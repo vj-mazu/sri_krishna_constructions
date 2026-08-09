@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { Search, Plus, FileSpreadsheet, FileText, ChevronRight, Edit, Trash2 } from 'lucide-react';
+import { showToast } from '../toast';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -185,7 +186,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
     e.preventDefault();
     const reason = window.prompt("Please enter reason for modifying this item:");
     if (!reason) {
-      alert("Reason is mandatory to request item modification!");
+      showToast("Reason is mandatory to request item modification!", "error");
       return;
     }
 
@@ -215,11 +216,11 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
         reason,
       });
 
-      alert(res.data.message || 'Request successfully processed!');
+      showToast(res.data.message || 'Request successfully processed!', 'success');
       setShowEditModal(false);
       fetchItems();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to submit edit request');
+      showToast(err.response?.data?.error || 'Failed to submit edit request', 'error');
     }
   };
 
@@ -234,10 +235,10 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
         reason,
       });
 
-      alert(res.data.message || 'Deletion request successfully submitted!');
+      showToast(res.data.message || 'Deletion request successfully submitted!', 'success');
       fetchItems();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to submit deletion request');
+      showToast(err.response?.data?.error || 'Failed to submit deletion request', 'error');
     }
   };
 

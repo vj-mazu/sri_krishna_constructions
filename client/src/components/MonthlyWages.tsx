@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { DollarSign, MessageSquare, Check, RefreshCw, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { showToast } from '../toast';
 import * as XLSX from 'xlsx';
 
 interface MonthlyWagesProps {
@@ -97,7 +98,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const handleApproveAll = async () => {
     const pendingWages = wagesReport.filter(w => w.paymentStatus !== 'APPROVED');
     if (pendingWages.length === 0) {
-      alert('All salaries in this list are already approved.');
+      showToast('All salaries in this list are already approved.', 'success');
       return;
     }
     if (!window.confirm(`Are you sure you want to approve payments for all ${pendingWages.length} workers?`)) return;
@@ -108,29 +109,26 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       const promises = pendingWages.map(worker => 
         api.post('/wages/approve', {
           workerId: worker.workerId,
-          month: selectedMonth,
-          year: selectedYear,
-          calculatedAmount: worker.calculatedAmount,
+          month: parseInt(selectedMonth, 10),
+          year: parseInt(selectedYear, 10),
           presentDays: worker.presentDays,
-          absentDays: worker.absentDays,
           halfDays: worker.halfDays,
           leaveDays: worker.leaveDays,
           totalOtHours: worker.totalOtHours,
         })
       );
       await Promise.all(promises);
-      setSuccess(`Successfully approved salary payments for all workers!`);
+      setSuccess(`Successfully approved salary payout for all ${pendingWages.length} workers!`);
       handleCalculateWages();
     } catch (err: any) {
-      setError('Some salary approvals failed to process.');
+      setError(err.response?.data?.error || 'Failed to bulk-approve salaries.');
     }
   };
 
-  const handleSendWhatsApp = async (worker: any) => {
+  const handleDispatchSlip = async (worker: any) => {
     try {
-      const res = await api.post('/wages/whatsapp-link', {
-        workerName: worker.fullName,
-        mobileNumber: worker.mobileNumber,
+      const res = await api.post('/wages/dispatch-slip', {
+        workerId: worker.workerId,
         month: selectedMonth,
         year: selectedYear,
         presentDays: worker.presentDays,
@@ -142,7 +140,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       // Open link directly
       window.open(res.data.link, '_blank');
     } catch (err) {
-      alert('Failed to construct WhatsApp dispatch link.');
+      showToast('Failed to construct WhatsApp dispatch link.', 'error');
     }
   };
 

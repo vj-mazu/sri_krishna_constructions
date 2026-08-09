@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { showToast } from '../toast';
 
 export const ApprovalsPanel: React.FC = () => {
   const [approvals, setApprovals] = useState<any[]>([]);
@@ -25,9 +26,10 @@ export const ApprovalsPanel: React.FC = () => {
   const handleAction = async (id: string, status: 'APPROVED' | 'REJECTED') => {
     try {
       await api.patch(`/approvals/${id}/action`, { status });
+      showToast(`Request ${status.toLowerCase()} successfully!`, 'success');
       fetchApprovals();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to process approval action');
+      showToast(err.response?.data?.error || 'Failed to process approval action', 'error');
     }
   };
 

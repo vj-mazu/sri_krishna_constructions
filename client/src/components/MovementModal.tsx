@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { PlusCircle, MinusCircle, X, AlertTriangle, RefreshCw } from 'lucide-react';
+import { showToast } from '../toast';
 
 interface MovementModalProps {
   category: string;
@@ -162,7 +163,7 @@ export const MovementModal: React.FC<MovementModalProps> = ({
   const startVoiceNote = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Voice entry is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+      showToast('Voice entry is not supported in this browser. Please use Google Chrome or Microsoft Edge.', 'error');
       return;
     }
     const recognition = new SpeechRecognition();

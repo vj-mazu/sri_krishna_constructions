@@ -12,11 +12,30 @@ import { MonthlyWages } from './components/MonthlyWages';
 import { TenderControl } from './components/TenderControl';
 import { SaleInvoiceModal } from './components/SaleInvoiceModal';
 
-import { Building2 } from 'lucide-react';
+import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  
+  // Toast state
+  const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
+  useEffect(() => {
+    const handleToast = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      setToast({ type: customEvent.detail.type, message: customEvent.detail.message });
+    };
+    window.addEventListener('show-toast', handleToast);
+    return () => window.removeEventListener('show-toast', handleToast);
+  }, []);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
   
   // Movement Modal state
   const [movementModalOpen, setMovementModalOpen] = useState(false);
@@ -327,6 +346,22 @@ export function App() {
         }}
       />
       <SaleInvoiceModal sale={completedSale} onClose={() => setCompletedSale(null)} />
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-2xl border flex items-center gap-3 transition-all duration-300 transform translate-y-0 max-w-sm animate-bounce ${
+          toast.type === 'success' 
+            ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
+            : 'bg-rose-50 text-rose-900 border-rose-300'
+        }`}>
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          )}
+          <span className="text-xs font-bold">{toast.message}</span>
+        </div>
+      )}
     </div>
   );
 }
