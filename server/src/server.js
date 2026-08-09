@@ -1352,11 +1352,10 @@ app.get('*', (req, res) => {
 app.listen(PORT, async () => {
   console.log(`🚀 IAC Stocks Server running on port ${PORT}`);
   try {
-    console.log('🔄 Auto-running Prisma database migrations...');
-    execSync('npx prisma db push', { stdio: 'inherit' });
+    // Run seed baseline data to ensure default accounts exist
     await seedBaselineData();
-    console.log('✅ Auto startup database migration and seeding completed!');
+    console.log('✅ Auto startup database seeding completed!');
   } catch (err) {
-    console.error('Database auto-setup log:', err.message);
+    console.error('Database seeding log:', err.message);
   }
 });
