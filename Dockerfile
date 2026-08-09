@@ -2,7 +2,7 @@
 FROM node:20-slim AS client-builder
 WORKDIR /app/client
 COPY client/package*.json client/package-lock.json ./
-COPY client/tsconfig*.json client/vite.config.ts client/postcss.config.js client/tailwind.config.js ./
+COPY client/index.html client/tsconfig*.json client/vite.config.ts client/postcss.config.js client/tailwind.config.js ./
 COPY client/public ./public
 COPY client/src ./src
 RUN npm ci
