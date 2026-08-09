@@ -27,4 +27,4 @@ COPY --from=server-builder /app/server/prisma ./server/prisma
 COPY --from=server-builder /app/server/src ./server/src
 EXPOSE 5000
 ENV NODE_ENV=production
-CMD ["node", "server/src/server.js"]
+CMD ["sh", "-c", "npx prisma db push && node server/src/server.js"]
