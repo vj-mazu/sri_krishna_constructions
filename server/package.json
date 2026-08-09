@@ -1,0 +1,29 @@
+{
+  "name": "iac-stocks-server",
+  "version": "1.0.0",
+  "description": "Backend API for IAC Stocks & Inventory Management",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "build": "npx prisma generate",
+    "db:push": "npx prisma db push",
+    "db:seed": "node src/seed.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.2.1",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "prisma": "^6.2.1"
+  }
+}

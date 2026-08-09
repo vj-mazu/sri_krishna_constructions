@@ -1,0 +1,221 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  OWNER
+  MANAGER
+  STAFF
+  SUPERVISOR
+}
+
+enum CategoryType {
+  IAC_CHICAGO
+  KIRLOSKAR_ANNEXURE
+  TAC_CHICAGO
+  KIRLOSKAR_UNIT4
+}
+
+enum MovementType {
+  INWARD
+  SALE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ApprovalType {
+  EDIT_ITEM
+  DELETE_ITEM
+  EDIT_MOVEMENT
+  DELETE_MOVEMENT
+  EDIT_ATTENDANCE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  LEAVE
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  PAID
+}
+
+model User {
+  id              String           @id @default(uuid())
+  username        String           @unique
+  fullName        String
+  mobileNumber    String
+  password        String
+  role            Role             @default(STAFF)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  movements       StockMovement[]
+  approvalRequests ApprovalRequest[] @relation("RequestedBy")
+  approvedRequests ApprovalRequest[] @relation("ApprovedBy")
+  auditLogs       AuditLog[]
+  attendances     Attendance[]
+
+  @@index([role])
+}
+
+model Item {
+  id                   String          @id @default(uuid())
+  category             CategoryType
+  itemCode             String
+  itemName             String
+  partNo               String?
+  specifications       String?
+  unit                 String          @default("NO")
+  brandOffered         String?
+  gstPercentage        Float?
+  hsnCode              String?
+  biddersCompliance   String?
+  basicRateRs          Float?
+  basicRateRsAlt       Float?
+  skcRate1             Float?
+  skcRate2             Float?
+  diffPercentage       Float?
+  baseQty              Int             @default(0)
+  targetQty            Int             @default(0)
+  currentStock         Int             @default(0)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+  movements            StockMovement[]
+  approvalRequests     ApprovalRequest[]
+
+  @@unique([category, itemCode])
+  @@index([category, itemCode])
+  @@index([category, currentStock])
+}
+
+model StockMovement {
+  id              String       @id @default(uuid())
+  itemId          String
+  item            Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  movementType    MovementType
+  quantity        Int
+  previousStock   Int
+  newStock        Int
+  unitPrice       Float?
+  invoiceRefNo    String?
+  remarks         String?
+  movementDate    DateTime     @default(now())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  @@index([itemId, movementDate])
+  @@index([userId])
+  @@index([movementType, createdAt])
+}
+
+model ApprovalRequest {
+  id             String         @id @default(uuid())
+  type           ApprovalType
+  status         ApprovalStatus @default(PENDING)
+  itemId         String?
+  item           Item?          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  requestedById  String
+  requestedBy    User           @relation("RequestedBy", fields: [requestedById], references: [id])
+  approvedById   String?
+  approvedBy     User?          @relation("ApprovedBy", fields: [approvedById], references: [id])
+  payload        Json
+  reason         String?
+  rejectionReason String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status])
+  @@index([requestedById])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Division {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  workers   Worker[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Worker {
+  id            String           @id @default(uuid())
+  workerId      String           @unique
+  fullName      String
+  mobileNumber  String
+  dailyWage     Float
+  otHourlyRate  Float            @default(0.0)
+  divisionId    String
+  division      Division         @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  attendances   Attendance[]
+  payments      MonthlyPayment[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([divisionId])
+  @@index([fullName])
+}
+
+model Attendance {
+  id            String           @id @default(uuid())
+  workerId      String
+  worker        Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  date          DateTime
+  status        AttendanceStatus
+  overtimeHours Float            @default(0.0)
+  dailyWageOverride Float?
+  recordedById  String
+  recordedBy    User             @relation(fields: [recordedById], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([workerId, date])
+  @@index([workerId, date])
+  @@index([date])
+}
+
+model MonthlyPayment {
+  id               String        @id @default(uuid())
+  workerId         String
+  worker           Worker        @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  month            Int
+  year             Int
+  presentDays      Float         @default(0.0)
+  absentDays       Float         @default(0.0)
+  halfDays         Float         @default(0.0)
+  leaveDays        Float         @default(0.0)
+  totalOtHours     Float         @default(0.0)
+  calculatedAmount Float
+  status           PaymentStatus @default(PENDING)
+  approvedById     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@unique([workerId, month, year])
+  @@index([workerId, month, year])
+  @@index([month, year])
+}

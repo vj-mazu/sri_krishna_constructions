@@ -1,0 +1,26 @@
+import React from 'react';
+import { Download, Printer, X } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+export const SaleInvoiceModal: React.FC<{ sale: any; onClose: () => void }> = ({ sale, onClose }) => {
+  if (!sale) return null;
+  const item = sale.item || {};
+  const amount = (sale.quantity || 0) * (sale.unitPrice || 0);
+  const invoiceNo = sale.invoiceRefNo || `SKC/${new Date().getFullYear()}/${sale.id?.slice(0, 8) || 'SALE'}`;
+  const invoiceDate = new Date(sale.movementDate || sale.createdAt || new Date()).toLocaleDateString('en-IN');
+
+  const download = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.text('SRI KRISHNA CONSTRUCTIONS', 105, 16, { align: 'center' });
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.text('H.no 2436 Raghavendra Colony, Shaktinagar, Raichur, Karnataka-584170', 105, 22, { align: 'center' });
+    doc.text('GST NO: 29DWKPP3582H1ZV | Mobile: 8496841904', 105, 27, { align: 'center' });
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.text('TAX INVOICE', 105, 38, { align: 'center' });
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.text(`Invoice No: ${invoiceNo}`, 14, 48); doc.text(`Invoice Date: ${invoiceDate}`, 145, 48);
+    (doc as any).autoTable({ startY: 58, head: [['POSl. NO.', 'KPCL ITEM CODE', 'DESCRIPTION / SPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']], body: [[1, item.itemCode || '', `${item.itemName || ''}${item.specifications ? `\n${item.specifications}` : ''}`, item.unit || 'NO', sale.quantity || 0, `₹${(sale.unitPrice || 0).toLocaleString('en-IN')}`, `₹${amount.toLocaleString('en-IN')}`]], theme: 'grid', styles: { fontSize: 8, cellPadding: 3 }, headStyles: { fillColor: [76, 81, 191] } });
+    const y = (doc as any).lastAutoTable.finalY + 12; doc.setFont('helvetica', 'bold'); doc.text(`TOTAL: ₹${amount.toLocaleString('en-IN')}`, 145, y); doc.setFont('helvetica', 'normal'); doc.text('For SRI KRISHNA CONSTRUCTIONS', 135, y + 35); doc.text('Authorised Signatory', 150, y + 43);
+    doc.save(`${invoiceNo.replaceAll('/', '-')}.pdf`);
+  };
+
+  return <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] overflow-y-auto"><div className="flex items-center justify-between px-6 py-4 border-b"><div><p className="text-[10px] uppercase tracking-widest text-indigo-600 font-bold">Sale completed · Stock ledger linked</p><h2 className="text-xl font-black text-slate-900">Tax Invoice {invoiceNo}</h2></div><button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-5 h-5" /></button></div><div className="p-8" id="sale-invoice"><div className="text-center border-b-2 border-slate-800 pb-4"><h1 className="text-2xl font-black tracking-wide">SRI KRISHNA CONSTRUCTIONS</h1><p className="text-xs">H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170</p><p className="text-xs mt-1">All type of air compressor Service and Spares Available.</p><p className="text-xs font-bold mt-1">GST NO: 29DWKPP3582H1ZV · Mobile No: 8496841904</p><h3 className="text-lg font-black mt-4">TAX INVOICE</h3></div><div className="grid grid-cols-2 gap-3 py-4 text-xs"><div><b>INVOICE NO:</b> {invoiceNo}</div><div><b>INVOICE DATE:</b> {invoiceDate}</div><div><b>Supply To:</b> {sale.remarks || 'Customer / Department'}</div><div><b>Reference:</b> {sale.invoiceRefNo || '—'}</div></div><table className="w-full text-xs border-collapse"><thead><tr className="bg-indigo-700 text-white"><th className="p-2 text-left">POSl. NO.</th><th className="p-2 text-left">KPCL ITEM CODE</th><th className="p-2 text-left">DESCRIPTION / SPECIFICATION</th><th className="p-2 text-left">UNIT</th><th className="p-2 text-right">QTY</th><th className="p-2 text-right">PRICE</th><th className="p-2 text-right">AMOUNT</th></tr></thead><tbody><tr className="border-b"><td className="p-2">1</td><td className="p-2 font-mono font-bold">{item.itemCode}</td><td className="p-2 whitespace-pre-wrap">{item.itemName}{item.specifications ? `\n${item.specifications}` : ''}</td><td className="p-2">{item.unit || 'NO'}</td><td className="p-2 text-right">{sale.quantity}</td><td className="p-2 text-right">₹{(sale.unitPrice || 0).toLocaleString('en-IN')}</td><td className="p-2 text-right font-bold">₹{amount.toLocaleString('en-IN')}</td></tr></tbody><tfoot><tr><td colSpan={6} className="p-3 text-right font-black">TOTAL</td><td className="p-3 text-right font-black">₹{amount.toLocaleString('en-IN')}</td></tr></tfoot></table><div className="flex justify-between mt-20 text-xs font-bold"><span>Customer / Receiving Signature</span><span>For SRI KRISHNA CONSTRUCTIONS<br /><br />Authorised Signatory</span></div></div><div className="flex justify-end gap-3 px-6 py-4 border-t"><button onClick={() => window.print()} className="px-4 py-2 rounded-lg bg-slate-800 text-white text-xs font-bold flex gap-2 items-center"><Printer className="w-4 h-4" /> Print invoice</button><button onClick={download} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-bold flex gap-2 items-center"><Download className="w-4 h-4" /> Download PDF</button></div></div></div>;
+};

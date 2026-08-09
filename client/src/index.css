@@ -1,0 +1,178 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#f5f5f5] text-slate-800 antialiased selection:bg-[#667eea] selection:text-white min-h-screen;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Mill Software Design System */
+.glass-panel {
+  background: #ffffff;
+  border-radius: 0.75rem; /* rounded-xl */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+.purple-gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.cyan-gradient-text {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Form focus */
+input:focus, textarea:focus, select:focus {
+  border-color: #667eea !important;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+  outline: none;
+}
+
+/* Custom Mill Software Excel Grid Styles */
+.excel-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+
+.excel-table th,
+.excel-table td {
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.excel-table th {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #ffffff;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.excel-table th:first-child {
+  border-top-left-radius: 8px;
+}
+
+.excel-table th:last-child {
+  border-top-right-radius: 8px;
+}
+
+.excel-table td {
+  background: #ffffff;
+  color: #6b7280;
+  border-right: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.excel-table tr:hover td {
+  background: #f8fafc;
+}
+
+/* Buttons */
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  transition: all 0.2s ease;
+}
+.btn-primary:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* Status Badges */
+.status-pending {
+  background-color: #f59e0b;
+  color: white;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.status-approved {
+  background-color: #10b981;
+  color: white;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.status-rejected {
+  background-color: #ef4444;
+  color: white;
+  border-radius: 9999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+/* Animations */
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-slideUp {
+  animation: slideInUp 0.4s ease-out forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+/* --- MOBILE APP FEEL STYLES --- */
+* {
+  -webkit-tap-highlight-color: transparent; /* Disable the gray tap highlight overlay on iOS */
+  box-sizing: border-box;
+}
+
+body {
+  /* Prevent bounce effect on mobile */
+  overscroll-behavior-y: contain; 
+}
+
+/* Custom scrollbar hider for mobile tab items scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Interactive elements get native touch feedback styles */
+button, select, input, label {
+  touch-action: manipulation; /* Eliminate 300ms click delay on mobile web views */
+}
+
+/* Inertia touch scrolling on iOS */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent accidental text selections during fast touch clicks */
+button, label, select {
+  user-select: none;
+  -webkit-user-select: none;
+}
