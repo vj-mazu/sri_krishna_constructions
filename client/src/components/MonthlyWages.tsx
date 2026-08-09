@@ -340,7 +340,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       
                       {/* Dispatch WhatsApp alert */}
                       <button
-                        onClick={() => handleSendWhatsApp(w)}
+                        onClick={() => handleDispatchSlip(w)}
                         className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[10px] flex items-center gap-1 transition-colors"
                       >
                         <MessageSquare className="w-3 h-3" /> WhatsApp
