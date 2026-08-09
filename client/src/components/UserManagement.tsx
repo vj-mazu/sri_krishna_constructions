@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { UserPlus, UserCheck, Shield, Trash2, Smartphone, AlertCircle, Users, FolderPlus, Edit } from 'lucide-react';
+import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit } from 'lucide-react';
 
 interface UserManagementProps {
   currentUserRole: string;

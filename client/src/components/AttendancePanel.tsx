@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
-import { Calendar, Users, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Calendar, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 
 interface AttendancePanelProps {
   currentUserRole?: string;

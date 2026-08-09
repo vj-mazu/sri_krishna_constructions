@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, HardHat } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 
 interface DashboardProps {
   onSelectTab: (tabKey: string) => void;

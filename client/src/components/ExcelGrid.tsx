@@ -217,7 +217,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
 
       alert(res.data.message || 'Request successfully processed!');
       setShowEditModal(false);
-      fetchItems(true);
+      fetchItems();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to submit edit request');
     }
@@ -235,7 +235,7 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
       });
 
       alert(res.data.message || 'Deletion request successfully submitted!');
-      fetchItems(true);
+      fetchItems();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to submit deletion request');
     }
