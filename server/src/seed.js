@@ -24,16 +24,32 @@ const numberValue = (value) => {
 };
 
 const importMasterWorkbooks = async () => {
-  const downloads = 'C:\\Users\\maju\\Downloads';
+  const localDownloads = 'C:\\Users\\maju\\Downloads';
+  const repoSeeds = path.join(__dirname, '../seeds');
   let imported = 0;
   for (const source of sourceFiles) {
     const workbook = new ExcelJS.Workbook();
+    let fileLoaded = false;
+    
+    // Try relative repo seeds folder first (works in Docker/Cloud if uploaded)
     try {
-      await workbook.xlsx.readFile(path.join(downloads, source.file));
-    } catch (error) {
-      console.warn(`⚠️ Master workbook not found: ${source.file}`);
-      continue;
+      const targetPath = path.join(repoSeeds, source.file);
+      await workbook.xlsx.readFile(targetPath);
+      console.log(`📖 Loading excel file from repository seeds: ${source.file}`);
+      fileLoaded = true;
+    } catch (e) {
+      // Fallback to local Windows Downloads folder (works locally)
+      try {
+        const targetPath = path.join(localDownloads, source.file);
+        await workbook.xlsx.readFile(targetPath);
+        console.log(`📖 Loading excel file from local Downloads: ${source.file}`);
+        fileLoaded = true;
+      } catch (error) {
+        console.warn(`⚠️ Master workbook not found in seeds/ or Downloads/: ${source.file}`);
+      }
     }
+
+    if (!fileLoaded) continue;
     for (const sheetIndex of source.sheets) {
       const worksheet = workbook.worksheets[sheetIndex];
       if (!worksheet) continue;

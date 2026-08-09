@@ -13,17 +13,20 @@ FROM node:20-slim AS server-builder
 WORKDIR /app/server
 COPY server/package*.json server/package-lock.json ./
 COPY server/prisma ./prisma
+COPY server/seeds ./seeds
 COPY server/src ./src
 RUN npm ci
 RUN npx prisma generate
 
 # Final production image
 FROM node:20-slim AS production
+RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app
 COPY --from=client-builder /app/client/dist ./client/dist
 COPY --from=server-builder /app/server/node_modules ./server/node_modules
 COPY --from=server-builder /app/server/package.json ./server/package.json
 COPY --from=server-builder /app/server/prisma ./server/prisma
+COPY --from=server-builder /app/server/seeds ./server/seeds
 COPY --from=server-builder /app/server/src ./server/src
 EXPOSE 5000
 ENV NODE_ENV=production
