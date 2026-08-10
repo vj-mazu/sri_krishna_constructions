@@ -386,8 +386,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
             <thead>
               {category === 'IAC_CHICAGO' && (
                 <tr>
-                  <th>Sino</th>
-                  <th>Item Code</th>
+                  <th className="hidden sm:table-cell">Sino</th>
+                  <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">Item Code</th>
                   <th>Item Name / Spec</th>
                   <th>Unit</th>
                   <th>Brand Offered</th>
@@ -404,8 +404,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
 
               {category === 'KIRLOSKAR_ANNEXURE' && (
                 <tr>
-                  <th>Sl. No.</th>
-                  <th>Item Code</th>
+                  <th className="hidden sm:table-cell">Sl. No.</th>
+                  <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">Item Code</th>
                   <th>Item Name</th>
                   <th>Part No.</th>
                   <th>Item Specifications</th>
@@ -425,8 +425,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
 
               {category === 'TAC_CHICAGO' && (
                 <tr>
-                  <th>Sno</th>
-                  <th>Item Code</th>
+                  <th className="hidden sm:table-cell">Sno</th>
+                  <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">Item Code</th>
                   <th>Item Name / Spec</th>
                   <th>Unit</th>
                   <th>SKC Rate</th>
@@ -440,8 +440,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
 
               {category === 'KIRLOSKAR_UNIT4' && (
                 <tr>
-                  <th>Sl. No.</th>
-                  <th>Item Code</th>
+                  <th className="hidden sm:table-cell">Sl. No.</th>
+                  <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">Item Code</th>
                   <th>Item Name</th>
                   <th>Unit</th>
                   <th>Qty</th>
@@ -471,8 +471,8 @@ export const ExcelGrid: React.FC<ExcelGridProps> = ({
               ) : (
                 items.map((item, index) => (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="font-mono text-center">{index + 1}</td>
-                    <td className="font-mono font-bold text-teal-800">{item.itemCode}</td>
+                    <td className="hidden sm:table-cell font-mono text-center">{index + 1}</td>
+                    <td className="sticky left-0 z-10 bg-white font-mono font-bold text-[#667eea] border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">{item.itemCode}</td>
 
                     {category === 'IAC_CHICAGO' && (
                       <>

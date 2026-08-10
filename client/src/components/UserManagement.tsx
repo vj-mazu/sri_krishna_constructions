@@ -291,11 +291,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         </div>
 
         {/* SUB-TABS NAVIGATION */}
-        <div className="flex bg-slate-100 p-1 rounded-lg self-start shrink-0">
+        <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto overflow-x-auto scrollbar-none gap-1">
           {currentUserRole !== 'SUPERVISOR' && (
             <button
               onClick={() => { setActiveSubTab('accounts'); clearMessages(); }}
-              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center ${
                 activeSubTab === 'accounts' ? 'bg-[#667eea] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
               }`}
             >
@@ -304,7 +304,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
           )}
           <button
             onClick={() => { setActiveSubTab('divisions'); clearMessages(); }}
-            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center ${
               activeSubTab === 'divisions' ? 'bg-[#667eea] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -312,7 +312,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
           </button>
           <button
             onClick={() => { setActiveSubTab('workers'); clearMessages(); }}
-            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+            className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center ${
               activeSubTab === 'workers' ? 'bg-[#667eea] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -577,7 +577,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             <h3 className="text-sm font-bold text-slate-800">Site Divisions Master</h3>
           </div>
 
-          <form onSubmit={handleCreateDivision} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex gap-3 items-end">
+          <form onSubmit={handleCreateDivision} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             <div className="flex-1 text-xs">
               <label className="block font-semibold text-slate-700 mb-1">New Division Name (e.g. Electrical, Bricklaying) *</label>
               <input
@@ -591,7 +591,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
             <button
               type="submit"
-              className="px-4 py-2 bg-[#667eea] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow h-fit"
+              className="px-4 py-2.5 bg-[#667eea] text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow h-fit w-full sm:w-auto"
             >
               <FolderPlus className="w-4 h-4" /> Create Division
             </button>

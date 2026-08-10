@@ -136,30 +136,32 @@ export const StockLedger: React.FC = () => {
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 w-full">
           <input 
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+            title="Date From"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none w-full sm:w-auto"
           />
           <input
             type="month"
             value={month}
             onChange={(e) => setMonth(e.target.value)}
             title="Filter by month"
-            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none w-full sm:w-auto"
           />
           <input 
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+            title="Date To"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none w-full sm:w-auto"
           />
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none w-full sm:w-auto"
           >
             <option value="">All Categories</option>
             <option value="IAC_CHICAGO">IAC Chicago</option>
@@ -170,7 +172,7 @@ export const StockLedger: React.FC = () => {
           <select
             value={movementType}
             onChange={(e: any) => setMovementType(e.target.value)}
-            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+            className="border border-slate-300 rounded-lg text-xs px-3 py-1.5 bg-white font-semibold focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none w-full sm:w-auto col-span-2 sm:col-span-1"
           >
             <option value="">All Transactions</option>
             <option value="INWARD">INWARD (+)</option>
@@ -184,10 +186,10 @@ export const StockLedger: React.FC = () => {
         <table className="w-full text-left text-xs excel-table">
           <thead>
             <tr>
-              <th>Sl No</th>
+              <th className="hidden sm:table-cell">Sl No</th>
               <th>Date & Time</th>
               <th>Transaction Type</th>
-              <th>Item Code</th>
+              <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">Item Code</th>
               <th>Item Name / Description</th>
               <th>Category</th>
               <th>Unit</th>
@@ -216,7 +218,7 @@ export const StockLedger: React.FC = () => {
             ) : (
               movements.map((m, i) => (
                 <tr key={m.id} className="hover:bg-slate-50">
-                  <td className="font-mono text-center">{i + 1}</td>
+                  <td className="hidden sm:table-cell font-mono text-center">{i + 1}</td>
                   <td className="font-mono text-slate-500">{new Date(m.createdAt).toLocaleString('en-GB')}</td>
                   <td>
                     <span
@@ -234,7 +236,7 @@ export const StockLedger: React.FC = () => {
                       {m.movementType}
                     </span>
                   </td>
-                  <td className="font-mono font-bold text-teal-800">{m.item?.itemCode}</td>
+                  <td className="sticky left-0 z-10 bg-white font-mono font-bold text-[#667eea] border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] px-3">{m.item?.itemCode}</td>
                   <td className="max-w-xs">{m.item?.itemName}</td>
                   <td className="text-[10px] font-semibold text-slate-600">{CATEGORY_NAMES[m.item?.category] || m.item?.category}</td>
                   <td className="text-[10px] text-slate-600">{m.item?.unit}</td>
