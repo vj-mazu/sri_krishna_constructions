@@ -108,25 +108,39 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f5] text-slate-900 flex flex-col font-sans">
-      {/* KUI-STYLE SINGLE ROW NAVBAR */}
       <header className="bg-gradient-to-r from-[#667eea] to-[#764ba2] shadow-md sticky top-0 z-40">
-        <div className="max-w-[1700px] mx-auto px-4 py-2.5 flex items-center justify-between gap-4">
+        <div className="max-w-[1700px] mx-auto px-4 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
           
-          {/* Logo / Brand Name */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow">
-              <Building2 className="w-4.5 h-4.5 text-[#667eea]" />
+          {/* Logo / Brand Name & Mobile Logout */}
+          <div className="flex items-center justify-between w-full md:w-auto gap-4">
+            <div className="flex items-center gap-2 shrink-0">
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow">
+                <Building2 className="w-4.5 h-4.5 text-[#667eea]" />
+              </div>
+              <div>
+                <h1 className="font-bold text-sm tracking-tight text-white uppercase leading-none">
+                  SRI KRISHNA CONSTRUCTIONS
+                </h1>
+                <span className="text-[9px] text-white/70 block mt-0.5">IAC STOCKS PORTAL</span>
+              </div>
             </div>
-            <div>
-              <h1 className="font-bold text-sm tracking-tight text-white uppercase leading-none">
-                SRI KRISHNA CONSTRUCTIONS
-              </h1>
-              <span className="text-[9px] text-white/70 block mt-0.5">IAC STOCKS PORTAL</span>
+
+            {/* Mobile-only Logout & Role */}
+            <div className="flex items-center gap-2 md:hidden">
+              <span className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded border border-white/10 font-mono uppercase tracking-wider text-white">
+                {user.role}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="px-2.5 py-1 bg-[#ef4444] hover:bg-red-600 text-white text-[10px] font-bold rounded transition-all shadow"
+              >
+                Logout
+              </button>
             </div>
           </div>
 
-          {/* Navigation Tabs in Center */}
-          <nav className="flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none px-4 justify-center">
+          {/* Navigation Tabs (Full width scrollable on mobile, centered on desktop) */}
+          <nav className="w-full md:flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 md:py-0 justify-start md:justify-center">
             {user.role !== 'SUPERVISOR' && (
               <>
                 <button
@@ -264,9 +278,9 @@ export function App() {
             )}
           </nav>
 
-          {/* USER PROFILE & LOGOUT */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right hidden sm:block text-white">
+          {/* USER PROFILE & LOGOUT (Desktop only) */}
+          <div className="hidden md:flex items-center gap-3 shrink-0">
+            <div className="text-right text-white">
               <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded border border-white/10 font-mono uppercase tracking-wider block text-center">
                 {user.role}
               </span>
@@ -274,7 +288,7 @@ export function App() {
 
             <button
               onClick={handleLogout}
-              className="px-3 py-1.5 bg-[#ef4444] hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-all shadow"
+              className="px-3 py-1.5 bg-[#ef4444] hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
             >
               Logout
             </button>
