@@ -127,7 +127,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
   const handleDispatchSlip = async (worker: any) => {
     try {
-      const res = await api.post('/wages/dispatch-slip', {
+      const res = await api.post('/wages/whatsapp-link', {
         workerId: worker.workerId,
         month: selectedMonth,
         year: selectedYear,
