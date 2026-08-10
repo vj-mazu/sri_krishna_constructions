@@ -229,7 +229,105 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
         return (
           <form onSubmit={handleSaveAttendance} className="space-y-4">
-            <div className="overflow-x-auto border border-slate-200 rounded-lg shadow-sm">
+            {/* 1. MOBILE VERTICAL CARD LIST (Shown only on mobile screens) */}
+            <div className="block md:hidden space-y-3.5">
+              {filteredWorkers.map((w) => {
+                const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
+                return (
+                  <div key={w.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                    {/* Header info */}
+                    <div className="flex justify-between items-start border-b border-slate-200 pb-2">
+                      <div>
+                        <div className="font-bold text-slate-800 text-sm">{w.fullName}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{w.mobileNumber}</div>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-mono font-bold bg-[#667eea]/10 text-[#667eea] px-2 py-0.5 rounded border border-[#667eea]/20">
+                          {w.workerId}
+                        </span>
+                        <div className="text-[10px] text-slate-500 font-semibold mt-1">₹{w.dailyWage}/day</div>
+                      </div>
+                    </div>
+
+                    {/* Attendance status selector (Clean full-width tap-friendly grid) */}
+                    <div>
+                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Mark Attendance</span>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
+                          const active = state.status === status;
+                          let colorClasses = '';
+                          if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 bg-white';
+                          if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 bg-white';
+                          if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 bg-white';
+                          if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 bg-white';
+
+                          return (
+                            <label
+                              key={status}
+                              className={`flex flex-col items-center justify-center p-2 border rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-wider text-center transition-all select-none ${colorClasses}`}
+                            >
+                              <input
+                                type="radio"
+                                name={`status-mobile-${w.id}`}
+                                value={status}
+                                checked={active}
+                                onChange={() => handleStatusChange(w.id, status)}
+                                className="sr-only"
+                              />
+                              <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Pres' : status === 'ABSENT' ? 'Abs' : 'Leave'}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Wage override & Overtime (Fast tap columns) */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Wage Override (₹)</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                            <span className="text-slate-400 text-[10px] font-bold">₹</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder={w.dailyWage.toString()}
+                            disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
+                            value={state.dailyWageOverride}
+                            onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
+                            className={`w-full pl-6 pr-2 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-center focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none ${
+                              currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Overtime Hours</label>
+                        <div className="relative rounded-md shadow-sm">
+                          <input
+                            type="number"
+                            min="0"
+                            max="24"
+                            step="0.5"
+                            value={state.overtimeHours}
+                            onChange={(e) => handleOtChange(w.id, e.target.value)}
+                            className="w-full pr-8 pl-2 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-center focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none bg-white"
+                          />
+                          <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
+                            <span className="text-slate-400 text-[9px] font-bold">hrs</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 2. DESKTOP / TABLET EXCEL TABLE (Hidden on mobile screens) */}
+            <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-lg shadow-sm">
               <table className="w-full text-left text-xs excel-table border-collapse">
                 <thead>
                   <tr>
@@ -244,7 +342,6 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
                     return (
                       <tr key={w.id} className="hover:bg-slate-50/50">
-                        {/* Sticky First Column for Native App Feel on Mobile */}
                         <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
                           <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
                           <div className="text-[9px] text-[#667eea] font-mono font-bold mt-0.5">{w.workerId}</div>
@@ -324,19 +421,19 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       </tr>
                     );
                   })}
-              </tbody>
-            </table>
-          </div>
+                </tbody>
+              </table>
+            </div>
 
-          <div className="flex justify-end pt-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 bg-gradient-to-r from-[#667eea] to-[#764ba2] hover:opacity-90 text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center gap-2"
-            >
-              {saving ? 'Saving Sheet...' : 'Save & Submit Attendance'}
-            </button>
-          </div>
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-6 py-2.5 bg-gradient-to-r from-[#667eea] to-[#764ba2] hover:opacity-90 text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center gap-2"
+              >
+                {saving ? 'Saving Sheet...' : 'Save & Submit Attendance'}
+              </button>
+            </div>
           </form>
         );
       })()}
