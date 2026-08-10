@@ -229,16 +229,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
         return (
           <form onSubmit={handleSaveAttendance} className="space-y-4">
-            <div className="overflow-x-auto border border-slate-200 rounded-lg">
-              <table className="w-full text-left text-xs excel-table">
+            <div className="overflow-x-auto border border-slate-200 rounded-lg shadow-sm">
+              <table className="w-full text-left text-xs excel-table border-collapse">
                 <thead>
                   <tr>
-                    <th>Sl No</th>
-                    <th>Worker ID</th>
-                    <th>Worker Name</th>
-                    <th className="text-center w-60">Attendance Status</th>
-                    <th className="text-center w-32">Daily Wage Override (₹)</th>
-                    <th className="text-center w-32">Overtime Hours (OT)</th>
+                    <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2.5">Worker Details</th>
+                    <th className="text-center min-w-[280px] px-3 py-2.5">Attendance Status</th>
+                    <th className="text-center min-w-[130px] px-3 py-2.5">Daily Wage Override (₹)</th>
+                    <th className="text-center min-w-[120px] px-3 py-2.5">Overtime Hours (OT)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -246,84 +244,86 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
                     return (
                       <tr key={w.id} className="hover:bg-slate-50/50">
-                        <td className="font-mono text-center">{index + 1}</td>
-                        <td className="font-mono font-bold text-slate-700">{w.workerId}</td>
-                        <td>
-                          <div className="font-semibold text-slate-800">{w.fullName}</div>
-                          <div className="text-[10px] text-slate-400">{w.mobileNumber} | ₹{w.dailyWage}/day</div>
+                        {/* Sticky First Column for Native App Feel on Mobile */}
+                        <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
+                          <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
+                          <div className="text-[9px] text-[#667eea] font-mono font-bold mt-0.5">{w.workerId}</div>
+                          <div className="text-[9px] text-slate-400 mt-0.5">₹{w.dailyWage}/day</div>
                         </td>
-                      <td>
-                        <div className="flex flex-wrap md:flex-nowrap justify-center gap-2">
-                          {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                            const active = state.status === status;
-                            let colorClasses = '';
-                            if (status === 'PRESENT') colorClasses = active ? 'border-[#10b981] bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                            if (status === 'ABSENT') colorClasses = active ? 'border-[#ef4444] bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                            if (status === 'HALF_DAY') colorClasses = active ? 'border-[#f59e0b] bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                            if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                        
+                        <td className="px-3 py-2">
+                          <div className="flex justify-center gap-1.5">
+                            {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
+                              const active = state.status === status;
+                              let colorClasses = '';
+                              if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                              if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                              if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                              if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
 
-                            let dotColor = '';
-                            if (status === 'PRESENT') dotColor = 'bg-[#10b981]';
-                            if (status === 'ABSENT') dotColor = 'bg-[#ef4444]';
-                            if (status === 'HALF_DAY') dotColor = 'bg-[#f59e0b]';
-                            if (status === 'LEAVE') dotColor = 'bg-slate-500';
+                              let dotColor = '';
+                              if (status === 'PRESENT') dotColor = 'bg-emerald-500';
+                              if (status === 'ABSENT') dotColor = 'bg-red-500';
+                              if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
+                              if (status === 'LEAVE') dotColor = 'bg-slate-500';
 
-                            return (
-                              <label
-                                key={status}
-                                className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg cursor-pointer text-[10px] uppercase tracking-wide transition-all select-none ${colorClasses}`}
-                              >
-                                <input
-                                  type="radio"
-                                  name={`status-${w.id}`}
-                                  value={status}
-                                  checked={active}
-                                  onChange={() => handleStatusChange(w.id, status)}
-                                  className="sr-only"
-                                  disabled={state.status === status}
-                                />
-                                <span className={`w-3.5 h-3.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white' : ''}`}>
-                                  {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
-                                </span>
-                                <span>{status.replace('_', ' ')}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td>
-                        <div className="flex items-center justify-center gap-1 font-mono">
-                          <span className="text-[10px] text-slate-400 font-semibold">₹</span>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder={w.dailyWage.toString()}
-                            disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
-                            value={state.dailyWageOverride}
-                            onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                            className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#667eea] outline-none ${
-                              currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
-                            }`}
-                          />
-                        </div>
-                      </td>
-                      <td>
-                        <div className="flex items-center justify-center gap-1.5 font-mono">
-                          <input
-                            type="number"
-                            min="0"
-                            max="24"
-                            step="0.5"
-                            value={state.overtimeHours}
-                            onChange={(e) => handleOtChange(w.id, e.target.value)}
-                            className="w-16 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#667eea] outline-none"
-                          />
-                          <span className="text-[10px] text-slate-400 font-semibold">hrs</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                              return (
+                                <label
+                                  key={status}
+                                  className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`status-${w.id}`}
+                                    value={status}
+                                    checked={active}
+                                    onChange={() => handleStatusChange(w.id, status)}
+                                    className="sr-only"
+                                  />
+                                  <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
+                                    {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
+                                  </span>
+                                  <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </td>
+                        
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-center gap-1 font-mono">
+                            <span className="text-[10px] text-slate-400 font-semibold">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder={w.dailyWage.toString()}
+                              disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
+                              value={state.dailyWageOverride}
+                              onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
+                              className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#667eea] outline-none text-xs ${
+                                currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                              }`}
+                            />
+                          </div>
+                        </td>
+                        
+                        <td className="px-3 py-2">
+                          <div className="flex items-center justify-center gap-1 font-mono">
+                            <input
+                              type="number"
+                              min="0"
+                              max="24"
+                              step="0.5"
+                              value={state.overtimeHours}
+                              onChange={(e) => handleOtChange(w.id, e.target.value)}
+                              className="w-14 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#667eea] outline-none text-xs"
+                            />
+                            <span className="text-[9px] text-slate-400 font-semibold">h</span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
