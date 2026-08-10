@@ -363,13 +363,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   </td>
                   <td>
                     <div className="flex items-center gap-1.5">
-                      {/* Approve payment action (restricted to Owners or Managers) */}
-                      {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && w.paymentStatus !== 'APPROVED' && (
+                      {/* Approve / Update payment action (restricted to Owners or Managers) */}
+                      {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
                         <button
                           onClick={() => handleApprovePayment(w)}
-                          className="px-2 py-1 bg-[#667eea] hover:bg-indigo-600 text-white font-bold rounded text-[10px] flex items-center gap-0.5 transition-colors"
+                          className={`px-2 py-1 text-white font-bold rounded text-[10px] flex items-center gap-0.5 transition-colors ${
+                            w.paymentStatus === 'APPROVED'
+                              ? 'bg-orange-500 hover:bg-orange-600'
+                              : 'bg-[#667eea] hover:bg-indigo-600'
+                          }`}
                         >
-                          <Check className="w-3 h-3" /> Approve
+                          <Check className="w-3 h-3" /> {w.paymentStatus === 'APPROVED' ? 'Update' : 'Approve'}
                         </button>
                       )}
                       
