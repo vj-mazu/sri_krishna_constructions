@@ -240,7 +240,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWorkers.map((w, index) => {
+                  {filteredWorkers.map((w) => {
                     const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
                     return (
                       <tr key={w.id} className="hover:bg-slate-50/50">
