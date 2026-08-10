@@ -842,6 +842,11 @@ app.delete('/api/divisions/:id', authenticateToken, async (req, res) => {
     if (req.user.role !== 'OWNER' && req.user.role !== 'MANAGER') {
       return res.status(403).json({ error: 'Only Owner or Manager can delete divisions' });
     }
+    // Check if any workers are assigned to this division
+    const workerCount = await prisma.worker.count({ where: { divisionId: id } });
+    if (workerCount > 0) {
+      return res.status(400).json({ error: `Cannot delete division — ${workerCount} worker(s) are still assigned. Please reassign them to another division first.` });
+    }
     await prisma.division.delete({ where: { id } });
     res.json({ message: 'Division deleted successfully' });
   } catch (err) {
@@ -1152,6 +1157,9 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
       const dbPayment = worker.payments[0];
 
+      const extraAmount = dbPayment ? (dbPayment.extraAmount || 0) : 0;
+      const totalAmount = calculatedAmount + extraAmount;
+
       return {
         workerId: worker.id,
         empId: worker.workerId,
@@ -1165,7 +1173,8 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         halfDays: half,
         leaveDays: leave,
         totalOtHours: totalOt,
-        calculatedAmount,
+        extraAmount,
+        calculatedAmount: totalAmount,
         paymentStatus: dbPayment ? dbPayment.status : 'PENDING',
         paymentId: dbPayment ? dbPayment.id : null,
       };
@@ -1180,7 +1189,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
 app.post('/api/wages/approve', authenticateToken, async (req, res) => {
   try {
-    const { workerId, month, year, calculatedAmount, presentDays, absentDays, halfDays, leaveDays, totalOtHours } = req.body;
+    const { workerId, month, year, calculatedAmount, presentDays, absentDays, halfDays, leaveDays, totalOtHours, extraAmount } = req.body;
     if (!workerId || !month || !year || calculatedAmount === undefined) {
       return res.status(400).json({ error: 'Worker ID, Month, Year, and Payout Amount are required' });
     }
@@ -1191,6 +1200,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
 
     const m = parseInt(month, 10);
     const y = parseInt(year, 10);
+    const extra = parseFloat(extraAmount) || 0;
 
     const payment = await prisma.monthlyPayment.upsert({
       where: {
@@ -1206,6 +1216,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
         halfDays: parseFloat(halfDays) || 0,
         leaveDays: parseFloat(leaveDays) || 0,
         totalOtHours: parseFloat(totalOtHours) || 0,
+        extraAmount: extra,
         calculatedAmount: parseFloat(calculatedAmount),
         status: 'APPROVED',
         approvedById: req.user.id
@@ -1219,6 +1230,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
         halfDays: parseFloat(halfDays) || 0,
         leaveDays: parseFloat(leaveDays) || 0,
         totalOtHours: parseFloat(totalOtHours) || 0,
+        extraAmount: extra,
         calculatedAmount: parseFloat(calculatedAmount),
         status: 'APPROVED',
         approvedById: req.user.id
@@ -1234,7 +1246,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
 
 app.post('/api/wages/whatsapp-link', authenticateToken, async (req, res) => {
   try {
-    const { workerName, mobileNumber, month, year, presentDays, halfDays, totalOtHours, calculatedAmount } = req.body;
+    const { workerName, mobileNumber, month, year, presentDays, halfDays, totalOtHours, extraAmount, calculatedAmount } = req.body;
     if (!workerName || !mobileNumber || !calculatedAmount) {
       return res.status(400).json({ error: 'Name, mobile number, and wage details are required' });
     }
@@ -1243,13 +1255,14 @@ app.post('/api/wages/whatsapp-link', authenticateToken, async (req, res) => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const monthText = months[parseInt(month, 10) - 1] || 'Month';
 
+    const extraLine = extraAmount && parseFloat(extraAmount) > 0 ? `\n- Extra Amount: *Rs. ${extraAmount}*` : '';
     const message = `*SRI KRISHNA CONSTRUCTIONS*
 ------------------------------
 Dear *${workerName}*,
 Your attendance and payment summary for *${monthText} ${year}* has been calculated and approved:
 - Present Days: *${presentDays}*
 - Half Days: *${halfDays}*
-- OT Hours: *${totalOtHours}*
+- OT Hours: *${totalOtHours}*${extraLine}
 - Total Approved Wage: *Rs. ${calculatedAmount}*
 
 Your salary payment is approved and is being disbursed. Thank you!`;

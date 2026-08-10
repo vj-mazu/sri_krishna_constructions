@@ -18,6 +18,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [extraAmounts, setExtraAmounts] = useState<Record<string, number>>({});
 
   const months = [
     { value: '1', name: 'January' },
@@ -61,6 +62,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         },
       });
       setWagesReport(res.data.wages || []);
+      // Initialize extraAmounts from saved data
+      const extras: Record<string, number> = {};
+      (res.data.wages || []).forEach((w: any) => {
+        extras[w.workerId] = w.extraAmount || 0;
+      });
+      setExtraAmounts(extras);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to calculate monthly wages.');
     } finally {
@@ -80,12 +87,13 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         workerId: worker.workerId,
         month: selectedMonth,
         year: selectedYear,
-        calculatedAmount: worker.calculatedAmount,
+        calculatedAmount: (worker.calculatedAmount || 0) + (extraAmounts[worker.workerId] || 0) - (worker.extraAmount || 0),
         presentDays: worker.presentDays,
         absentDays: worker.absentDays,
         halfDays: worker.halfDays,
         leaveDays: worker.leaveDays,
         totalOtHours: worker.totalOtHours,
+        extraAmount: extraAmounts[worker.workerId] || 0,
       });
 
       setSuccess(`Salary payment approved for '${worker.fullName}'!`);
@@ -107,7 +115,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     setSuccess('');
     try {
       const promises = pendingWages.map(worker => 
-        api.post('/wages/approve', {
+          api.post('/wages/approve', {
           workerId: worker.workerId,
           month: parseInt(selectedMonth, 10),
           year: parseInt(selectedYear, 10),
@@ -115,6 +123,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           halfDays: worker.halfDays,
           leaveDays: worker.leaveDays,
           totalOtHours: worker.totalOtHours,
+          extraAmount: extraAmounts[worker.workerId] || 0,
+          calculatedAmount: (worker.calculatedAmount || 0) + (extraAmounts[worker.workerId] || 0) - (worker.extraAmount || 0),
         })
       );
       await Promise.all(promises);
@@ -135,7 +145,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         presentDays: worker.presentDays,
         halfDays: worker.halfDays,
         totalOtHours: worker.totalOtHours,
-        calculatedAmount: worker.calculatedAmount,
+        extraAmount: extraAmounts[worker.workerId] || 0,
+        calculatedAmount: getWorkerTotal(worker),
       });
 
       // Open link directly
@@ -158,7 +169,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       'Absent Days': w.absentDays,
       'Leave Days': w.leaveDays,
       'Total OT Hours': w.totalOtHours,
-      'Calculated Payout (Rs)': w.calculatedAmount,
+      'Extra Amount (Rs)': extraAmounts[w.workerId] || 0,
+      'Calculated Payout (Rs)': getWorkerTotal(w),
       'Approval Status': w.paymentStatus,
     }));
 
@@ -176,6 +188,16 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       (w.fullName || '').toLowerCase().includes(term)
     );
   });
+
+  const handleExtraChange = (workerId: string, value: string) => {
+    const num = parseFloat(value) || 0;
+    setExtraAmounts(prev => ({ ...prev, [workerId]: num }));
+  };
+
+  const getWorkerTotal = (w: any) => {
+    const baseCalc = (w.calculatedAmount || 0) - (w.extraAmount || 0);
+    return baseCalc + (extraAmounts[w.workerId] || 0);
+  };
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 p-6 space-y-6">
@@ -291,6 +313,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 <th className="text-center">Half Day</th>
                 <th className="text-center">Absent</th>
                 <th className="text-center">OT Hours</th>
+                <th className="text-center">Extra Amount</th>
                 <th className="text-center">Calculated Pay</th>
                 <th>Status</th>
                 <th>Actions</th>
@@ -313,8 +336,19 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   <td className="text-center font-mono font-bold bg-amber-50/50 text-amber-700">{w.halfDays}</td>
                   <td className="text-center font-mono font-bold bg-red-50/50 text-red-700">{w.absentDays}</td>
                   <td className="text-center font-mono font-bold bg-indigo-50/50 text-indigo-700">{w.totalOtHours}h</td>
+                  <td className="text-center">
+                    <input
+                      type="number"
+                      min="0"
+                      step="100"
+                      value={extraAmounts[w.workerId] || ''}
+                      onChange={(e) => handleExtraChange(w.workerId, e.target.value)}
+                      placeholder="0"
+                      className="w-20 text-center font-mono font-bold text-orange-700 bg-orange-50/50 border border-orange-200 rounded px-1 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-orange-400"
+                    />
+                  </td>
                   <td className="font-mono font-bold text-center text-sm text-[#764ba2]">
-                    ₹{w.calculatedAmount.toLocaleString()}
+                    ₹{getWorkerTotal(w).toLocaleString()}
                   </td>
                   <td>
                     <span

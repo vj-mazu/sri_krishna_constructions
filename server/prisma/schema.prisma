@@ -170,7 +170,7 @@ model Worker {
   dailyWage     Float
   otHourlyRate  Float            @default(0.0)
   divisionId    String
-  division      Division         @relation(fields: [divisionId], references: [id], onDelete: Cascade)
+  division      Division         @relation(fields: [divisionId], references: [id], onDelete: Restrict)
   attendances   Attendance[]
   payments      MonthlyPayment[]
   createdAt     DateTime         @default(now())
@@ -209,6 +209,7 @@ model MonthlyPayment {
   halfDays         Float         @default(0.0)
   leaveDays        Float         @default(0.0)
   totalOtHours     Float         @default(0.0)
+  extraAmount      Float         @default(0.0)
   calculatedAmount Float
   status           PaymentStatus @default(PENDING)
   approvedById     String?
