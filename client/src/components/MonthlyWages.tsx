@@ -200,9 +200,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       ? parseFloat(w.otPayment) 
       : Math.round(otHours * (otHourlyRate || (dailyWage / 8)));
 
+    const workerDefaultOtAllow = parseFloat(w.otAllowance ?? 0) || 0;
     const otAllowanceVal = customOtAllowance[w.workerId] !== undefined 
       ? customOtAllowance[w.workerId] 
-      : parseFloat(w.otAllowance ?? 0);
+      : (otHours > 0 ? workerDefaultOtAllow : 0);
     const otAllowance = otAllowanceVal === '' ? 0 : parseFloat(otAllowanceVal as string) || 0;
 
     const totalPayment = netBaseAmount + otPayment + otAllowance;

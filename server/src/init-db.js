@@ -280,6 +280,9 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "divisionId" TEXT REFERENCES "Division"("id");
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "notes" TEXT;
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "overtimeHours" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "otHours" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "recordedById" TEXT REFERENCES "User"("id");
+      ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "markedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "dailyWageOverride" DOUBLE PRECISION;
 
       -- MonthlyPayment 18-column payroll breakdown fields

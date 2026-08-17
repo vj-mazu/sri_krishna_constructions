@@ -2229,20 +2229,24 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const otHours = attendanceData.map(r => parseFloat(r.overtimeHours) || 0.0);
       const dailyWageOverrides = attendanceData.map(r => r.dailyWageOverride ? parseFloat(r.dailyWageOverride) : null);
       const notes = attendanceData.map(r => r.notes || null);
-      const markedByIds = attendanceData.map(r => req.user.id);
+      const userIds = attendanceData.map(r => req.user.id);
 
       await pool.query(
-        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "otHours", "dailyWageOverride", "notes", "markedById", "createdAt", "updatedAt")
-         SELECT gen_random_uuid()::text, * FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[])
+        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.nt, u.uid, u.uid, NOW(), NOW()
+         FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[]) 
+         AS u(workerId, dt, st, ot, dw, nt, uid)
          ON CONFLICT ("workerId", "date")
          DO UPDATE SET
            "status" = EXCLUDED."status",
+           "overtimeHours" = EXCLUDED."overtimeHours",
            "otHours" = EXCLUDED."otHours",
            "dailyWageOverride" = EXCLUDED."dailyWageOverride",
            "notes" = EXCLUDED."notes",
+           "recordedById" = EXCLUDED."recordedById",
            "markedById" = EXCLUDED."markedById",
            "updatedAt" = NOW()`,
-        [workerIds, dates, statuses, otHours, dailyWageOverrides, notes, markedByIds]
+        [workerIds, dates, statuses, otHours, dailyWageOverrides, notes, userIds]
       );
     }
 
@@ -2370,9 +2374,11 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         ? parseFloat(dbPayment.otPayment) 
         : Math.round(totalOt * otRate);
 
+      // OT Allowance should ONLY be given when OT is actually done (totalOt > 0) or manually set in payment
+      const defaultOtAllowance = parseFloat(worker.otAllowance) || 0;
       const otAllowance = dbPayment && dbPayment.otAllowance !== undefined && dbPayment.otAllowance !== null 
         ? parseFloat(dbPayment.otAllowance) 
-        : (parseFloat(worker.otAllowance) || 0);
+        : (totalOt > 0 ? defaultOtAllowance : 0);
 
       const totalPayment = netBaseAmount + otPayment + otAllowance;
       const advanceDeducted = dbPayment ? (parseFloat(dbPayment.advanceDeducted) || 0) : 0;
