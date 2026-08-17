@@ -1,9 +1,17 @@
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const getApiBase = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (import.meta.env.VITE_APP_API_URL) return import.meta.env.VITE_APP_API_URL;
+  // If running in production on the same domain (e.g. Render / Custom domain), use relative /api
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    return '/api';
+  }
+  return 'http://localhost:5000/api';
+};
 
 const api = axios.create({
-  baseURL: API_BASE,
+  baseURL: getApiBase(),
 });
 
 api.interceptors.request.use((config) => {
