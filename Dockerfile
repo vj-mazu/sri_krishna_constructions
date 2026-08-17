@@ -29,4 +29,4 @@ COPY --from=server-builder /app/server/seeds ./server/seeds
 COPY --from=server-builder /app/server/src ./server/src
 EXPOSE 5000
 ENV NODE_ENV=production
-CMD ["sh", "-c", "cd server && npx -y prisma db push && node src/server.js"]
+CMD ["sh", "-c", "cd server && node src/server.js"]
