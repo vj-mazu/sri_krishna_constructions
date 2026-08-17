@@ -20,3 +20,12 @@ pnpm-debug.log*
 # OS files
 .DS_Store
 Thumbs.db
+
+# Scratch and temporary development files
+scratch/
+**/scratch/
+*.tmp
+*.bak
+.vscode/
+.idea/
+

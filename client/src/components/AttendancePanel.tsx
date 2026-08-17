@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
+import { showToast } from '../toast';
 import { Calendar, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 
 interface AttendancePanelProps {
@@ -9,7 +10,7 @@ interface AttendancePanelProps {
 export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRole }) => {
   const [divisions, setDivisions] = useState<any[]>([]);
   const [selectedDivisionId, setSelectedDivisionId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [workers, setWorkers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'; overtimeHours: string; dailyWageOverride: string }>>({});
@@ -26,8 +27,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       if (divList.length > 0) {
         setSelectedDivisionId(divList[0].id);
       }
-    } catch (err) {
-      console.error('Failed to load divisions:', err);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to load divisions', 'error');
     }
   };
 
@@ -37,36 +38,44 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const fetchWorkersAndAttendance = async () => {
     if (!selectedDivisionId || !selectedDate) return;
-    setLoading(true);
-    setError('');
-    setSuccess('');
-
     try {
-      // 1. Fetch all workers under this division
-      const workersRes = await api.get('/workers', { params: { divisionId: selectedDivisionId } });
-      const activeWorkers = workersRes.data.workers || [];
-      setWorkers(activeWorkers);
+      setLoading(true);
+      setError('');
+      setSuccess('');
 
-      // 2. Fetch existing daily logs if already logged today
-      const attRes = await api.get('/attendance', { params: { date: selectedDate, divisionId: selectedDivisionId } });
-      const logged = attRes.data.attendances || [];
+      const [workersRes, attendanceRes] = await Promise.all([
+        api.get(`/workers?divisionId=${selectedDivisionId}`),
+        api.get(`/attendance?divisionId=${selectedDivisionId}&date=${selectedDate}`),
+      ]);
 
-      // 3. Build state map. If no record logged, default worker status to PRESENT
-      const map: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'; overtimeHours: string; dailyWageOverride: string }> = {};
-      activeWorkers.forEach((w: any) => {
-        const record = logged.find((l: any) => l.workerId === w.id);
-        map[w.id] = {
-          status: record ? record.status : 'PRESENT',
-          overtimeHours: record ? record.overtimeHours.toString() : '0',
-          dailyWageOverride: record && record.dailyWageOverride !== null && record.dailyWageOverride !== undefined
-            ? record.dailyWageOverride.toString()
-            : '',
+      const fetchedWorkers = workersRes.data.workers || [];
+      const fetchedAttendance = attendanceRes.data.attendances || attendanceRes.data.attendance || [];
+
+      setWorkers(fetchedWorkers);
+
+      const recordsMap: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'; overtimeHours: string; dailyWageOverride: string }> = {};
+
+      fetchedWorkers.forEach((w: any) => {
+        recordsMap[w.id] = {
+          status: 'PRESENT',
+          overtimeHours: '0',
+          dailyWageOverride: '',
         };
       });
 
-      setAttendanceRecords(map);
-    } catch (err) {
-      setError('Failed to load daily workers attendance roster.');
+      fetchedAttendance.forEach((att: any) => {
+        recordsMap[att.workerId] = {
+          status: att.status,
+          overtimeHours: att.overtimeHours ? att.overtimeHours.toString() : '0',
+          dailyWageOverride: att.dailyWageOverride ? att.dailyWageOverride.toString() : '',
+        };
+      });
+
+      setAttendanceRecords(recordsMap);
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to fetch workers and daily attendance data';
+      setError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setLoading(false);
     }
@@ -96,6 +105,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     }));
   };
 
+  const formatDateDMY = (dateStr: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    return dateStr;
+  };
+
   const handleWageOverrideChange = (workerId: string, dailyWageOverride: string) => {
     setAttendanceRecords((prev) => ({
       ...prev,
@@ -108,6 +124,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const handleSaveAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedDivisionId || !selectedDate) {
+      const msg = 'Please select both a division and a date before saving.';
+      setError(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
     setSaving(true);
     setError('');
     setSuccess('');
@@ -127,40 +150,42 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         attendanceData: formattedData,
       });
       
-      if (res.data.requiresApproval) {
-        setSuccess(res.data.message);
-      } else {
-        setSuccess('Daily worker attendance roster saved and updated successfully!');
-      }
+      const successMsg = res.data.requiresApproval 
+        ? res.data.message 
+        : 'Daily worker attendance roster saved and updated successfully!';
+      setSuccess(successMsg);
+      showToast(successMsg, 'success');
       setTimeout(() => setSuccess(''), 6000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to record daily worker attendance sheet.');
+      const errMsg = err.response?.data?.error || 'Failed to record daily worker attendance sheet.';
+      setError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow border border-slate-200 p-6 space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-4 gap-3">
+    <div className="bg-white rounded-xl shadow border border-slate-200 p-2.5 sm:p-6 space-y-2.5 sm:space-y-6">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-[#667eea]" /> Daily Workers Attendance Sheets
+          <h2 className="text-sm sm:text-xl font-bold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#1e3a8a]" /> Daily Workers Attendance
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
             Choose a Division and Date to mark daily worker presence and calculate site overtime (OT).
           </p>
         </div>
       </div>
 
-      {/* FILTER CONTROLS */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+      {/* COMPACT FILTER CONTROLS */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-slate-50 p-2 sm:p-4 rounded-lg sm:rounded-xl border border-slate-200">
         <div className="text-xs">
-          <label className="block font-semibold text-slate-700 mb-1">Select Site Division *</label>
+          <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">Division *</label>
           <select
             value={selectedDivisionId}
             onChange={(e) => setSelectedDivisionId(e.target.value)}
-            className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
+            className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
           >
             {divisions.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
@@ -168,35 +193,37 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           </select>
         </div>
         <div className="text-xs">
-          <label className="block font-semibold text-slate-700 mb-1">Select Attendance Date *</label>
+          <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">
+            Date * {selectedDate && <span className="text-[#1e3a8a] font-mono font-bold text-[10px]">[{formatDateDMY(selectedDate)}]</span>}
+          </label>
           <input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
+            className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs font-mono"
           />
         </div>
-        <div className="text-xs">
-          <label className="block font-semibold text-slate-700 mb-1">Search Worker</label>
+        <div className="text-xs col-span-2 md:col-span-1">
+          <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">Search Worker</label>
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Name or ID"
-            className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
+            placeholder="Search Name or ID..."
+            className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
           />
         </div>
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 rounded-lg text-xs border border-red-200 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" /> {error}
+        <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs border border-red-200 flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" /> {error}
         </div>
       )}
 
       {success && (
-        <div className="p-3 bg-indigo-50 text-indigo-700 rounded-lg text-xs border border-indigo-200 flex items-center gap-2">
-          <CheckCircle className="w-4 h-4" /> {success}
+        <div className="p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-200 flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 text-[#1e3a8a] shrink-0" /> {success}
         </div>
       )}
 
@@ -229,96 +256,88 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
         return (
           <form onSubmit={handleSaveAttendance} className="space-y-4">
-            {/* 1. MOBILE VERTICAL CARD LIST (Shown only on mobile screens) */}
-            <div className="block md:hidden space-y-3.5">
+            {/* 1. MOBILE COMPACT CARD LIST (Shown only on mobile screens) */}
+            <div className="block md:hidden space-y-2.5">
               {filteredWorkers.map((w) => {
                 const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
                 return (
-                  <div key={w.id} className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                  <div key={w.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     {/* Header info */}
-                    <div className="flex justify-between items-start border-b border-slate-200 pb-2">
-                      <div>
-                        <div className="font-bold text-slate-800 text-sm">{w.fullName}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{w.mobileNumber}</div>
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-[#1e3a8a]/10 text-[#1e3a8a] font-bold text-xs flex items-center justify-center">
+                          {w.fullName.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-800 text-xs leading-tight">{w.fullName}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">{w.workerId}</div>
+                        </div>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] font-mono font-bold bg-[#667eea]/10 text-[#667eea] px-2 py-0.5 rounded border border-[#667eea]/20">
-                          {w.workerId}
-                        </span>
-                        <div className="text-[10px] text-slate-500 font-semibold mt-1">₹{w.dailyWage}/day</div>
+                        <div className="text-[10px] text-emerald-700 font-bold font-mono">₹{w.dailyWage}/d</div>
+                        {w.dailyAllowance > 0 && (
+                          <div className="text-[9px] text-amber-700 font-mono">+₹{w.dailyAllowance} allow</div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Attendance status selector (Clean full-width tap-friendly grid) */}
-                    <div>
-                      <span className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">Mark Attendance</span>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                          const active = state.status === status;
-                          let colorClasses = '';
-                          if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 bg-white';
-                          if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 bg-white';
-                          if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 bg-white';
-                          if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 bg-white';
+                    {/* Attendance status selector (Compact tap buttons) */}
+                    <div className="grid grid-cols-4 gap-1">
+                      {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
+                        const active = state.status === status;
+                        let colorClasses = '';
+                        if (status === 'PRESENT') colorClasses = active ? 'border-emerald-600 bg-emerald-600 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
+                        if (status === 'ABSENT') colorClasses = active ? 'border-red-600 bg-red-600 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
+                        if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-600 bg-amber-600 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
+                        if (status === 'LEAVE') colorClasses = active ? 'border-slate-700 bg-slate-700 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
 
-                          return (
-                            <label
-                              key={status}
-                              className={`flex flex-col items-center justify-center p-2 border rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-wider text-center transition-all select-none ${colorClasses}`}
-                            >
-                              <input
-                                type="radio"
-                                name={`status-mobile-${w.id}`}
-                                value={status}
-                                checked={active}
-                                onChange={() => handleStatusChange(w.id, status)}
-                                className="sr-only"
-                              />
-                              <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Pres' : status === 'ABSENT' ? 'Abs' : 'Leave'}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
+                        return (
+                          <label
+                            key={status}
+                            className={`flex items-center justify-center py-1.5 px-1 border rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-wider text-center transition-all select-none ${colorClasses}`}
+                          >
+                            <input
+                              type="radio"
+                              name={`status-mobile-${w.id}`}
+                              value={status}
+                              checked={active}
+                              onChange={() => handleStatusChange(w.id, status)}
+                              className="sr-only"
+                            />
+                            <span>{status === 'HALF_DAY' ? 'HD' : status === 'PRESENT' ? 'P' : status === 'ABSENT' ? 'A' : 'L'}</span>
+                          </label>
+                        );
+                      })}
                     </div>
 
-                    {/* Wage override & Overtime (Fast tap columns) */}
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Wage Override (₹)</label>
-                        <div className="relative rounded-md shadow-sm">
-                          <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
-                            <span className="text-slate-400 text-[10px] font-bold">₹</span>
-                          </div>
-                          <input
-                            type="number"
-                            min="0"
-                            placeholder={w.dailyWage.toString()}
-                            disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
-                            value={state.dailyWageOverride}
-                            onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                            className={`w-full pl-6 pr-2 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-center focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none ${
-                              currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
-                            }`}
-                          />
-                        </div>
+                    {/* Wage override & Overtime (Compact row) */}
+                    <div className="grid grid-cols-2 gap-2 pt-0.5 text-xs">
+                      <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                        <span className="text-slate-400 text-[10px] font-bold">₹</span>
+                        <input
+                          type="number"
+                          min="0"
+                          placeholder={`Wage: ₹${w.dailyWage}`}
+                          disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
+                          value={state.dailyWageOverride}
+                          onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
+                          className="w-full bg-transparent text-[11px] font-bold text-slate-700 focus:outline-none"
+                        />
                       </div>
 
-                      <div>
-                        <label className="block text-[9px] uppercase tracking-wider text-slate-400 font-bold mb-1">Overtime Hours</label>
-                        <div className="relative rounded-md shadow-sm">
-                          <input
-                            type="number"
-                            min="0"
-                            max="24"
-                            step="0.5"
-                            value={state.overtimeHours}
-                            onChange={(e) => handleOtChange(w.id, e.target.value)}
-                            className="w-full pr-8 pl-2 py-1.5 border border-slate-300 rounded-lg text-xs font-bold text-center focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none bg-white"
-                          />
-                          <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
-                            <span className="text-slate-400 text-[9px] font-bold">hrs</span>
-                          </div>
-                        </div>
+                      <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                        <span className="text-slate-400 text-[10px] font-bold">OT:</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="24"
+                          step="0.5"
+                          placeholder="0 hrs"
+                          value={state.overtimeHours === '0' ? '' : state.overtimeHours}
+                          onChange={(e) => handleOtChange(w.id, e.target.value)}
+                          className="w-full bg-transparent text-[11px] font-bold text-slate-700 focus:outline-none"
+                        />
+                        <span className="text-slate-400 text-[9px]">hrs</span>
                       </div>
                     </div>
                   </div>
@@ -344,8 +363,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       <tr key={w.id} className="hover:bg-slate-50/50">
                         <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
                           <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
-                          <div className="text-[9px] text-[#667eea] font-mono font-bold mt-0.5">{w.workerId}</div>
-                          <div className="text-[9px] text-slate-400 mt-0.5">₹{w.dailyWage}/day</div>
+                          <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
+                          <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
                         </td>
                         
                         <td className="px-3 py-2">
@@ -393,11 +412,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             <input
                               type="number"
                               min="0"
-                              placeholder={w.dailyWage.toString()}
+                              placeholder={w.dailyWage?.toString() || '0'}
                               disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
                               value={state.dailyWageOverride}
                               onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                              className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#667eea] outline-none text-xs ${
+                              className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs ${
                                 currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
                               }`}
                             />
@@ -413,7 +432,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                               step="0.5"
                               value={state.overtimeHours}
                               onChange={(e) => handleOtChange(w.id, e.target.value)}
-                              className="w-14 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#667eea] outline-none text-xs"
+                              className="w-14 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs"
                             />
                             <span className="text-[9px] text-slate-400 font-semibold">h</span>
                           </div>
@@ -429,7 +448,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-2.5 bg-gradient-to-r from-[#667eea] to-[#764ba2] hover:opacity-90 text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center gap-2"
+                className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center gap-2"
               >
                 {saving ? 'Saving Sheet...' : 'Save & Submit Attendance'}
               </button>

@@ -1,18 +1,25 @@
 import { useState, useEffect } from 'react';
 import api from './api';
 import { LoginModal } from './components/LoginModal';
-import { ExcelGrid } from './components/ExcelGrid';
-import { StockLedger } from './components/StockLedger';
+import { PurchaseRecords } from './components/PurchaseRecords';
+import { StockGrid } from './components/StockGrid';
 import { UserManagement } from './components/UserManagement';
 import { ApprovalsPanel } from './components/ApprovalsPanel';
 import { DashboardOverview } from './components/DashboardOverview';
-import { MovementModal } from './components/MovementModal';
 import { AttendancePanel } from './components/AttendancePanel';
 import { MonthlyWages } from './components/MonthlyWages';
-import { TenderControl } from './components/TenderControl';
-import { SaleInvoiceModal } from './components/SaleInvoiceModal';
 
-import { Building2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { 
+  Building2, 
+  CheckCircle2, 
+  AlertCircle, 
+  LayoutDashboard, 
+  FileSpreadsheet, 
+  Package, 
+  Calendar, 
+  Wallet, 
+  ShieldCheck 
+} from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
@@ -37,11 +44,7 @@ export function App() {
     }
   }, [toast]);
   
-  // Movement Modal state
-  const [movementModalOpen, setMovementModalOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('IAC_CHICAGO');
-  const [selectedItemCode, setSelectedItemCode] = useState<string>('');
-  const [completedSale, setCompletedSale] = useState<any>(null);
+
 
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -83,13 +86,9 @@ export function App() {
   const handleLogout = () => {
     localStorage.removeItem('iac_token');
     setUser(null);
+    setActiveTab('dashboard');
   };
 
-  const handleOpenMovementModal = (category: string, itemCode?: string) => {
-    setSelectedCategory(category);
-    setSelectedItemCode(itemCode || '');
-    setMovementModalOpen(true);
-  };
 
   if (!user) {
     return (
@@ -107,111 +106,73 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f5] text-slate-900 flex flex-col font-sans">
-      <header className="bg-gradient-to-r from-[#667eea] to-[#764ba2] shadow-md sticky top-0 z-40">
-        <div className="max-w-[1700px] mx-auto px-4 py-2 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans">
+      <header className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] border-b border-blue-900 shadow-md sticky top-0 z-40">
+        <div className="max-w-[1700px] mx-auto px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
           
           {/* Logo / Brand Name & Mobile Logout */}
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
             <div className="flex items-center gap-2 shrink-0">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow">
-                <Building2 className="w-4.5 h-4.5 text-[#667eea]" />
+              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-md">
+                <Building2 className="w-4.5 h-4.5 text-[#1e3a8a]" />
               </div>
               <div>
-                <h1 className="font-bold text-sm tracking-tight text-white uppercase leading-none">
+                <h1 className="font-extrabold text-sm tracking-tight text-white uppercase leading-none">
                   SRI KRISHNA CONSTRUCTIONS
                 </h1>
-                <span className="text-[9px] text-white/70 block mt-0.5">IAC STOCKS PORTAL</span>
+                <span className="text-[9px] text-blue-200 font-semibold block mt-0.5 tracking-wider">ERP PORTAL</span>
               </div>
             </div>
 
             {/* Mobile-only Logout & Role */}
             <div className="flex items-center gap-2 md:hidden">
-              <span className="text-[9px] font-bold bg-white/20 px-1.5 py-0.5 rounded border border-white/10 font-mono uppercase tracking-wider text-white">
+              <span className="text-[9px] font-bold bg-white/20 text-white px-2 py-0.5 rounded border border-white/20 font-mono uppercase tracking-wider">
                 {user.role}
               </span>
               <button
                 onClick={handleLogout}
-                className="px-2.5 py-1 bg-[#ef4444] hover:bg-red-600 text-white text-[10px] font-bold rounded transition-all shadow"
+                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-[10px] font-bold rounded transition-all shadow"
               >
                 Logout
               </button>
             </div>
           </div>
 
-          {/* Navigation Tabs (Full width scrollable on mobile, centered on desktop) */}
-          <nav className="w-full md:flex-1 flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 md:py-0 justify-start md:justify-center">
+          {/* Desktop Navigation Tabs */}
+          <nav className="hidden md:flex flex-1 items-center gap-1.5 justify-center">
             {user.role !== 'SUPERVISOR' && (
               <>
                 <button
                   onClick={() => setActiveTab('dashboard')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                     activeTab === 'dashboard'
-                      ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                      : 'text-white hover:bg-white/10'
+                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                   }`}
                 >
                   Dashboard
                 </button>
 
-                {/* TAB 1: IAC SPARES */}
                 <button
-                  onClick={() => setActiveTab('iac_chicago')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'iac_chicago'
-                      ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                      : 'text-white hover:bg-white/10'
+                  onClick={() => setActiveTab('purchase_orders')}
+                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                    activeTab === 'purchase_orders'
+                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                   }`}
                 >
-                  IAC Spares (CP)
+                  Purchase Orders
                 </button>
 
-                {/* TAB 2: KIRLOSKAR ANNEXURE */}
                 <button
-                  onClick={() => setActiveTab('kirloskar_annexure')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'kirloskar_annexure'
-                      ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                      : 'text-white hover:bg-white/10'
+                  onClick={() => setActiveTab('stock')}
+                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                    activeTab === 'stock'
+                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                   }`}
                 >
-                  Kirloskar Annexure
-                </button>
-
-                {/* TAB 3: TAC SPARES */}
-                <button
-                  onClick={() => setActiveTab('tac_chicago')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'tac_chicago'
-                      ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                      : 'text-white hover:bg-white/10'
-                  }`}
-                >
-                  TAC Spares (CP)
-                </button>
-
-                {/* TAB 4: KIRLOSKAR UNIT-4 */}
-                <button
-                  onClick={() => setActiveTab('kirloskar_unit4')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'kirloskar_unit4'
-                      ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                      : 'text-white hover:bg-white/10'
-                  }`}
-                >
-                  Kirloskar Unit-4
-                </button>
-
-                {/* STOCK LEDGER */}
-                <button
-                  onClick={() => setActiveTab('ledger')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'ledger'
-                      ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                      : 'text-white hover:bg-white/10'
-                  }`}
-                >
-                  Stock Ledger
+                  Stock
                 </button>
               </>
             )}
@@ -220,10 +181,10 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
               <button
                 onClick={() => setActiveTab('attendance')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                   activeTab === 'attendance'
-                    ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                    : 'text-white hover:bg-white/10'
+                    ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                    : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                 }`}
               >
                 Attendance
@@ -234,10 +195,10 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
                 onClick={() => setActiveTab('wages')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                   activeTab === 'wages'
-                    ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                    : 'text-white hover:bg-white/10'
+                    ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                    : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                 }`}
               >
                 Monthly Wages
@@ -248,15 +209,15 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
                 onClick={() => setActiveTab('approvals')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   activeTab === 'approvals'
-                    ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                    : 'text-white hover:bg-white/10'
+                    ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                    : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                 }`}
               >
                 <span>Approvals</span>
                 {pendingCount > 0 && (
-                  <span className="bg-[#ef4444] text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                  <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
                     {pendingCount}
                   </span>
                 )}
@@ -267,10 +228,10 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
               <button
                 onClick={() => setActiveTab('master_creation')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                   activeTab === 'master_creation'
-                    ? 'bg-white text-[#667eea] font-bold shadow-sm'
-                    : 'text-white hover:bg-white/10'
+                    ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                    : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                 }`}
               >
                 Master Creation
@@ -281,14 +242,14 @@ export function App() {
           {/* USER PROFILE & LOGOUT (Desktop only) */}
           <div className="hidden md:flex items-center gap-3 shrink-0">
             <div className="text-right text-white">
-              <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded border border-white/10 font-mono uppercase tracking-wider block text-center">
+              <span className="text-[10px] font-bold bg-white/20 text-white px-2.5 py-1 rounded border border-white/20 font-mono uppercase tracking-wider block text-center">
                 {user.role}
               </span>
             </div>
 
             <button
               onClick={handleLogout}
-              className="px-3 py-1.5 bg-[#ef4444] hover:bg-red-600 text-white text-xs font-bold rounded-lg transition-all shadow-sm"
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-all shadow"
             >
               Logout
             </button>
@@ -296,84 +257,135 @@ export function App() {
         </div>
       </header>
 
-      {/* MAIN CONTAINER */}
-      <main className="flex-1 max-w-[1700px] w-full mx-auto p-4 sm:p-8 animate-fadeIn">
-        {activeTab === 'dashboard' && <DashboardOverview onSelectTab={(t) => setActiveTab(t)} />}
-
-        {activeTab === 'iac_chicago' && (
-          <ExcelGrid
-            category="IAC_CHICAGO"
-            title="IAC spares on ARC basis for one year"
-            subtitle="Spares List Instrument air compressor for Make: Chicago Pneumatics (Image 1 Format)"
-            userRole={user.role}
-            onOpenMovement={(code) => handleOpenMovementModal('IAC_CHICAGO', code)}
-          />
-        )}
-
-        {activeTab === 'kirloskar_annexure' && (
-          <ExcelGrid
-            category="KIRLOSKAR_ANNEXURE"
-            title="ANNEXURE - KIRLOSKAR MAKE COMPRESSOR SPARES LIST"
-            subtitle="Spares List for Model T-BTD-PM & T-BTD-RM (Image 2 Format)"
-            userRole={user.role}
-            onOpenMovement={(code) => handleOpenMovementModal('KIRLOSKAR_ANNEXURE', code)}
-          />
-        )}
-
-        {activeTab === 'tac_chicago' && (
-          <ExcelGrid
-            category="TAC_CHICAGO"
-            title="TAC spares on ARC basis for one year"
-            subtitle="Spares List of Transport Air Compressor for make: Chicago Pneumatics (Image 3 Format)"
-            userRole={user.role}
-            onOpenMovement={(code) => handleOpenMovementModal('TAC_CHICAGO', code)}
-          />
-        )}
-
-        {activeTab === 'kirloskar_unit4' && (
-          <ExcelGrid
-            category="KIRLOSKAR_UNIT4"
-            title="Spares list of Kirloskar make-T-BTD-PM model Compressors (Unit-4)"
-            subtitle="Compressor Spares Unit-4 List (Image 4 Format)"
-            userRole={user.role}
-            onOpenMovement={(code) => handleOpenMovementModal('KIRLOSKAR_UNIT4', code)}
-          />
-        )}
-
-        {activeTab === 'ledger' && <StockLedger />}
-        {activeTab === 'tender_control' && <TenderControl />}
-        {activeTab === 'approvals' && <ApprovalsPanel />}
+      {/* MAIN CONTAINER (FULL-SCREEN RESPONSIVE LAYOUT) */}
+      <main className="flex-1 max-w-[1700px] w-full mx-auto p-2 sm:p-6 md:p-8 pb-20 md:pb-8 animate-fadeIn">
+        {activeTab === 'dashboard' && user.role !== 'SUPERVISOR' && <DashboardOverview onSelectTab={(t) => setActiveTab(t)} />}
+        {activeTab === 'purchase_orders' && user.role !== 'SUPERVISOR' && <PurchaseRecords currentUserRole={user.role} />}
+        {activeTab === 'stock' && user.role !== 'SUPERVISOR' && <StockGrid />}
+        {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
         {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
         {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}
-        {activeTab === 'wages' && <MonthlyWages currentUserRole={user.role} />}
+        {activeTab === 'wages' && (user.role === 'OWNER' || user.role === 'MANAGER') && <MonthlyWages currentUserRole={user.role} />}
       </main>
 
-      {/* GLOBAL MOVEMENT MODAL */}
-      <MovementModal
-        category={selectedCategory}
-        itemCode={selectedItemCode}
-        isOpen={movementModalOpen}
-        onClose={() => setMovementModalOpen(false)}
-        onSuccess={(movement) => {
-          setMovementModalOpen(false);
-          if (movement?.movementType === 'SALE') setCompletedSale(movement);
-        }}
-      />
-      <SaleInvoiceModal sale={completedSale} onClose={() => setCompletedSale(null)} />
-      
-      {/* Toast Notification */}
+      {/* NATIVE MOBILE APP BOTTOM NAVIGATION BAR */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl py-1 px-1 flex justify-around items-center">
+        {user.role !== 'SUPERVISOR' && (
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+              activeTab === 'dashboard' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            }`}
+          >
+            <LayoutDashboard className="w-4 h-4" />
+            <span className="text-[9px]">Dashboard</span>
+          </button>
+        )}
+
+        {user.role !== 'SUPERVISOR' && (
+          <button
+            onClick={() => setActiveTab('purchase_orders')}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+              activeTab === 'purchase_orders' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span className="text-[9px]">POs</span>
+          </button>
+        )}
+
+        {user.role !== 'SUPERVISOR' && (
+          <button
+            onClick={() => setActiveTab('stock')}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+              activeTab === 'stock' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            <span className="text-[9px]">Stock</span>
+          </button>
+        )}
+
+        <button
+          onClick={() => setActiveTab('attendance')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+            activeTab === 'attendance' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+          }`}
+        >
+          <Calendar className="w-4 h-4" />
+          <span className="text-[9px]">Attendance</span>
+        </button>
+
+        {(user.role === 'OWNER' || user.role === 'MANAGER') && (
+          <button
+            onClick={() => setActiveTab('wages')}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+              activeTab === 'wages' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            }`}
+          >
+            <Wallet className="w-4 h-4" />
+            <span className="text-[9px]">Wages</span>
+          </button>
+        )}
+
+        {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
+          <button
+            onClick={() => setActiveTab('master_creation')}
+            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+              activeTab === 'master_creation' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span className="text-[9px]">Master</span>
+          </button>
+        )}
+
+        {(user.role === 'OWNER' || user.role === 'MANAGER') && (
+          <button
+            onClick={() => setActiveTab('approvals')}
+            className={`relative flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
+              activeTab === 'approvals' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span className="text-[9px]">Approvals</span>
+            {pendingCount > 0 && (
+              <span className="absolute -top-0.5 right-1 bg-red-500 text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
+                {pendingCount}
+              </span>
+            )}
+          </button>
+        )}
+      </nav>
+
+      {/* Top-Right Toast Notification */}
       {toast && (
-        <div className={`fixed bottom-5 right-5 z-50 p-4 rounded-xl shadow-2xl border flex items-center gap-3 transition-all duration-300 transform translate-y-0 max-w-sm animate-bounce ${
-          toast.type === 'success' 
-            ? 'bg-emerald-50 text-emerald-900 border-emerald-300' 
-            : 'bg-rose-50 text-rose-900 border-rose-300'
-        }`}>
+        <div 
+          className={`fixed top-5 right-5 z-[9999] p-4 rounded-xl shadow-2xl border flex items-center gap-3 transition-all duration-300 transform translate-y-0 max-w-md backdrop-blur-md animate-in slide-in-from-top-4 fade-in ${
+            toast.type === 'success' 
+              ? 'bg-emerald-900/90 text-white border-emerald-500 shadow-emerald-900/30' 
+              : 'bg-rose-900/90 text-white border-rose-500 shadow-rose-900/30'
+          }`}
+        >
           {toast.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 border border-emerald-400">
+              <CheckCircle2 className="w-5 h-5 text-emerald-300" />
+            </div>
           ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+            <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0 border border-rose-400">
+              <AlertCircle className="w-5 h-5 text-rose-300" />
+            </div>
           )}
-          <span className="text-xs font-bold">{toast.message}</span>
+          <div className="flex-1">
+            <p className="text-xs font-bold tracking-wide">{toast.message}</p>
+          </div>
+          <button 
+            onClick={() => setToast(null)}
+            className="text-white/60 hover:text-white p-1 transition-colors text-xs font-bold"
+            title="Dismiss"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

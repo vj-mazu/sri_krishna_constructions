@@ -34,13 +34,13 @@ export const ApprovalsPanel: React.FC = () => {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow border border-slate-200 p-6 space-y-4">
-      <div className="border-b border-slate-200 pb-3">
-        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <Clock className="w-5 h-5 text-amber-600" /> Pending Owner / Admin Approval Requests
+    <div className="bg-white rounded-xl shadow border border-slate-200 p-2.5 sm:p-6 space-y-2.5 sm:space-y-4">
+      <div className="border-b border-slate-200 pb-2 sm:pb-3">
+        <h2 className="text-sm sm:text-xl font-bold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+          <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" /> Pending Approval Requests
         </h2>
-        <p className="text-xs text-slate-500 mt-0.5">
-          Approve or Reject item edit/deletion requests submitted by Staff or Managers
+        <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
+          Approve or Reject attendance edit requests submitted by Supervisors or Managers
         </p>
       </div>
 
@@ -50,7 +50,7 @@ export const ApprovalsPanel: React.FC = () => {
             <tr>
               <th>Sl No</th>
               <th>Request Type</th>
-              <th>Item Code</th>
+              <th>Request Details</th>
               <th>Requested By</th>
               <th>Reason</th>
               <th>Requested Date</th>
@@ -79,8 +79,10 @@ export const ApprovalsPanel: React.FC = () => {
                       {a.type}
                     </span>
                   </td>
-                  <td className="font-mono font-bold text-[#667eea]">
-                    {a.type === 'EDIT_ATTENDANCE' ? (a.payload?.date || 'Attendance') : (a.item?.itemCode || '-')}
+                  <td className="font-mono font-bold text-[#1e3a8a]">
+                    {a.type === 'EDIT_ATTENDANCE' 
+                      ? ((typeof a.payload === 'string' ? (JSON.parse(a.payload || '{}')?.date) : a.payload?.date) || 'Attendance') 
+                      : '-'}
                   </td>
                   <td className="font-semibold">{a.requestedBy?.fullName} ({a.requestedBy?.role})</td>
                   <td className="max-w-xs text-slate-700">{a.reason}</td>

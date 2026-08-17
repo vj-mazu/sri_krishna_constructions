@@ -14,17 +14,7 @@ enum Role {
   SUPERVISOR
 }
 
-enum CategoryType {
-  IAC_CHICAGO
-  KIRLOSKAR_ANNEXURE
-  TAC_CHICAGO
-  KIRLOSKAR_UNIT4
-}
 
-enum MovementType {
-  INWARD
-  SALE
-}
 
 enum ApprovalStatus {
   PENDING
@@ -33,10 +23,6 @@ enum ApprovalStatus {
 }
 
 enum ApprovalType {
-  EDIT_ITEM
-  DELETE_ITEM
-  EDIT_MOVEMENT
-  DELETE_MOVEMENT
   EDIT_ATTENDANCE
 }
 
@@ -62,7 +48,9 @@ model User {
   role            Role             @default(STAFF)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
-  movements       StockMovement[]
+  purchaseOrders  PurchaseOrder[]  @relation("POAddedBy")
+  purchasesAdded  Purchase[]       @relation("PurchaseAddedBy")
+  salesAdded      Sale[]           @relation("SaleAddedBy")
   approvalRequests ApprovalRequest[] @relation("RequestedBy")
   approvedRequests ApprovalRequest[] @relation("ApprovedBy")
   auditLogs       AuditLog[]
@@ -71,63 +59,114 @@ model User {
   @@index([role])
 }
 
-model Item {
-  id                   String          @id @default(uuid())
-  category             CategoryType
-  itemCode             String
-  itemName             String
-  partNo               String?
-  specifications       String?
-  unit                 String          @default("NO")
-  brandOffered         String?
-  gstPercentage        Float?
-  hsnCode              String?
-  biddersCompliance   String?
-  basicRateRs          Float?
-  basicRateRsAlt       Float?
-  skcRate1             Float?
-  skcRate2             Float?
-  diffPercentage       Float?
-  baseQty              Int             @default(0)
-  targetQty            Int             @default(0)
-  currentStock         Int             @default(0)
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
-  movements            StockMovement[]
-  approvalRequests     ApprovalRequest[]
+model PurchaseOrder {
+  id            String    @id @default(uuid())
+  poNumber      String    @unique
+  date          DateTime
+  divisionId    String
+  division      Division  @relation(fields: [divisionId], references: [id])
+  poAmount      Float
+  addedById     String
+  addedBy       User      @relation("POAddedBy", fields: [addedById], references: [id])
+  items         PurchaseOrderItem[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  @@unique([category, itemCode])
-  @@index([category, itemCode])
-  @@index([category, currentStock])
+  @@index([poNumber])
+  @@index([date])
+  @@index([divisionId])
 }
 
-model StockMovement {
-  id              String       @id @default(uuid())
-  itemId          String
-  item            Item         @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  movementType    MovementType
-  quantity        Int
-  previousStock   Int
-  newStock        Int
-  unitPrice       Float?
-  invoiceRefNo    String?
-  remarks         String?
-  movementDate    DateTime     @default(now())
-  userId          String
-  user            User         @relation(fields: [userId], references: [id])
-  createdAt       DateTime     @default(now())
+model PurchaseOrderItem {
+  id              String    @id @default(uuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  kpclCode        String
+  itemName        String
+  specifications  String?
+  partNumber      String    @unique
+  make            String?
+  hsnCode         String?
+  unit            String     @default("NOS")
+  qty             Float
+  rate            Float
+  basicAmount     Float
+  discount        Float      @default(0)
+  freight         Float      @default(0)
+  pAndF           Float      @default(0)
+  cgstPercent     Float      @default(0)
+  sgstPercent     Float      @default(0)
+  igstPercent     Float      @default(0)
+  cgstAmount      Float      @default(0)
+  sgstAmount      Float      @default(0)
+  igstAmount      Float      @default(0)
+  insurance       Float      @default(0)
+  totalAmount     Float
+  purchases       Purchase[]
+  sales           Sale[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
-  @@index([itemId, movementDate])
-  @@index([userId])
-  @@index([movementType, createdAt])
+  @@index([kpclCode])
+  @@index([purchaseOrderId])
+  @@index([partNumber])
+  @@index([itemName])
+  @@index([purchaseOrderId, partNumber])
+  @@index([purchaseOrderId, kpclCode])
+}
+
+model Purchase {
+  id                  String    @id @default(uuid())
+  purchaseOrderItemId String
+  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Cascade)
+  date                DateTime
+  qty                 Float
+  rate                Float
+  basicAmount         Float
+  cgstPercent         Float     @default(0)
+  sgstPercent         Float     @default(0)
+  igstPercent         Float     @default(0)
+  cgstAmount          Float     @default(0)
+  sgstAmount          Float     @default(0)
+  igstAmount          Float     @default(0)
+  totalAmount         Float
+  addedById           String
+  addedBy             User      @relation("PurchaseAddedBy", fields: [addedById], references: [id])
+  createdAt           DateTime  @default(now())
+
+  @@index([purchaseOrderItemId])
+  @@index([date])
+}
+
+model Sale {
+  id                  String    @id @default(uuid())
+  purchaseOrderItemId String
+  purchaseOrderItem   PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Cascade)
+  invoiceNumber       String
+  invoiceDate         DateTime
+  qty                 Float
+  rate                Float
+  basicAmount         Float
+  cgstPercent         Float     @default(0)
+  sgstPercent         Float     @default(0)
+  igstPercent         Float     @default(0)
+  cgstAmount          Float     @default(0)
+  sgstAmount          Float     @default(0)
+  igstAmount          Float     @default(0)
+  totalAmount         Float
+  addedById           String
+  addedBy             User      @relation("SaleAddedBy", fields: [addedById], references: [id])
+  createdAt           DateTime  @default(now())
+
+  @@index([purchaseOrderItemId])
+  @@index([invoiceDate])
+  @@index([invoiceNumber])
 }
 
 model ApprovalRequest {
   id             String         @id @default(uuid())
   type           ApprovalType
   status         ApprovalStatus @default(PENDING)
-  itemId         String?
-  item           Item?          @relation(fields: [itemId], references: [id], onDelete: Cascade)
   requestedById  String
   requestedBy    User           @relation("RequestedBy", fields: [requestedById], references: [id])
   approvedById   String?
@@ -158,6 +197,8 @@ model Division {
   id        String   @id @default(uuid())
   name      String   @unique
   workers   Worker[]
+  purchaseOrders PurchaseOrder[]
+  attendances Attendance[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -166,9 +207,22 @@ model Worker {
   id            String           @id @default(uuid())
   workerId      String           @unique
   fullName      String
+  fatherName    String?
+  designation   String?
   mobileNumber  String
   dailyWage     Float
+  dailyAllowance Float           @default(0.0)
+  advanceTaken  Float            @default(0.0)
+  advanceBalance Float           @default(0.0)
+  otAllowance   Float            @default(0.0)
   otHourlyRate  Float            @default(0.0)
+  pfNumber      String?
+  esiNumber     String?
+  uanNumber     String?
+  bankAccountNo String?
+  ifscCode      String?
+  placeOfWork   String?
+  natureOfWork  String?
   divisionId    String
   division      Division         @relation(fields: [divisionId], references: [id], onDelete: Restrict)
   attendances   Attendance[]
@@ -184,18 +238,22 @@ model Attendance {
   id            String           @id @default(uuid())
   workerId      String
   worker        Worker           @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  divisionId    String?
+  division      Division?        @relation(fields: [divisionId], references: [id], onDelete: SetNull)
   date          DateTime
   status        AttendanceStatus
   overtimeHours Float            @default(0.0)
   dailyWageOverride Float?
   recordedById  String
   recordedBy    User             @relation(fields: [recordedById], references: [id])
+  notes         String?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
   @@unique([workerId, date])
   @@index([workerId, date])
   @@index([date])
+  @@index([divisionId])
 }
 
 model MonthlyPayment {
@@ -209,8 +267,20 @@ model MonthlyPayment {
   halfDays         Float         @default(0.0)
   leaveDays        Float         @default(0.0)
   totalOtHours     Float         @default(0.0)
+  wagesAmount      Float         @default(0.0)
+  allowanceAmount  Float         @default(0.0)
+  grossPayment     Float         @default(0.0)
+  pfAmount         Float         @default(0.0)
+  esiAmount        Float         @default(0.0)
+  netBaseAmount    Float         @default(0.0)
+  otPayment        Float         @default(0.0)
+  otAllowance      Float         @default(0.0)
+  totalPayment     Float         @default(0.0)
+  advanceDeducted  Float         @default(0.0)
   extraAmount      Float         @default(0.0)
+  finalNetAmount   Float         @default(0.0)
   calculatedAmount Float
+  divisionSummary  Json?
   status           PaymentStatus @default(PENDING)
   approvedById     String?
   createdAt        DateTime      @default(now())
