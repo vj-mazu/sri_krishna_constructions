@@ -164,80 +164,52 @@ const requireRoles = (roles) => {
   };
 };
 
-// Serve extracted HD SKC Logo directly from Excel file
-app.get('/api/logo/skc-logo', authenticateToken, async (req, res) => {
+// Serve extracted HD SKC Logo directly
+app.get('/api/logo/skc-logo', async (req, res) => {
   try {
     const filePath = 'C:\\Users\\maju\\Downloads\\SKC LOGO.xlsx';
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Excel file not found' });
-    }
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(filePath);
-
-    let logoBuffer = null;
-    let logoExt = 'png';
-
-    if (workbook.media && workbook.media.length > 0) {
-      const media = workbook.media[0];
-      logoBuffer = media.buffer;
-      logoExt = media.extension || 'png';
+    if (fs.existsSync(filePath)) {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(filePath);
+      if (workbook.media && workbook.media.length > 0) {
+        const media = workbook.media[0];
+        res.setHeader('Content-Type', `image/${media.extension || 'png'}`);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        return res.send(media.buffer);
+      }
     }
 
-    if (!logoBuffer) {
-      workbook.eachSheet((worksheet) => {
-        const images = worksheet.getImages();
-        if (images && images.length > 0) {
-          const img = images[0];
-          const media = workbook.media.find(m => m.index === img.imageId || m.name === img.imageId);
-          if (media) {
-            logoBuffer = media.buffer;
-            logoExt = media.extension || 'png';
-          }
-        }
-      });
-    }
-
-    if (logoBuffer) {
-      res.setHeader('Content-Type', `image/${logoExt}`);
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      return res.send(logoBuffer);
-    } else {
-      return res.status(404).json({ error: 'No image found inside Excel' });
-    }
+    // Cloud production: Serve embedded base64 image as binary buffer
+    const base64Data = SKC_LOGO_BASE64.replace(/^data:image\/\w+;base64,/, '');
+    const imgBuffer = Buffer.from(base64Data, 'base64');
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return res.send(imgBuffer);
   } catch (err) {
-    console.error('Error serving SKC logo from Excel:', err.message);
+    console.error('Error serving SKC logo:', err.message);
     res.status(500).json({ error: 'Failed to serve logo' });
   }
 });
 
 // Serve extracted HD SKC Logo as Base64 JSON
-app.get('/api/logo/base64', authenticateToken, async (req, res) => {
+app.get('/api/logo/base64', async (req, res) => {
   try {
     const filePath = 'C:\\Users\\maju\\Downloads\\SKC LOGO.xlsx';
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Excel file not found' });
-    }
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.readFile(filePath);
-
-    let logoBuffer = null;
-    let logoExt = 'png';
-
-    if (workbook.media && workbook.media.length > 0) {
-      const media = workbook.media[0];
-      logoBuffer = media.buffer;
-      logoExt = media.extension || 'png';
+    if (fs.existsSync(filePath)) {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.readFile(filePath);
+      if (workbook.media && workbook.media.length > 0) {
+        const media = workbook.media[0];
+        const base64Data = `data:image/${media.extension || 'png'};base64,${Buffer.from(media.buffer).toString('base64')}`;
+        return res.json({ success: true, base64: base64Data });
+      }
     }
 
-    if (logoBuffer) {
-      const base64Data = `data:image/${logoExt};base64,${Buffer.from(logoBuffer).toString('base64')}`;
-      return res.json({ success: true, base64: base64Data });
-    } else {
-      return res.status(404).json({ error: 'No image in Excel' });
-    }
+    // Cloud production: Serve embedded SKC_LOGO_BASE64
+    return res.json({ success: true, base64: SKC_LOGO_BASE64 });
   } catch (err) {
     console.error('Base64 logo error:', err.message);
-    res.status(500).json({ error: 'Failed to serve base64 logo' });
+    res.json({ success: true, base64: SKC_LOGO_BASE64 });
   }
 });
 
@@ -2312,7 +2284,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
     // Fetch attendances for this month
     const { rows: attendances } = await pool.query(
-      `SELECT a."workerId", a."date", a."status", a."otHours", a."dailyWageOverride", a."divisionId",
+      `SELECT a."workerId", a."date", a."status", COALESCE(a."overtimeHours", 0)::float as "overtimeHours", a."dailyWageOverride", a."divisionId",
               d."name" as "divisionName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
@@ -2360,7 +2332,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         } else if (att.status === 'LEAVE') {
           leave += 1;
         }
-        totalOt += (parseFloat(att.otHours) || 0.0);
+        totalOt += (parseFloat(att.overtimeHours) || 0.0);
       });
 
       const workingDays = present + (half * 0.5);
