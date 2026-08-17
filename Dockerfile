@@ -1,21 +1,20 @@
 # Build the React client
 FROM node:20-slim AS client-builder
 WORKDIR /app/client
-COPY client/package*.json client/package-lock.json ./
-COPY client/index.html client/tsconfig*.json client/vite.config.ts client/postcss.config.js client/tailwind.config.js ./
-COPY client/public ./public
-COPY client/src ./src
-RUN npm ci
+COPY client/package*.json ./
+RUN npm install
+COPY client/ ./
 RUN npm run build
 
 # Build the server and Prisma client
 FROM node:20-slim AS server-builder
+RUN apt-get update -y && apt-get install -y openssl
 WORKDIR /app/server
-COPY server/package*.json server/package-lock.json ./
+COPY server/package*.json ./
 COPY server/prisma ./prisma
 COPY server/seeds ./seeds
 COPY server/src ./src
-RUN npm ci
+RUN npm install
 RUN npx prisma generate
 
 # Final production image
