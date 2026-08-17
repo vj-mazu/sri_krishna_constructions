@@ -8,7 +8,10 @@ export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 25, // Maximum concurrent clients for high throughput
   idleTimeoutMillis: 30000, // Close idle connections after 30s
-  connectionTimeoutMillis: 5000, // Return an error after 5s if connection cannot be established
+  connectionTimeoutMillis: 10000, // Return an error after 10s if connection cannot be established
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('sslmode=') 
+    ? { rejectUnauthorized: false } 
+    : (process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined),
 });
 
 export const query = (text, params) => pool.query(text, params);

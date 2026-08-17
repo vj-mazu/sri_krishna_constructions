@@ -46,7 +46,12 @@ export const initializeDatabaseTables = async () => {
     return;
   }
 
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes('sslmode=') || process.env.NODE_ENV === 'production' 
+      ? { rejectUnauthorized: false } 
+      : undefined,
+  });
 
   try {
     const client = await pool.connect();
