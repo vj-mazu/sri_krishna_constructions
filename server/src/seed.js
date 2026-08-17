@@ -1,47 +1,33 @@
-import { PrismaClient } from '@prisma/client';
+import { pool } from './db.js';
 import bcrypt from 'bcryptjs';
-import ExcelJS from 'exceljs';
-import path from 'path';
-
-const prisma = new PrismaClient();
-
-
 
 export const seedBaselineData = async () => {
-  console.log('🌱 Starting automatic seed & database verification...');
+  try {
+    console.log('🌱 Starting automatic seed & database verification...');
 
-  const hashedOwner = await bcrypt.hash('owner123', 10);
-  const hashedManjunath = await bcrypt.hash('admin123', 10);
+    const hashedOwner = await bcrypt.hash('owner123', 10);
+    const hashedManjunath = await bcrypt.hash('admin123', 10);
 
-  // 1. Ensure 'owner' user exists/updates
-  await prisma.user.upsert({
-    where: { username: 'owner' },
-    update: { role: 'OWNER' },
-    create: {
-      username: 'owner',
-      fullName: 'System Owner',
-      mobileNumber: '9876543210',
-      password: hashedOwner,
-      role: 'OWNER',
-    }
-  });
+    // 1. Ensure 'owner' user exists
+    await pool.query(`
+      INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'owner', 'System Owner', '9876543210', $1, 'OWNER', NOW(), NOW())
+      ON CONFLICT ("username") DO UPDATE SET "role" = 'OWNER';
+    `, [hashedOwner]);
 
-  // 2. Ensure 'manjunath' user exists/updates
-  await prisma.user.upsert({
-    where: { username: 'manjunath' },
-    update: { role: 'OWNER' },
-    create: {
-      username: 'manjunath',
-      fullName: 'Manjunath',
-      mobileNumber: '9876543210',
-      password: hashedManjunath,
-      role: 'OWNER',
-    }
-  });
+    // 2. Ensure 'manjunath' user exists
+    await pool.query(`
+      INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'manjunath', 'Manjunath', '9876543210', $1, 'OWNER', NOW(), NOW())
+      ON CONFLICT ("username") DO UPDATE SET "role" = 'OWNER';
+    `, [hashedManjunath]);
 
-  console.log('✅ Baseline seeded successfully with owner and manjunath accounts!');
+    console.log('✅ Baseline seeded successfully with owner and manjunath accounts!');
+  } catch (err) {
+    console.warn('⚠️ Note on seed verification:', err.message);
+  }
 };
 
 if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
-  seedBaselineData().then(() => prisma.$disconnect());
+  seedBaselineData();
 }
