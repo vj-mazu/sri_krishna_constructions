@@ -5,7 +5,6 @@ import {
   ShoppingCart, 
   Calendar, 
   Users, 
-  CheckCircle2, 
   XCircle, 
   Clock, 
   RefreshCw,
@@ -14,6 +13,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import api from '../api';
+import { showToast } from '../toast';
 
 interface DashboardProps {
   onSelectTab: (tabKey: string) => void;

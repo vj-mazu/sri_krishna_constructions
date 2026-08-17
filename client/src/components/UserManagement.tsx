@@ -107,8 +107,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     setSuccess('');
   };
 
-  const [initialLoading, setInitialLoading] = useState(true);
-
   const fetchUsers = async () => {
     try {
       const res = await api.get('/users');
@@ -154,7 +152,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     if (currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') {
       promises.push(fetchUsers(), fetchPurchaseOrders());
     }
-    Promise.all(promises).finally(() => setInitialLoading(false));
+    Promise.all(promises);
   }, [currentUserRole]);
 
   // --- ACTIONS: USERS ---

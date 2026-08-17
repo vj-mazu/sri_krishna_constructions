@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Package, ShoppingCart, ArrowLeft, Plus, Trash2, 
-  Search, Calendar, ChevronLeft, ChevronRight, Edit, 
-  ArrowDownToLine, Receipt, Eye, Minus, TrendingUp,
-  IndianRupee, CheckCircle, Clock, Zap
+  Search, ChevronLeft, ChevronRight, Edit, 
+  ArrowDownToLine, Receipt, Eye, Minus,
+  IndianRupee, Zap
 } from 'lucide-react';
 import api from '../api';
 import { showToast } from '../toast';

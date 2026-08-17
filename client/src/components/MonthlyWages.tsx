@@ -11,7 +11,6 @@ import {
   X, 
   Building2,
   FileText,
-  Printer,
   Download,
   Send,
   Share2
@@ -612,10 +611,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     startY += empBoxHeight;
 
     // ================= 4. EARNINGS & DEDUCTIONS TABLE =================
-    const basicPlusAllowDaily = (parseFloat(calc.dailyWage) || 0) + (parseFloat(calc.dailyAllowance) || 0);
-    const basicPlusAllowAmount = (parseFloat(calc.wagesAmount) || 0) + (parseFloat(calc.allowanceAmount) || 0);
-    const otRateDaily = Math.round(parseFloat(worker.otHourlyRate) || ((parseFloat(calc.dailyWage) || 0) / 8));
-    const totalDeductions = (parseFloat(calc.pf) || 0) + (parseFloat(calc.esi) || 0) + (parseFloat(calc.advance) || 0);
+    const basicPlusAllowDaily = (parseFloat(String(calc.dailyWage || 0)) || 0) + (parseFloat(String(calc.dailyAllowance || 0)) || 0);
+    const basicPlusAllowAmount = (parseFloat(String(calc.wagesAmount || 0)) || 0) + (parseFloat(String(calc.allowanceAmount || 0)) || 0);
+    const otRateDaily = Math.round(parseFloat(String(worker.otHourlyRate || 0)) || ((parseFloat(String(calc.dailyWage || 0)) || 0) / 8));
+    const totalDeductions = (parseFloat(String(calc.pf || 0)) || 0) + (parseFloat(String(calc.esi || 0)) || 0) + (parseFloat(String(calc.advance || 0)) || 0);
 
     // Exact matching widths summing to exactly 182mm (contentWidth)
     const cW_earnings = 50;  // col 0
@@ -770,9 +769,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     if (shouldDownload) {
       doc.save(filename);
       showToast(`Salary slip downloaded for ${worker.fullName}`, 'success');
+      return doc;
     } else {
-      // Return blob URL for printing / modal preview
-      return doc.output('bloburl');
+      return doc;
     }
   };
 
@@ -1201,7 +1200,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     <td className={`text-left font-mono font-black text-xs xl:text-sm px-2 py-1 relative ${calc.finalNetAmount < 0 ? 'bg-red-100 text-red-900 border-2 border-red-500' : 'bg-gradient-to-r from-orange-50 to-amber-100 text-orange-950'}`}>
                       {formatIndianCurrency(calc.finalNetAmount)}
                       {calc.finalNetAmount < 0 && (
-                        <AlertCircle className="w-4 h-4 text-red-600 absolute right-2 top-1/2 -translate-y-1/2" title="Negative Net Amount" />
+                        <span title="Negative Net Amount" className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <AlertCircle className="w-4 h-4 text-red-600" />
+                        </span>
                       )}
                     </td>
 
@@ -1545,10 +1546,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         const monthObj = months.find(m => m.value === selectedMonth);
         const fallbackMonth = months[new Date().getMonth()]?.name || '';
         const mName = monthObj ? monthObj.name.toUpperCase() : fallbackMonth.toUpperCase();
-        const basicPlusAllowDaily = (parseFloat(calc.dailyWage) || 0) + (parseFloat(calc.dailyAllowance) || 0);
-        const basicPlusAllowAmount = (parseFloat(calc.wagesAmount) || 0) + (parseFloat(calc.allowanceAmount) || 0);
-        const otRateDaily = Math.round(parseFloat(w.otHourlyRate) || ((parseFloat(calc.dailyWage) || 0) / 8));
-        const totalDeductions = (parseFloat(calc.pf) || 0) + (parseFloat(calc.esi) || 0) + (parseFloat(calc.advance) || 0);
+        const basicPlusAllowDaily = (parseFloat(String(calc.dailyWage || 0)) || 0) + (parseFloat(String(calc.dailyAllowance || 0)) || 0);
+        const basicPlusAllowAmount = (parseFloat(String(calc.wagesAmount || 0)) || 0) + (parseFloat(String(calc.allowanceAmount || 0)) || 0);
+        const otRateDaily = Math.round(parseFloat(String(w.otHourlyRate || 0)) || ((parseFloat(String(calc.dailyWage || 0)) || 0) / 8));
+        const totalDeductions = (parseFloat(String(calc.pf || 0)) || 0) + (parseFloat(String(calc.esi || 0)) || 0) + (parseFloat(String(calc.advance || 0)) || 0);
         const placeWork = (w.placeOfWork || w.divisionName || 'GENERAL').toUpperCase();
         const natureWork = (w.natureOfWork || 'MAINTENANCE').toUpperCase();
 
@@ -1829,7 +1830,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         `Dear *${w.fullName}*,\n` +
                         `Your Salary Slip for *${mName} ${selectedYear}* has been calculated & approved:\n\n` +
                         `• Present / Working Days: *${calc.workingDays} days*\n` +
-                        `• Daily Wage + Allowance: *₹${(parseFloat(calc.dailyWage) || 0) + (parseFloat(calc.dailyAllowance) || 0)}/day*\n` +
+                        `• Daily Wage + Allowance: *₹${(parseFloat(String(calc.dailyWage || 0)) || 0) + (parseFloat(String(calc.dailyAllowance || 0)) || 0)}/day*\n` +
                         `• Gross Earnings: *₹${calc.grossPayment}*\n` +
                         `• Total Earnings (incl. OT): *₹${calc.totalPayment}*\n` +
                         `• PF Deducted: *₹${calc.pf}*\n` +
@@ -1860,8 +1861,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     <button
                       onClick={async () => {
                         try {
-                          const doc = generateSalarySlipPdf(w, false);
-                          if (doc) {
+                          const doc = generateSalarySlipPdf(w, false) as any;
+                          if (doc && typeof doc.output === 'function') {
                             const pdfBlob = doc.output('blob');
                             const pdfFile = new File([pdfBlob], `${w.fullName.replaceAll(' ', '_')}_Payslip_${selectedMonth}_${selectedYear}.pdf`, { type: 'application/pdf' });
                             if (navigator.canShare && navigator.canShare({ files: [pdfFile] })) {

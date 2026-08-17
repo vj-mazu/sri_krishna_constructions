@@ -17,8 +17,7 @@ import {
   FileSpreadsheet, 
   Package, 
   Calendar, 
-  Wallet, 
-  ShieldCheck 
+  Wallet 
 } from 'lucide-react';
 
 export function App() {
