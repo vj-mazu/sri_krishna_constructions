@@ -2154,7 +2154,9 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
     }
 
     const { rows: attendances } = await pool.query(
-      `SELECT a."id", a."workerId", a."date", a."status", a."otHours" as "overtimeHours", a."dailyWageOverride", a."notes",
+      `SELECT a."id", a."workerId", a."date", a."status", 
+              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
+              a."dailyWageOverride", a."notes",
               json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
        FROM "Attendance" a
        JOIN "Worker" w ON a."workerId" = w."id"

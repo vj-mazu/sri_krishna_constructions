@@ -276,9 +276,10 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "natureOfWork" TEXT;
       UPDATE "Worker" SET "advanceBalance" = "advanceTaken" WHERE ("advanceBalance" IS NULL OR "advanceBalance" = 0) AND "advanceTaken" > 0;
 
-      -- Attendance division tracking, notes & dailyWageOverride
+      -- Attendance division tracking, notes, overtimeHours & dailyWageOverride
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "divisionId" TEXT REFERENCES "Division"("id");
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "notes" TEXT;
+      ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "overtimeHours" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "dailyWageOverride" DOUBLE PRECISION;
 
       -- MonthlyPayment 18-column payroll breakdown fields
