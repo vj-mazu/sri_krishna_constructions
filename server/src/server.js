@@ -141,6 +141,29 @@ app.use(rateLimiter);
 const clientDistPath = path.join(__dirname, '../../client/dist');
 app.use(express.static(clientDistPath));
 
+// Middleware: Authentication
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Access token required' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
+
+// Middleware: Authorization (Roles)
+const requireRoles = (roles) => {
+  return (req, res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: `Access denied. Requires one of roles: ${roles.join(', ')}` });
+    }
+    next();
+  };
+};
+
 // Serve extracted HD SKC Logo directly from Excel file
 app.get('/api/logo/skc-logo', authenticateToken, async (req, res) => {
   try {
@@ -217,29 +240,6 @@ app.get('/api/logo/base64', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to serve base64 logo' });
   }
 });
-
-// Middleware: Authentication
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Access token required' });
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
-    req.user = user;
-    next();
-  });
-};
-
-// Middleware: Authorization (Roles)
-const requireRoles = (roles) => {
-  return (req, res, next) => {
-    if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: `Access denied. Requires one of roles: ${roles.join(', ')}` });
-    }
-    next();
-  };
-};
 
 // --- AUTH ROUTES ---
 app.post('/api/auth/login', async (req, res) => {
