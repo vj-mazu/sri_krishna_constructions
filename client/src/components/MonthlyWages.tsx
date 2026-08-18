@@ -1009,32 +1009,32 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           No matching worker records found for search filter.
         </div>
       ) : (
-        <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-inner max-h-[78vh]">
+        <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm max-h-[78vh] bg-white">
           <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs min-w-[1350px]'}`}>
-            <thead className="sticky top-0 z-20 shadow-md">
-              <tr className="bg-gradient-to-r from-slate-900 via-[#1e3a8a] to-slate-900 text-white text-[9px] xl:text-[10px] uppercase font-bold tracking-tight">
-                <th className="w-7 text-center py-2 px-1 border-b-2 border-amber-400">#</th>
-                <th className={`${tableViewMode === 'fit' ? 'min-w-[120px] max-w-[140px]' : 'min-w-[180px]'} py-2 px-1.5 border-b-2 border-amber-400`}>Worker Name</th>
-                <th className="text-right py-2 px-1 border-b-2 border-amber-400">Basic</th>
-                <th className="text-center py-2 px-1 bg-slate-800/80 border-b-2 border-amber-400">Days</th>
-                <th className="text-right py-2 px-1 border-b-2 border-amber-400">Allow</th>
-                <th className="text-right py-2 px-1 bg-slate-800/80 border-b-2 border-amber-400">Wages</th>
-                <th className="text-right py-2 px-1 bg-slate-800/80 border-b-2 border-amber-400">Allow.Amt</th>
-                <th className="text-right py-2 px-1 bg-blue-950 text-amber-300 border-b-2 border-amber-400">Gross</th>
-                <th className="text-center py-2 px-1 bg-red-950 text-red-200 border-b-2 border-amber-400">P.F.</th>
-                <th className="text-center py-2 px-1 bg-red-950 text-red-200 border-b-2 border-amber-400">ESI</th>
-                <th className="text-right py-2 px-1 bg-slate-800 border-b-2 border-amber-400">Net Base</th>
-                <th className="text-center py-2 px-1 border-b-2 border-amber-400">OT.Hr</th>
-                <th className="text-right py-2 px-1 border-b-2 border-amber-400">OT.Pay</th>
-                <th className="text-center py-2 px-1 bg-amber-950 text-amber-200 border-b-2 border-amber-400">OT Allow</th>
-                <th className="text-right py-2 px-1 bg-emerald-950 text-emerald-300 border-b-2 border-amber-400">Total Pay</th>
-                <th className="text-right py-2 px-1 bg-amber-950/80 text-amber-200 border-b-2 border-amber-400">Adv.Take</th>
-                <th className="text-center py-2 px-1 bg-amber-900 text-amber-100 border-b-2 border-amber-400">Adv.Ded</th>
-                <th className="text-right py-2 px-1 bg-amber-950/80 text-amber-200 border-b-2 border-amber-400">Adv.Bal</th>
-                <th className="text-center py-2 px-1 bg-indigo-950 text-indigo-200 border-b-2 border-amber-400">Extra</th>
-                <th className="text-left py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black border-b-2 border-amber-400">FINAL NET</th>
-                <th className="text-center py-2 px-1 border-b-2 border-amber-400">Status</th>
-                <th className="text-center py-2 px-1 border-b-2 border-amber-400">Actions</th>
+            <thead className="sticky top-0 z-20 shadow">
+              <tr className="bg-[#1e3a8a] text-white text-[9px] xl:text-[10px] uppercase font-bold tracking-wider">
+                <th className="w-7 text-center py-2.5 px-1">#</th>
+                <th className={`${tableViewMode === 'fit' ? 'min-w-[120px] max-w-[140px]' : 'min-w-[180px]'} py-2.5 px-1.5`}>Worker Name</th>
+                <th className="text-right py-2.5 px-1">Basic</th>
+                <th className="text-center py-2.5 px-1 bg-[#172554]">Days</th>
+                <th className="text-right py-2.5 px-1">Allow</th>
+                <th className="text-right py-2.5 px-1 bg-[#172554]">Wages</th>
+                <th className="text-right py-2.5 px-1 bg-[#172554]">Allow.Amt</th>
+                <th className="text-right py-2.5 px-1 bg-[#0f172a] text-amber-300">Gross</th>
+                <th className="text-center py-2.5 px-1 bg-red-950 text-red-200">P.F.</th>
+                <th className="text-center py-2.5 px-1 bg-red-950 text-red-200">ESI</th>
+                <th className="text-right py-2.5 px-1 bg-slate-800">Net Base</th>
+                <th className="text-center py-2.5 px-1">OT.Hr</th>
+                <th className="text-right py-2.5 px-1">OT.Pay</th>
+                <th className="text-center py-2.5 px-1 bg-amber-950 text-amber-200">OT Allow</th>
+                <th className="text-right py-2.5 px-1 bg-emerald-950 text-emerald-300">Total Pay</th>
+                <th className="text-right py-2.5 px-1 bg-amber-950/80 text-amber-200">Adv.Take</th>
+                <th className="text-center py-2.5 px-1 bg-amber-900 text-amber-100">Adv.Ded</th>
+                <th className="text-right py-2.5 px-1 bg-amber-950/80 text-amber-200">Adv.Bal</th>
+                <th className="text-center py-2.5 px-1 bg-indigo-950 text-indigo-200">Extra</th>
+                <th className="text-left py-2.5 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black">FINAL NET</th>
+                <th className="text-center py-2.5 px-1">Status</th>
+                <th className="text-center py-2.5 px-1">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
