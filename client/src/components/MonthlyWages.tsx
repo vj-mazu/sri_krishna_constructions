@@ -16,6 +16,7 @@ import {
   Share2
 } from 'lucide-react';
 import { showToast } from '../toast';
+import { SKC_LOGO_BASE64 } from '../logoBase64';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -49,7 +50,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
   // Salary Slip Modal Preview state
   const [slipModalWorker, setSlipModalWorker] = useState<any | null>(null);
-  const [logoBase64, setLogoBase64] = useState<string | null>(null);
+  const [logoBase64, setLogoBase64] = useState<string | null>(SKC_LOGO_BASE64 || null);
 
   // Table Responsive View Mode: 'fit' (fits desktop/tablet without scroll) | 'scroll' (wide ledger)
   const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('fit');
@@ -454,44 +455,38 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
     if (logoBase64) {
       try {
-        doc.addImage(logoBase64, 'PNG', centerX - 14, startY + 9, 28, 25);
+        // High-definition square emblem rendering
+        const logoSize = 22;
+        doc.addImage(logoBase64, 'JPEG', centerX - (logoSize / 2), startY + 9.5, logoSize, logoSize);
       } catch (err) {
-        // Vector fallback if image add fails
+        // Fallback drawing if base64 format mismatch
         doc.setDrawColor(212, 175, 55);
         doc.setLineWidth(0.6);
-        doc.circle(centerX, startY + 19, 7.5, 'S');
+        doc.circle(centerX, startY + 18, 7.5, 'S');
         doc.setFillColor(30, 41, 59);
-        doc.circle(centerX, startY + 19, 7, 'F');
+        doc.circle(centerX, startY + 18, 7, 'F');
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(8.5);
         doc.setTextColor(251, 191, 36);
-        doc.text('SKC', centerX, startY + 21.5, { align: 'center' });
-        doc.setFontSize(6.5);
+        doc.text('SKC', centerX, startY + 20.5, { align: 'center' });
+        doc.setFontSize(6);
         doc.setTextColor(0, 0, 0);
-        doc.text('SALES & SERVICE', centerX, startY + 30, { align: 'center' });
-        doc.setFontSize(5.5);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 100, 100);
-        doc.text('ESTD 2019', centerX, startY + 33.5, { align: 'center' });
+        doc.text('SALES & SERVICE', centerX, startY + 29, { align: 'center' });
       }
     } else {
       // Vector Emblem Drawing
       doc.setDrawColor(212, 175, 55);
       doc.setLineWidth(0.6);
-      doc.circle(centerX, startY + 19, 7.5, 'S');
+      doc.circle(centerX, startY + 18, 7.5, 'S');
       doc.setFillColor(30, 41, 59);
-      doc.circle(centerX, startY + 19, 7, 'F');
+      doc.circle(centerX, startY + 18, 7, 'F');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8.5);
       doc.setTextColor(251, 191, 36);
-      doc.text('SKC', centerX, startY + 21.5, { align: 'center' });
-      doc.setFontSize(6.5);
+      doc.text('SKC', centerX, startY + 20.5, { align: 'center' });
+      doc.setFontSize(6);
       doc.setTextColor(0, 0, 0);
-      doc.text('SALES & SERVICE', centerX, startY + 30, { align: 'center' });
-      doc.setFontSize(5.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 100, 100);
-      doc.text('ESTD 2019', centerX, startY + 33.5, { align: 'center' });
+      doc.text('SALES & SERVICE', centerX, startY + 29, { align: 'center' });
     }
 
     // Right Column: Establishment Under Which Work Carried On
@@ -1015,31 +1010,31 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         </div>
       ) : (
         <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-inner max-h-[78vh]">
-          <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs excel-table'}`}>
-            <thead className="sticky top-0 z-20 shadow-sm">
-              <tr className="bg-slate-800 text-white text-[9px] xl:text-[10px] uppercase font-bold tracking-tight">
-                <th className="w-7 text-center py-2 px-1">#</th>
-                <th className={`${tableViewMode === 'fit' ? 'min-w-[120px] max-w-[140px]' : 'min-w-[180px]'} py-2 px-1.5`}>Worker Name</th>
-                <th className="text-right py-2 px-1">Basic</th>
-                <th className="text-center py-2 px-1 bg-slate-700/60">Days</th>
-                <th className="text-right py-2 px-1">Allow</th>
-                <th className="text-right py-2 px-1 bg-slate-700/80">Wages</th>
-                <th className="text-right py-2 px-1 bg-slate-700/80">Allow.Amt</th>
-                <th className="text-right py-2 px-1 bg-blue-900/90 text-amber-300">Gross</th>
-                <th className="text-center py-2 px-1 bg-red-900/70 text-red-200">P.F.</th>
-                <th className="text-center py-2 px-1 bg-red-900/70 text-red-200">ESI</th>
-                <th className="text-right py-2 px-1 bg-slate-700/90">Net Base</th>
-                <th className="text-center py-2 px-1">OT.Hr</th>
-                <th className="text-right py-2 px-1">OT.Pay</th>
-                <th className="text-center py-2 px-1 bg-amber-900/70 text-amber-200">OT Allow</th>
-                <th className="text-right py-2 px-1 bg-emerald-900/90 text-emerald-300">Total Pay</th>
-                <th className="text-right py-2 px-1 bg-amber-900/60 text-amber-200">Adv.Take</th>
-                <th className="text-center py-2 px-1 bg-amber-800 text-amber-100">Adv.Ded</th>
-                <th className="text-right py-2 px-1 bg-amber-900/60 text-amber-200">Adv.Bal</th>
-                <th className="text-center py-2 px-1 bg-indigo-900/70 text-indigo-200">Extra</th>
-                <th className="text-left py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black">FINAL NET</th>
-                <th className="text-center py-2 px-1">Status</th>
-                <th className="text-center py-2 px-1.5">Actions</th>
+          <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs min-w-[1350px]'}`}>
+            <thead className="sticky top-0 z-20 shadow-md">
+              <tr className="bg-gradient-to-r from-slate-900 via-[#1e3a8a] to-slate-900 text-white text-[9px] xl:text-[10px] uppercase font-bold tracking-tight">
+                <th className="w-7 text-center py-2 px-1 border-b-2 border-amber-400">#</th>
+                <th className={`${tableViewMode === 'fit' ? 'min-w-[120px] max-w-[140px]' : 'min-w-[180px]'} py-2 px-1.5 border-b-2 border-amber-400`}>Worker Name</th>
+                <th className="text-right py-2 px-1 border-b-2 border-amber-400">Basic</th>
+                <th className="text-center py-2 px-1 bg-slate-800/80 border-b-2 border-amber-400">Days</th>
+                <th className="text-right py-2 px-1 border-b-2 border-amber-400">Allow</th>
+                <th className="text-right py-2 px-1 bg-slate-800/80 border-b-2 border-amber-400">Wages</th>
+                <th className="text-right py-2 px-1 bg-slate-800/80 border-b-2 border-amber-400">Allow.Amt</th>
+                <th className="text-right py-2 px-1 bg-blue-950 text-amber-300 border-b-2 border-amber-400">Gross</th>
+                <th className="text-center py-2 px-1 bg-red-950 text-red-200 border-b-2 border-amber-400">P.F.</th>
+                <th className="text-center py-2 px-1 bg-red-950 text-red-200 border-b-2 border-amber-400">ESI</th>
+                <th className="text-right py-2 px-1 bg-slate-800 border-b-2 border-amber-400">Net Base</th>
+                <th className="text-center py-2 px-1 border-b-2 border-amber-400">OT.Hr</th>
+                <th className="text-right py-2 px-1 border-b-2 border-amber-400">OT.Pay</th>
+                <th className="text-center py-2 px-1 bg-amber-950 text-amber-200 border-b-2 border-amber-400">OT Allow</th>
+                <th className="text-right py-2 px-1 bg-emerald-950 text-emerald-300 border-b-2 border-amber-400">Total Pay</th>
+                <th className="text-right py-2 px-1 bg-amber-950/80 text-amber-200 border-b-2 border-amber-400">Adv.Take</th>
+                <th className="text-center py-2 px-1 bg-amber-900 text-amber-100 border-b-2 border-amber-400">Adv.Ded</th>
+                <th className="text-right py-2 px-1 bg-amber-950/80 text-amber-200 border-b-2 border-amber-400">Adv.Bal</th>
+                <th className="text-center py-2 px-1 bg-indigo-950 text-indigo-200 border-b-2 border-amber-400">Extra</th>
+                <th className="text-left py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black border-b-2 border-amber-400">FINAL NET</th>
+                <th className="text-center py-2 px-1 border-b-2 border-amber-400">Status</th>
+                <th className="text-center py-2 px-1 border-b-2 border-amber-400">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
