@@ -1261,29 +1261,31 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 );
               })}
             </tbody>
-            <tfoot className="sticky bottom-0 z-20 shadow-md">
-              <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase tracking-tight">
-                <td colSpan={3} className="text-right py-2 px-1.5 border-t border-slate-600">Totals:</td>
-                <td className="text-center py-2 px-1 border-t border-slate-600">{avgWorkingDays.toFixed(1)} avg</td>
-                <td className="text-right py-2 px-1 border-t border-slate-600">-</td>
-                <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.wagesAmount)}</td>
-                <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.allowanceAmount)}</td>
-                <td className="text-right py-2 px-1 bg-blue-900/90 text-amber-300 border-t border-blue-700">{formatIndianCurrency(totals.grossPayment)}</td>
-                <td className="text-center py-2 px-1 bg-red-900/70 text-red-200 border-t border-red-700">{formatIndianCurrency(totals.pf)}</td>
-                <td className="text-center py-2 px-1 bg-red-900/70 text-red-200 border-t border-red-700">{formatIndianCurrency(totals.esi)}</td>
-                <td className="text-right py-2 px-1 bg-slate-700/90 border-t border-slate-600">{formatIndianCurrency(totals.netBaseAmount)}</td>
-                <td className="text-center py-2 px-1 border-t border-slate-600">-</td>
-                <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.otPayment)}</td>
-                <td className="text-center py-2 px-1 bg-amber-900/70 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.otAllowance)}</td>
-                <td className="text-right py-2 px-1 bg-emerald-900/90 text-emerald-300 border-t border-emerald-700">{formatIndianCurrency(totals.totalPayment)}</td>
-                <td className="text-right py-2 px-1 bg-amber-900/60 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.advanceTaken)}</td>
-                <td className="text-center py-2 px-1 bg-amber-800 text-amber-100 border-t border-amber-700">{formatIndianCurrency(totals.advance)}</td>
-                <td className="text-right py-2 px-1 bg-amber-900/60 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.remainingAdvance)}</td>
-                <td className="text-center py-2 px-1 bg-indigo-900/70 text-indigo-200 border-t border-indigo-700">{formatIndianCurrency(totals.extra)}</td>
-                <td className="text-left py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black border-t border-orange-400">{formatIndianCurrency(totals.finalNetAmount)}</td>
-                <td colSpan={2} className="border-t border-slate-600"></td>
-              </tr>
-            </tfoot>
+            {filteredWages.length > 1 && (
+              <tfoot className="sticky bottom-0 z-20 shadow-md">
+                <tr className="bg-slate-800 text-white font-bold text-[10px] uppercase tracking-tight">
+                  <td colSpan={3} className="text-right py-2 px-1.5 border-t border-slate-600">Totals:</td>
+                  <td className="text-center py-2 px-1 border-t border-slate-600">{avgWorkingDays.toFixed(1)} avg</td>
+                  <td className="text-right py-2 px-1 border-t border-slate-600">-</td>
+                  <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.wagesAmount)}</td>
+                  <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.allowanceAmount)}</td>
+                  <td className="text-right py-2 px-1 bg-blue-900/90 text-amber-300 border-t border-blue-700">{formatIndianCurrency(totals.grossPayment)}</td>
+                  <td className="text-center py-2 px-1 bg-red-900/70 text-red-200 border-t border-red-700">{formatIndianCurrency(totals.pf)}</td>
+                  <td className="text-center py-2 px-1 bg-red-900/70 text-red-200 border-t border-red-700">{formatIndianCurrency(totals.esi)}</td>
+                  <td className="text-right py-2 px-1 bg-slate-700/90 border-t border-slate-600">{formatIndianCurrency(totals.netBaseAmount)}</td>
+                  <td className="text-center py-2 px-1 border-t border-slate-600">-</td>
+                  <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.otPayment)}</td>
+                  <td className="text-center py-2 px-1 bg-amber-900/70 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.otAllowance)}</td>
+                  <td className="text-right py-2 px-1 bg-emerald-900/90 text-emerald-300 border-t border-emerald-700">{formatIndianCurrency(totals.totalPayment)}</td>
+                  <td className="text-right py-2 px-1 bg-amber-900/60 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.advanceTaken)}</td>
+                  <td className="text-center py-2 px-1 bg-amber-800 text-amber-100 border-t border-amber-700">{formatIndianCurrency(totals.advance)}</td>
+                  <td className="text-right py-2 px-1 bg-amber-900/60 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.remainingAdvance)}</td>
+                  <td className="text-center py-2 px-1 bg-indigo-900/70 text-indigo-200 border-t border-indigo-700">{formatIndianCurrency(totals.extra)}</td>
+                  <td className="text-left py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black border-t border-orange-400">{formatIndianCurrency(totals.finalNetAmount)}</td>
+                  <td colSpan={2} className="border-t border-slate-600"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
