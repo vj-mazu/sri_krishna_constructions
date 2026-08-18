@@ -1622,7 +1622,7 @@ app.get('/api/approvals', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
   }
 });
 
-app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER']), async (req, res) => {
+app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
     const { status, rejectionReason } = req.body; // 'APPROVED' or 'REJECTED'
@@ -1649,14 +1649,25 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER']
         const statuses = attendanceData.map(r => r.status);
         const otHours = attendanceData.map(r => parseFloat(r.overtimeHours) || 0.0);
         const dailyWageOverrides = attendanceData.map(r => r.dailyWageOverride ? parseFloat(r.dailyWageOverride) : null);
-        const markedByIds = attendanceData.map(r => approval.requestedById);
+        const notes = attendanceData.map(r => r.notes || null);
+        const userIds = attendanceData.map(r => approval.requestedById);
 
         await pool.query(
-          `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "otHours", "dailyWageOverride", "markedById", "createdAt", "updatedAt")
-           SELECT gen_random_uuid()::text, * FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[])
+          `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+           SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.nt, u.uid, u.uid, NOW(), NOW()
+           FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[]) 
+           AS u(workerId, dt, st, ot, dw, nt, uid)
            ON CONFLICT ("workerId", "date")
-           DO UPDATE SET "status" = EXCLUDED."status", "otHours" = EXCLUDED."otHours", "dailyWageOverride" = EXCLUDED."dailyWageOverride", "markedById" = EXCLUDED."markedById", "updatedAt" = NOW()`,
-          [workerIds, dates, statuses, otHours, dailyWageOverrides, markedByIds]
+           DO UPDATE SET 
+             "status" = EXCLUDED."status", 
+             "overtimeHours" = EXCLUDED."overtimeHours",
+             "otHours" = EXCLUDED."otHours", 
+             "dailyWageOverride" = EXCLUDED."dailyWageOverride", 
+             "notes" = EXCLUDED."notes",
+             "recordedById" = EXCLUDED."recordedById",
+             "markedById" = EXCLUDED."markedById", 
+             "updatedAt" = NOW()`,
+          [workerIds, dates, statuses, otHours, dailyWageOverrides, notes, userIds]
         );
       }
     }
