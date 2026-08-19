@@ -55,12 +55,13 @@ input:focus, textarea:focus, select:focus {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 11px;
+  border-right: 1px solid #3b82f6;
 }
 
 .excel-table td {
   background: #ffffff;
   color: #1e293b;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1; /* clearly defined, crisp darker cell border */
 }
 
 .excel-table tr:hover td {
