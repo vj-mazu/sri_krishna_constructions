@@ -36,6 +36,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     fetchDivisions();
   }, []);
 
+  const [holidayInfo, setHolidayInfo] = useState<any>(null);
+
   const fetchWorkersAndAttendance = async () => {
     if (!selectedDivisionId || !selectedDate) return;
     try {
@@ -43,13 +45,22 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       setError('');
       setSuccess('');
 
-      const [workersRes, attendanceRes] = await Promise.all([
+      const [workersRes, attendanceRes, holidaysRes] = await Promise.all([
         api.get(`/workers?divisionId=${selectedDivisionId}`),
         api.get(`/attendance?divisionId=${selectedDivisionId}&date=${selectedDate}`),
+        api.get(`/holidays?year=${new Date(selectedDate).getFullYear()}&month=${new Date(selectedDate).getMonth() + 1}`),
       ]);
 
       const fetchedWorkers = workersRes.data.workers || [];
       const fetchedAttendance = attendanceRes.data.attendances || attendanceRes.data.attendance || [];
+      const fetchedHolidays = holidaysRes.data.holidays || [];
+
+      // Check if selected date is an official declared holiday
+      const currentHoliday = fetchedHolidays.find((h: any) => {
+        const hDate = new Date(h.date).toISOString().split('T')[0];
+        return hDate === selectedDate;
+      });
+      setHolidayInfo(currentHoliday || null);
 
       setWorkers(fetchedWorkers);
 
@@ -214,6 +225,25 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           />
         </div>
       </div>
+
+      {holidayInfo && (
+        <div className="p-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl shadow-sm flex items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">🏛️</span>
+            <div>
+              <div className="font-bold text-xs sm:text-sm tracking-wide uppercase">
+                OFFICIAL COMPANY / GOVT HOLIDAY: {holidayInfo.name}
+              </div>
+              <div className="text-[10px] sm:text-xs text-amber-100 font-sans">
+                Workers on this date are automatically credited with a paid working day. Site overtime (OT) can still be entered if emergency site work is done.
+              </div>
+            </div>
+          </div>
+          <span className="shrink-0 px-2.5 py-1 bg-white/20 text-white font-bold text-[10px] rounded-full uppercase">
+            Paid Holiday
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs border border-red-200 flex items-center gap-2">

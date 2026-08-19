@@ -249,6 +249,18 @@ export const initializeDatabaseTables = async () => {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 10. Create Holiday Table (Company / Govt Paid Holidays)
+      CREATE TABLE IF NOT EXISTS "Holiday" (
+        "id" TEXT PRIMARY KEY,
+        "date" TIMESTAMP(3) UNIQUE NOT NULL,
+        "name" TEXT NOT NULL,
+        "type" TEXT NOT NULL DEFAULT 'GOVT_HOLIDAY',
+        "description" TEXT,
+        "addedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Schema Column Synchronizations
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;

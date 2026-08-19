@@ -1554,6 +1554,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                                     [H] SUNDAY
                                   </span>
                                 )}
+                                {d.status === 'GOVT_HOLIDAY' && (
+                                  <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-amber-100 text-amber-900 border border-amber-400 flex items-center justify-center gap-1">
+                                    🏛️ [H] {d.holidayName || 'GOVT HOLIDAY'}
+                                  </span>
+                                )}
                                 {d.status === 'NOT_MARKED' && (
                                   <span className="px-2 py-0.5 text-[10px] text-slate-400">
                                     -

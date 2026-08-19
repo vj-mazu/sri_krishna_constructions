@@ -8,7 +8,7 @@ interface UserManagementProps {
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'divisions' | 'workers' | 'pos'>(
+  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'divisions' | 'workers' | 'pos' | 'holidays'>(
     currentUserRole === 'SUPERVISOR' ? 'workers' : 'accounts'
   );
   const [error, setError] = useState('');
@@ -97,14 +97,74 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   
   // Edit PO State
   const [editingPO, setEditingPO] = useState<any>(null);
-  const [editPONumber, setEditPONumber] = useState('');
-  const [editPODivisionId, setEditPODivisionId] = useState('');
-  const [editPODate, setEditPODate] = useState('');
-  const [editPOAmount, setEditPOAmount] = useState('');
+  // --- HOLIDAYS (CALENDAR) STATE ---
+  const [holidays, setHolidays] = useState<any[]>([]);
+  const [holidayDate, setHolidayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [holidayName, setHolidayName] = useState('');
+  const [holidayType, setHolidayType] = useState('GOVT_HOLIDAY');
+  const [holidayDescription, setHolidayDescription] = useState('');
 
   const clearMessages = () => {
     setError('');
     setSuccess('');
+  };
+
+  const fetchHolidays = async () => {
+    try {
+      const res = await api.get('/holidays');
+      setHolidays(res.data.holidays || []);
+    } catch (err: any) {
+      console.error('Failed to load holidays:', err);
+      showToast(err.response?.data?.error || 'Failed to load holiday calendar', 'error');
+    }
+  };
+
+  const handleAddHoliday = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessages();
+    if (!holidayName.trim() || !holidayDate) {
+      showToast('Holiday name and date are required', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.post('/holidays', {
+        date: holidayDate,
+        name: holidayName.trim(),
+        type: holidayType,
+        description: holidayDescription.trim() || undefined,
+      });
+      const msg = `Holiday '${holidayName}' declared successfully!`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+      setHolidayName('');
+      setHolidayDescription('');
+      fetchHolidays();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to save holiday';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteHoliday = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove the holiday '${name}'?`)) return;
+    clearMessages();
+
+    try {
+      await api.delete(`/holidays/${id}`);
+      const msg = `Holiday '${name}' removed successfully.`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+      fetchHolidays();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete holiday';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
   };
 
   const fetchUsers = async () => {
@@ -150,7 +210,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   useEffect(() => {
     const promises: Promise<void>[] = [fetchDivisions(), fetchWorkers()];
     if (currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') {
-      promises.push(fetchUsers(), fetchPurchaseOrders());
+      promises.push(fetchUsers(), fetchPurchaseOrders(), fetchHolidays());
     }
     Promise.all(promises);
   }, [currentUserRole]);
@@ -622,6 +682,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 }`}
               >
                 POs
+              </button>
+            )}
+            {currentUserRole !== 'SUPERVISOR' && (
+              <button
+                onClick={() => { setActiveSubTab('holidays'); clearMessages(); fetchHolidays(); }}
+                className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center flex items-center gap-1 ${
+                  activeSubTab === 'holidays' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span>🏛️</span> Holidays
               </button>
             )}
           </div>
@@ -1791,6 +1861,133 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB 5: HOLIDAY CALENDAR (GOVT & COMPANY PAID HOLIDAYS) --- */}
+      {activeSubTab === 'holidays' && (
+        <div className="space-y-4 animate-fadeIn">
+          <div className="flex justify-between items-center bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-3 rounded-xl border border-amber-200">
+            <div>
+              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                <span>🏛️</span> Official Company & Government Holiday Calendar
+              </h3>
+              <p className="text-xs text-slate-500">
+                Holidays declared here apply to <strong>all divisions</strong> and are automatically credited as a paid working day for workers in daily attendance and payroll.
+              </p>
+            </div>
+            <span className="px-3 py-1 bg-amber-500 text-white font-bold text-xs rounded-lg shadow-sm">
+              {holidays.length} Declared Holidays
+            </span>
+          </div>
+
+          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+            <form onSubmit={handleAddHoliday} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider">Declare New Holiday</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Holiday Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={holidayDate}
+                    onChange={(e) => setHolidayDate(e.target.value)}
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block font-bold text-slate-700 mb-1">Holiday Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={holidayName}
+                    onChange={(e) => setHolidayName(e.target.value)}
+                    placeholder="e.g. Independence Day, Rajyotsava, Gandhi Jayanti"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Holiday Type</label>
+                  <select
+                    value={holidayType}
+                    onChange={(e) => setHolidayType(e.target.value)}
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-semibold"
+                  >
+                    <option value="GOVT_HOLIDAY">Govt Holiday (Paid)</option>
+                    <option value="FESTIVAL_HOLIDAY">Festival Holiday (Paid)</option>
+                    <option value="COMPANY_HOLIDAY">Company Holiday (Paid)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold rounded-lg text-xs shadow disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <span>🏛️</span> Declare Holiday
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="overflow-x-auto border border-slate-200 rounded-lg">
+            <table className="w-full text-left text-xs excel-table">
+              <thead>
+                <tr>
+                  <th>Holiday Date</th>
+                  <th>Holiday Name</th>
+                  <th>Category</th>
+                  <th>Declared By</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {holidays.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-400">
+                      No holidays declared yet for this calendar year.
+                    </td>
+                  </tr>
+                ) : (
+                  holidays.map((h) => (
+                    <tr key={h.id} className="hover:bg-amber-50/30">
+                      <td className="font-mono font-bold text-[#1e3a8a]">
+                        {new Date(h.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="font-bold text-slate-800 flex items-center gap-1.5 py-2">
+                        <span>🏛️</span> {h.name}
+                      </td>
+                      <td>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                          {h.type?.replace('_', ' ') || 'GOVT HOLIDAY'}
+                        </span>
+                      </td>
+                      <td className="text-slate-600">{h.addedByName || 'Owner/Manager'}</td>
+                      <td>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          Paid Holiday
+                        </span>
+                      </td>
+                      <td>
+                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                          <button
+                            onClick={() => handleDeleteHoliday(h.id, h.name)}
+                            className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded transition-colors"
+                            title="Remove Holiday"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         )}
                       </td>
                     </tr>

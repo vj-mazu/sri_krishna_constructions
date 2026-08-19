@@ -1622,6 +1622,78 @@ app.get('/api/approvals', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
   }
 });
 
+// --- HOLIDAY CALENDAR APIS (COMPANY / GOVT PAID HOLIDAYS) ---
+app.get('/api/holidays', authenticateToken, async (req, res) => {
+  try {
+    const { year, month } = req.query;
+    let query = `
+      SELECT h.*, u."fullName" as "addedByName"
+      FROM "Holiday" h
+      LEFT JOIN "User" u ON h."addedById" = u.id
+    `;
+    const params = [];
+
+    if (year && month) {
+      const y = parseInt(year, 10);
+      const m = parseInt(month, 10);
+      const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+      const totalDays = new Date(y, m, 0).getDate();
+      const endDate = `${y}-${String(m).padStart(2, '0')}-${String(totalDays).padStart(2, '0')} 23:59:59.999`;
+      query += ` WHERE h."date" >= $1::timestamp AND h."date" <= $2::timestamp`;
+      params.push(startDate, endDate);
+    } else if (year) {
+      const y = parseInt(year, 10);
+      query += ` WHERE EXTRACT(YEAR FROM h."date") = $1`;
+      params.push(y);
+    }
+
+    query += ` ORDER BY h."date" ASC`;
+    const { rows } = await pool.query(query, params);
+    res.json({ holidays: rows });
+  } catch (err) {
+    console.error('Error fetching holidays:', err);
+    res.status(500).json({ error: 'Failed to fetch holidays' });
+  }
+});
+
+app.post('/api/holidays', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { date, name, type = 'GOVT_HOLIDAY', description } = req.body;
+    if (!date || !name || !name.trim()) {
+      return res.status(400).json({ error: 'Holiday date and name are required' });
+    }
+
+    // Ensure date is treated as YYYY-MM-DD at 12:00:00 to prevent timezone rollback
+    const dateOnlyStr = date.includes('T') ? date.split('T')[0] : date;
+    const holidayTimestamp = `${dateOnlyStr} 12:00:00`;
+
+    const { rows } = await pool.query(
+      `INSERT INTO "Holiday" ("id", "date", "name", "type", "description", "addedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1::timestamp, $2, $3, $4, $5, NOW(), NOW())
+       ON CONFLICT ("date")
+       DO UPDATE SET "name" = EXCLUDED."name", "type" = EXCLUDED."type", "description" = EXCLUDED."description", "updatedAt" = NOW()
+       RETURNING *`,
+      [holidayTimestamp, name.trim(), type, description || null, req.user.id]
+    );
+
+    res.status(201).json({ message: 'Holiday declared successfully!', holiday: rows[0] });
+  } catch (err) {
+    console.error('Error creating holiday:', err);
+    res.status(500).json({ error: 'Failed to save holiday' });
+  }
+});
+
+app.delete('/api/holidays/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM "Holiday" WHERE "id" = $1`, [id]);
+    res.json({ message: 'Holiday deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting holiday:', err);
+    res.status(500).json({ error: 'Failed to delete holiday' });
+  }
+});
+
 app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -2320,6 +2392,12 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       [startDate, endDate]
     );
 
+    // Fetch declared holidays for this month
+    const { rows: holidays } = await pool.query(
+      `SELECT "date", "name" FROM "Holiday" WHERE "date" >= $1::timestamp AND "date" <= $2::timestamp`,
+      [startDate, endDate]
+    );
+
     // Fetch payments for this month
     const { rows: payments } = await pool.query(
       `SELECT * FROM "MonthlyPayment" WHERE "month" = $1 AND "year" = $2`,
@@ -2337,8 +2415,19 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       paysByWorker[p.workerId] = p;
     });
 
+    const formatToLocalDateStr = (d) => {
+      const dt = new Date(d);
+      const year = dt.getFullYear();
+      const month = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    const holidayDatesSet = new Set(holidays.map(h => formatToLocalDateStr(h.date)));
+
     const wageReport = workers.map((worker) => {
       const workerAtts = attsByWorker[worker.id] || [];
+      const workerAttDateMap = {};
       let present = 0;
       let absent = 0;
       let half = 0;
@@ -2347,6 +2436,8 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const divisionCounts = {};
 
       workerAtts.forEach((att) => {
+        const dStr = formatToLocalDateStr(att.date);
+        workerAttDateMap[dStr] = att;
         const divName = att.divisionName || worker.divisionName || 'General';
 
         if (att.status === 'PRESENT') {
@@ -2363,7 +2454,20 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         totalOt += (parseFloat(att.overtimeHours) || 0.0);
       });
 
-      const workingDays = present + (half * 0.5);
+      // Credit paid Govt Holidays for workers
+      let paidHolidaysCount = 0;
+      holidayDatesSet.forEach(hDateStr => {
+        const att = workerAttDateMap[hDateStr];
+        // If not marked at all, or if marked as LEAVE or NOT_MARKED, give 1.0 day paid holiday
+        // If marked PRESENT, they already received +1 in 'present' above, so don't double count!
+        if (!att || att.status === 'LEAVE') {
+          paidHolidaysCount += 1;
+          const defaultDiv = worker.divisionName || 'General';
+          divisionCounts[defaultDiv] = (divisionCounts[defaultDiv] || 0) + 1;
+        }
+      });
+
+      const workingDays = present + (half * 0.5) + paidHolidaysCount;
       const dailyWage = parseFloat(worker.dailyWage) || 0;
       const dailyAllowance = parseFloat(worker.dailyAllowance) || 0;
       const advanceTaken = parseFloat(worker.advanceTaken) || 0;
@@ -2491,10 +2595,30 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
       [workerId, startDate, endDate]
     );
 
+    const formatToLocalDateStr = (d) => {
+      const dt = new Date(d);
+      const year = dt.getFullYear();
+      const month = String(dt.getMonth() + 1).padStart(2, '0');
+      const day = String(dt.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const logsByDateStr = {};
     logs.forEach(l => {
-      const dStr = new Date(l.date).toISOString().split('T')[0];
+      const dStr = formatToLocalDateStr(l.date);
       logsByDateStr[dStr] = l;
+    });
+
+    // Fetch declared holidays for this month
+    const { rows: holidays } = await pool.query(
+      `SELECT "date", "name", "type" FROM "Holiday" WHERE "date" >= $1::timestamp AND "date" <= $2::timestamp`,
+      [startDate, endDate]
+    );
+
+    const holidaysByDateStr = {};
+    holidays.forEach(h => {
+      const dStr = formatToLocalDateStr(h.date);
+      holidaysByDateStr[dStr] = h;
     });
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -2505,15 +2629,17 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
     let totalAbsent = 0;
     let totalLeave = 0;
     let totalOtHours = 0;
+    let totalGovtHolidays = 0;
 
     for (let day = 1; day <= totalDaysInMonth; day++) {
       const curDate = new Date(y, m - 1, day);
       const curDateStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const dayName = dayNames[curDate.getDay()];
       const isSunday = curDate.getDay() === 0;
+      const declaredHoliday = holidaysByDateStr[curDateStr];
 
       const log = logsByDateStr[curDateStr];
-      const status = log ? log.status : (isSunday ? 'HOLIDAY' : 'NOT_MARKED');
+      let status = log ? log.status : (declaredHoliday ? 'GOVT_HOLIDAY' : (isSunday ? 'HOLIDAY' : 'NOT_MARKED'));
       const otHours = log ? (parseFloat(log.otHours) || 0) : 0;
       const divName = log?.divisionName || worker.divisionName || 'General';
 
@@ -2530,6 +2656,9 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
           totalLeave += 1;
         }
         totalOtHours += otHours;
+      } else if (declaredHoliday) {
+        totalGovtHolidays += 1;
+        divisionSummary[divName] = (divisionSummary[divName] || 0) + 1;
       }
 
       daysList.push({
@@ -2537,11 +2666,13 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         dateStr: curDateStr,
         dayName,
         isSunday,
+        isHoliday: !!declaredHoliday,
+        holidayName: declaredHoliday ? declaredHoliday.name : null,
         status,
         divisionName: divName,
         overtimeHours: otHours,
-        notes: log?.notes || null,
-        markedBy: log?.markedByName || null
+        notes: declaredHoliday ? `🏛️ ${declaredHoliday.name}` : (log?.notes || null),
+        markedBy: log?.markedByName || (declaredHoliday ? 'Govt/Company Holiday' : null)
       });
     }
 
