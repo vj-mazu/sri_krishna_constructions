@@ -13,6 +13,255 @@ interface PurchaseRecordsProps {
   currentUserRole: string;
 }
 
+// --- ULTRA-FAST MULTI-TOKEN FUZZY SEARCHABLE AUTOCOMPLETE ITEM SELECT ---
+interface SearchableItemSelectProps {
+  items: any[];
+  selectedItemId: string;
+  placeholder?: string;
+  type: 'inward' | 'sale';
+  onSelect: (item: any | null) => void;
+}
+
+const SearchableItemSelect: React.FC<SearchableItemSelectProps> = ({
+  items,
+  selectedItemId,
+  placeholder = 'Type to search items...',
+  type,
+  onSelect
+}) => {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(0);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+  const listRef = React.useRef<HTMLDivElement>(null);
+
+  const selectedItem = items.find(i => i.id === selectedItemId);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Multi-Token Search Algorithm: Splits search query by spaces so "RING 4904" matches Part No 49047030 with Name SCRAPPER RING
+  // Also ranks exact prefix/exact word matches at the very top
+  const filteredItems = React.useMemo(() => {
+    if (!query.trim()) return items.slice(0, 60);
+
+    const tokens = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+
+    const scored: Array<{ item: any; score: number }> = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const partNo = (item.partNumber || '').toLowerCase();
+      const name = (item.itemName || '').toLowerCase();
+      const kpcl = (item.kpclCode || '').toLowerCase();
+      const make = (item.make || '').toLowerCase();
+      const spec = (item.specifications || '').toLowerCase();
+
+      // Combined searchable text corpus
+      const combined = `${partNo} ${name} ${kpcl} ${make} ${spec}`;
+
+      // Every token must match somewhere in the item fields
+      let allMatch = true;
+      let score = 0;
+
+      for (const token of tokens) {
+        if (!combined.includes(token)) {
+          allMatch = false;
+          break;
+        }
+
+        // Scoring algorithm for relevance:
+        if (partNo.startsWith(token)) score += 100;
+        else if (partNo.includes(token)) score += 50;
+
+        if (name.startsWith(token)) score += 80;
+        else if (name.includes(token)) score += 40;
+
+        if (kpcl.startsWith(token)) score += 60;
+        else if (kpcl.includes(token)) score += 30;
+
+        if (spec.includes(token)) score += 10;
+        if (make.includes(token)) score += 10;
+      }
+
+      if (allMatch) {
+        scored.push({ item, score });
+      }
+    }
+
+    // Sort by highest relevance score first
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, 100).map(s => s.item);
+  }, [items, query]);
+
+  // Keyboard navigation support: ArrowDown, ArrowUp, Enter, Escape
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === 'ArrowDown' || e.key === 'Enter') {
+        setIsOpen(true);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev < filteredItems.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex(prev => (prev > 0 ? prev - 1 : filteredItems.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredItems[highlightedIndex]) {
+        onSelect(filteredItems[highlightedIndex]);
+        setIsOpen(false);
+        setQuery('');
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  };
+
+  // Keep highlighted item scrolled into view
+  useEffect(() => {
+    if (isOpen && listRef.current) {
+      const el = listRef.current.children[highlightedIndex + 1] as HTMLElement;
+      if (el) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex, isOpen]);
+
+  return (
+    <div className="relative w-full" ref={dropdownRef}>
+      {/* Search Input Trigger */}
+      <div className="relative">
+        <input
+          ref={inputRef}
+          type="text"
+          value={isOpen ? query : (selectedItem ? `${selectedItem.partNumber} — ${selectedItem.itemName}` : '')}
+          placeholder={placeholder}
+          onFocus={() => {
+            setIsOpen(true);
+            setQuery('');
+            setHighlightedIndex(0);
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setHighlightedIndex(0);
+            if (!isOpen) setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          className="w-full pl-8 pr-8 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1e3a8a] focus:border-transparent shadow-sm"
+        />
+        <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5 pointer-events-none" />
+        {selectedItemId && (
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(null);
+              setQuery('');
+            }}
+            className="absolute right-2.5 top-2 text-slate-400 hover:text-rose-600 text-xs font-bold px-1"
+            title="Clear selection"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Dropdown Results List */}
+      {isOpen && (
+        <div 
+          ref={listRef}
+          className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-80 overflow-y-auto divide-y divide-slate-100"
+        >
+          <div className="p-2 bg-slate-50 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex justify-between items-center border-b border-slate-200 sticky top-0 z-10">
+            <span>{filteredItems.length} matching of {items.length} items</span>
+            <span className="text-[#1e3a8a]">Use ↑ ↓ arrows & Enter to pick</span>
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="p-5 text-center text-xs text-slate-400 font-medium">
+              No matching items found for "<strong className="text-slate-600">{query}</strong>".
+            </div>
+          ) : (
+            filteredItems.map((item, idx) => {
+              const isSelected = item.id === selectedItemId;
+              const isHighlighted = idx === highlightedIndex;
+              const remainingArrival = item.remainingQty !== undefined ? item.remainingQty : (item.qty - (item.purchasedQty || 0));
+              const availableStock = item.availableForSale !== undefined ? item.availableForSale : ((item.purchasedQty || 0) - (item.soldQty || 0));
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    onSelect(item);
+                    setIsOpen(false);
+                    setQuery('');
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(idx)}
+                  className={`p-2.5 cursor-pointer transition-colors text-xs flex items-center justify-between gap-3 ${
+                    isHighlighted ? 'bg-indigo-100/70' : isSelected ? 'bg-indigo-50 border-l-4 border-[#1e3a8a]' : 'hover:bg-indigo-50/50'
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded text-[11px]">
+                        {item.partNumber || 'NO PART NO'}
+                      </span>
+                      {item.kpclCode && (
+                        <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                          KPCL: {item.kpclCode}
+                        </span>
+                      )}
+                      <span className="font-bold text-slate-800 truncate">{item.itemName}</span>
+                    </div>
+                    {item.specifications && (
+                      <p className="text-[10px] text-slate-500 truncate mt-0.5 max-w-md font-mono">
+                        {item.specifications}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Quantity and Rate Badge */}
+                  <div className="text-right flex-shrink-0 flex items-center gap-2 font-mono">
+                    <div className="text-[11px] font-bold text-slate-700">
+                      ₹{Number(item.rate || 0).toLocaleString('en-IN')}
+                    </div>
+                    {type === 'inward' ? (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        remainingArrival > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-500'
+                      }`}>
+                        To Inward: {remainingArrival}
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        availableStock > 0 ? 'bg-amber-100 text-amber-900' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        Stock: {availableStock}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRole }) => {
   const isManagerOrOwner = ['owner', 'manager'].includes(currentUserRole.toLowerCase());
 
@@ -182,10 +431,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   }, [itemsSearch, itemsPartNumber, itemsKpclCode]);
 
-  // --- API CALL: FETCH ALL ITEMS (FOR FORM DROPDOWNS) ---
+  // --- API CALL: FETCH ALL ITEMS (FOR FORM DROPDOWNS & SEARCHABLE COMBOBOX) ---
   const fetchAllItemsForDropdown = async (poId: string) => {
     try {
-      const res = await api.get(`/purchase-orders/${poId}/items?limit=100`);
+      const res = await api.get(`/purchase-orders/${poId}/items?limit=5000`);
       setAllItemsForSelection(res.data?.items || []);
     } catch (err: any) {
       console.error('Failed to load items dropdown', err);
@@ -1833,34 +2082,29 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       Record Inward Material Receipt
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Select Part Number *</label>
-                      <select 
-                        required 
-                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold"
-                        value={purchaseForm.itemId}
-                        onChange={e => {
-                          const item = allItemsForSelection.find(i => i.id === e.target.value);
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
+                      </label>
+                      <SearchableItemSelect
+                        items={allItemsForSelection}
+                        selectedItemId={purchaseForm.itemId}
+                        placeholder="🔍 Type Part Number, Item Name, or KPCL Code to search..."
+                        type="inward"
+                        onSelect={(item) => {
                           if (item) {
                             setPurchaseForm(prev => ({
                               ...prev,
-                              itemId: e.target.value,
+                              itemId: item.id,
                               rate: item.rate,
                               cgstPercent: item.cgstPercent || 0,
                               sgstPercent: item.sgstPercent || 0,
                               igstPercent: item.igstPercent || 0
                             }));
                           } else {
-                            handlePurchaseChange('itemId', e.target.value);
+                            handlePurchaseChange('itemId', '');
                           }
                         }}
-                      >
-                        <option value="">-- Choose Item by Part Number --</option>
-                        {allItemsForSelection.map(i => (
-                          <option key={i.id} value={i.id}>
-                            {i.partNumber} — {i.itemName} (Remaining to arrive: {i.remainingQty || 0})
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
 
                     <div>
@@ -2125,34 +2369,29 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       Record Sales / Dispatch Invoice
                     </div>
                     <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Select Part Number *</label>
-                      <select 
-                        required 
-                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold"
-                        value={saleForm.itemId}
-                        onChange={e => {
-                          const item = allItemsForSelection.find(i => i.id === e.target.value);
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
+                      </label>
+                      <SearchableItemSelect
+                        items={allItemsForSelection}
+                        selectedItemId={saleForm.itemId}
+                        placeholder="🔍 Type Part Number, Item Name, or KPCL Code to search..."
+                        type="sale"
+                        onSelect={(item) => {
                           if (item) {
                             setSaleForm(prev => ({
                               ...prev,
-                              itemId: e.target.value,
+                              itemId: item.id,
                               rate: item.rate,
                               cgstPercent: item.cgstPercent || 0,
                               sgstPercent: item.sgstPercent || 0,
                               igstPercent: item.igstPercent || 0
                             }));
                           } else {
-                            handleSaleChange('itemId', e.target.value);
+                            handleSaleChange('itemId', '');
                           }
                         }}
-                      >
-                        <option value="">-- Choose Item by Part Number --</option>
-                        {allItemsForSelection.map(i => (
-                          <option key={i.id} value={i.id}>
-                            {i.partNumber} — {i.itemName} (Available in stock: {i.availableForSale || 0})
-                          </option>
-                        ))}
-                      </select>
+                      />
                     </div>
 
                     <div>
