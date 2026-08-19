@@ -13,7 +13,8 @@ import {
   FileText,
   Download,
   Send,
-  Share2
+  Share2,
+  Receipt
 } from 'lucide-react';
 import { showToast } from '../toast';
 import { SKC_LOGO_BASE64 } from '../logoBase64';

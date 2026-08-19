@@ -2393,7 +2393,11 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
       const totalPayment = netBaseAmount + otPayment + otAllowance;
       const advanceDeducted = dbPayment ? (parseFloat(dbPayment.advanceDeducted) || 0) : 0;
-      const remainingAdvanceBalance = Math.max(0, advanceBalance - advanceDeducted);
+      // If dbPayment exists (already approved), worker.advanceBalance in database has ALREADY been updated.
+      // So remaining is worker.advanceBalance, and original balance before deduction was worker.advanceBalance + advanceDeducted.
+      // If NOT yet approved, remaining is worker.advanceBalance - advanceDeducted.
+      const initialAdvanceBalance = dbPayment ? (advanceBalance + advanceDeducted) : advanceBalance;
+      const remainingAdvanceBalance = dbPayment ? advanceBalance : Math.max(0, advanceBalance - advanceDeducted);
       const extraAmount = dbPayment ? (parseFloat(dbPayment.extraAmount) || 0) : 0;
       const finalNetAmount = totalPayment - advanceDeducted + extraAmount;
 
@@ -2421,7 +2425,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         workingDays,
         dailyAllowance,
         advanceTaken,
-        advanceBalance,
+        advanceBalance: initialAdvanceBalance,
         wagesAmount,
         allowanceAmount,
         grossPayment,
