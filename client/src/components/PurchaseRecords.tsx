@@ -1887,7 +1887,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const basicCost = (item.qty || 0) * (item.rate || 0);
                           return (
                             <React.Fragment key={item.id}>
-                              <tr className="hover:bg-slate-50 border-b border-slate-200">
+                              <tr className="hover:bg-slate-50/80 border-t-2 border-slate-400 bg-white">
                                 <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
                                 <td className="font-mono font-bold text-[#1e3a8a]">{item.kpclCode || '-'}</td>
                                 <td className="font-bold text-slate-800">{item.itemName}</td>
@@ -1949,8 +1949,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               {(() => {
                                 const b = calculateBreakdown(item.qty, item.rate, item.cgstPercent, item.sgstPercent, item.igstPercent, item.discount, item.freight, item.pAndF, item.insurance);
                                 return (
-                                  <tr className="bg-slate-50/80 border-b-2 border-slate-300 text-[11px] text-slate-700 font-mono">
-                                    <td colSpan={15} className="px-4 py-2.5">
+                                  <tr className="bg-slate-50/90 border-b-2 border-slate-400 text-[11px] text-slate-700 font-mono">
+                                    <td colSpan={15} className="px-4 py-2">
                                       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 w-full">
                                         {/* LEFT: TAX & CHARGES PILLS */}
                                         <div className="flex flex-wrap gap-2.5 items-center">
@@ -2216,10 +2216,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const sgst = basic * ((pur.sgstPercent || 0) / 100);
                           const igst = basic * ((pur.igstPercent || 0) / 100);
                           return (
-                            <tr key={pur.id} className="hover:bg-slate-50 border-b border-slate-200">
+                            <tr key={pur.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
                               <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
                               <td className="font-mono font-bold text-slate-800">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</td>
-                              <td>{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
+                              <td className="font-semibold text-slate-800">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
                               <td className="whitespace-nowrap font-mono">{formatDate(pur.date)}</td>
                               <td className="text-center font-mono font-bold text-emerald-700 bg-emerald-50/50">{pur.qty}</td>
                               <td className="text-left font-mono">{formatCurrency(pur.rate)}</td>
@@ -2227,8 +2227,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-left font-mono">{formatCurrency(cgst)}</td>
                               <td className="text-left font-mono">{formatCurrency(sgst)}</td>
                               <td className="text-left font-mono">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono font-bold text-slate-800">{formatCurrency(basic + cgst + sgst + igst)}</td>
-                              <td>{pur.addedBy?.fullName || '-'}</td>
+                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50">{formatCurrency(basic + cgst + sgst + igst)}</td>
+                              <td className="text-slate-600 font-medium">{pur.addedBy?.fullName || '-'}</td>
                               <td className="text-center">
                                 {isManagerOrOwner && (
                                   <div className="flex items-center justify-center gap-1">
@@ -2508,7 +2508,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const sgst = basic * ((sale.sgstPercent || 0) / 100);
                           const igst = basic * ((sale.igstPercent || 0) / 100);
                           return (
-                            <tr key={sale.id} className="hover:bg-slate-50 border-b border-slate-200">
+                            <tr key={sale.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
                               <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
                               <td className="font-mono font-bold text-slate-800">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
                               <td>{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
