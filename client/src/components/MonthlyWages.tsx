@@ -272,7 +272,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       setSuccess(successMsg);
       showToast(successMsg, 'success');
       
-      setWagesReport(prev => prev.map(w => w.workerId === worker.workerId ? { ...w, paymentStatus: 'APPROVED' } : w));
+      // Refresh entire report to pull fresh advanceBalance and MonthlyPayment records from database
+      await handleCalculateWages();
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to approve wage payout.';
       setError(errMsg);
@@ -1407,13 +1408,69 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <span className="text-base font-bold font-mono text-blue-900">{drilldownData.summary.totalLeave}</span>
                     </div>
                     <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-                      <span className="text-[10px] font-bold uppercase text-indigo-700 block">Total OT Hours</span>
-                      <span className="text-base font-bold font-mono text-indigo-900">{drilldownData.summary.totalOtHours}h</span>
+                      <span className="text-[10px] font-bold uppercase text-indigo-700 block">Total Work Days</span>
+                      <span className="text-base font-bold font-mono text-indigo-900">{drilldownData.summary.totalWorkingDays}</span>
                     </div>
-                    <div className="p-2.5 bg-gradient-to-r from-orange-100 to-amber-100 border border-orange-300 rounded-lg">
-                      <span className="text-[10px] font-extrabold uppercase text-orange-950 block">Net Working Days</span>
-                      <span className="text-base font-black font-mono text-orange-950">{drilldownData.summary.totalWorkingDays}</span>
+                    <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
+                      <span className="text-[10px] font-bold uppercase text-purple-700 block">Total OT Hours</span>
+                      <span className="text-base font-bold font-mono text-purple-900">{drilldownData.summary.totalOtHours}h</span>
                     </div>
+                  </div>
+
+                  {/* 📜 HISTORICAL MONTH-BY-MONTH ADVANCE DEDUCTION LEDGER */}
+                  <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-300 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                      <span className="font-bold text-xs uppercase tracking-wider text-amber-950 flex items-center gap-1.5">
+                        <Receipt className="w-4 h-4 text-amber-700" /> Historical Advance Deduction Ledger (Month-by-Month)
+                      </span>
+                      <span className="text-[11px] font-mono text-amber-900 font-bold bg-amber-200/80 px-2.5 py-0.5 rounded-full border border-amber-300">
+                        Remaining Advance Balance: ₹{Number(drilldownData.worker.advanceBalance || 0).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+
+                    {!drilldownData.paymentHistory || drilldownData.paymentHistory.length === 0 ? (
+                      <p className="text-xs text-amber-800 italic py-1">No monthly advance deductions recorded yet for this worker.</p>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left bg-white border border-amber-200 rounded-lg overflow-hidden">
+                          <thead>
+                            <tr className="bg-amber-100/80 text-amber-950 font-bold text-[10px] uppercase border-b border-amber-300">
+                              <th className="py-2 px-3">Month / Year</th>
+                              <th className="py-2 px-3 text-right">Advance Deducted</th>
+                              <th className="py-2 px-3 text-right">Net Payout</th>
+                              <th className="py-2 px-3 text-center">Status</th>
+                              <th className="py-2 px-3 text-right">Deduction Date</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-amber-100 font-mono">
+                            {drilldownData.paymentHistory.map((p: any, pIdx: number) => {
+                              const mLabel = months.find(m => parseInt(m.value, 10) === p.month)?.name || `Month ${p.month}`;
+                              return (
+                                <tr key={pIdx} className="hover:bg-amber-50/50">
+                                  <td className="py-2 px-3 font-sans font-bold text-slate-800">
+                                    {mLabel} {p.year}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-bold text-amber-900 bg-amber-50/30">
+                                    ₹{Number(p.advanceDeducted).toLocaleString('en-IN')}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-semibold text-slate-900">
+                                    ₹{Number(p.finalNetAmount).toLocaleString('en-IN')}
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-sans">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                      {p.status || 'APPROVED'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-right text-slate-500 text-[11px] font-sans">
+                                    {p.date ? new Date(p.date).toLocaleDateString('en-GB') : '-'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
 
                   {/* PHYSICAL REGISTER STYLE DATE-WISE TABLE (WITH HORIZONTAL SCROLL) */}

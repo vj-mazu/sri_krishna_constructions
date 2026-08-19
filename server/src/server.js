@@ -2541,6 +2541,15 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
       });
     }
 
+    // Fetch all historical approved payments for this worker to track lifetime advance deduction audit trail
+    const { rows: paymentHistory } = await pool.query(
+      `SELECT "id", "month", "year", "advanceDeducted", "finalNetAmount", "status", "createdAt", "updatedAt"
+       FROM "MonthlyPayment"
+       WHERE "workerId" = $1
+       ORDER BY "year" DESC, "month" DESC`,
+      [workerId]
+    );
+
     res.json({
       worker: {
         id: worker.id,
@@ -2568,6 +2577,14 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         totalWorkingDays: totalPresent + (totalHalfDay * 0.5),
         totalOtHours
       },
+      paymentHistory: paymentHistory.map(p => ({
+        month: p.month,
+        year: p.year,
+        advanceDeducted: parseFloat(p.advanceDeducted) || 0,
+        finalNetAmount: parseFloat(p.finalNetAmount) || 0,
+        status: p.status,
+        date: p.updatedAt || p.createdAt
+      })),
       days: daysList
     });
   } catch (err) {
