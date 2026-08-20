@@ -287,8 +287,53 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           );
         }
 
+        const presentCount = Object.values(attendanceRecords).filter(r => r.status === 'PRESENT').length;
+        const absentCount = Object.values(attendanceRecords).filter(r => r.status === 'ABSENT').length;
+        const halfCount = Object.values(attendanceRecords).filter(r => r.status === 'HALF_DAY').length;
+        const leaveCount = Object.values(attendanceRecords).filter(r => r.status === 'LEAVE').length;
+        const unmarkedCount = filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount);
+
+        const getStatusBadge = (status: string) => {
+          switch (status) {
+            case 'PRESENT':
+              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs">🟢 Present</span>;
+            case 'ABSENT':
+              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-xs">🔴 Absent</span>;
+            case 'HALF_DAY':
+              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-xs">🟡 Half Day</span>;
+            case 'LEAVE':
+              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 shadow-xs">🟣 Leave</span>;
+            default:
+              return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">⚪ Unmarked</span>;
+          }
+        };
+
         return (
-          <form onSubmit={handleSaveAttendance} className="space-y-4">
+          <form onSubmit={handleSaveAttendance} className="space-y-3">
+            {/* REAL-TIME SUMMARY STATS BAR */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-center text-xs">
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-1.5">
+                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Present</div>
+                <div className="text-sm font-black text-emerald-800 font-mono">{presentCount}</div>
+              </div>
+              <div className="bg-rose-50/70 border border-rose-200/80 rounded-lg p-1.5">
+                <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Absent</div>
+                <div className="text-sm font-black text-rose-800 font-mono">{absentCount}</div>
+              </div>
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-lg p-1.5">
+                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Half Day</div>
+                <div className="text-sm font-black text-amber-800 font-mono">{halfCount}</div>
+              </div>
+              <div className="bg-purple-50/70 border border-purple-200/80 rounded-lg p-1.5">
+                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Leave</div>
+                <div className="text-sm font-black text-purple-800 font-mono">{leaveCount}</div>
+              </div>
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 col-span-2 sm:col-span-1">
+                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Unmarked</div>
+                <div className="text-sm font-black text-slate-700 font-mono">{Math.max(0, unmarkedCount)}</div>
+              </div>
+            </div>
+
             {/* 1. MOBILE COMPACT CARD LIST (Shown only on mobile screens) */}
             <div className="block md:hidden space-y-2.5">
               {filteredWorkers.map((w) => {
@@ -306,11 +351,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           <div className="text-[10px] text-slate-400 font-mono">{w.workerId}</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-[10px] text-emerald-700 font-bold font-mono">₹{w.dailyWage}/d</div>
-                        {w.dailyAllowance > 0 && (
-                          <div className="text-[9px] text-amber-700 font-mono">+₹{w.dailyAllowance} allow</div>
-                        )}
+                      <div className="flex flex-col items-end gap-0.5">
+                        {getStatusBadge(state.status)}
+                        <div className="text-[10px] text-emerald-700 font-bold font-mono mt-0.5">₹{w.dailyWage}/d</div>
                       </div>
                     </div>
 
@@ -384,9 +427,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                 <thead>
                   <tr>
                     <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2.5">Worker Details</th>
-                    <th className="text-center min-w-[280px] px-3 py-2.5">Attendance Status</th>
-                    <th className="text-center min-w-[130px] px-3 py-2.5">Daily Wage Override (₹)</th>
-                    <th className="text-center min-w-[120px] px-3 py-2.5">Overtime Hours (OT)</th>
+                    <th className="text-center min-w-[100px] px-3 py-2.5">Status</th>
+                    <th className="text-center min-w-[260px] px-3 py-2.5">Attendance Mark</th>
+                    <th className="text-center min-w-[120px] px-3 py-2.5">Daily Wage Override (₹)</th>
+                    <th className="text-center min-w-[110px] px-3 py-2.5">Overtime Hours (OT)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -400,6 +444,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
                         </td>
                         
+                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                          {getStatusBadge(state.status)}
+                        </td>
+
                         <td className="px-3 py-2">
                           <div className="flex justify-center gap-1.5">
                             {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
