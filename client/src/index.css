@@ -42,6 +42,48 @@ input:focus, textarea:focus, select:focus {
   width: 100%;
 }
 
+/* Mobile-First Responsive App Refinements */
+@media (max-width: 768px) {
+  /* Prevent horizontal screen shaking */
+  body {
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+  }
+
+  /* Compact spacing for inputs on mobile */
+  input, select, textarea {
+    font-size: 14px !important; /* Prevents iOS zoom-in on focus */
+  }
+
+  /* Smooth horizontal swipe on tables */
+  .excel-table-container {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Mobile compact touch targets */
+  .btn-mobile-touch {
+    min-height: 38px;
+  }
+}
+
+/* Custom smooth scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .excel-table th,
 .excel-table td {
   padding: 8px 10px;

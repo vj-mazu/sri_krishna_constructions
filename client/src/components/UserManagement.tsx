@@ -1570,7 +1570,110 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           )}
 
-          <div className="overflow-x-auto border border-slate-200 rounded-lg">
+          {/* 📱 MOBILE WORKER CARDS (Shown on mobile screens only) */}
+          <div className="block md:hidden space-y-2.5">
+            {workers.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl">No workers registered yet.</div>
+            ) : (
+              (() => {
+                const sorted = [...workers].sort((a, b) => {
+                  const extractNum = (str: string) => {
+                    if (!str) return 999999;
+                    const match = str.match(/\d+/);
+                    return match ? parseInt(match[0], 10) : 999999;
+                  };
+                  return extractNum(a.workerId) - extractNum(b.workerId);
+                });
+
+                return sorted.map((w, i) => (
+                  <div key={w.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                    <div className="flex justify-between items-start border-b border-slate-100 pb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-[#1e3a8a]/10 text-[#1e3a8a] font-bold text-xs flex items-center justify-center">
+                          {w.fullName?.charAt(0) || 'W'}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-900 text-xs">{w.fullName}</div>
+                          <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5">
+                            <span className="text-[#1e3a8a] font-bold">{w.workerId}</span>
+                            <span>•</span>
+                            <span>{w.designation || 'Worker'}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-900 font-bold text-[10px] border border-blue-200">
+                        {w.division?.name || 'General'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50/60 p-2 rounded-lg border border-slate-100 font-mono">
+                      <div>
+                        <span className="text-slate-400 text-[9px] block uppercase">Daily Wage</span>
+                        <span className="font-bold text-slate-800">{formatIndianCurrency(w.dailyWage)}/d</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[9px] block uppercase">Allowance</span>
+                        <span className="font-bold text-emerald-700">+{formatIndianCurrency(w.dailyAllowance || 0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[9px] block uppercase">Advance Taken</span>
+                        <span className="font-semibold text-slate-700">{formatIndianCurrency(w.advanceTaken || w.advanceBalance || 0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[9px] block uppercase">Advance Balance</span>
+                        <span className="font-bold text-amber-900">{formatIndianCurrency(w.advanceBalance || 0)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-1">
+                      <span className="text-[10px] text-slate-400 font-mono">{w.mobileNumber}</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setEditingWorker(w);
+                            setEditWorkerName(w.fullName);
+                            setEditFatherName(w.fatherName || '');
+                            setEditDesignation(w.designation || '');
+                            setEditWorkerMobile(w.mobileNumber.startsWith('+91') ? w.mobileNumber.slice(3) : w.mobileNumber);
+                            setEditWage(w.dailyWage.toString());
+                            setEditDailyAllowance((w.dailyAllowance || 0).toString());
+                            setEditAdvanceTaken((w.advanceTaken || w.advanceBalance || 0).toString());
+                            setEditAdvanceBalance((w.advanceBalance || 0).toString());
+                            setEditOtAllowance((w.otAllowance || 0).toString());
+                            setEditOtRate((w.otHourlyRate || 0).toString());
+                            setEditWorkerDivisionId(w.divisionId);
+                            setEditPfNumber(w.pfNumber || '');
+                            setEditEsiNumber(w.esiNumber || '');
+                            setEditUanNumber(w.uanNumber || '');
+                            setEditBankAcc(w.bankAccountNo || '');
+                            setEditIfsc(w.ifscCode || '');
+                            setEditPlaceOfWork(w.placeOfWork || '');
+                            setEditNatureOfWork(w.natureOfWork || '');
+                            setShowAddWorkerForm(false);
+                          }}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-[#1e3a8a] rounded-lg font-bold text-[11px] flex items-center gap-1 border border-blue-200"
+                        >
+                          <Edit className="w-3 h-3" /> Edit
+                        </button>
+                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                          <button
+                            onClick={() => handleDeleteWorker(w.id, w.fullName)}
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-[11px] border border-rose-200"
+                            title="Delete Worker"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ));
+              })()
+            )}
+          </div>
+
+          {/* 💻 DESKTOP/TABLET TABLE (100% UNTOUCHED) */}
+          <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-lg">
             <table className="w-full text-left text-xs excel-table">
               <thead>
                 <tr>

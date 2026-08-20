@@ -395,89 +395,89 @@ export function App() {
         {activeTab === 'wages' && (user.role === 'OWNER' || user.role === 'MANAGER') && <MonthlyWages currentUserRole={user.role} />}
       </main>
 
-      {/* NATIVE MOBILE APP BOTTOM NAVIGATION BAR */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl py-1 px-1 flex justify-around items-center">
+      {/* NATIVE MOBILE APP BOTTOM NAVIGATION BAR (No Overlap, Compact & Fast) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl py-1 px-1 flex justify-around items-center h-14 pb-[env(safe-area-inset-bottom,0px)]">
         {user.role !== 'SUPERVISOR' && (
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-              activeTab === 'dashboard' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+              activeTab === 'dashboard' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="text-[9px]">Dashboard</span>
+            <span className="text-[9px] tracking-tight mt-0.5">Dashboard</span>
           </button>
         )}
 
         {user.role !== 'SUPERVISOR' && (
           <button
             onClick={() => setActiveTab('purchase_orders')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-              activeTab === 'purchase_orders' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+              activeTab === 'purchase_orders' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span className="text-[9px]">POs</span>
+            <span className="text-[9px] tracking-tight mt-0.5">POs</span>
           </button>
         )}
 
         {user.role !== 'SUPERVISOR' && (
           <button
             onClick={() => setActiveTab('stock')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-              activeTab === 'stock' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+              activeTab === 'stock' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
             }`}
           >
             <Package className="w-4 h-4" />
-            <span className="text-[9px]">Stock</span>
+            <span className="text-[9px] tracking-tight mt-0.5">Stock</span>
           </button>
         )}
 
         <button
           onClick={() => setActiveTab('attendance')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-            activeTab === 'attendance' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+          className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+            activeTab === 'attendance' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
           }`}
         >
           <Calendar className="w-4 h-4" />
-          <span className="text-[9px]">Attendance</span>
+          <span className="text-[9px] tracking-tight mt-0.5">Attendance</span>
         </button>
 
         {(user.role === 'OWNER' || user.role === 'MANAGER') && (
           <button
             onClick={() => setActiveTab('wages')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-              activeTab === 'wages' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+              activeTab === 'wages' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
             }`}
           >
             <Wallet className="w-4 h-4" />
-            <span className="text-[9px]">Wages</span>
+            <span className="text-[9px] tracking-tight mt-0.5">Wages</span>
           </button>
         )}
 
         {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
           <button
             onClick={() => setActiveTab('master_creation')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-              activeTab === 'master_creation' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+              activeTab === 'master_creation' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span className="text-[9px]">Master</span>
+            <span className="text-[9px] tracking-tight mt-0.5">Master</span>
           </button>
         )}
 
         {(user.role === 'OWNER' || user.role === 'MANAGER') && (
           <button
             onClick={() => setActiveTab('approvals')}
-            className={`relative flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg transition-all ${
-              activeTab === 'approvals' ? 'text-[#1e3a8a] font-bold bg-blue-50/80' : 'text-slate-500'
+            className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
+              activeTab === 'approvals' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span className="text-[9px]">Approvals</span>
+            <span className="text-[9px] tracking-tight mt-0.5">Approvals</span>
             {pendingCount > 0 && (
-              <span className="absolute -top-0.5 right-1 bg-red-500 text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
+              <span className="absolute 1 right-2 bg-red-500 text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
                 {pendingCount}
               </span>
             )}
