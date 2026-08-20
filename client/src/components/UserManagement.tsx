@@ -1586,17 +1586,40 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 </tr>
               </thead>
               <tbody>
-                {workers.map((w, i) => (
-                  <tr key={w.id}>
-                    <td className="font-mono text-center">{i + 1}</td>
-                    <td className="font-mono font-bold text-slate-800">{w.workerId}</td>
-                    <td className="font-semibold text-slate-800">{w.fullName}</td>
-                    <td className="text-slate-600">{w.fatherName || '-'}</td>
-                    <td>
-                      <span className="px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700 text-[10px]">
-                        {w.designation || 'Worker'}
-                      </span>
-                    </td>
+                {(() => {
+                  const sortedWorkers = [...workers].sort((a, b) => {
+                    const extractNum = (str: string) => {
+                      if (!str) return 999999;
+                      const match = str.match(/\d+/);
+                      return match ? parseInt(match[0], 10) : 999999;
+                    };
+                    const numA = extractNum(a.workerId);
+                    const numB = extractNum(b.workerId);
+                    if (numA !== numB) return numA - numB;
+                    return (a.workerId || '').localeCompare(b.workerId || '');
+                  });
+
+                  if (sortedWorkers.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 14 : 8} className="p-8 text-center text-slate-400">
+                          No workers registered yet.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return sortedWorkers.map((w, i) => (
+                    <tr key={w.id} className="hover:bg-slate-50/50">
+                      <td className="font-mono text-center font-bold text-slate-500">{i + 1}</td>
+                      <td className="font-mono font-bold text-slate-900">{w.workerId}</td>
+                      <td className="font-semibold text-slate-800">{w.fullName}</td>
+                      <td className="text-slate-600">{w.fatherName || '-'}</td>
+                      <td>
+                        <span className="px-2 py-0.5 rounded-full bg-slate-100 font-semibold text-slate-700 text-[10px]">
+                          {w.designation || 'Worker'}
+                        </span>
+                      </td>
                     <td className="font-mono text-slate-600">{w.mobileNumber}</td>
                     <td className="font-semibold text-blue-900">{w.division?.name || '-'}</td>
                     {currentUserRole !== 'SUPERVISOR' && (
@@ -1667,7 +1690,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       </div>
                     </td>
                   </tr>
-                ))}
+                ));
+              })()}
               </tbody>
             </table>
           </div>

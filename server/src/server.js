@@ -2015,7 +2015,12 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
       query += ` WHERE ` + whereClauses.join(' AND ');
     }
 
-    query += ` ORDER BY w."id" ASC`;
+    query += ` ORDER BY 
+      CASE 
+        WHEN w."workerId" ~ '^SKC-E-[0-9]+$' THEN CAST(SUBSTRING(w."workerId" FROM 7) AS INTEGER)
+        WHEN w."workerId" ~ '^[0-9]+$' THEN CAST(w."workerId" AS INTEGER)
+        ELSE 999999
+      END ASC, w."workerId" ASC, w."fullName" ASC`;
     
     params.push(limitNum + 1);
     query += ` LIMIT $${params.length}`;
@@ -2199,14 +2204,12 @@ app.delete('/api/workers/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only Owner or Manager can delete worker records' });
     }
 
-    const { rows: attCheck } = await pool.query(`SELECT COUNT(*)::int as count FROM "Attendance" WHERE "workerId" = $1`, [id]);
-    const { rows: payCheck } = await pool.query(`SELECT COUNT(*)::int as count FROM "MonthlyPayment" WHERE "workerId" = $1`, [id]);
-    if (attCheck[0]?.count > 0 || payCheck[0]?.count > 0) {
-      return res.status(400).json({ error: `Cannot delete worker — has ${attCheck[0].count} attendance records and ${payCheck[0].count} payment records. Archive instead.` });
-    }
-
+    // Cleanly cascade delete any dummy attendance or payments associated with this worker
+    await pool.query(`DELETE FROM "Attendance" WHERE "workerId" = $1`, [id]);
+    await pool.query(`DELETE FROM "MonthlyPayment" WHERE "workerId" = $1`, [id]);
     await pool.query(`DELETE FROM "Worker" WHERE "id" = $1`, [id]);
-    res.json({ message: 'Worker record deleted successfully' });
+
+    res.json({ message: 'Worker and all associated records deleted successfully' });
   } catch (err) {
     console.error('Delete worker error:', err);
     res.status(500).json({ error: 'Failed to delete worker' });
