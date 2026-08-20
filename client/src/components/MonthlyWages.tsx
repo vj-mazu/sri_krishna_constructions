@@ -53,6 +53,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [slipModalWorker, setSlipModalWorker] = useState<any | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(SKC_LOGO_BASE64 || null);
 
+  // Tab mode: 'register' (Main Register) | 'esipf' (ESI PF Salary Statement)
+  const [activeWageTab, setActiveWageTab] = useState<'register' | 'esipf'>('register');
+
   // Table Responsive View Mode: 'fit' (fits desktop/tablet without scroll) | 'scroll' (wide ledger)
   const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('fit');
 
@@ -98,6 +101,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       setDivisions(res.data.divisions || (Array.isArray(res.data) ? res.data : []));
     } catch (err) {
       console.error('Failed to load divisions:', err);
+      showToast('Could not load divisions list', 'error');
     }
   };
 
@@ -141,11 +145,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       const initialExt: Record<string, number | string> = {};
 
       data.forEach((w: any) => {
-        if (w.pfAmount !== undefined && w.pfAmount !== null) initialPf[w.workerId] = parseFloat(w.pfAmount);
-        if (w.esiAmount !== undefined && w.esiAmount !== null) initialEsi[w.workerId] = parseFloat(w.esiAmount);
-        if (w.otAllowance !== undefined && w.otAllowance !== null) initialOtAllow[w.workerId] = parseFloat(w.otAllowance);
-        if (w.advanceDeducted !== undefined && w.advanceDeducted !== null) initialAdv[w.workerId] = parseFloat(w.advanceDeducted);
-        if (w.extraAmount !== undefined && w.extraAmount !== null) initialExt[w.workerId] = parseFloat(w.extraAmount);
+        if (w.pfAmount !== undefined && w.pfAmount !== null) initialPf[w.workerId] = parseFloat(w.pfAmount) || 0;
+        if (w.esiAmount !== undefined && w.esiAmount !== null) initialEsi[w.workerId] = parseFloat(w.esiAmount) || 0;
+        if (w.otAllowance !== undefined && w.otAllowance !== null) initialOtAllow[w.workerId] = parseFloat(w.otAllowance) || 0;
+        if (w.advanceDeducted !== undefined && w.advanceDeducted !== null) initialAdv[w.workerId] = parseFloat(w.advanceDeducted) || 0;
+        if (w.extraAmount !== undefined && w.extraAmount !== null) initialExt[w.workerId] = parseFloat(w.extraAmount) || 0;
       });
 
       setCustomPf(initialPf);
@@ -188,10 +192,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const allowanceAmount = Math.round(workingDays * dailyAllowance);
     const grossPayment = wagesAmount + allowanceAmount;
 
-    const pfVal = customPf[w.workerId] !== undefined ? customPf[w.workerId] : parseFloat(w.pfAmount || 0);
+    const pfVal = customPf[w.workerId] !== undefined ? customPf[w.workerId] : (parseFloat(w.pfAmount || 0) || 0);
     const pf = pfVal === '' ? 0 : parseFloat(pfVal as string) || 0;
 
-    const esiVal = customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : parseFloat(w.esiAmount || 0);
+    const esiVal = customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (parseFloat(w.esiAmount || 0) || 0);
     const esi = esiVal === '' ? 0 : parseFloat(esiVal as string) || 0;
 
     const netBaseAmount = grossPayment - pf - esi;
@@ -199,7 +203,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const otHours = parseFloat(w.totalOtHours) || 0;
     const otHourlyRate = parseFloat(w.otHourlyRate) || 0;
     const otPayment = w.otPayment !== undefined && w.otPayment !== null 
-      ? parseFloat(w.otPayment) 
+      ? (parseFloat(w.otPayment) || 0)
       : Math.round(otHours * (otHourlyRate || (dailyWage / 8)));
 
     const workerDefaultOtAllow = parseFloat(w.otAllowance ?? 0) || 0;
@@ -825,6 +829,240 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     showToast('Monthly wages register exported to Excel successfully!', 'success');
   };
 
+  // --- ESI PF SHEET EXCEL EXPORT (EXACT MULTI-LEVEL COLUMNS) ---
+  const handleExportEsiPfExcel = () => {
+    const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+
+    const exportRows = filteredWages.map((w, index) => {
+      const calc = getRowCalculations(w);
+      const wDays = Math.round(calc.workingDays);
+      const hDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
+      const abDays = Math.max(0, daysInMonth - (wDays + hDays));
+      const totDays = daysInMonth;
+
+      const basicMonthly = Math.round(calc.dailyWage * 26);
+      const vdaMonthly = Math.round(calc.dailyAllowance * 26);
+      const conMonthly = 0;
+      const totMonthly = basicMonthly + vdaMonthly + conMonthly;
+
+      const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
+      const conEarned = 0;
+      const grossEarned = calc.grossPayment + calc.otPayment + calc.otAllowance;
+      const epfBase = Math.min(15000, basicAndVdaEarned);
+      const grossEarn = grossEarned;
+
+      const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
+
+      return {
+        'SL NO': index + 1,
+        'NAME OF THE EMPLOYEE': (w.fullName || '').toUpperCase(),
+        'BASIC': basicMonthly,
+        'VDA': vdaMonthly,
+        'CON': conMonthly > 0 ? conMonthly : '-',
+        'TOT': totMonthly,
+        'W': wDays,
+        'H': hDays,
+        'AB': abDays,
+        'ATT_TOT': totDays,
+        'BASIC & VDA': basicAndVdaEarned,
+        'EARN_CON': conEarned > 0 ? conEarned : '-',
+        'GROSS': grossEarned,
+        'EPF': epfBase,
+        'GROSS EARN': grossEarn,
+        'PF': calc.pf,
+        'ESI': calc.esi,
+        'NET SALARY': netSalary,
+        'DESIGNATION': (w.designation || 'HELPER').toUpperCase()
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'SALARY STATEMENT');
+    XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_SALARY_STATEMENT_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
+    showToast('ESI PF Salary Statement exported to Excel successfully!', 'success');
+  };
+
+  // --- ESI PF SHEET PDF EXPORT (PORTRAIT A4 PROFESSIONAL) ---
+  const handleExportEsiPfPdf = () => {
+    const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    // Document Title (Centered on A4 portrait width = 210mm)
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('SRI KRISHNA CONSTRUCTIONS', 105, 10, { align: 'center' });
+    doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`SALARY STATEMENT FOR ${monthName.toUpperCase()} - ${selectedYear}`, 105, 16, { align: 'center' });
+
+    // Compute column totals for foot row
+    let totBasicMonthly = 0;
+    let totVdaMonthly = 0;
+    let totMonthlySum = 0;
+    let totWDays = 0;
+    let totHDays = 0;
+    let totAbDays = 0;
+    let totBasicVdaEarned = 0;
+    let totGrossEarned = 0;
+    let totEpfBase = 0;
+    let totGrossEarn = 0;
+    let totPf = 0;
+    let totEsi = 0;
+    let totNetSalary = 0;
+
+    const tableBody = filteredWages.map((w, index) => {
+      const calc = getRowCalculations(w);
+      const wDays = Math.round(calc.workingDays);
+      const hDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
+      const abDays = Math.max(0, daysInMonth - (wDays + hDays));
+      const totDays = daysInMonth;
+
+      const basicMonthly = Math.round(calc.dailyWage * 26);
+      const vdaMonthly = Math.round(calc.dailyAllowance * 26);
+      const totMonthly = basicMonthly + vdaMonthly;
+
+      const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
+      const grossEarned = calc.grossPayment + calc.otPayment + calc.otAllowance;
+      const epfBase = Math.min(15000, basicAndVdaEarned);
+      const grossEarn = grossEarned;
+      const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
+
+      totBasicMonthly += basicMonthly;
+      totVdaMonthly += vdaMonthly;
+      totMonthlySum += totMonthly;
+      totWDays += wDays;
+      totHDays += hDays;
+      totAbDays += abDays;
+      totBasicVdaEarned += basicAndVdaEarned;
+      totGrossEarned += grossEarned;
+      totEpfBase += epfBase;
+      totGrossEarn += grossEarn;
+      totPf += calc.pf;
+      totEsi += calc.esi;
+      totNetSalary += netSalary;
+
+      return [
+        index + 1,
+        (w.fullName || '').toUpperCase(),
+        basicMonthly.toLocaleString('en-IN'),
+        vdaMonthly.toLocaleString('en-IN'),
+        '-',
+        totMonthly.toLocaleString('en-IN'),
+        wDays,
+        hDays,
+        abDays,
+        totDays,
+        basicAndVdaEarned.toLocaleString('en-IN'),
+        '-',
+        grossEarned.toLocaleString('en-IN'),
+        epfBase.toLocaleString('en-IN'),
+        grossEarn.toLocaleString('en-IN'),
+        calc.pf > 0 ? calc.pf.toLocaleString('en-IN') : '-',
+        calc.esi > 0 ? calc.esi.toLocaleString('en-IN') : '-',
+        netSalary.toLocaleString('en-IN'),
+        (w.designation || 'HELPER').toUpperCase()
+      ];
+    });
+
+    const footRow = [
+      '',
+      'TOTAL',
+      totBasicMonthly.toLocaleString('en-IN'),
+      totVdaMonthly.toLocaleString('en-IN'),
+      '-',
+      totMonthlySum.toLocaleString('en-IN'),
+      totWDays,
+      totHDays,
+      totAbDays,
+      '-',
+      totBasicVdaEarned.toLocaleString('en-IN'),
+      '-',
+      totGrossEarned.toLocaleString('en-IN'),
+      totEpfBase.toLocaleString('en-IN'),
+      totGrossEarn.toLocaleString('en-IN'),
+      totPf > 0 ? totPf.toLocaleString('en-IN') : '-',
+      totEsi > 0 ? totEsi.toLocaleString('en-IN') : '-',
+      totNetSalary.toLocaleString('en-IN'),
+      ''
+    ];
+
+    autoTable(doc, {
+      startY: 20,
+      head: [
+        [
+          { content: 'SL\nNO', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
+          { content: 'NAME OF EMPLOYEE', rowSpan: 2, styles: { halign: 'left', valign: 'middle' } },
+          { content: 'WAGE STRUCTURE', colSpan: 4, styles: { halign: 'center' } },
+          { content: 'ATTENDANCE', colSpan: 4, styles: { halign: 'center' } },
+          { content: 'EARNINGS', colSpan: 5, styles: { halign: 'center' } },
+          { content: 'DEDUCTIONS', colSpan: 2, styles: { halign: 'center' } },
+          { content: 'NET\nSALARY', rowSpan: 2, styles: { halign: 'right', valign: 'middle' } },
+          { content: 'DESIG', rowSpan: 2, styles: { halign: 'left', valign: 'middle' } }
+        ],
+        [
+          'BASIC', 'VDA', 'CON', 'TOT',
+          'W', 'H', 'AB', 'TOT',
+          'BASIC & VDA', 'CON', 'GROSS', 'EPF', 'GROSS EARN',
+          'PF', 'ESI'
+        ]
+      ],
+      body: tableBody,
+      foot: [footRow],
+      theme: 'grid',
+      styles: {
+        fontSize: 5.5,
+        cellPadding: { top: 1.2, bottom: 1.2, left: 0.5, right: 0.5 },
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+        textColor: [0, 0, 0],
+        overflow: 'linebreak'
+      },
+      headStyles: {
+        fillColor: [242, 242, 242],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 5,
+        cellPadding: { top: 1.5, bottom: 1.5, left: 0.5, right: 0.5 }
+      },
+      footStyles: {
+        fillColor: [235, 235, 235],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        fontSize: 5.2,
+        cellPadding: { top: 1.5, bottom: 1.5, left: 0.5, right: 0.5 }
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 5 },
+        1: { halign: 'left', cellWidth: 26 },
+        2: { halign: 'right', cellWidth: 10 },
+        3: { halign: 'right', cellWidth: 9 },
+        4: { halign: 'center', cellWidth: 5 },
+        5: { halign: 'right', cellWidth: 10 },
+        6: { halign: 'center', cellWidth: 5 },
+        7: { halign: 'center', cellWidth: 4 },
+        8: { halign: 'center', cellWidth: 5 },
+        9: { halign: 'center', cellWidth: 5 },
+        10: { halign: 'right', cellWidth: 13 },
+        11: { halign: 'center', cellWidth: 5 },
+        12: { halign: 'right', cellWidth: 12 },
+        13: { halign: 'right', cellWidth: 11 },
+        14: { halign: 'right', cellWidth: 12 },
+        15: { halign: 'right', cellWidth: 9 },
+        16: { halign: 'right', cellWidth: 9 },
+        17: { halign: 'right', cellWidth: 13, fontStyle: 'bold' },
+        18: { halign: 'left', cellWidth: 15 }
+      },
+      margin: { left: 6, right: 6, top: 20, bottom: 10 }
+    });
+
+    doc.save(`SRI_KRISHNA_CONSTRUCTIONS_SALARY_STATEMENT_${monthName.toUpperCase()}_${selectedYear}.pdf`);
+    showToast('ESI PF Salary Statement exported to PDF (Portrait) successfully!', 'success');
+  };
+
   const filteredWages = wagesReport.filter((w) => {
     const term = workerSearch.toLowerCase().trim();
     if (!term) return true;
@@ -889,6 +1127,30 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         </div>
       </div>
 
+      {/* SUB-TABS: WORKERS PAYMENT REGISTER vs ESI PF SALARY STATEMENT */}
+      <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 rounded-xl gap-1">
+        <button
+          onClick={() => setActiveWageTab('register')}
+          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+            activeWageTab === 'register'
+              ? 'bg-[#1e3a8a] text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <IndianRupee className="w-4 h-4" /> Workers Payment Register (22-Col)
+        </button>
+        <button
+          onClick={() => setActiveWageTab('esipf')}
+          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+            activeWageTab === 'esipf'
+              ? 'bg-[#1e3a8a] text-white shadow-sm'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <Receipt className="w-4 h-4 text-amber-300" /> ESI PF Sheet (Salary Statement)
+        </button>
+      </div>
+
       {/* FILTERS BAR */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 bg-slate-50 p-2 sm:p-4 rounded-lg sm:rounded-xl border border-slate-200 text-xs">
         <div>
@@ -939,52 +1201,73 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           />
         </div>
         <div className="col-span-2 sm:col-span-2 lg:col-span-3 flex items-end gap-1.5">
-          <div className="hidden sm:flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-300 mr-1">
-            <button
-              onClick={() => setTableViewMode('fit')}
-              className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all ${
-                tableViewMode === 'fit'
-                  ? 'bg-[#1e3a8a] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Fit entire 22-column payroll register on screen without horizontal scrolling"
-            >
-              🖥️ Fit Screen
-            </button>
-            <button
-              onClick={() => setTableViewMode('scroll')}
-              className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all ${
-                tableViewMode === 'scroll'
-                  ? 'bg-[#1e3a8a] text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Wide Excel Ledger with full spacing"
-            >
-              ↔️ Wide Ledger
-            </button>
-          </div>
-          <button
-            onClick={handleExportExcel}
-            className="flex-1 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
-            title="Export Excel Register"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
-          </button>
-          <button
-            onClick={handlePrintAllSlips}
-            className="flex-1 py-1.5 sm:py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
-            title="Download All Salary Slips in PDF (Portrait A4)"
-          >
-            <FileText className="w-3.5 h-3.5" /> All Slips PDF
-          </button>
-          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-            <button
-              onClick={handleApproveAll}
-              className="flex-1 py-1.5 sm:py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
-              title="Approve All Salaries"
-            >
-              <Check className="w-4 h-4" /> Approve All
-            </button>
+          {activeWageTab === 'register' ? (
+            <>
+              <div className="hidden sm:flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-300 mr-1">
+                <button
+                  onClick={() => setTableViewMode('fit')}
+                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all ${
+                    tableViewMode === 'fit'
+                      ? 'bg-[#1e3a8a] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Fit entire 22-column payroll register on screen without horizontal scrolling"
+                >
+                  🖥️ Fit Screen
+                </button>
+                <button
+                  onClick={() => setTableViewMode('scroll')}
+                  className={`px-2.5 py-1.5 rounded-md text-[11px] font-bold transition-all ${
+                    tableViewMode === 'scroll'
+                      ? 'bg-[#1e3a8a] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Wide Excel Ledger with full spacing"
+                >
+                  ↔️ Wide Ledger
+                </button>
+              </div>
+              <button
+                onClick={handleExportExcel}
+                className="flex-1 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                title="Export Excel Register"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Excel
+              </button>
+              <button
+                onClick={handlePrintAllSlips}
+                className="flex-1 py-1.5 sm:py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                title="Download All Salary Slips in PDF (Portrait A4)"
+              >
+                <FileText className="w-3.5 h-3.5" /> All Slips PDF
+              </button>
+              {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                <button
+                  onClick={handleApproveAll}
+                  className="flex-1 py-1.5 sm:py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                  title="Approve All Salaries"
+                >
+                  <Check className="w-4 h-4" /> Approve All
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={handleExportEsiPfExcel}
+                className="flex-1 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                title="Download ESI PF Salary Statement Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Excel (.xlsx)
+              </button>
+              <button
+                onClick={handleExportEsiPfPdf}
+                className="flex-1 py-1.5 sm:py-2 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                title="Download ESI PF Salary Statement PDF (Portrait A4)"
+              >
+                <FileText className="w-3.5 h-3.5" /> Download PDF (Portrait A4)
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1001,7 +1284,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         </div>
       )}
 
-      {/* TABLE */}
+      {/* TABLE CONDITIONAL RENDERING: ESI PF SALARY STATEMENT OR 22-COL WAGE REGISTER */}
       {loading ? (
         <div className="text-center py-12 text-slate-500 font-semibold flex items-center justify-center gap-2">
           <RefreshCw className="w-5 h-5 animate-spin" /> Calculating payroll wages...
@@ -1010,7 +1293,109 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl">
           No matching worker records found for search filter.
         </div>
+      ) : activeWageTab === 'esipf' ? (
+        /* --- EXACT ESI PF SHEET (SALARY STATEMENT) AS PER EXCEL SPEC --- */
+        <div className="overflow-x-auto border border-slate-300 rounded-xl shadow-sm max-h-[78vh] bg-white">
+          <div className="p-3 bg-white text-center border-b border-slate-300">
+            <h3 className="text-sm sm:text-base font-black tracking-wide text-slate-900 uppercase">SRI KRISHNA CONSTRUCTIONS</h3>
+            <p className="text-xs font-bold text-slate-700 uppercase mt-0.5">SALARY STATEMENT FOR {monthName.toUpperCase()}- {selectedYear}</p>
+          </div>
+          <table className="w-full text-left border-collapse text-[11px] excel-table font-sans">
+            <thead className="sticky top-0 z-20 bg-white">
+              <tr className="bg-slate-100 text-slate-900 font-bold border-b border-slate-300 text-center">
+                <th rowSpan={2} className="border border-slate-400 px-2 py-1.5 w-10">SL<br/>NO</th>
+                <th rowSpan={2} className="border border-slate-400 px-3 py-1.5 min-w-[170px] text-left">NAME OF THE EMPLOYEE</th>
+                <th colSpan={4} className="border border-slate-400 px-2 py-1 bg-amber-50 text-amber-950 font-bold">WAGE STRUCTURE</th>
+                <th colSpan={4} className="border border-slate-400 px-2 py-1 bg-blue-50 text-blue-950 font-bold">ATTENDANCE</th>
+                <th colSpan={5} className="border border-slate-400 px-2 py-1 bg-emerald-50 text-emerald-950 font-bold">EARNINGS</th>
+                <th colSpan={2} className="border border-slate-400 px-2 py-1 bg-rose-50 text-rose-950 font-bold">DEDUCTIONS</th>
+                <th rowSpan={2} className="border border-slate-400 px-3 py-1.5 text-right bg-emerald-100 text-emerald-950 font-black min-w-[90px]">NET<br/>SALARY</th>
+                <th rowSpan={2} className="border border-slate-400 px-3 py-1.5 text-left min-w-[100px]">DESIGNATION</th>
+              </tr>
+              <tr className="bg-slate-50 text-slate-800 font-bold border-b border-slate-400 text-center text-[10px]">
+                {/* WAGE STRUCTURE */}
+                <th className="border border-slate-400 px-2 py-1 text-right bg-amber-50/50">BASIC</th>
+                <th className="border border-slate-400 px-2 py-1 text-right bg-amber-50/50">VDA</th>
+                <th className="border border-slate-400 px-2 py-1 text-center bg-amber-50/50">CON</th>
+                <th className="border border-slate-400 px-2 py-1 text-right bg-amber-100/70 font-black">TOT</th>
+                {/* ATTENDANCE */}
+                <th className="border border-slate-400 px-2 py-1 text-center bg-blue-50/50">W</th>
+                <th className="border border-slate-400 px-2 py-1 text-center bg-blue-50/50">H</th>
+                <th className="border border-slate-400 px-2 py-1 text-center bg-blue-50/50">AB</th>
+                <th className="border border-slate-400 px-2 py-1 text-center bg-blue-100/70 font-black">TOT</th>
+                {/* EARNINGS */}
+                <th className="border border-slate-400 px-2 py-1 text-right bg-emerald-50/50">BASIC & VDA</th>
+                <th className="border border-slate-400 px-2 py-1 text-center bg-emerald-50/50">CON</th>
+                <th className="border border-slate-400 px-2 py-1 text-right bg-emerald-50/50">GROSS</th>
+                <th className="border border-slate-400 px-2 py-1 text-right bg-emerald-50/50">EPF</th>
+                <th className="border border-slate-400 px-2 py-1 text-right bg-emerald-100/70 font-black">GROSS EARN</th>
+                {/* DEDUCTIONS */}
+                <th className="border border-slate-400 px-2 py-1 text-right bg-rose-50/50 text-rose-900 font-bold">PF</th>
+                <th className="border border-slate-400 px-2 py-1 text-right bg-rose-50/50 text-rose-900 font-bold">ESI</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-300">
+              {filteredWages.map((w, index) => {
+                const calc = getRowCalculations(w);
+                const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+                const wDays = Math.round(calc.workingDays);
+                const hDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
+                const abDays = Math.max(0, daysInMonth - (wDays + hDays));
+                const totDays = daysInMonth;
+
+                const basicMonthly = Math.round(calc.dailyWage * 26);
+                const vdaMonthly = Math.round(calc.dailyAllowance * 26);
+                const conMonthly = 0;
+                const totMonthly = basicMonthly + vdaMonthly + conMonthly;
+
+                const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
+                const conEarned = 0;
+                const grossEarned = calc.grossPayment + calc.otPayment + calc.otAllowance;
+                const epfBase = Math.min(15000, basicAndVdaEarned);
+                const grossEarn = grossEarned;
+                const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
+
+                return (
+                  <tr key={w.workerId} className="hover:bg-slate-50 border-b border-slate-300 font-mono text-[11px]">
+                    <td className="border border-slate-300 text-center font-bold px-2 py-1 bg-slate-50">{index + 1}</td>
+                    <td className="border border-slate-300 font-sans font-bold text-slate-900 px-3 py-1 uppercase">{w.fullName}</td>
+                    {/* WAGE STRUCTURE */}
+                    <td className="border border-slate-300 text-right px-2 py-1">{basicMonthly.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 text-right px-2 py-1">{vdaMonthly.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 text-center text-slate-400 px-2 py-1">-</td>
+                    <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-amber-50/40">{totMonthly.toLocaleString('en-IN')}</td>
+                    {/* ATTENDANCE */}
+                    <td className="border border-slate-300 text-center font-bold px-2 py-1 text-emerald-800">{wDays}</td>
+                    <td className="border border-slate-300 text-center text-slate-700 px-2 py-1">{hDays}</td>
+                    <td className="border border-slate-300 text-center text-rose-700 px-2 py-1">{abDays}</td>
+                    <td className="border border-slate-300 text-center font-bold px-2 py-1 bg-blue-50/40">{totDays}</td>
+                    {/* EARNINGS */}
+                    <td className="border border-slate-300 text-right px-2 py-1">{basicAndVdaEarned.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 text-center text-slate-400 px-2 py-1">-</td>
+                    <td className="border border-slate-300 text-right px-2 py-1">{grossEarned.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 text-right px-2 py-1">{epfBase.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-emerald-50/40">{grossEarn.toLocaleString('en-IN')}</td>
+                    {/* DEDUCTIONS (MANUAL FROM WAGES TAB) */}
+                    <td className="border border-slate-300 text-right font-bold text-rose-800 px-2 py-1 bg-rose-50/30">
+                      {calc.pf > 0 ? calc.pf.toLocaleString('en-IN') : '-'}
+                    </td>
+                    <td className="border border-slate-300 text-right font-bold text-rose-800 px-2 py-1 bg-rose-50/30">
+                      {calc.esi > 0 ? calc.esi.toLocaleString('en-IN') : '-'}
+                    </td>
+                    {/* NET SALARY */}
+                    <td className="border border-slate-300 text-right font-black text-emerald-900 bg-emerald-100/60 px-3 py-1 text-xs">
+                      ₹{netSalary.toLocaleString('en-IN')}
+                    </td>
+                    {/* DESIGNATION */}
+                    <td className="border border-slate-300 font-sans font-bold text-slate-700 px-3 py-1 uppercase">{w.designation || 'HELPER'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
+        /* --- 22-COLUMN MAIN WAGES REGISTER --- */
         <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm max-h-[78vh] bg-white">
           <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs min-w-[1350px]'}`}>
             <thead className="sticky top-0 z-20 shadow">

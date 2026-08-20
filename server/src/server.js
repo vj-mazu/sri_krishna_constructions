@@ -340,7 +340,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
 // --- DASHBOARD DAILY STATS API (TODAY'S PURCHASES, SALES & ATTENDANCE) ---
 app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
   try {
-    const todayStr = new Date().toISOString().split('T')[0];
+    // Use IST (UTC+5:30) for accurate "today" boundary
+    const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000));
+    const todayStr = nowIST.toISOString().split('T')[0];
     const todayStart = new Date(`${todayStr}T00:00:00.000Z`);
     const todayEnd = new Date(`${todayStr}T23:59:59.999Z`);
 
@@ -396,361 +398,12 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
   }
 });
 
-// --- HIGH PERFORMANCE STOCKS CURSOR API (<100ms) ---
-app.get('/api/stocks/category/:category', authenticateToken, async (req, res) => {
-  const startTime = Date.now();
-  try {
-    const { category } = req.params;
-    const { limit = 100, cursor, search, stockStatus } = req.query;
-
-    const limitNum = parseInt(limit, 10);
-    const where = { category };
-
-    if (search) {
-      where.OR = [
-        { itemCode: { contains: search, mode: 'insensitive' } },
-        { itemName: { contains: search, mode: 'insensitive' } },
-        { specifications: { contains: search, mode: 'insensitive' } },
-        { partNo: { contains: search, mode: 'insensitive' } },
-        { hsnCode: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    if (stockStatus === 'LOW') {
-      where.currentStock = { lte: 10 };
-    } else if (stockStatus === 'OUT') {
-      where.currentStock = 0;
-    }
-
-    const queryOptions = {
-      where,
-      take: limitNum + 1,
-      orderBy: { itemCode: 'asc' },
-    };
-
-    if (cursor) {
-      queryOptions.cursor = { id: cursor };
-      queryOptions.skip = 1;
-    }
-
-    const items = await prisma.item.findMany(queryOptions);
-    const totalCount = await prisma.item.count({ where });
-
-    let nextCursor = null;
-    if (items.length > limitNum) {
-      const nextItem = items.pop();
-      nextCursor = nextItem.id;
-    }
-
-    const responseTimeMs = Date.now() - startTime;
-
-    res.json({
-      items,
-      nextCursor,
-      totalCount,
-      responseTimeMs,
-    });
-  } catch (err) {
-    console.error('Fetch stocks error:', err);
-    res.status(500).json({ error: 'Failed to fetch items' });
-  }
-});
-
-// --- ADD NEW ITEM TO CATEGORY ---
-app.post('/api/stocks/item', authenticateToken, async (req, res) => {
-  try {
-    const {
-      category,
-      itemCode,
-      itemName,
-      partNo,
-      specifications,
-      unit,
-      brandOffered,
-      gstPercentage,
-      hsnCode,
-      biddersCompliance,
-      basicRateRs,
-      basicRateRsAlt,
-      skcRate1,
-      skcRate2,
-      diffPercentage,
-      baseQty,
-      targetQty,
-      initialStock = 0,
-    } = req.body;
-
-    if (!category || !itemCode || !itemName) {
-      return res.status(400).json({ error: 'Category, Item Code, and Item Name are required' });
-    }
-
-    const existing = await prisma.item.findUnique({
-      where: { category_itemCode: { category, itemCode } },
-    });
-
-    if (existing) {
-      return res.status(400).json({ error: `Item Code ${itemCode} already exists under ${category}` });
-    }
-
-    const newItem = await prisma.item.create({
-      data: {
-        category,
-        itemCode,
-        itemName,
-        partNo,
-        specifications,
-        unit: unit || 'NO',
-        brandOffered,
-        gstPercentage: gstPercentage ? parseFloat(gstPercentage) : null,
-        hsnCode,
-        biddersCompliance,
-        basicRateRs: basicRateRs ? parseFloat(basicRateRs) : null,
-        basicRateRsAlt: basicRateRsAlt ? parseFloat(basicRateRsAlt) : null,
-        skcRate1: skcRate1 ? parseFloat(skcRate1) : null,
-        skcRate2: skcRate2 ? parseFloat(skcRate2) : null,
-        diffPercentage: diffPercentage ? parseFloat(diffPercentage) : null,
-        baseQty: baseQty ? parseInt(baseQty, 10) : 0,
-        targetQty: targetQty ? parseInt(targetQty, 10) : 0,
-        currentStock: parseInt(initialStock, 10) || 0,
-      },
-    });
-
-    // Record initial stock movement if > 0
-    if (initialStock > 0) {
-      await prisma.stockMovement.create({
-        data: {
-          itemId: newItem.id,
-          movementType: 'INWARD',
-          quantity: parseInt(initialStock, 10),
-          previousStock: 0,
-          newStock: parseInt(initialStock, 10),
-          userId: req.user.id,
-          remarks: 'Initial stock creation',
-        },
-      });
-    }
-
-    res.status(201).json({ item: newItem });
-  } catch (err) {
-    console.error('Create item error:', err);
-    res.status(500).json({ error: 'Failed to create item' });
-  }
-});
-
-// --- STOCK MOVEMENT (INWARD + / SALE - WITH ACCURATE ERROR VALIDATION) ---
-app.post('/api/stocks/movement', authenticateToken, async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const {
-      category,
-      itemCode,
-      movementType,
-      quantity,
-      invoiceRefNo,
-      remarks,
-      unitPrice,
-      itemName,
-      partNo,
-      specifications,
-      unit,
-      brandOffered,
-      gstPercentage,
-      hsnCode,
-      biddersCompliance,
-      basicRateRs,
-      basicRateRsAlt,
-      skcRate1,
-      skcRate2,
-      diffPercentage,
-      baseQty,
-      targetQty,
-      movementDate
-    } = req.body;
-    const qty = parseInt(quantity, 10);
-
-    if (!category || !itemCode || !movementType || !qty || qty <= 0) {
-      client.release();
-      return res.status(400).json({ error: 'Valid Category, Item Code, Movement Type, and positive Quantity are required' });
-    }
-
-    await client.query('BEGIN');
-
-    let { rows: itemRows } = await client.query(
-      `SELECT * FROM "Item" WHERE category = $1 AND "itemCode" = $2 FOR UPDATE`,
-      [category, itemCode]
-    );
-
-    let item = itemRows[0];
-
-    if (!item) {
-      if (movementType === 'SALE') {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(404).json({ error: `⚠️ Item Code '${itemCode}' not found in category '${category}'. Sale cannot be performed!` });
-      }
-
-      // Automatically create item for INWARD
-      const createRes = await client.query(
-        `INSERT INTO "Item" ("id", "category", "itemCode", "itemName", "partNo", "specifications", "unit", "brandOffered", "gstPercentage", "hsnCode", "biddersCompliance", "basicRateRs", "basicRateRsAlt", "skcRate1", "skcRate2", "diffPercentage", "baseQty", "targetQty", "currentStock", "createdAt", "updatedAt")
-         VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 0, NOW(), NOW())
-         RETURNING *`,
-        [
-          category, itemCode, itemName || `Item ${itemCode}`, partNo || null, specifications || null, unit || 'NO', brandOffered || null,
-          gstPercentage ? parseFloat(gstPercentage) : null, hsnCode || null, biddersCompliance || null, basicRateRs ? parseFloat(basicRateRs) : null,
-          basicRateRsAlt ? parseFloat(basicRateRsAlt) : null, skcRate1 ? parseFloat(skcRate1) : null, skcRate2 ? parseFloat(skcRate2) : null,
-          diffPercentage ? parseFloat(diffPercentage) : null, baseQty ? parseInt(baseQty, 10) : 1, targetQty ? parseInt(targetQty, 10) : 0
-        ]
-      );
-      item = createRes.rows[0];
-    }
-
-    // ACCURATE SALE VALIDATION GUARD
-    if (movementType === 'SALE') {
-      if (item.currentStock <= 0) {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(400).json({
-          error: `⚠️ INSUFFICIENT STOCK! Item '${item.itemCode}' (${item.itemName}) has ZERO (0) stock available. Sale cannot be performed!`,
-          availableStock: item.currentStock,
-          requestedQty: qty,
-        });
-      }
-
-      if (qty > item.currentStock) {
-        await client.query('ROLLBACK');
-        client.release();
-        return res.status(400).json({
-          error: `⚠️ INSUFFICIENT STOCK! Available stock for '${item.itemCode}' is ${item.currentStock} ${item.unit}. You requested ${qty}. Sale exceeds stock limit!`,
-          availableStock: item.currentStock,
-          requestedQty: qty,
-        });
-      }
-    }
-
-    const previousStock = item.currentStock;
-    const newStock = movementType === 'INWARD' ? previousStock + qty : previousStock - qty;
-
-    // Build update parameters for Item
-    let updateSql = `UPDATE "Item" SET "currentStock" = $1, "updatedAt" = NOW()`;
-    let updateParams = [newStock];
-    let paramIndex = 2;
-
-    if (movementType === 'INWARD') {
-      if (itemName) { updateSql += `, "itemName" = $${paramIndex++}`; updateParams.push(itemName); }
-      if (partNo) { updateSql += `, "partNo" = $${paramIndex++}`; updateParams.push(partNo); }
-      if (specifications) { updateSql += `, "specifications" = $${paramIndex++}`; updateParams.push(specifications); }
-      if (unit) { updateSql += `, "unit" = $${paramIndex++}`; updateParams.push(unit); }
-      if (brandOffered) { updateSql += `, "brandOffered" = $${paramIndex++}`; updateParams.push(brandOffered); }
-      if (gstPercentage !== undefined) { updateSql += `, "gstPercentage" = $${paramIndex++}`; updateParams.push(gstPercentage ? parseFloat(gstPercentage) : null); }
-      if (hsnCode) { updateSql += `, "hsnCode" = $${paramIndex++}`; updateParams.push(hsnCode); }
-      if (biddersCompliance) { updateSql += `, "biddersCompliance" = $${paramIndex++}`; updateParams.push(biddersCompliance); }
-      if (basicRateRs !== undefined) { updateSql += `, "basicRateRs" = $${paramIndex++}`; updateParams.push(basicRateRs ? parseFloat(basicRateRs) : null); }
-      if (basicRateRsAlt !== undefined) { updateSql += `, "basicRateRsAlt" = $${paramIndex++}`; updateParams.push(basicRateRsAlt ? parseFloat(basicRateRsAlt) : null); }
-      if (skcRate1 !== undefined) { updateSql += `, "skcRate1" = $${paramIndex++}`; updateParams.push(skcRate1 ? parseFloat(skcRate1) : null); }
-      if (skcRate2 !== undefined) { updateSql += `, "skcRate2" = $${paramIndex++}`; updateParams.push(skcRate2 ? parseFloat(skcRate2) : null); }
-      if (diffPercentage !== undefined) { updateSql += `, "diffPercentage" = $${paramIndex++}`; updateParams.push(diffPercentage ? parseFloat(diffPercentage) : null); }
-      if (baseQty !== undefined) { updateSql += `, "baseQty" = $${paramIndex++}`; updateParams.push(baseQty ? parseInt(baseQty, 10) : 0); }
-    }
-
-    updateSql += ` WHERE "id" = $${paramIndex} RETURNING *`;
-    updateParams.push(item.id);
-
-    const { rows: updatedItems } = await client.query(updateSql, updateParams);
-    const updatedItem = updatedItems[0];
-
-    const invRef = invoiceRefNo || (movementType === 'SALE' ? `SKC/${new Date().getFullYear()}/${Date.now()}` : null);
-    const mDate = movementDate ? new Date(movementDate) : new Date();
-
-    const { rows: movementRows } = await client.query(
-      `INSERT INTO "StockMovement" ("id", "itemId", "movementType", "quantity", "previousStock", "newStock", "unitPrice", "invoiceRefNo", "remarks", "movementDate", "userId", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-       RETURNING *`,
-      [item.id, movementType, qty, previousStock, newStock, unitPrice ? parseFloat(unitPrice) : null, invRef, remarks, mDate, req.user.id]
-    );
-
-    await client.query('COMMIT');
-    client.release();
-
-    res.json({
-      message: `Stock successfully updated for ${itemCode}`,
-      item: updatedItem,
-      movement,
-    });
-  } catch (err) {
-    console.error('Stock movement error:', err);
-    res.status(500).json({ error: 'Failed to process stock movement' });
-  }
-});
-
-// --- CONSOLIDATED STOCK LEDGER API ---
-app.get('/api/stocks/ledger', authenticateToken, async (req, res) => {
-  try {
-    const { search, category, movementType, dateFrom, dateTo, month, cursor, limit = 50 } = req.query;
-
-    const where = {};
-
-    if (movementType) where.movementType = movementType;
-
-    if (category) {
-      where.item = { category };
-    }
-
-    if (search) {
-      where.OR = [
-        { invoiceRefNo: { contains: search, mode: 'insensitive' } },
-        { remarks: { contains: search, mode: 'insensitive' } },
-        { item: { itemCode: { contains: search, mode: 'insensitive' } } },
-        { item: { itemName: { contains: search, mode: 'insensitive' } } },
-      ];
-    }
-
-    if (dateFrom || dateTo) {
-      where.createdAt = {};
-      if (dateFrom) where.createdAt.gte = new Date(dateFrom);
-      if (dateTo) where.createdAt.lte = new Date(dateTo);
-    }
-
-    if (month) {
-      const monthStart = new Date(`${month}-01T00:00:00.000Z`);
-      const monthEnd = new Date(monthStart);
-      monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1);
-      where.movementDate = { gte: monthStart, lt: monthEnd };
-    }
-
-    const limitNum = Math.min(parseInt(limit, 10) || 50, 100);
-    const queryOptions = {
-      where,
-      take: limitNum + 1,
-      orderBy: [{ movementDate: 'desc' }, { id: 'desc' }],
-      include: {
-        item: { select: { itemCode: true, itemName: true, category: true, unit: true } },
-        user: { select: { username: true, fullName: true, role: true } },
-      },
-    };
-
-    if (cursor) {
-      queryOptions.cursor = { id: cursor };
-      queryOptions.skip = 1;
-    }
-
-    const movements = await prisma.stockMovement.findMany(queryOptions);
-    let nextCursor = null;
-    if (movements.length > limitNum) nextCursor = movements.pop().id;
-
-    res.json({ movements, nextCursor, pageSize: limitNum });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch stock ledger history' });
-  }
-});
-
-// --- PO AND INVENTORY APIS ---
-
 // --- PO AND INVENTORY APIS (DIRECT POSTGRESQL LAYER) ---
 
 // POST /api/purchase-orders - Create PO (Owner/Manager only)
 app.post('/api/purchase-orders', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { poNumber, date, divisionId, poAmount } = req.body;
+    const { poNumber, date, divisionId, poAmount, remarks } = req.body;
     if (!poNumber || !poNumber.trim()) {
       return res.status(400).json({ error: 'Purchase Order number is required' });
     }
@@ -762,10 +415,10 @@ app.post('/api/purchase-orders', authenticateToken, requireRoles(['OWNER', 'MANA
     }
 
     const result = await pool.query(
-      `INSERT INTO "PurchaseOrder" ("id", "poNumber", "date", "divisionId", "poAmount", "addedById", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, NOW(), NOW())
+      `INSERT INTO "PurchaseOrder" ("id", "poNumber", "date", "divisionId", "poAmount", "remarks", "addedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())
        RETURNING *`,
-      [poNumber.trim(), new Date(date), divisionId, parseFloat(poAmount) || 0, req.user.id]
+      [poNumber.trim(), new Date(date), divisionId, parseFloat(poAmount) || 0, remarks ? remarks.trim() : null, req.user.id]
     );
 
     res.status(201).json(result.rows[0]);
@@ -1079,20 +732,28 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
   }
 });
 
-// PUT /api/purchase-orders/:id - Update PO header
+// PUT /api/purchase-orders/:id - Update PO header & Remarks
 app.put('/api/purchase-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { poNumber, date, divisionId, poAmount } = req.body;
+    const { poNumber, date, divisionId, poAmount, remarks } = req.body;
     const { rows } = await pool.query(
       `UPDATE "PurchaseOrder"
        SET "poNumber" = COALESCE($1, "poNumber"),
            "date" = COALESCE($2, "date"),
            "divisionId" = COALESCE($3, "divisionId"),
            "poAmount" = COALESCE($4, "poAmount"),
+           "remarks" = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE "remarks" END,
            "updatedAt" = NOW()
-       WHERE id = $5
+       WHERE id = $6
        RETURNING *`,
-      [poNumber?.trim(), date ? new Date(date) : null, divisionId || null, poAmount !== undefined ? parseFloat(poAmount) : null, req.params.id]
+      [
+        poNumber !== undefined ? poNumber?.trim() : null,
+        date ? new Date(date) : null,
+        divisionId || null,
+        poAmount !== undefined ? parseFloat(poAmount) : null,
+        remarks !== undefined ? remarks : null,
+        req.params.id
+      ]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'PO not found' });
     res.json(rows[0]);
@@ -1283,16 +944,26 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
       `INSERT INTO "Purchase" (
         "id", "purchaseOrderItemId", "date", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "addedById", "createdAt"
+        "totalAmount", "partyName", "supplierAddress", "gstNumber", "partyInvoiceNumber",
+        "supplierInvoiceDate", "vehicleNumber", "remarks", "addedById", "createdAt"
       ) VALUES (
         gen_random_uuid()::text, $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
-        $12, $13, NOW()
+        $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, NOW()
       ) RETURNING *`,
       [
         d.purchaseOrderItemId, new Date(d.date), qty, rate, basicAmount,
         cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
-        totalAmount, req.user.id
+        totalAmount,
+        d.partyName ? d.partyName.trim() : null,
+        d.supplierAddress ? d.supplierAddress.trim() : null,
+        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
+        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
+        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
+        req.user.id
       ]
     );
 
@@ -1329,14 +1000,24 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
        SET "qty" = $1, "rate" = $2, "basicAmount" = $3,
            "cgstPercent" = $4, "sgstPercent" = $5, "igstPercent" = $6,
            "cgstAmount" = $7, "sgstAmount" = $8, "igstAmount" = $9,
-           "totalAmount" = $10, "date" = $11
-       WHERE id = $12
+           "totalAmount" = $10, "date" = $11,
+           "partyName" = $12, "supplierAddress" = $13, "gstNumber" = $14,
+           "partyInvoiceNumber" = $15, "supplierInvoiceDate" = $16,
+           "vehicleNumber" = $17, "remarks" = $18
+       WHERE id = $19
        RETURNING *`,
       [
         qty, rate, basicAmount,
         cgstPercent, sgstPercent, igstPercent,
         cgstAmount, sgstAmount, igstAmount,
         totalAmount, d.date ? new Date(d.date) : new Date(),
+        d.partyName ? d.partyName.trim() : null,
+        d.supplierAddress ? d.supplierAddress.trim() : null,
+        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
+        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
+        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
         id
       ]
     );
@@ -1362,6 +1043,7 @@ app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANA
 });
 
 // POST /api/sales - Outward sale record with ACID transactional safety
+// POST /api/sales - Outward sale record with ACID transactional safety & mandatory Owner approval
 app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
@@ -1383,50 +1065,112 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
     // Row-level lock on item to prevent overselling race conditions
     const stockRes = await client.query(`
       SELECT 
+        poi."partNumber", poi."itemName",
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as purchased,
-        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)::float as sold
+        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)::float as sold
       FROM "PurchaseOrderItem" poi
       WHERE poi.id = $1
       FOR UPDATE
     `, [d.purchaseOrderItemId]);
 
+    const partNumber = stockRes.rows[0]?.partNumber || '-';
+    const itemName = stockRes.rows[0]?.itemName || '-';
     const purchased = stockRes.rows[0]?.purchased || 0;
     const sold = stockRes.rows[0]?.sold || 0;
     const available = purchased - sold;
     if (qty > available) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: `Sale quantity (${qty}) exceeds available stock (${available})` });
+      return res.status(400).json({ error: `Sale quantity (${qty}) exceeds available approved stock (${available})` });
     }
 
+    const saleId = (await client.query('SELECT gen_random_uuid()::text as id')).rows[0].id;
+
+    // EVERY sale requires Owner approval (even if created by Owner/Manager)
     const { rows } = await client.query(
       `INSERT INTO "Sale" (
         "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "addedById", "createdAt"
+        "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber", "partyInvoiceNumber",
+        "supplierInvoiceDate", "vehicleNumber", "remarks", "status", "addedById", "createdAt"
       ) VALUES (
-        gen_random_uuid()::text, $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11, $12,
-        $13, $14, NOW()
+        $1, $2, $3, $4, $5, $6, $7,
+        $8, $9, $10, $11, $12, $13,
+        $14, $15, $16, $17, $18, $19,
+        $20, $21, $22, 'PENDING', $23, NOW()
       ) RETURNING *`,
       [
-        d.purchaseOrderItemId, d.invoiceNumber, new Date(d.invoiceDate), qty, rate, basicAmount,
+        saleId, d.purchaseOrderItemId, d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
+        d.invoiceDate ? new Date(d.invoiceDate) : new Date(),
+        qty, rate, basicAmount,
         cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
-        totalAmount, req.user.id
+        totalAmount,
+        d.partyName ? d.partyName.trim() : null,
+        d.supplierAddress ? d.supplierAddress.trim() : null,
+        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
+        d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null,
+        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
+        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
+        req.user.id
+      ]
+    );
+
+    // Ensure SALE_ENTRY is in ApprovalType enum
+    try {
+      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY'`);
+    } catch (_) {}
+
+    // Automatically create an Approval Request for OWNER review
+    await client.query(
+      `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+      [
+        req.user.id,
+        JSON.stringify({
+          saleId: saleId,
+          partNumber: partNumber,
+          itemName: itemName,
+          invoiceNumber: d.invoiceNumber || '-',
+          invoiceDate: d.invoiceDate,
+          qty: qty,
+          rate: rate,
+          basicAmount: basicAmount,
+          cgstPercent: cgstPercent,
+          sgstPercent: sgstPercent,
+          igstPercent: igstPercent,
+          cgstAmount: cgstAmount,
+          sgstAmount: sgstAmount,
+          igstAmount: igstAmount,
+          totalAmount: totalAmount,
+          partyName: d.partyName || '-',
+          supplierAddress: d.supplierAddress || '-',
+          companyGstNumber: d.companyGstNumber || '-',
+          gstNumber: d.gstNumber || '-',
+          partyInvoiceNumber: d.partyInvoiceNumber || '-',
+          supplierInvoiceDate: d.supplierInvoiceDate || null,
+          vehicleNumber: d.vehicleNumber || '-',
+          remarks: d.remarks || '-'
+        }),
+        `Sale Invoice #${d.invoiceNumber || '-'} (${qty} units of ${partNumber}) submitted for Owner Approval`
       ]
     );
 
     await client.query('COMMIT');
-    res.status(201).json(rows[0]);
+    res.status(201).json({
+      message: 'Sale recorded and submitted for Owner Approval',
+      sale: rows[0]
+    });
   } catch (err) {
-    await client.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('Error recording sale:', err);
-    res.status(500).json({ error: 'Failed to record sale' });
+    res.status(500).json({ error: err.message || 'Failed to record sale' });
   } finally {
     client.release();
   }
 });
 
-// PUT /api/sales/:id - Update sale
+// PUT /api/sales/:id - Update sale (Only Owner can update approved, or pending can be updated)
 app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -1449,13 +1193,28 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
            "invoiceDate" = $2, "qty" = $3, "rate" = $4, "basicAmount" = $5,
            "cgstPercent" = $6, "sgstPercent" = $7, "igstPercent" = $8,
            "cgstAmount" = $9, "sgstAmount" = $10, "igstAmount" = $11,
-           "totalAmount" = $12
-       WHERE id = $13
+           "totalAmount" = $12,
+           "partyName" = $13, "supplierAddress" = $14, "gstNumber" = $15,
+           "companyGstNumber" = $16,
+           "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18,
+           "vehicleNumber" = $19, "remarks" = $20
+       WHERE id = $21
        RETURNING *`,
       [
-        d.invoiceNumber, d.invoiceDate ? new Date(d.invoiceDate) : new Date(), qty, rate, basicAmount,
+        d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
+        d.invoiceDate ? new Date(d.invoiceDate) : new Date(),
+        qty, rate, basicAmount,
         cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
-        totalAmount, id
+        totalAmount,
+        d.partyName ? d.partyName.trim() : null,
+        d.supplierAddress ? d.supplierAddress.trim() : null,
+        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
+        d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null,
+        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
+        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
+        id
       ]
     );
 
@@ -1750,7 +1509,31 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
     }
     const approval = checkRes.rows[0];
 
-    if (status === 'APPROVED' && approval.type === 'EDIT_ATTENDANCE') {
+    if (approval.type === 'SALE_ENTRY') {
+      // Sales must be approved by OWNER ONLY
+      if (req.user.role !== 'OWNER') {
+        return res.status(403).json({ error: 'Sale approvals must be reviewed and approved by the OWNER only.' });
+      }
+
+      const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+      const saleId = payload.saleId;
+
+      if (status === 'APPROVED') {
+        await pool.query(
+          `UPDATE "Sale" 
+           SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() 
+           WHERE id = $2`,
+          [req.user.id, saleId]
+        );
+      } else if (status === 'REJECTED') {
+        await pool.query(
+          `UPDATE "Sale" 
+           SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() 
+           WHERE id = $3`,
+          [rejectionReason || 'Rejected by Owner', req.user.id, saleId]
+        );
+      }
+    } else if (status === 'APPROVED' && approval.type === 'EDIT_ATTENDANCE') {
       const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
       const { date, attendanceData } = payload;
       const queryDate = new Date(date);
@@ -2261,20 +2044,27 @@ app.delete('/api/workers/:id', authenticateToken, async (req, res) => {
 app.get('/api/attendance', authenticateToken, async (req, res) => {
   try {
     const { date, divisionId } = req.query;
-    if (!date || !divisionId) {
-      return res.status(400).json({ error: 'Date (YYYY-MM-DD) and Division ID are required' });
+    if (!date) {
+      return res.status(400).json({ error: 'Date (YYYY-MM-DD) is required' });
     }
 
-    const { rows: attendances } = await pool.query(
-      `SELECT a."id", a."workerId", a."date", a."status", 
-              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
-              a."dailyWageOverride", a."notes",
-              json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
-       FROM "Attendance" a
-       JOIN "Worker" w ON a."workerId" = w."id"
-       WHERE a."date"::date = $1::date AND w."divisionId" = $2`,
-      [date, divisionId]
-    );
+    let query = `
+      SELECT a."id", a."workerId", a."date", a."status", 
+             COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
+             a."dailyWageOverride", a."notes",
+             json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
+      FROM "Attendance" a
+      JOIN "Worker" w ON a."workerId" = w."id"
+      WHERE a."date"::date = $1::date
+    `;
+    const params = [date];
+
+    if (divisionId && divisionId !== 'ALL' && divisionId !== 'all') {
+      params.push(divisionId);
+      query += ` AND w."divisionId" = $${params.length}`;
+    }
+
+    const { rows: attendances } = await pool.query(query, params);
 
     res.json({ attendances });
   } catch (err) {

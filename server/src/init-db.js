@@ -78,10 +78,13 @@ export const initializeDatabaseTables = async () => {
       END $$;
 
       DO $$ BEGIN
-        CREATE TYPE "ApprovalType" AS ENUM ('EDIT_ATTENDANCE');
+        CREATE TYPE "ApprovalType" AS ENUM ('EDIT_ATTENDANCE', 'SALE_ENTRY');
       EXCEPTION
         WHEN duplicate_object THEN null;
       END $$;
+
+      -- Add SALE_ENTRY to ApprovalType enum if not already present
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY';
 
       DO $$ BEGIN
         CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
@@ -267,10 +270,34 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "poAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "divisionId" TEXT REFERENCES "Division"("id");
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "addedById" TEXT REFERENCES "User"("id");
+      ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "remarks" TEXT;
       ALTER TABLE "PurchaseOrderItem" ADD COLUMN IF NOT EXISTS "discount" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "PurchaseOrderItem" ADD COLUMN IF NOT EXISTS "freight" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "PurchaseOrderItem" ADD COLUMN IF NOT EXISTS "pAndF" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "PurchaseOrderItem" ADD COLUMN IF NOT EXISTS "insurance" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+      -- Purchase inward supplier details (Party Name, Supplier Address, GST Number, Party Invoice No, Invoice Date, Vehicle No, Remarks)
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "supplierAddress" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "gstNumber" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "partyInvoiceNumber" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "supplierInvoiceDate" TIMESTAMP(3);
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "vehicleNumber" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "remarks" TEXT;
+
+      -- Sale outward buyer/party details & mandatory Owner approval system
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "supplierAddress" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "gstNumber" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "companyGstNumber" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "partyInvoiceNumber" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "supplierInvoiceDate" TIMESTAMP(3);
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "vehicleNumber" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "remarks" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'APPROVED';
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
 
       -- Worker master enhancements (Father Name, Designation, Daily Allowance, Advance Balance, Statutory & Bank Details)
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
@@ -320,8 +347,15 @@ export const initializeDatabaseTables = async () => {
       CREATE INDEX IF NOT EXISTS "idx_poi_po_kpcl" ON "PurchaseOrderItem"("purchaseOrderId", "kpclCode");
       CREATE INDEX IF NOT EXISTS "idx_pur_poi" ON "Purchase"("purchaseOrderItemId");
       CREATE INDEX IF NOT EXISTS "idx_pur_date" ON "Purchase"("date");
+      CREATE INDEX IF NOT EXISTS "idx_pur_party" ON "Purchase"("partyName");
+      CREATE INDEX IF NOT EXISTS "idx_pur_invno" ON "Purchase"("partyInvoiceNumber");
+      CREATE INDEX IF NOT EXISTS "idx_pur_vehicle" ON "Purchase"("vehicleNumber");
       CREATE INDEX IF NOT EXISTS "idx_sale_poi" ON "Sale"("purchaseOrderItemId");
       CREATE INDEX IF NOT EXISTS "idx_sale_invdate" ON "Sale"("invoiceDate");
+      CREATE INDEX IF NOT EXISTS "idx_sale_status" ON "Sale"("status");
+      CREATE INDEX IF NOT EXISTS "idx_sale_party" ON "Sale"("partyName");
+      CREATE INDEX IF NOT EXISTS "idx_sale_invno" ON "Sale"("partyInvoiceNumber");
+      CREATE INDEX IF NOT EXISTS "idx_sale_vehicle" ON "Sale"("vehicleNumber");
       CREATE INDEX IF NOT EXISTS "idx_worker_workerid" ON "Worker"("workerId");
       CREATE INDEX IF NOT EXISTS "idx_worker_fullname" ON "Worker"("fullName");
       CREATE INDEX IF NOT EXISTS "idx_worker_div" ON "Worker"("divisionId");
@@ -329,6 +363,34 @@ export const initializeDatabaseTables = async () => {
       CREATE INDEX IF NOT EXISTS "idx_att_worker_date" ON "Attendance"("workerId", "date");
       CREATE INDEX IF NOT EXISTS "idx_att_div" ON "Attendance"("divisionId");
       CREATE INDEX IF NOT EXISTS "idx_pay_worker_my" ON "MonthlyPayment"("workerId", "month", "year");
+
+      -- Performance indexes for login
+      CREATE INDEX IF NOT EXISTS idx_user_lower_username ON "User" (LOWER("username"));
+
+      -- Approval panel queries
+      CREATE INDEX IF NOT EXISTS idx_ar_status ON "ApprovalRequest" ("status");
+      CREATE INDEX IF NOT EXISTS idx_ar_type ON "ApprovalRequest" ("type");
+      CREATE INDEX IF NOT EXISTS idx_ar_requestedby ON "ApprovalRequest" ("requestedById");
+      CREATE INDEX IF NOT EXISTS idx_ar_approvedby ON "ApprovalRequest" ("approvedById");
+
+      -- Foreign key join indexes
+      CREATE INDEX IF NOT EXISTS idx_po_division ON "PurchaseOrder"("divisionId");
+      CREATE INDEX IF NOT EXISTS idx_po_addedby ON "PurchaseOrder"("addedById");
+      CREATE INDEX IF NOT EXISTS idx_pur_addedby ON "Purchase"("addedById");
+      CREATE INDEX IF NOT EXISTS idx_sale_addedby ON "Sale"("addedById");
+      CREATE INDEX IF NOT EXISTS idx_sale_approvedby ON "Sale"("approvedById");
+      CREATE INDEX IF NOT EXISTS idx_att_markedby ON "Attendance"("markedById");
+      CREATE INDEX IF NOT EXISTS idx_att_recordedby ON "Attendance"("recordedById");
+      CREATE INDEX IF NOT EXISTS idx_pay_approvedby ON "MonthlyPayment"("approvedById");
+
+      -- Cursor pagination & ORDER BY
+      CREATE INDEX IF NOT EXISTS idx_po_date_created ON "PurchaseOrder"("date" DESC, "createdAt" DESC);
+      CREATE INDEX IF NOT EXISTS idx_pur_date_desc ON "Purchase"("date" DESC);
+      CREATE INDEX IF NOT EXISTS idx_sale_invdate_desc ON "Sale"("invoiceDate" DESC);
+
+      -- Holiday lookups
+      CREATE INDEX IF NOT EXISTS idx_holiday_date ON "Holiday"("date");
+      CREATE INDEX IF NOT EXISTS idx_holiday_addedby ON "Holiday"("addedById");
     `);
 
     client.release();

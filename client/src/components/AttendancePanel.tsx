@@ -13,7 +13,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [workers, setWorkers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'; overtimeHours: string; dailyWageOverride: string }>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string }>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -24,9 +24,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       const res = await api.get('/divisions');
       const divList = res.data.divisions || [];
       setDivisions(divList);
-      if (divList.length > 0) {
-        setSelectedDivisionId(divList[0].id);
-      }
+      // Default to ALL divisions
+      setSelectedDivisionId('ALL');
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to load divisions', 'error');
     }
@@ -39,15 +38,19 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [holidayInfo, setHolidayInfo] = useState<any>(null);
 
   const fetchWorkersAndAttendance = async () => {
-    if (!selectedDivisionId || !selectedDate) return;
+    if (!selectedDate) return;
     try {
       setLoading(true);
       setError('');
       setSuccess('');
 
+      const divParam = selectedDivisionId && selectedDivisionId !== 'ALL' ? `divisionId=${selectedDivisionId}` : '';
+      const workerUrl = divParam ? `/workers?${divParam}&limit=1000` : `/workers?limit=1000`;
+      const attUrl = divParam ? `/attendance?${divParam}&date=${selectedDate}` : `/attendance?date=${selectedDate}`;
+
       const [workersRes, attendanceRes, holidaysRes] = await Promise.all([
-        api.get(`/workers?divisionId=${selectedDivisionId}`),
-        api.get(`/attendance?divisionId=${selectedDivisionId}&date=${selectedDate}`),
+        api.get(workerUrl),
+        api.get(attUrl),
         api.get(`/holidays?year=${new Date(selectedDate).getFullYear()}&month=${new Date(selectedDate).getMonth() + 1}`),
       ]);
 
@@ -64,11 +67,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       setWorkers(fetchedWorkers);
 
-      const recordsMap: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE'; overtimeHours: string; dailyWageOverride: string }> = {};
+      const recordsMap: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string }> = {};
 
+      // Do NOT pre-fill with PRESENT — leave unselected until user clicks
       fetchedWorkers.forEach((w: any) => {
         recordsMap[w.id] = {
-          status: 'PRESENT',
+          status: '',
           overtimeHours: '0',
           dailyWageOverride: '',
         };
@@ -118,9 +122,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const formatDateDMY = (dateStr: string) => {
     if (!dateStr) return '';
-    const parts = dateStr.split('-');
-    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    return dateStr;
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
   };
 
   const handleWageOverrideChange = (workerId: string, dailyWageOverride: string) => {
@@ -135,40 +138,39 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const handleSaveAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDivisionId || !selectedDate) {
-      const msg = 'Please select both a division and a date before saving.';
-      setError(msg);
-      showToast(msg, 'error');
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-    setSuccess('');
-
-    const formattedData = Object.keys(attendanceRecords).map((workerId) => ({
-      workerId,
-      status: attendanceRecords[workerId].status,
-      overtimeHours: parseFloat(attendanceRecords[workerId].overtimeHours) || 0.0,
-      dailyWageOverride: attendanceRecords[workerId].dailyWageOverride
-        ? parseFloat(attendanceRecords[workerId].dailyWageOverride)
-        : null,
-    }));
-
     try {
-      const res = await api.post('/attendance', {
-        date: selectedDate,
-        attendanceData: formattedData,
-      });
+      setSaving(true);
+      setError('');
+      setSuccess('');
+
+      // Filter only records that have a status chosen
+      const markedEntries = Object.entries(attendanceRecords).filter(([_, data]) => Boolean(data.status));
       
-      const successMsg = res.data.requiresApproval 
-        ? res.data.message 
-        : 'Daily worker attendance roster saved and updated successfully!';
-      setSuccess(successMsg);
-      showToast(successMsg, 'success');
-      setTimeout(() => setSuccess(''), 6000);
+      if (markedEntries.length === 0) {
+        const msg = 'Please select attendance status (Present, Absent, Half, Leave) for at least one worker before saving.';
+        setError(msg);
+        showToast(msg, 'error');
+        setSaving(false);
+        return;
+      }
+
+      const recordsToSave = markedEntries.map(([workerId, data]) => ({
+        workerId,
+        status: data.status,
+        overtimeHours: parseFloat(data.overtimeHours) || 0,
+        dailyWageOverride: data.dailyWageOverride ? parseFloat(data.dailyWageOverride) : null,
+      }));
+
+      await api.post('/attendance', {
+        date: selectedDate,
+        attendanceData: recordsToSave,
+      });
+
+      setSuccess('Attendance marked successfully!');
+      showToast('Daily attendance saved successfully!', 'success');
+      fetchWorkersAndAttendance();
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to record daily worker attendance sheet.';
+      const errMsg = err.response?.data?.error || 'Failed to save attendance records';
       setError(errMsg);
       showToast(errMsg, 'error');
     } finally {
@@ -198,6 +200,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             onChange={(e) => setSelectedDivisionId(e.target.value)}
             className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
           >
+            <option value="ALL">🏢 All Divisions (All Sites)</option>
             {divisions.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
@@ -289,14 +292,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             {/* 1. MOBILE COMPACT CARD LIST (Shown only on mobile screens) */}
             <div className="block md:hidden space-y-2.5">
               {filteredWorkers.map((w) => {
-                const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
+                const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                 return (
                   <div key={w.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
                     {/* Header info */}
                     <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-[#1e3a8a]/10 text-[#1e3a8a] font-bold text-xs flex items-center justify-center">
-                          {w.fullName.charAt(0)}
+                          {(w.fullName || '?').charAt(0)}
                         </div>
                         <div>
                           <div className="font-bold text-slate-800 text-xs leading-tight">{w.fullName}</div>
@@ -388,7 +391,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                 </thead>
                 <tbody>
                   {filteredWorkers.map((w) => {
-                    const state = attendanceRecords[w.id] || { status: 'PRESENT', overtimeHours: '0', dailyWageOverride: '' };
+                    const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                     return (
                       <tr key={w.id} className="hover:bg-slate-50/50">
                         <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">

@@ -34,7 +34,18 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && localStorage.getItem('iac_token')) {
       localStorage.removeItem('iac_token');
-      window.location.reload();
+      // Brief visual feedback before redirect
+      try {
+        const toast = document.createElement('div');
+        toast.textContent = '⏳ Session expired. Redirecting to login...';
+        toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#1e3a8a;color:#fff;padding:12px 24px;border-radius:12px;z-index:99999;font-size:14px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
+        document.body.appendChild(toast);
+      } catch (_) {}
+      setTimeout(() => window.location.reload(), 1200);
+      return new Promise(() => {}); // Prevent further handling
+    }
+    if (!error.response && error.code === 'ERR_NETWORK') {
+      console.error('Network error — server may be down');
     }
     return Promise.reject(error);
   }

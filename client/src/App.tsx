@@ -405,7 +405,7 @@ export function App() {
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
-            <span className="text-[9px] tracking-tight mt-0.5">Dashboard</span>
+            <span className="text-[11px] tracking-tight mt-0.5">Dashboard</span>
           </button>
         )}
 
@@ -417,7 +417,7 @@ export function App() {
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            <span className="text-[9px] tracking-tight mt-0.5">POs</span>
+            <span className="text-[11px] tracking-tight mt-0.5">POs</span>
           </button>
         )}
 
@@ -429,7 +429,7 @@ export function App() {
             }`}
           >
             <Package className="w-4 h-4" />
-            <span className="text-[9px] tracking-tight mt-0.5">Stock</span>
+            <span className="text-[11px] tracking-tight mt-0.5">Stock</span>
           </button>
         )}
 
@@ -440,7 +440,7 @@ export function App() {
           }`}
         >
           <Calendar className="w-4 h-4" />
-          <span className="text-[9px] tracking-tight mt-0.5">Attendance</span>
+          <span className="text-[11px] tracking-tight mt-0.5">Attendance</span>
         </button>
 
         {(user.role === 'OWNER' || user.role === 'MANAGER') && (
@@ -451,7 +451,7 @@ export function App() {
             }`}
           >
             <Wallet className="w-4 h-4" />
-            <span className="text-[9px] tracking-tight mt-0.5">Wages</span>
+            <span className="text-[11px] tracking-tight mt-0.5">Wages</span>
           </button>
         )}
 
@@ -463,7 +463,7 @@ export function App() {
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span className="text-[9px] tracking-tight mt-0.5">Master</span>
+            <span className="text-[11px] tracking-tight mt-0.5">Master</span>
           </button>
         )}
 
@@ -475,7 +475,7 @@ export function App() {
             }`}
           >
             <CheckCircle2 className="w-4 h-4" />
-            <span className="text-[9px] tracking-tight mt-0.5">Approvals</span>
+            <span className="text-[11px] tracking-tight mt-0.5">Approvals</span>
             {pendingCount > 0 && (
               <span className="absolute 1 right-2 bg-red-500 text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
                 {pendingCount}

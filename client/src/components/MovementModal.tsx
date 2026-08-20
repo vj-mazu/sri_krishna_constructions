@@ -1,52 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import api from '../api';
-import { PlusCircle, MinusCircle, X, AlertTriangle, RefreshCw } from 'lucide-react';
-import { showToast } from '../toast';
+import React from 'react';
 
-interface MovementModalProps {
-  category: string;
-  itemCode: string;
-  isOpen: boolean;
-  onClose: () => void;
-  onSuccess: (movement?: any) => void;
-}
-
-export const MovementModal: React.FC<MovementModalProps> = ({
-  category,
-  itemCode: initialItemCode = '',
-  isOpen,
-  onClose,
-  onSuccess,
-}) => {
-  const [movementType, setMovementType] = useState<'INWARD' | 'SALE'>('INWARD');
-  const [itemCode, setItemCode] = useState(initialItemCode);
-  const [quantity, setQuantity] = useState('');
-  const [unitPrice, setUnitPrice] = useState('');
-  const [invoiceRefNo, setInvoiceRefNo] = useState('');
-  const [remarks, setRemarks] = useState('');
-  const [movementDate, setMovementDate] = useState(new Date().toISOString().slice(0, 10));
-  const [loading, setLoading] = useState(false);
-  const [loadingItemDetails, setLoadingItemDetails] = useState(false);
-  
-  // Category-specific fields (for INWARD)
-  const [itemName, setItemName] = useState('');
-  const [unit, setUnit] = useState('NO');
-  const [brandOffered, setBrandOffered] = useState('');
-  const [gstPercentage, setGstPercentage] = useState('');
-  const [hsnCode, setHsnCode] = useState('');
-  const [biddersCompliance, setBiddersCompliance] = useState('');
-  const [partNo, setPartNo] = useState('');
-  const [specifications, setSpecifications] = useState('');
-  const [basicRateRs, setBasicRateRs] = useState('');
-  const [basicRateRsAlt, setBasicRateRsAlt] = useState('');
-  const [skcRate1, setSkcRate1] = useState('');
-  const [skcRate2, setSkcRate2] = useState('');
-  const [diffPercentage, setDiffPercentage] = useState('');
-  const [baseQty, setBaseQty] = useState('1');
-
-  const [stockError, setStockError] = useState<{ message: string; availableStock?: number; requestedQty?: number } | null>(null);
-
-  // Sync initialItemCode when modal opens
+export const MovementModal: React.FC<any> = () => {
+  return null;
+};
   useEffect(() => {
     if (isOpen) {
       setItemCode(initialItemCode);

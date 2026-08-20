@@ -3,7 +3,7 @@ import {
   Package, ShoppingCart, ArrowLeft, Plus, Trash2, 
   Search, ChevronLeft, ChevronRight, Edit, 
   ArrowDownToLine, Receipt, Eye, Minus,
-  IndianRupee, Zap
+  IndianRupee, Zap, FileText
 } from 'lucide-react';
 import api from '../api';
 import { showToast } from '../toast';
@@ -305,6 +305,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [purchasesPartNumber, setPurchasesPartNumber] = useState('');
   const [purchasesDateFrom, setPurchasesDateFrom] = useState('');
   const [purchasesDateTo, setPurchasesDateTo] = useState('');
+  const [purchasesTableViewMode, setPurchasesTableViewMode] = useState<'fit' | 'scroll'>('fit');
 
   // Sub-Tab 3: Sales State & Pagination
   const [poSales, setPoSales] = useState<any[]>([]);
@@ -333,11 +334,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   });
 
   const [purchaseForm, setPurchaseForm] = useState({
-    itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0
+    itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+    partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
   });
 
   const [saleForm, setSaleForm] = useState({
-    itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0
+    itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
   });
 
   // --- EDIT MODAL STATES ---
@@ -345,13 +348,45 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [editItemForm, setEditItemForm] = useState<any>({});
 
   const [editingPurchase, setEditingPurchase] = useState<any | null>(null);
-  const [editPurchaseForm, setEditPurchaseForm] = useState<any>({});
+  const [editPurchaseForm, setEditPurchaseForm] = useState<{
+    date?: string;
+    qty?: number;
+    rate?: number;
+    cgstPercent?: number;
+    sgstPercent?: number;
+    igstPercent?: number;
+    partyName?: string;
+    supplierAddress?: string;
+    gstNumber?: string;
+    partyInvoiceNumber?: string;
+    supplierInvoiceDate?: string;
+    vehicleNumber?: string;
+    remarks?: string;
+  }>({});
 
   const [editingSale, setEditingSale] = useState<any | null>(null);
-  const [editSaleForm, setEditSaleForm] = useState<any>({});
+  const [editSaleForm, setEditSaleForm] = useState<{
+    invoiceNumber?: string;
+    invoiceDate?: string;
+    qty?: number;
+    rate?: number;
+    cgstPercent?: number;
+    sgstPercent?: number;
+    igstPercent?: number;
+    partyName?: string;
+    supplierAddress?: string;
+    gstNumber?: string;
+    companyGstNumber?: string;
+    partyInvoiceNumber?: string;
+    supplierInvoiceDate?: string;
+    vehicleNumber?: string;
+    remarks?: string;
+  }>({});
 
   const [editingPoModal, setEditingPoModal] = useState<any | null>(null);
-  const [editPoForm, setEditPoForm] = useState({ poNumber: '', date: '', divisionId: '', poAmount: 0 });
+  const [editPoForm, setEditPoForm] = useState({ poNumber: '', date: '', divisionId: '', poAmount: 0, remarks: '' });
+  const [poRemarksModal, setPoRemarksModal] = useState<any | null>(null);
+  const [poRemarksText, setPoRemarksText] = useState('');
   const [divisions, setDivisions] = useState<Array<{ id: string; name: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -580,7 +615,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       showToast('Inward material recorded successfully', 'success');
       setShowAddPurchase(false);
       setPurchaseForm({
-        itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0
+        itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+        partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoPurchases(selectedPo.id, purchasesCursor);
@@ -604,10 +640,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         purchaseOrderItemId: itemId,
         ...rest
       });
-      showToast('Sale invoice recorded successfully', 'success');
+      showToast('Sale invoice recorded! Submitted for Owner Approval.', 'success');
       setShowAddSale(false);
       setSaleForm({
-        itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0
+        itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoSales(selectedPo.id, salesCursor);
@@ -719,7 +756,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         poNumber: editPoForm.poNumber.trim(),
         date: editPoForm.date,
         divisionId: editPoForm.divisionId,
-        poAmount: parseFloat(String(editPoForm.poAmount))
+        poAmount: parseFloat(String(editPoForm.poAmount)),
+        remarks: editPoForm.remarks ? editPoForm.remarks.trim() : null
       });
       showToast('Purchase Order updated successfully', 'success');
       setEditingPoModal(null);
@@ -729,6 +767,28 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       fetchPoList(cursor);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to update PO', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- ACTIONS: QUICK UPDATE PO REMARKS ---
+  const handleSavePoRemarks = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!poRemarksModal || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await api.put(`/purchase-orders/${poRemarksModal.id}`, {
+        remarks: poRemarksText.trim()
+      });
+      showToast('Purchase Order remarks saved successfully', 'success');
+      setPoRemarksModal(null);
+      if (selectedPo && selectedPo.id === poRemarksModal.id) {
+        fetchPoHeaderAndKpi(selectedPo.id);
+      }
+      fetchPoList(cursor);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to save remarks', 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -830,7 +890,68 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   };
 
   const exportToExcel = (data: any[], filename: string) => {
-    const ws = XLSX.utils.json_to_sheet(data);
+    let exportRows = data;
+    if (filename.includes('Purchases')) {
+      exportRows = data.map((pur, i) => {
+        const basic = (pur.qty || 0) * (pur.rate || 0);
+        const cgst = basic * ((pur.cgstPercent || 0) / 100);
+        const sgst = basic * ((pur.sgstPercent || 0) / 100);
+        const igst = basic * ((pur.igstPercent || 0) / 100);
+        return {
+          'SL NO': i + 1,
+          'Part Number': pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-',
+          'Item Name': pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-',
+          'Inward Date': formatDate(pur.date),
+          'Party Name': pur.partyName || '-',
+          'Supplier Address': pur.supplierAddress || '-',
+          'Supplier GSTIN': pur.gstNumber || '-',
+          'Party Invoice No': pur.partyInvoiceNumber || '-',
+          'Supplier Invoice Date': pur.supplierInvoiceDate ? formatDate(pur.supplierInvoiceDate) : '-',
+          'Vehicle No': pur.vehicleNumber || '-',
+          'Inward Qty': pur.qty || 0,
+          'Rate': pur.rate || 0,
+          'Basic Amount': basic,
+          'CGST': cgst,
+          'SGST': sgst,
+          'IGST': igst,
+          'Total Inward': basic + cgst + sgst + igst,
+          'Remarks': pur.remarks || '-',
+          'Added By': pur.addedBy?.fullName || '-'
+        };
+      });
+    } else if (filename.includes('Sales')) {
+      exportRows = data.map((sale, i) => {
+        const basic = (sale.qty || 0) * (sale.rate || 0);
+        const cgst = basic * ((sale.cgstPercent || 0) / 100);
+        const sgst = basic * ((sale.sgstPercent || 0) / 100);
+        const igst = basic * ((sale.igstPercent || 0) / 100);
+        return {
+          'SL NO': i + 1,
+          'Part Number': sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-',
+          'Item Name': sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-',
+          'Invoice Number': sale.invoiceNumber || '-',
+          'Invoice Date': formatDate(sale.invoiceDate),
+          'Party Name': sale.partyName || '-',
+          'Party Address': sale.supplierAddress || '-',
+          'Our GST No': sale.companyGstNumber || '-',
+          'Party GST No': sale.gstNumber || '-',
+          'Party Invoice / DC No': sale.partyInvoiceNumber || '-',
+          'Party Invoice Date': sale.supplierInvoiceDate ? formatDate(sale.supplierInvoiceDate) : '-',
+          'Vehicle No': sale.vehicleNumber || '-',
+          'Sold Qty': sale.qty || 0,
+          'Rate': sale.rate || 0,
+          'Basic Amount': basic,
+          'CGST': cgst,
+          'SGST': sgst,
+          'IGST': igst,
+          'Total Invoice Value': basic + cgst + sgst + igst,
+          'Approval Status': sale.status || 'PENDING',
+          'Remarks': sale.remarks || '-',
+          'Added By': sale.addedBy?.fullName || '-'
+        };
+      });
+    }
+    const ws = XLSX.utils.json_to_sheet(exportRows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, `${filename}.xlsx`);
@@ -972,12 +1093,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           <div className="p-6">
             {/* 1. EDIT PO MODAL */}
             {editingPoModal && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn">
-                  <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                    Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPoModal.poNumber}</span>
-                  </h3>
-                  <form onSubmit={handleUpdatePoHeader} className="space-y-4 text-xs">
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+                      <span>Edit Purchase Order:</span>
+                      <span className="font-mono text-[#1e3a8a] bg-blue-50 px-2 py-0.5 rounded font-bold">{editingPoModal.poNumber}</span>
+                    </h3>
+                    <button onClick={() => setEditingPoModal(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">×</button>
+                  </div>
+                  <form onSubmit={handleUpdatePoHeader} className="space-y-4 text-xs overflow-y-auto pr-1">
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">PO Number *</label>
                       <input
@@ -1025,6 +1150,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
                       />
                     </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Remarks / Special Notes</label>
+                      <textarea
+                        rows={2}
+                        value={editPoForm.remarks || ''}
+                        onChange={(e) => setEditPoForm(prev => ({ ...prev, remarks: e.target.value }))}
+                        placeholder="Enter PO remarks, tender terms, delivery notes..."
+                        className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                      />
+                    </div>
                     <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                       <button
                         type="button"
@@ -1045,14 +1180,61 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
               </div>
             )}
 
+            {/* 1.1 QUICK PO REMARKS MODAL */}
+            {poRemarksModal && (
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-8">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+                    <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-amber-600" />
+                      <span>PO Remarks: <span className="font-mono text-[#1e3a8a]">{poRemarksModal.poNumber}</span></span>
+                    </h3>
+                    <button onClick={() => setPoRemarksModal(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
+                  </div>
+                  <form onSubmit={handleSavePoRemarks} className="space-y-4">
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1 text-xs">Enter / Edit PO Remarks</label>
+                      <textarea
+                        rows={4}
+                        value={poRemarksText}
+                        onChange={(e) => setPoRemarksText(e.target.value)}
+                        placeholder="Type remarks or notes for this purchase order here..."
+                        className="w-full p-3 border border-slate-300 rounded-xl focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20 outline-none text-xs"
+                      />
+                    </div>
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setPoRemarksModal(null)}
+                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-xl text-xs shadow"
+                      >
+                        Save Remarks
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
             {/* 2. EDIT ITEM MODAL */}
             {editingItem && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-2xl animate-fadeIn my-8">
-                  <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                    Edit PO Item: <span className="font-mono text-[#1e3a8a]">{editingItem.partNumber}</span>
-                  </h3>
-                  <form onSubmit={handleUpdateItem} className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+                      <span>Edit PO Item:</span>
+                      <span className="font-mono text-[#1e3a8a] bg-blue-50 px-2 py-0.5 rounded font-bold">{editingItem.partNumber}</span>
+                    </h3>
+                    <button onClick={() => setEditingItem(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">×</button>
+                  </div>
+                  <form onSubmit={handleUpdateItem} className="space-y-3 text-xs overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* 1. KPCL Code */}
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">KPCL Code *</label>
@@ -1298,11 +1480,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       })()}
                     </div>
 
+                    </div>
+
                     {/* MODAL BREAKDOWN SUMMARY */}
                     {(() => {
                       const b = calculateBreakdown(editItemForm.qty, editItemForm.rate, editItemForm.cgstPercent, editItemForm.sgstPercent, editItemForm.igstPercent, editItemForm.discount, editItemForm.freight, editItemForm.pAndF, editItemForm.insurance);
                       return (
-                        <div className="col-span-full bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                           <div className="flex flex-wrap gap-2 text-[11px]">
                             <span>Basic: <strong>{formatCurrency(b.basicAmount)}</strong></span>
                             {b.discount > 0 && <span className="text-rose-600">Disc: -{formatCurrency(b.discount)}</span>}
@@ -1317,7 +1501,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       );
                     })()}
 
-                    <div className="col-span-full flex justify-end gap-2 pt-4 border-t border-slate-100">
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
                       <button
                         type="button"
                         onClick={() => setEditingItem(null)}
@@ -1339,55 +1523,149 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 3. EDIT INWARD PURCHASE MODAL */}
             {editingPurchase && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn">
-                  <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                    Edit Inward Purchase: <span className="font-mono text-emerald-600">{editingPurchase.purchaseOrderItem?.partNumber || '-'}</span>
-                  </h3>
-                  <form onSubmit={handleUpdatePurchase} className="space-y-4 text-xs">
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Inward Date *</label>
-                      <input
-                        type="date"
-                        required
-                        value={editPurchaseForm.date || ''}
-                        onChange={e => setEditPurchaseForm(prev => ({ ...prev, date: e.target.value }))}
-                        className="w-full p-2 border border-slate-300 rounded"
-                      />
+                      <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span>Edit Inward Purchase</span>
+                        <span className="font-mono text-xs text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded font-bold">
+                          {editingPurchase.purchaseOrderItem?.partNumber || editingPurchase.item?.partNumber || 'NO PART NO'}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Item: <strong className="text-slate-800">{editingPurchase.purchaseOrderItem?.itemName || editingPurchase.item?.itemName || '-'}</strong>
+                      </p>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <button onClick={() => setEditingPurchase(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">×</button>
+                  </div>
+
+                  <form onSubmit={handleUpdatePurchase} className="space-y-3 text-xs overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Quantity *</label>
+                        <label className="block font-semibold text-slate-700 mb-1">Inward Date *</label>
+                        <input
+                          type="date"
+                          required
+                          value={editPurchaseForm.date || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, date: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Quantity Received *</label>
                         <input
                           type="number"
                           step="0.01"
                           required
                           value={editPurchaseForm.qty || ''}
                           onChange={e => setEditPurchaseForm(prev => ({ ...prev, qty: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Rate (₹) *</label>
+                        <label className="block font-semibold text-slate-700 mb-1">Purchase Rate (₹) *</label>
                         <input
                           type="number"
                           step="0.01"
                           required
                           value={editPurchaseForm.rate || ''}
                           onChange={e => setEditPurchaseForm(prev => ({ ...prev, rate: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                     </div>
+
+                    {/* SUPPLIER DETAILS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party / Supplier Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Acme Steels & Hardware"
+                          value={editPurchaseForm.partyName || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, partyName: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded font-semibold text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Supplier Address</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Industrial Area, Ballari"
+                          value={editPurchaseForm.supplierAddress || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, supplierAddress: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Supplier GSTIN No</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 29ABCDE1234F1Z5"
+                          value={editPurchaseForm.gstNumber || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party Invoice / DC No</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. INV-9821 / DC-402"
+                          value={editPurchaseForm.partyInvoiceNumber || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, partyInvoiceNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-blue-900 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Supplier Invoice Date</label>
+                        <input
+                          type="date"
+                          value={editPurchaseForm.supplierInvoiceDate || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, supplierInvoiceDate: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Vehicle / Lorry No</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. KA-34-A-1234"
+                          value={editPurchaseForm.vehicleNumber || ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
+                      <input
+                        type="text"
+                        placeholder="Delivery notes, driver info, inspection remarks..."
+                        value={editPurchaseForm.remarks || ''}
+                        onChange={e => setEditPurchaseForm(prev => ({ ...prev, remarks: e.target.value }))}
+                        className="w-full p-2 border border-slate-300 rounded text-xs"
+                      />
+                    </div>
+
+                    {/* TAX PERCENTAGES */}
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">CGST %</label>
                         <input
                           type="number"
                           step="0.01"
-                          value={editPurchaseForm.cgstPercent || ''}
+                          value={editPurchaseForm.cgstPercent ?? ''}
                           onChange={e => setEditPurchaseForm(prev => ({ ...prev, cgstPercent: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                       <div>
@@ -1395,9 +1673,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <input
                           type="number"
                           step="0.01"
-                          value={editPurchaseForm.sgstPercent || ''}
+                          value={editPurchaseForm.sgstPercent ?? ''}
                           onChange={e => setEditPurchaseForm(prev => ({ ...prev, sgstPercent: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                       <div>
@@ -1405,13 +1683,42 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <input
                           type="number"
                           step="0.01"
-                          value={editPurchaseForm.igstPercent || ''}
+                          value={editPurchaseForm.igstPercent ?? ''}
                           onChange={e => setEditPurchaseForm(prev => ({ ...prev, igstPercent: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+
+                    {/* LIVE CALCULATION BREAKDOWN PREVIEW */}
+                    {(() => {
+                      const qty = Number(editPurchaseForm.qty || 0);
+                      const rate = Number(editPurchaseForm.rate || 0);
+                      const cgstP = Number(editPurchaseForm.cgstPercent || 0);
+                      const sgstP = Number(editPurchaseForm.sgstPercent || 0);
+                      const igstP = Number(editPurchaseForm.igstPercent || 0);
+                      const basic = qty * rate;
+                      const cgst = basic * (cgstP / 100);
+                      const sgst = basic * (sgstP / 100);
+                      const igst = basic * (igstP / 100);
+                      const total = basic + cgst + sgst + igst;
+
+                      return (
+                        <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                          <div className="flex flex-wrap gap-2 text-[11px]">
+                            <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(basic)}</strong></span>
+                            <span className="text-emerald-700">CGST ({cgstP}%): +{formatCurrency(cgst)}</span>
+                            <span className="text-emerald-700">SGST ({sgstP}%): +{formatCurrency(sgst)}</span>
+                            {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{formatCurrency(igst)}</span>}
+                          </div>
+                          <span className="text-sm font-black text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 shadow-sm">
+                            Total Inward: {formatCurrency(total)}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0">
                       <button
                         type="button"
                         onClick={() => setEditingPurchase(null)}
@@ -1421,7 +1728,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow"
+                        className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow font-semibold"
                       >
                         Update Purchase
                       </button>
@@ -1433,21 +1740,33 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 4. EDIT SALE MODAL */}
             {editingSale && (
-              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn">
-                  <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                    Edit Sale: <span className="font-mono text-blue-600">{editingSale.invoiceNumber}</span>
-                  </h3>
-                  <form onSubmit={handleUpdateSale} className="space-y-4 text-xs">
-                    <div className="grid grid-cols-2 gap-3">
+              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                  <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span>Edit Sale Invoice</span>
+                        <span className="font-mono text-xs text-blue-800 bg-blue-100 px-2 py-0.5 rounded font-bold">
+                          {editingSale.purchaseOrderItem?.partNumber || editingSale.item?.partNumber || 'NO PART NO'}
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Item: <strong className="text-slate-800">{editingSale.purchaseOrderItem?.itemName || editingSale.item?.itemName || '-'}</strong>
+                      </p>
+                    </div>
+                    <button onClick={() => setEditingSale(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">×</button>
+                  </div>
+
+                  <form onSubmit={handleUpdateSale} className="space-y-3 text-xs overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Invoice No *</label>
+                        <label className="block font-semibold text-slate-700 mb-1">Invoice Number *</label>
                         <input
                           type="text"
                           required
                           value={editSaleForm.invoiceNumber || ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, invoiceNumber: e.target.value.toUpperCase() }))}
-                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold uppercase"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold uppercase text-xs"
                         />
                       </div>
                       <div>
@@ -1457,11 +1776,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           required
                           value={editSaleForm.invoiceDate || ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, invoiceDate: e.target.value }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
                         />
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Quantity *</label>
                         <input
@@ -1470,30 +1790,125 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           required
                           value={editSaleForm.qty || ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, qty: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Rate (₹) *</label>
+                        <label className="block font-semibold text-slate-700 mb-1">Sale Rate (₹) *</label>
                         <input
                           type="number"
                           step="0.01"
                           required
                           value={editSaleForm.rate || ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, rate: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                     </div>
+
+                    {/* PARTY DETAILS */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Acme Steels & Hardware"
+                          value={editSaleForm.partyName || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, partyName: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded font-semibold text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party Address</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Industrial Area, Ballari"
+                          value={editSaleForm.supplierAddress || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, supplierAddress: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Company GST No (Our GST)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 29SKC12345F1Z9"
+                          value={editSaleForm.companyGstNumber || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, companyGstNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase text-xs bg-slate-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party GST No</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 29ABCDE1234F1Z5"
+                          value={editSaleForm.gstNumber || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party Invoice / DC No</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. INV-9821 / DC-402"
+                          value={editSaleForm.partyInvoiceNumber || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, partyInvoiceNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-blue-900 text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Party Invoice / DC Date</label>
+                        <input
+                          type="date"
+                          value={editSaleForm.supplierInvoiceDate || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, supplierInvoiceDate: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Vehicle No</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. KA-34-A-1234"
+                          value={editSaleForm.vehicleNumber || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
+                      <input
+                        type="text"
+                        placeholder="Delivery notes, driver info, inspection remarks..."
+                        value={editSaleForm.remarks || ''}
+                        onChange={e => setEditSaleForm(prev => ({ ...prev, remarks: e.target.value }))}
+                        className="w-full p-2 border border-slate-300 rounded text-xs"
+                      />
+                    </div>
+
+                    {/* TAX PERCENTAGES */}
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">CGST %</label>
                         <input
                           type="number"
                           step="0.01"
-                          value={editSaleForm.cgstPercent || ''}
+                          value={editSaleForm.cgstPercent ?? ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, cgstPercent: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                       <div>
@@ -1501,9 +1916,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <input
                           type="number"
                           step="0.01"
-                          value={editSaleForm.sgstPercent || ''}
+                          value={editSaleForm.sgstPercent ?? ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, sgstPercent: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                       <div>
@@ -1511,13 +1926,42 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <input
                           type="number"
                           step="0.01"
-                          value={editSaleForm.igstPercent || ''}
+                          value={editSaleForm.igstPercent ?? ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, igstPercent: Number(e.target.value) }))}
-                          className="w-full p-2 border border-slate-300 rounded"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
                     </div>
-                    <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+
+                    {/* LIVE CALCULATION BREAKDOWN PREVIEW */}
+                    {(() => {
+                      const qty = Number(editSaleForm.qty || 0);
+                      const rate = Number(editSaleForm.rate || 0);
+                      const cgstP = Number(editSaleForm.cgstPercent || 0);
+                      const sgstP = Number(editSaleForm.sgstPercent || 0);
+                      const igstP = Number(editSaleForm.igstPercent || 0);
+                      const basic = qty * rate;
+                      const cgst = basic * (cgstP / 100);
+                      const sgst = basic * (sgstP / 100);
+                      const igst = basic * (igstP / 100);
+                      const total = basic + cgst + sgst + igst;
+
+                      return (
+                        <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                          <div className="flex flex-wrap gap-2 text-[11px]">
+                            <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(basic)}</strong></span>
+                            <span className="text-blue-700">CGST ({cgstP}%): +{formatCurrency(cgst)}</span>
+                            <span className="text-blue-700">SGST ({sgstP}%): +{formatCurrency(sgst)}</span>
+                            {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{formatCurrency(igst)}</span>}
+                          </div>
+                          <span className="text-sm font-black text-blue-800 bg-white px-2.5 py-1 rounded-lg border border-blue-300 shadow-sm">
+                            Total Sale Value: {formatCurrency(total)}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0">
                       <button
                         type="button"
                         onClick={() => setEditingSale(null)}
@@ -1527,7 +1971,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </button>
                       <button
                         type="submit"
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow"
+                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow font-semibold"
                       >
                         Update Sale
                       </button>
@@ -2058,6 +2502,34 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {/* View Mode Toggle: Fit Screen vs Wide Scroll */}
+                    <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setPurchasesTableViewMode('fit')}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                          purchasesTableViewMode === 'fit'
+                            ? 'bg-[#1e3a8a] text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Fit all columns on screen without horizontal scroll"
+                      >
+                        Fit Screen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPurchasesTableViewMode('scroll')}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                          purchasesTableViewMode === 'scroll'
+                            ? 'bg-[#1e3a8a] text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Expanded scrollable ledger view"
+                      >
+                        Wide View
+                      </button>
+                    </div>
+
                     <button 
                       onClick={() => exportToExcel(poPurchases, `PO_${selectedPo.poNumber}_Purchases`)}
                       className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold"
@@ -2114,6 +2586,42 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Received *</label>
                       <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={purchaseForm.qty || ''} onChange={e => handlePurchaseChange('qty', Number(e.target.value))} />
+                    </div>
+
+                    {/* SUPPLIER & INVOICE DETAILS SECTION */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Supplier Name</label>
+                      <input type="text" placeholder="e.g. Acme Steels & Hardware" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold" value={purchaseForm.partyName || ''} onChange={e => handlePurchaseChange('partyName', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Address</label>
+                      <input type="text" placeholder="e.g. Industrial Area, Ballari" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.supplierAddress || ''} onChange={e => handlePurchaseChange('supplierAddress', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier GSTIN No</label>
+                      <input type="text" placeholder="e.g. 29ABCDE1234F1Z5" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={purchaseForm.gstNumber || ''} onChange={e => handlePurchaseChange('gstNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
+                      <input type="text" placeholder="e.g. INV-9821 / DC-402" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900" value={purchaseForm.partyInvoiceNumber || ''} onChange={e => handlePurchaseChange('partyInvoiceNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
+                      <input type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.supplierInvoiceDate || ''} onChange={e => handlePurchaseChange('supplierInvoiceDate', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle / Lorry No</label>
+                      <input type="text" placeholder="e.g. KA-34-A-1234" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold" value={purchaseForm.vehicleNumber || ''} onChange={e => handlePurchaseChange('vehicleNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                      <input type="text" placeholder="Delivery notes, driver info, inspection remarks..." className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.remarks || ''} onChange={e => handlePurchaseChange('remarks', e.target.value)} />
                     </div>
 
                     <div>
@@ -2185,30 +2693,37 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 )}
 
                 {/* PURCHASES TABLE */}
-                <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                  <table className="excel-table w-full text-xs text-left">
+                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+                  <table className={`excel-table w-full text-left ${purchasesTableViewMode === 'fit' ? 'text-[11px]' : 'text-xs'}`}>
                     <thead>
                       <tr>
-                        <th className="text-center w-12 bg-sky-950 text-sky-200 font-bold border-r border-sky-800">SL NO</th>
-                        <th>Part Number</th>
-                        <th>Item Name</th>
-                        <th>Date</th>
-                        <th className="text-center">Inward Qty</th>
-                        <th>Rate</th>
-                        <th>Basic</th>
-                        <th>CGST</th>
-                        <th>SGST</th>
-                        <th>IGST</th>
-                        <th>Total Inward</th>
-                        <th>Added By</th>
-                        <th className="text-center">Actions</th>
+                        <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Date</th>
+                        <th className="px-2 py-1.5 min-w-[110px]">Party Name</th>
+                        <th className="px-2 py-1.5 min-w-[120px]">Supplier Address</th>
+                        <th className="px-2 py-1.5 min-w-[100px]">GST No</th>
+                        <th className="px-2 py-1.5 min-w-[100px]">Party Inv No</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Supplier Date</th>
+                        <th className="px-2 py-1.5 min-w-[90px]">Vehicle No</th>
+                        <th className="text-center px-2 py-1.5 whitespace-nowrap">Inward Qty</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Rate</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Basic</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">CGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">SGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">IGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Total Inward</th>
+                        <th className="px-2 py-1.5 min-w-[110px]">Remarks</th>
+                        <th className="px-2 py-1.5 min-w-[90px]">Added By</th>
+                        <th className="text-center px-2 py-1.5 sticky right-0 bg-sky-950 text-sky-200 font-bold z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] min-w-[70px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {purchasesLoading ? (
-                        <tr><td colSpan={13} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
+                        <tr><td colSpan={20} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
                       ) : poPurchases.length === 0 ? (
-                        <tr><td colSpan={13} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
+                        <tr><td colSpan={20} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
                       ) : (
                         poPurchases.map((pur, idx) => {
                           const basic = (pur.qty || 0) * (pur.rate || 0);
@@ -2217,21 +2732,28 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const igst = basic * ((pur.igstPercent || 0) / 100);
                           return (
                             <tr key={pur.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
-                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
-                              <td className="font-mono font-bold text-slate-800">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</td>
-                              <td className="font-semibold text-slate-800">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
-                              <td className="whitespace-nowrap font-mono">{formatDate(pur.date)}</td>
-                              <td className="text-center font-mono font-bold text-emerald-700 bg-emerald-50/50">{pur.qty}</td>
-                              <td className="text-left font-mono">{formatCurrency(pur.rate)}</td>
-                              <td className="text-left font-mono">{formatCurrency(basic)}</td>
-                              <td className="text-left font-mono">{formatCurrency(cgst)}</td>
-                              <td className="text-left font-mono">{formatCurrency(sgst)}</td>
-                              <td className="text-left font-mono">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50">{formatCurrency(basic + cgst + sgst + igst)}</td>
-                              <td className="text-slate-600 font-medium">{pur.addedBy?.fullName || '-'}</td>
-                              <td className="text-center">
+                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{idx + 1}</td>
+                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</td>
+                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
+                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(pur.date)}</td>
+                              <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{pur.partyName || '-'}</td>
+                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{pur.supplierAddress || '-'}</td>
+                              <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{pur.gstNumber || '-'}</td>
+                              <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{pur.partyInvoiceNumber || '-'}</td>
+                              <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{pur.supplierInvoiceDate ? formatDate(pur.supplierInvoiceDate) : '-'}</td>
+                              <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{pur.vehicleNumber || '-'}</td>
+                              <td className="text-center font-mono font-bold text-emerald-700 bg-emerald-50/50 px-2 py-1.5">{pur.qty}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(pur.rate)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
+                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst)}</td>
+                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{pur.remarks || '-'}</td>
+                              <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{pur.addedBy?.fullName || '-'}</td>
+                              <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                                 {isManagerOrOwner && (
-                                  <div className="flex items-center justify-center gap-1">
+                                  <div className="flex items-center justify-center gap-1.5">
                                     <button
                                       onClick={() => {
                                         setEditingPurchase(pur);
@@ -2241,17 +2763,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           rate: pur.rate || 0,
                                           cgstPercent: pur.cgstPercent || 0,
                                           sgstPercent: pur.sgstPercent || 0,
-                                          igstPercent: pur.igstPercent || 0
+                                          igstPercent: pur.igstPercent || 0,
+                                          partyName: pur.partyName || '',
+                                          supplierAddress: pur.supplierAddress || '',
+                                          gstNumber: pur.gstNumber || '',
+                                          partyInvoiceNumber: pur.partyInvoiceNumber || '',
+                                          supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                          vehicleNumber: pur.vehicleNumber || '',
+                                          remarks: pur.remarks || ''
                                         });
                                       }}
-                                      className="p-1 text-[#667eea] hover:text-[#764ba2] hover:bg-indigo-50 rounded"
+                                      className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
                                       title="Edit Inward Purchase"
                                     >
                                       <Edit className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       onClick={() => handleDeletePurchase(pur.id)}
-                                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded"
+                                      className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
                                       title="Delete Inward Purchase"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -2396,11 +2925,52 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Number *</label>
-                      <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.invoiceNumber} onChange={e => handleSaleChange('invoiceNumber', e.target.value)} placeholder="INV-2026-001" />
+                      <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold uppercase" value={saleForm.invoiceNumber} onChange={e => handleSaleChange('invoiceNumber', e.target.value.toUpperCase())} placeholder="INV-2026-001" />
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
                       <input required type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.invoiceDate} onChange={e => handleSaleChange('invoiceDate', e.target.value)} />
+                    </div>
+
+                    {/* PARTY DETAILS SECTION */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Name</label>
+                      <input type="text" placeholder="e.g. KPCL / Client Corp" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold" value={saleForm.partyName || ''} onChange={e => handleSaleChange('partyName', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Address</label>
+                      <input type="text" placeholder="e.g. BTPS Project Site, Kudligi" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierAddress || ''} onChange={e => handleSaleChange('supplierAddress', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GST No (Our GST)</label>
+                      <input type="text" placeholder="e.g. 29SKC12345F1Z9" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.companyGstNumber || ''} onChange={e => handleSaleChange('companyGstNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GST No</label>
+                      <input type="text" placeholder="e.g. 29ABCDE1234F1Z5" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.gstNumber || ''} onChange={e => handleSaleChange('gstNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
+                      <input type="text" placeholder="e.g. DC-9901" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900" value={saleForm.partyInvoiceNumber || ''} onChange={e => handleSaleChange('partyInvoiceNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC Date</label>
+                      <input type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierInvoiceDate || ''} onChange={e => handleSaleChange('supplierInvoiceDate', e.target.value)} />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle No</label>
+                      <input type="text" placeholder="e.g. KA-34-A-1234" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold" value={saleForm.vehicleNumber || ''} onChange={e => handleSaleChange('vehicleNumber', e.target.value.toUpperCase())} />
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                      <input type="text" placeholder="Dispatch remarks, client PO ref, gate pass details..." className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.remarks || ''} onChange={e => handleSaleChange('remarks', e.target.value)} />
                     </div>
 
                     <div>
@@ -2476,55 +3046,93 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 )}
 
                 {/* SALES TABLE */}
-                <div className="overflow-x-auto border border-slate-200 rounded-xl">
-                  <table className="excel-table w-full text-xs text-left">
+                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+                  <table className="excel-table w-full text-[11px] text-left">
                     <thead>
                       <tr>
-                        <th className="text-center w-12 bg-sky-950 text-sky-200 font-bold border-r border-sky-800">SL NO</th>
-                        <th>Part Number</th>
-                        <th>Item Name</th>
-                        <th>Invoice No</th>
-                        <th>Date</th>
-                        <th className="text-center bg-blue-100 text-blue-900">Sold Qty</th>
-                        <th>Rate</th>
-                        <th>Basic</th>
-                        <th>CGST</th>
-                        <th>SGST</th>
-                        <th>IGST</th>
-                        <th>Total Invoice</th>
-                        <th>Added By</th>
-                        <th className="text-center">Actions</th>
+                        <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Invoice No</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Date</th>
+                        <th className="px-2 py-1.5 min-w-[110px]">Party Name</th>
+                        <th className="px-2 py-1.5 min-w-[120px]">Party Address</th>
+                        <th className="px-2 py-1.5 min-w-[100px]">Our GST No</th>
+                        <th className="px-2 py-1.5 min-w-[100px]">Party GST No</th>
+                        <th className="px-2 py-1.5 min-w-[100px]">Party Inv / DC No</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Party Inv Date</th>
+                        <th className="px-2 py-1.5 min-w-[90px]">Vehicle No</th>
+                        <th className="text-center px-2 py-1.5 whitespace-nowrap bg-blue-900 text-blue-100 font-bold">Sold Qty</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Rate</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Basic</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">CGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">SGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">IGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Total Invoice</th>
+                        <th className="px-2 py-1.5 min-w-[90px] text-center">Status</th>
+                        <th className="px-2 py-1.5 min-w-[110px]">Remarks</th>
+                        <th className="px-2 py-1.5 min-w-[90px]">Added By</th>
+                        <th className="text-center px-2 py-1.5 sticky right-0 bg-sky-950 text-sky-200 font-bold z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] min-w-[70px]">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {salesLoading ? (
-                        <tr><td colSpan={14} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
+                        <tr><td colSpan={23} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
                       ) : poSales.length === 0 ? (
-                        <tr><td colSpan={14} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
+                        <tr><td colSpan={23} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
                       ) : (
                         poSales.map((sale, idx) => {
                           const basic = (sale.qty || 0) * (sale.rate || 0);
                           const cgst = basic * ((sale.cgstPercent || 0) / 100);
                           const sgst = basic * ((sale.sgstPercent || 0) / 100);
                           const igst = basic * ((sale.igstPercent || 0) / 100);
+                          const isApproved = sale.status === 'APPROVED';
+                          const isPending = sale.status === 'PENDING';
+                          const isRejected = sale.status === 'REJECTED';
+
                           return (
                             <tr key={sale.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
-                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
-                              <td className="font-mono font-bold text-slate-800">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
-                              <td>{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
-                              <td className="font-mono font-bold text-[#1e3a8a]">{sale.invoiceNumber}</td>
-                              <td className="whitespace-nowrap font-mono">{formatDate(sale.invoiceDate)}</td>
-                              <td className="text-center font-mono font-bold text-[#1e3a8a] bg-blue-50/50">{sale.qty}</td>
-                              <td className="text-left font-mono">{formatCurrency(sale.rate)}</td>
-                              <td className="text-left font-mono">{formatCurrency(basic)}</td>
-                              <td className="text-left font-mono">{formatCurrency(cgst)}</td>
-                              <td className="text-left font-mono">{formatCurrency(sgst)}</td>
-                              <td className="text-left font-mono">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono font-bold text-slate-800">{formatCurrency(basic + cgst + sgst + igst)}</td>
-                              <td>{sale.addedBy?.fullName || '-'}</td>
-                              <td className="text-center">
+                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{idx + 1}</td>
+                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
+                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
+                              <td className="font-mono font-bold text-[#1e3a8a] px-2 py-1.5 break-all">{sale.invoiceNumber || '-'}</td>
+                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(sale.invoiceDate)}</td>
+                              <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{sale.partyName || '-'}</td>
+                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{sale.supplierAddress || '-'}</td>
+                              <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px] bg-slate-50">{sale.companyGstNumber || '-'}</td>
+                              <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{sale.gstNumber || '-'}</td>
+                              <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{sale.partyInvoiceNumber || '-'}</td>
+                              <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{sale.supplierInvoiceDate ? formatDate(sale.supplierInvoiceDate) : '-'}</td>
+                              <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{sale.vehicleNumber || '-'}</td>
+                              <td className="text-center font-mono font-bold text-blue-800 bg-blue-50/70 px-2 py-1.5">{sale.qty}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sale.rate)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
+                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst)}</td>
+                              <td className="text-center px-2 py-1.5 whitespace-nowrap">
+                                {isPending && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                    ⏳ Pending Owner
+                                  </span>
+                                )}
+                                {isApproved && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                                    ✓ Approved
+                                  </span>
+                                )}
+                                {isRejected && (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300" title={sale.rejectionReason || ''}>
+                                    ✕ Rejected
+                                  </span>
+                                )}
+                              </td>
+                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{sale.remarks || '-'}</td>
+                              <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{sale.addedBy?.fullName || '-'}</td>
+                              <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                                 {isManagerOrOwner && (
-                                  <div className="flex items-center justify-center gap-1">
+                                  <div className="flex items-center justify-center gap-1.5">
                                     <button
                                       onClick={() => {
                                         setEditingSale(sale);
@@ -2535,17 +3143,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           rate: sale.rate || 0,
                                           cgstPercent: sale.cgstPercent || 0,
                                           sgstPercent: sale.sgstPercent || 0,
-                                          igstPercent: sale.igstPercent || 0
+                                          igstPercent: sale.igstPercent || 0,
+                                          partyName: sale.partyName || '',
+                                          supplierAddress: sale.supplierAddress || '',
+                                          gstNumber: sale.gstNumber || '',
+                                          partyInvoiceNumber: sale.partyInvoiceNumber || '',
+                                          supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                          vehicleNumber: sale.vehicleNumber || '',
+                                          remarks: sale.remarks || ''
                                         });
                                       }}
-                                      className="p-1 text-[#1e3a8a] hover:text-[#1e40af] hover:bg-slate-100 rounded"
+                                      className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
                                       title="Edit Sale Record"
                                     >
                                       <Edit className="w-3.5 h-3.5" />
                                     </button>
                                     <button
                                       onClick={() => handleDeleteSale(sale.id)}
-                                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded"
+                                      className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
                                       title="Delete Sale"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -2604,80 +3219,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   // ==========================================
   return (
     <div className="flex flex-col gap-3 sm:gap-6 animate-fadeIn">
-      {/* EDIT PO MODAL */}
-      {editingPoModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn">
-            <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-              Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPoModal.poNumber}</span>
-            </h3>
-            <form onSubmit={handleUpdatePoHeader} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">PO Number *</label>
-                <input
-                  type="text"
-                  required
-                  value={editPoForm.poNumber}
-                  onChange={(e) => setEditPoForm(prev => ({ ...prev, poNumber: e.target.value.toUpperCase() }))}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold uppercase"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Division *</label>
-                <select
-                  required
-                  value={editPoForm.divisionId}
-                  onChange={(e) => setEditPoForm(prev => ({ ...prev, divisionId: e.target.value }))}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold"
-                >
-                  <option value="">Select Division *</option>
-                  {divisions.map((div) => (
-                    <option key={div.id} value={div.id}>
-                      {div.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Date *</label>
-                <input
-                  type="date"
-                  required
-                  value={editPoForm.date}
-                  onChange={(e) => setEditPoForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
-                />
-              </div>
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Total PO Amount (₹) *</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  required
-                  value={editPoForm.poAmount || ''}
-                  onChange={(e) => setEditPoForm(prev => ({ ...prev, poAmount: Number(e.target.value) }))}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setEditingPoModal(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg shadow"
-                >
-                  Update Purchase Order
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
 
       {/* HEADER BANNER - NAVY & LIGHT BLUE */}
       <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0284c7] rounded-xl sm:rounded-2xl shadow-lg p-3.5 sm:p-8 text-white flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 border border-blue-400/30">
@@ -2759,15 +3301,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 <th>Date</th>
                 <th className="text-center">Items Registered</th>
                 <th className="text-left">PO Amount</th>
+                <th>Remarks</th>
                 <th>Added By</th>
-                <th className="text-center">Actions</th>
+                <th className="text-center min-w-[120px]">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="p-10 text-center text-slate-500 font-semibold">Loading purchase orders...</td></tr>
+                <tr><td colSpan={9} className="p-10 text-center text-slate-500 font-semibold">Loading purchase orders...</td></tr>
               ) : poList.length === 0 ? (
-                <tr><td colSpan={8} className="p-10 text-center text-slate-400">No purchase orders found. Create one in Master Creation.</td></tr>
+                <tr><td colSpan={9} className="p-10 text-center text-slate-400">No purchase orders found. Create one in Master Creation.</td></tr>
               ) : (
                 poList.map((po, index) => (
                   <tr key={po.id} className="border-b border-slate-200 hover:bg-slate-50/80 transition-colors">
@@ -2791,35 +3334,57 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </span>
                     </td>
                     <td className="text-left font-mono font-bold text-slate-900">{formatCurrency(po.poAmount)}</td>
+                    <td className="text-slate-700 max-w-xs break-words">
+                      {po.remarks ? (
+                        <span className="bg-amber-50 text-amber-900 border border-amber-200 px-2 py-0.5 rounded text-[11px]">
+                          {po.remarks}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">-</span>
+                      )}
+                    </td>
                     <td className="text-slate-600">{po.addedBy?.fullName || '-'}</td>
                     <td className="text-center">
-                      {isManagerOrOwner && (
-                        <div className="flex justify-center gap-1.5">
-                          <button
-                            onClick={() => {
-                              fetchDivisions();
-                              setEditingPoModal(po);
-                              setEditPoForm({
-                                poNumber: po.poNumber,
-                                date: po.date ? new Date(po.date).toISOString().split('T')[0] : '',
-                                divisionId: po.divisionId || po.division?.id || '',
-                                poAmount: po.poAmount || 0
-                              });
-                            }}
-                            className="p-1.5 text-[#1e3a8a] hover:text-[#1e40af] hover:bg-slate-100 rounded transition-colors"
-                            title="Edit PO"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeletePO(po.id, po.poNumber)} 
-                            className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors" 
-                            title="Delete PO"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
+                      <div className="flex justify-center items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setPoRemarksModal(po);
+                            setPoRemarksText(po.remarks || '');
+                          }}
+                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-semibold text-[10px] flex items-center gap-1 transition-colors"
+                          title="View / Edit PO Remarks"
+                        >
+                          <FileText className="w-3 h-3" /> Remarks
+                        </button>
+                        {isManagerOrOwner && (
+                          <>
+                            <button
+                              onClick={() => {
+                                fetchDivisions();
+                                setEditingPoModal(po);
+                                setEditPoForm({
+                                  poNumber: po.poNumber,
+                                  date: po.date ? new Date(po.date).toISOString().split('T')[0] : '',
+                                  divisionId: po.divisionId || po.division?.id || '',
+                                  poAmount: po.poAmount || 0,
+                                  remarks: po.remarks || ''
+                                });
+                              }}
+                              className="p-1.5 text-[#1e3a8a] hover:text-[#1e40af] hover:bg-slate-100 rounded transition-colors"
+                              title="Edit PO"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={() => handleDeletePO(po.id, po.poNumber)} 
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors" 
+                              title="Delete PO"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -2861,6 +3426,133 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           </div>
         </div>
       </div>
+
+      {/* QUICK PO REMARKS MODAL (AVAILABLE ON MAIN PO LIST VIEW) */}
+      {poRemarksModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-8">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-amber-600" />
+                <span>PO Remarks: <span className="font-mono text-[#1e3a8a]">{poRemarksModal.poNumber}</span></span>
+              </h3>
+              <button onClick={() => setPoRemarksModal(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
+            </div>
+            <form onSubmit={handleSavePoRemarks} className="space-y-4">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 text-xs">Enter / Edit PO Remarks</label>
+                <textarea
+                  rows={4}
+                  value={poRemarksText}
+                  onChange={(e) => setPoRemarksText(e.target.value)}
+                  placeholder="Type remarks or notes for this purchase order here..."
+                  className="w-full p-3 border border-slate-300 rounded-xl focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/20 outline-none text-xs"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setPoRemarksModal(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-xl text-xs shadow"
+                >
+                  Save Remarks
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PO MODAL (AVAILABLE ON MAIN PO LIST VIEW) */}
+      {editingPoModal && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-8">
+            <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
+              Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPoModal.poNumber}</span>
+            </h3>
+            <form onSubmit={handleUpdatePoHeader} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">PO Number *</label>
+                <input
+                  type="text"
+                  required
+                  value={editPoForm.poNumber}
+                  onChange={(e) => setEditPoForm(prev => ({ ...prev, poNumber: e.target.value.toUpperCase() }))}
+                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold uppercase"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Division *</label>
+                <select
+                  required
+                  value={editPoForm.divisionId}
+                  onChange={(e) => setEditPoForm(prev => ({ ...prev, divisionId: e.target.value }))}
+                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold"
+                >
+                  <option value="">Select Division *</option>
+                  {divisions.map((div) => (
+                    <option key={div.id} value={div.id}>
+                      {div.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Date *</label>
+                <input
+                  type="date"
+                  required
+                  value={editPoForm.date}
+                  onChange={(e) => setEditPoForm(prev => ({ ...prev, date: e.target.value }))}
+                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Total PO Amount (₹) *</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={editPoForm.poAmount || ''}
+                  onChange={(e) => setEditPoForm(prev => ({ ...prev, poAmount: Number(e.target.value) }))}
+                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Remarks / Special Notes</label>
+                <textarea
+                  rows={2}
+                  value={editPoForm.remarks || ''}
+                  onChange={(e) => setEditPoForm(prev => ({ ...prev, remarks: e.target.value }))}
+                  placeholder="Enter PO remarks, tender terms, delivery notes..."
+                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingPoModal(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg shadow"
+                >
+                  Update Purchase Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
