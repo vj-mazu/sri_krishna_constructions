@@ -131,16 +131,58 @@ export function App() {
 
   if (!user) {
     return (
-      <LoginModal
-        onLoginSuccess={(u) => {
-          setUser(u);
-          if (u.role === 'SUPERVISOR') {
-            setActiveTab('attendance');
-          } else {
-            setActiveTab('dashboard');
-          }
-        }}
-      />
+      <div className="min-h-screen bg-slate-900 flex flex-col font-sans">
+        {/* 📱 SMART PWA INSTALL BANNER ON LOGIN SCREEN (ANDROID & APPLE IOS) */}
+        {showInstallBanner && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-3 py-2.5 flex items-center justify-between shadow-2xl text-xs z-[9999] animate-fadeIn border-b-2 border-amber-300">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-slate-950 text-amber-400 flex items-center justify-center font-black shadow shrink-0">
+                <Smartphone className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="font-extrabold text-[12px] sm:text-xs tracking-tight text-slate-950 flex items-center gap-1.5 leading-tight">
+                  <span>Install Official Sri Krishna App</span>
+                  <span className="px-1.5 py-0.2 bg-slate-950 text-amber-300 rounded text-[9px] font-bold">1-Tap Access</span>
+                </div>
+                <p className="text-[10px] text-slate-900 font-medium">
+                  {isIOS 
+                    ? 'Tap Share ⎋ in Safari → Select "Add to Home Screen ⊞"'
+                    : 'Download to your mobile home screen for fast fullscreen access.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 ml-2">
+              {!isIOS && (
+                <button
+                  onClick={handleInstallClick}
+                  className="px-3.5 py-1.5 bg-slate-950 hover:bg-slate-800 active:scale-95 text-amber-300 font-black rounded-lg text-xs flex items-center gap-1.5 shadow-lg transition-all whitespace-nowrap"
+                >
+                  <Download className="w-3.5 h-3.5" /> Download App
+                </button>
+              )}
+              <button
+                onClick={() => setShowInstallBanner(false)}
+                className="w-7 h-7 rounded-full bg-black/10 hover:bg-black/20 text-slate-950 flex items-center justify-center transition-colors"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <LoginModal
+          onLoginSuccess={(u) => {
+            setUser(u);
+            if (u.role === 'SUPERVISOR') {
+              setActiveTab('attendance');
+            } else {
+              setActiveTab('dashboard');
+            }
+          }}
+        />
+      </div>
     );
   }
 
