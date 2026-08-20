@@ -17,12 +17,52 @@ import {
   FileSpreadsheet, 
   Package, 
   Calendar, 
-  Wallet 
+  Wallet,
+  Download,
+  Smartphone,
+  X
 } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  
+  // PWA Install Prompt state
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+
+  useEffect(() => {
+    // Detect iOS devices (iPhone / iPad)
+    const isIosDevice = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+    const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+    
+    if (isIosDevice && !isStandalone) {
+      setIsIOS(true);
+      setShowInstallBanner(true);
+    }
+
+    // Android / Chrome PWA install prompt listener
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setShowInstallBanner(false);
+      }
+      setDeferredPrompt(null);
+    }
+  };
   
   // Toast state
   const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
@@ -106,6 +146,46 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans">
+      {/* 📱 SMART PWA INSTALL BANNER (ANDROID & APPLE IOS) */}
+      {showInstallBanner && (
+        <div className="bg-gradient-to-r from-indigo-900 via-blue-900 to-indigo-950 text-white px-3 py-2 border-b border-indigo-700/60 flex items-center justify-between shadow-lg text-xs z-50 animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 flex items-center justify-center font-black shadow shrink-0">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-extrabold text-[11px] sm:text-xs tracking-tight flex items-center gap-1.5">
+                <span>Install Sri Krishna Constructions App</span>
+                <span className="px-1.5 py-0.2 bg-amber-400/20 text-amber-300 rounded text-[9px] font-bold">Fast & Fullscreen</span>
+              </div>
+              <p className="text-[10px] text-blue-200">
+                {isIOS 
+                  ? 'Tap the Share icon ⎋ at the bottom of Safari and select "Add to Home Screen ⊞"'
+                  : 'Install official Web App on your phone for 1-tap instant access without browser bars.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 ml-2">
+            {!isIOS && deferredPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black rounded-lg text-xs flex items-center gap-1 shadow-md transition-all"
+              >
+                <Download className="w-3.5 h-3.5" /> Download App
+              </button>
+            )}
+            <button
+              onClick={() => setShowInstallBanner(false)}
+              className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white flex items-center justify-center transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <header className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] border-b border-blue-900 shadow-md sticky top-0 z-40">
         <div className="max-w-[1700px] mx-auto px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
           

@@ -151,6 +151,29 @@ app.use(rateLimiter);
 const clientDistPath = path.join(__dirname, '../../client/dist');
 app.use(express.static(clientDistPath));
 
+// PWA Web App Manifest endpoint for Android & iOS App Install
+app.get('/manifest.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json');
+  res.json({
+    short_name: "SKC ERP",
+    name: "Sri Krishna Constructions ERP",
+    description: "Official Enterprise Construction Management & Payroll Portal",
+    icons: [
+      {
+        src: "/favicon.svg",
+        sizes: "192x192 512x512",
+        type: "image/svg+xml",
+        purpose: "any maskable"
+      }
+    ],
+    start_url: "/",
+    background_color: "#0f172a",
+    theme_color: "#1e3a8a",
+    display: "standalone",
+    orientation: "portrait"
+  });
+});
+
 // Middleware: Authentication
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
