@@ -167,14 +167,20 @@ export function App() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 ml-2">
-            {!isIOS && deferredPrompt && (
+            {!isIOS ? (
               <button
-                onClick={handleInstallClick}
-                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black rounded-lg text-xs flex items-center gap-1 shadow-md transition-all"
+                onClick={() => {
+                  if (deferredPrompt) {
+                    handleInstallClick();
+                  } else {
+                    alert('To install the App:\n1. Tap the 3 dots (⋮) in Chrome menu at the top-right.\n2. Tap "Install App" or "Add to Home screen".');
+                  }
+                }}
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black rounded-lg text-xs flex items-center gap-1 shadow-md transition-all whitespace-nowrap"
               >
                 <Download className="w-3.5 h-3.5" /> Download App
               </button>
-            )}
+            ) : null}
             <button
               onClick={() => setShowInstallBanner(false)}
               className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white/80 hover:text-white flex items-center justify-center transition-colors"

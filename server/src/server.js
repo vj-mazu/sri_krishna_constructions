@@ -174,6 +174,24 @@ app.get('/manifest.json', (req, res) => {
   });
 });
 
+// PWA Service Worker script
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+    const CACHE_NAME = 'skc-erp-v1';
+    self.addEventListener('install', (e) => {
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', (e) => {
+      e.waitUntil(self.clients.claim());
+    });
+    self.addEventListener('fetch', (e) => {
+      // Pass through fetch for fresh data
+      return;
+    });
+  `);
+});
+
 // Middleware: Authentication
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
