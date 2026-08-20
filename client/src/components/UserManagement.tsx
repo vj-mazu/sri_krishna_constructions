@@ -526,12 +526,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   const handleDeleteWorker = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete worker '${name}'?`)) return;
+    const confirmFirst = window.confirm(
+      `⚠️ WARNING: ARE YOU ABSOLUTELY SURE?\n\nYou are about to permanently delete worker '${name}'.\nAll past attendance and wage payment history linked to this worker will be erased.`
+    );
+    if (!confirmFirst) return;
+
+    const confirmSecond = window.confirm(
+      `🚨 FINAL CONFIRMATION:\n\nDo you really want to delete '${name}'? This action CANNOT be undone.`
+    );
+    if (!confirmSecond) return;
+
     clearMessages();
 
     try {
       await api.delete(`/workers/${id}`);
-      const msg = `Worker '${name}' removed successfully.`;
+      const msg = `Worker '${name}' and associated records removed successfully.`;
       setSuccess(msg);
       showToast(msg, 'success');
       fetchWorkers();
