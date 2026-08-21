@@ -103,8 +103,6 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     fetchDivisions();
   }, []);
 
-  const [holidayInfo, setHolidayInfo] = useState<any>(null);
-
   const fetchWorkersAndAttendance = async () => {
     if (!selectedDate) return;
     try {
