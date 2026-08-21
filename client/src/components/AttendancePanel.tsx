@@ -620,6 +620,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
                           <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
                           <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
+                          {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && (
+                            <div className="mt-1 inline-block px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold">
+                              ⚡ 0.5d done at {state.divisionName || 'Other Site'}
+                            </div>
+                          )}
                         </td>
                         
                         <td className="px-3 py-2 text-center whitespace-nowrap">

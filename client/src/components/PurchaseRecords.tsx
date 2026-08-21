@@ -834,7 +834,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     const sgstAmount = Math.round(taxableAmount * (sgstP / 100) * 100) / 100;
     const igstAmount = Math.round(taxableAmount * (igstP / 100) * 100) / 100;
     const totalTax = Math.round((cgstAmount + sgstAmount + igstAmount) * 100) / 100;
-    const totalAmount = Math.round((taxableAmount + totalTax + ins) * 100) / 100;
+    // Round off total amount to the nearest whole integer (e.g. 25,393.60 -> 25,394)
+    const exactTotal = taxableAmount + totalTax + ins;
+    const totalAmount = Math.round(exactTotal);
 
     return {
       basicAmount: Math.round(basicAmount * 100) / 100,
@@ -850,6 +852,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       igstAmount,
       totalTax,
       insurance: ins,
+      exactTotal,
       totalAmount
     };
   };
