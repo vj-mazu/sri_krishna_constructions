@@ -154,7 +154,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   useEffect(() => {
     fetchWorkersAndAttendance();
-  }, [selectedDate]);
+  }, [selectedDate, selectedDivisionId]);
 
   const handleStatusChange = (workerId: string, status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE') => {
     const currentRec = attendanceRecords[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
@@ -416,35 +416,26 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             return false;
           }
 
-          // 2. Dynamic Division Exclusion & Split Half-Day Business Logic:
+          // 2. Strict Division Isolation & Business Logic:
           if (selectedDivisionId && selectedDivisionId !== 'ALL') {
             const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
             
-            // If worker is marked in this division, always show them!
+            // 1. If worker has attendance recorded at this division, show them!
             if (isMarkedInThisDiv) {
               return true;
             }
 
-            // If worker has already completed 2 half days (or full day) elsewhere, hide completely
-            const hasTwoHalfDays = rec && rec.status === 'HALF_DAY' && Boolean(rec.divisionId) && Boolean(rec.secondDivisionId);
-            const isFullDayInOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'LEAVE' || rec.status === 'ABSENT');
-            
-            if (hasTwoHalfDays || isFullDayInOtherDiv) {
+            // 2. If worker has ANY attendance recorded at ANY OTHER division (Full Day or Half Day),
+            // EXCLUDE them from this division so they don't show up with buttons or clutter!
+            const isMarkedAtOtherSite = rec && Boolean(rec.status) && Boolean(rec.divisionId) && rec.divisionId !== selectedDivisionId;
+            if (isMarkedAtOtherSite) {
               return false;
             }
 
-            // If worker is marked Half Day at ONE other site only, hide from this site unless default division or searching
-            const isHalfDayInOtherDiv = rec && Boolean(rec.status) && (rec.status === 'HALF_DAY') && Boolean(rec.divisionId);
-            if (isHalfDayInOtherDiv && !rec.secondDivisionId) {
-              // Hide from all 3rd/other sites once marked at another site to avoid clutter,
-              // unless worker's home division is this site!
-              return w.divisionId === selectedDivisionId;
-            }
-
-            // Include if worker is currently unmarked/available
+            // 3. If unmarked, show only if this division is the worker's home/registered division
             const isUnmarked = !rec || !rec.status;
             const isDefaultDiv = w.divisionId === selectedDivisionId;
-            return isDefaultDiv || isUnmarked;
+            return isDefaultDiv && isUnmarked;
           }
 
           return true;
