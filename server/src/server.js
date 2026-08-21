@@ -458,10 +458,14 @@ app.get('/api/purchase-orders', authenticateToken, async (req, res) => {
 
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
-    const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "PurchaseOrder" po ${whereSql}`, params);
-    const totalCount = countRes.rows[0]?.count || 0;
+    let cursorWhere = whereSql;
+    const queryParams = [...params];
+    if (cursor) {
+      queryParams.push(cursor);
+      cursorWhere += (whereClauses.length > 0 ? ' AND ' : 'WHERE ') + `po."id" < $${queryParams.length}`;
+    }
 
-    params.push(limitNum + 1);
+    queryParams.push(limitNum + 1);
     const querySql = `
       SELECT 
         po.*,
@@ -471,15 +475,16 @@ app.get('/api/purchase-orders', authenticateToken, async (req, res) => {
       FROM "PurchaseOrder" po
       LEFT JOIN "Division" d ON po."divisionId" = d.id
       LEFT JOIN "User" u ON po."addedById" = u.id
-      ${whereSql}
-      ORDER BY po."date" DESC, po."createdAt" DESC
-      LIMIT $${params.length}
+      ${cursorWhere}
+      ORDER BY po."id" DESC
+      LIMIT $${queryParams.length}
     `;
 
-    const { rows } = await pool.query(querySql, params);
+    const { rows } = await pool.query(querySql, queryParams);
     let nextCursor = null;
     if (rows.length > limitNum) {
-      nextCursor = rows.pop().id;
+      const extra = rows.pop();
+      nextCursor = extra.id;
     }
 
     res.json({ purchaseOrders: rows, nextCursor, totalCount });
