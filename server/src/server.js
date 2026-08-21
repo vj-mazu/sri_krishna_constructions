@@ -2050,21 +2050,23 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
     }
 
     let query = `
-      SELECT a."id", a."workerId", a."date", a."status", a."divisionId",
+      SELECT a."id", a."workerId", a."date", a."status", a."divisionId", a."secondDivisionId",
              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
              a."dailyWageOverride", a."notes",
              d."name" as "divisionName",
+             d2."name" as "secondDivisionName",
              json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
       FROM "Attendance" a
       JOIN "Worker" w ON a."workerId" = w."id"
       LEFT JOIN "Division" d ON a."divisionId" = d."id"
+      LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
       WHERE a."date"::date = $1::date
     `;
     const params = [date];
 
     if (divisionId && divisionId !== 'ALL' && divisionId !== 'all') {
       params.push(divisionId);
-      query += ` AND (a."divisionId" = $${params.length} OR (a."divisionId" IS NULL AND w."divisionId" = $${params.length}))`;
+      query += ` AND (a."divisionId" = $${params.length} OR a."secondDivisionId" = $${params.length} OR (a."divisionId" IS NULL AND w."divisionId" = $${params.length}))`;
     }
 
     const { rows: attendances } = await pool.query(query, params);
