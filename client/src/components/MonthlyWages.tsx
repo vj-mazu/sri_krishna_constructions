@@ -1395,9 +1395,118 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           </table>
         </div>
       ) : (
-        /* --- 22-COLUMN MAIN WAGES REGISTER --- */
-        <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm max-h-[78vh] bg-white">
-          <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs min-w-[1350px]'}`}>
+        /* --- 22-COLUMN MAIN WAGES REGISTER & MOBILE APP VIEW --- */
+        <div className="space-y-3">
+          {/* 1. MOBILE NATIVE WAGE CARDS */}
+          <div className="block md:hidden space-y-3">
+            {filteredWages.map((w, index) => {
+              const calc = getRowCalculations(w);
+              const isApproved = w.paymentStatus === 'APPROVED';
+
+              return (
+                <div key={w.workerId} className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                  {/* Card Header */}
+                  <div className="flex justify-between items-start border-b border-slate-100 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white font-black text-sm flex items-center justify-center shadow-xs">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <div 
+                          onClick={() => handleOpenRegisterBook(w.workerId)}
+                          className="font-extrabold text-slate-900 text-sm leading-tight flex items-center gap-1.5 active:text-blue-600"
+                        >
+                          <span>{w.fullName}</span>
+                          <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                          <span className="font-mono text-[10px] text-[#1e3a8a] font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">{w.empId}</span>
+                          <span>•</span>
+                          <span>{w.designation || 'Worker'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
+                        {isApproved ? 'PAID' : 'PENDING'}
+                      </span>
+                      <div className="text-sm font-black text-emerald-700 font-mono">
+                        {formatIndianCurrency(calc.finalNetPay)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Key Salary Breakdown Matrix */}
+                  <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/80 p-2.5 rounded-xl border border-slate-100 font-mono text-[10px]">
+                    <div>
+                      <div className="text-[9px] text-slate-400 font-semibold uppercase">Daily Rate</div>
+                      <div className="font-bold text-slate-800">{formatIndianCurrency(calc.dailyWage)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-blue-600 font-semibold uppercase">Days Worked</div>
+                      <div className="font-bold text-blue-700">{calc.workingDays} days</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] text-emerald-600 font-semibold uppercase">Gross Pay</div>
+                      <div className="font-bold text-emerald-700">{formatIndianCurrency(calc.grossPayment)}</div>
+                    </div>
+                  </div>
+
+                  {/* Overtime and Deductions Pill row */}
+                  <div className="flex justify-between items-center text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200/70 font-mono">
+                    <div>
+                      <span className="text-slate-400">PF/ESI: </span>
+                      <strong className="text-rose-700">₹{calc.pf + calc.esi}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">OT Pay: </span>
+                      <strong className="text-indigo-700">{formatIndianCurrency(calc.otPayment)}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400">Adv Ded: </span>
+                      <strong className="text-amber-700">{formatIndianCurrency(calc.advance)}</strong>
+                    </div>
+                  </div>
+
+                  {/* Action Button Bar */}
+                  <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
+                    <button
+                      onClick={() => setSlipModalWorker(w)}
+                      className="py-1.5 bg-purple-50 hover:bg-purple-100 active:scale-95 text-purple-700 border border-purple-200 font-bold rounded-lg text-xs flex items-center justify-center gap-1 transition-all"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      <span>Slip</span>
+                    </button>
+
+                    <button
+                      onClick={() => generateSalarySlipPdf(w, true)}
+                      className="py-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-800 border border-slate-300 font-bold rounded-lg text-xs flex items-center justify-center gap-1 transition-all"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>PDF</span>
+                    </button>
+
+                    {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                      <button
+                        onClick={() => handleApprovePayment(w)}
+                        className={`py-1.5 font-bold text-xs rounded-lg flex items-center justify-center gap-1 active:scale-95 transition-all text-white shadow-xs ${
+                          isApproved ? 'bg-emerald-600' : 'bg-[#1e3a8a]'
+                        }`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>{isApproved ? 'Paid' : 'Approve'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 2. DESKTOP 22-COLUMN MAIN WAGES REGISTER */}
+          <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl shadow-sm max-h-[78vh] bg-white">
+            <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs min-w-[1350px]'}`}>
             <thead className="sticky top-0 z-20 shadow">
               <tr className="bg-[#1e3a8a] text-white text-[9px] xl:text-[10px] uppercase font-bold tracking-wider">
                 <th className="w-7 text-center py-2.5 px-1">#</th>
@@ -1674,6 +1783,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               </tfoot>
             )}
           </table>
+          </div>
         </div>
       )}
 

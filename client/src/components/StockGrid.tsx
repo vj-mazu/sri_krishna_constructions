@@ -367,9 +367,64 @@ export const StockGrid: React.FC = () => {
         )}
       </div>
 
-      {/* SPREADSHEET TABLE */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
-        <div className="overflow-x-auto flex-1">
+      {/* SPREADSHEET TABLE & NATIVE MOBILE CARDS */}
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col flex-1">
+        {/* 1. MOBILE NATIVE CARDS VIEW */}
+        <div className="block md:hidden p-3 space-y-2.5">
+          {loading ? (
+            <div className="p-8 text-center text-slate-500 font-semibold">
+              <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
+              Calculating real-time database stock...
+            </div>
+          ) : items.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 border border-dashed rounded-xl">
+              No stock items match your search.
+            </div>
+          ) : (
+            items.map((item, idx) => (
+              <div key={item.id || idx} className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs space-y-2">
+                <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-2">
+                  <div>
+                    <div className="font-extrabold text-slate-900 text-xs leading-tight">{item.itemName}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-mono text-[10px] font-bold text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">{item.partNumber}</span>
+                      {item.kpclCode && <span className="font-mono text-[10px] text-slate-500">KPCL: {item.kpclCode}</span>}
+                    </div>
+                  </div>
+                  {getBalanceBadge(item.balanceStock)}
+                </div>
+
+                <div className="text-[10px] text-slate-600 flex justify-between items-center">
+                  <span>PO: <strong className="text-slate-800 font-mono">{getDisplayPoNumber(item)}</strong></span>
+                  <span>Make: <strong className="text-slate-800">{item.make || '-'}</strong></span>
+                </div>
+
+                {/* Stock metrics pill grid */}
+                <div className="grid grid-cols-4 gap-1.5 text-center bg-slate-50 p-2 rounded-lg border border-slate-100 font-mono text-[10px]">
+                  <div>
+                    <div className="text-[9px] text-slate-400 font-semibold uppercase">Ordered</div>
+                    <div className="font-bold text-slate-800">{item.orderedQty}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-emerald-600 font-semibold uppercase">Inward</div>
+                    <div className="font-bold text-emerald-700">{item.totalPurchased}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-blue-600 font-semibold uppercase">Sold</div>
+                    <div className="font-bold text-blue-700">{item.totalSold}</div>
+                  </div>
+                  <div className="bg-blue-100/60 rounded py-0.5">
+                    <div className="text-[9px] text-[#1e3a8a] font-bold uppercase">Balance</div>
+                    <div className="font-black text-[#1e3a8a]">{item.balanceStock}</div>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 2. DESKTOP SPREADSHEET TABLE */}
+        <div className="hidden md:block overflow-x-auto flex-1">
           <table className="excel-table w-full text-xs text-left">
             <thead>
               <tr>

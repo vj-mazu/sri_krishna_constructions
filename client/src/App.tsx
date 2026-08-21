@@ -237,28 +237,31 @@ export function App() {
       <header className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] border-b border-blue-900 shadow-md sticky top-0 z-40">
         <div className="max-w-[1700px] mx-auto px-4 py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
           
-          {/* Logo / Brand Name & Mobile Logout */}
+          {/* Logo / Brand Name & Mobile User Badge */}
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center shadow-md">
-                <Building2 className="w-4.5 h-4.5 text-[#1e3a8a]" />
+            <div className="flex items-center gap-2.5 shrink-0">
+              <div className="w-8 h-8 bg-gradient-to-tr from-white to-blue-50 rounded-xl flex items-center justify-center shadow-md border border-white/20">
+                <Building2 className="w-4.5 h-4.5 text-[#1e3a8a] stroke-[2.5]" />
               </div>
               <div>
-                <h1 className="font-extrabold text-sm tracking-tight text-white uppercase leading-none">
-                  SRI KRISHNA CONSTRUCTIONS
+                <h1 className="font-black text-sm tracking-tight text-white uppercase leading-none">
+                  Sri Krishna Constructions
                 </h1>
-                <span className="text-[9px] text-blue-200 font-semibold block mt-0.5 tracking-wider">ERP PORTAL</span>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-[9px] text-blue-200 font-bold uppercase tracking-wider">ERP Cloud</span>
+                </div>
               </div>
             </div>
 
-            {/* Mobile-only Logout & Role */}
-            <div className="flex items-center gap-2 md:hidden">
-              <span className="text-[9px] font-bold bg-white/20 text-white px-2 py-0.5 rounded border border-white/20 font-mono uppercase tracking-wider">
+            {/* Mobile-only Logout & Role Pill */}
+            <div className="flex items-center gap-1.5 md:hidden">
+              <span className="text-[9px] font-black bg-white/15 text-blue-100 px-2 py-0.5 rounded-full border border-white/20 font-mono uppercase tracking-wider">
                 {user.role}
               </span>
               <button
                 onClick={handleLogout}
-                className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-[10px] font-bold rounded transition-all shadow"
+                className="px-2.5 py-1 bg-rose-600/90 hover:bg-rose-600 active:scale-90 text-white text-[10px] font-extrabold rounded-full transition-all shadow-sm border border-rose-400/30"
               >
                 Logout
               </button>
@@ -395,89 +398,103 @@ export function App() {
         {activeTab === 'wages' && (user.role === 'OWNER' || user.role === 'MANAGER') && <MonthlyWages currentUserRole={user.role} />}
       </main>
 
-      {/* NATIVE MOBILE APP BOTTOM NAVIGATION BAR (No Overlap, Compact & Fast) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-2xl py-1 px-1 flex justify-around items-center h-14 pb-[env(safe-area-inset-bottom,0px)]">
+      {/* NATIVE MOBILE APP BOTTOM FLOATING DOCK (High-End iOS/Android Bar) */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/90 backdrop-blur-xl border-t border-slate-700/60 shadow-[0_-4px_25px_rgba(0,0,0,0.3)] py-1.5 px-2 flex justify-around items-center h-16 pb-[env(safe-area-inset-bottom,6px)]">
         {user.role !== 'SUPERVISOR' && (
           <button
             onClick={() => setActiveTab('dashboard')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-              activeTab === 'dashboard' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'dashboard'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <LayoutDashboard className="w-4 h-4" />
-            <span className="text-[11px] tracking-tight mt-0.5">Dashboard</span>
+            <LayoutDashboard className={`w-4 h-4 ${activeTab === 'dashboard' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Home</span>
           </button>
         )}
 
         {user.role !== 'SUPERVISOR' && (
           <button
             onClick={() => setActiveTab('purchase_orders')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-              activeTab === 'purchase_orders' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'purchase_orders'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span className="text-[11px] tracking-tight mt-0.5">POs</span>
+            <FileSpreadsheet className={`w-4 h-4 ${activeTab === 'purchase_orders' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Orders</span>
           </button>
         )}
 
         {user.role !== 'SUPERVISOR' && (
           <button
             onClick={() => setActiveTab('stock')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-              activeTab === 'stock' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'stock'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Package className="w-4 h-4" />
-            <span className="text-[11px] tracking-tight mt-0.5">Stock</span>
+            <Package className={`w-4 h-4 ${activeTab === 'stock' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Stock</span>
           </button>
         )}
 
         <button
           onClick={() => setActiveTab('attendance')}
-          className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-            activeTab === 'attendance' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+          className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+            activeTab === 'attendance'
+              ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+              : 'text-slate-400 hover:text-slate-200'
           }`}
         >
-          <Calendar className="w-4 h-4" />
-          <span className="text-[11px] tracking-tight mt-0.5">Attendance</span>
+          <Calendar className={`w-4 h-4 ${activeTab === 'attendance' ? 'stroke-[2.5]' : ''}`} />
+          <span className="text-[10px] tracking-tight mt-0.5 font-medium">Attendance</span>
         </button>
 
         {(user.role === 'OWNER' || user.role === 'MANAGER') && (
           <button
             onClick={() => setActiveTab('wages')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-              activeTab === 'wages' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'wages'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Wallet className="w-4 h-4" />
-            <span className="text-[11px] tracking-tight mt-0.5">Wages</span>
+            <Wallet className={`w-4 h-4 ${activeTab === 'wages' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Wages</span>
           </button>
         )}
 
         {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
           <button
             onClick={() => setActiveTab('master_creation')}
-            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-              activeTab === 'master_creation' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'master_creation'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Building2 className="w-4 h-4" />
-            <span className="text-[11px] tracking-tight mt-0.5">Master</span>
+            <Building2 className={`w-4 h-4 ${activeTab === 'master_creation' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Master</span>
           </button>
         )}
 
         {(user.role === 'OWNER' || user.role === 'MANAGER') && (
           <button
             onClick={() => setActiveTab('approvals')}
-            className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-lg transition-all ${
-              activeTab === 'approvals' ? 'text-[#1e3a8a] font-bold bg-blue-50/90' : 'text-slate-500'
+            className={`relative flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'approvals'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4" />
-            <span className="text-[11px] tracking-tight mt-0.5">Approvals</span>
+            <CheckCircle2 className={`w-4 h-4 ${activeTab === 'approvals' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Approvals</span>
             {pendingCount > 0 && (
-              <span className="absolute 1 right-2 bg-red-500 text-white text-[8px] font-black w-3.5 h-3.5 rounded-full flex items-center justify-center animate-pulse shadow-sm">
+              <span className="absolute top-0.5 right-1.5 bg-rose-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-pulse shadow-sm ring-1 ring-white">
                 {pendingCount}
               </span>
             )}

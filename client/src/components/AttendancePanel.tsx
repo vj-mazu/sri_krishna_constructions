@@ -44,13 +44,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       setError('');
       setSuccess('');
 
-      const divParam = selectedDivisionId && selectedDivisionId !== 'ALL' ? `divisionId=${selectedDivisionId}` : '';
-      const workerUrl = divParam ? `/workers?${divParam}&limit=1000` : `/workers?limit=1000`;
-      const attUrl = divParam ? `/attendance?${divParam}&date=${selectedDate}` : `/attendance?date=${selectedDate}`;
-
+      // Always fetch all workers so supervisors can dynamically assign any worker to any division
       const [workersRes, attendanceRes, holidaysRes] = await Promise.all([
-        api.get(workerUrl),
-        api.get(attUrl),
+        api.get('/workers?limit=1000'),
+        api.get(`/attendance?date=${selectedDate}`),
         api.get(`/holidays?year=${new Date(selectedDate).getFullYear()}&month=${new Date(selectedDate).getMonth() + 1}`),
       ]);
 
@@ -67,22 +64,26 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       setWorkers(fetchedWorkers);
 
-      const recordsMap: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string }> = {};
+      const recordsMap: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId: string; divisionName?: string }> = {};
 
-      // Do NOT pre-fill with PRESENT — leave unselected until user clicks
+      // Initialize all workers as clean/unmarked
       fetchedWorkers.forEach((w: any) => {
         recordsMap[w.id] = {
           status: '',
           overtimeHours: '0',
           dailyWageOverride: '',
+          divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || ''),
         };
       });
 
+      // Overlay saved attendance records
       fetchedAttendance.forEach((att: any) => {
         recordsMap[att.workerId] = {
           status: att.status,
           overtimeHours: att.overtimeHours ? att.overtimeHours.toString() : '0',
           dailyWageOverride: att.dailyWageOverride ? att.dailyWageOverride.toString() : '',
+          divisionId: att.divisionId || att.worker?.divisionId || '',
+          divisionName: att.divisionName || '',
         };
       });
 
@@ -98,16 +99,20 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   useEffect(() => {
     fetchWorkersAndAttendance();
-  }, [selectedDivisionId, selectedDate]);
+  }, [selectedDate]);
 
   const handleStatusChange = (workerId: string, status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE') => {
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        status,
-      },
-    }));
+    setAttendanceRecords((prev) => {
+      const currentRec = prev[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
+      return {
+        ...prev,
+        [workerId]: {
+          ...currentRec,
+          status,
+          divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (currentRec.divisionId || ''),
+        },
+      };
+    });
   };
 
   const handleOtChange = (workerId: string, overtimeHours: string) => {
@@ -154,12 +159,20 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return;
       }
 
-      const recordsToSave = markedEntries.map(([workerId, data]) => ({
-        workerId,
-        status: data.status,
-        overtimeHours: parseFloat(data.overtimeHours) || 0,
-        dailyWageOverride: data.dailyWageOverride ? parseFloat(data.dailyWageOverride) : null,
-      }));
+      // Prepare records with dynamic divisionId for the day
+      const recordsToSave = markedEntries.map(([workerId, data]) => {
+        let divToAssign = data.divisionId;
+        if (!divToAssign && selectedDivisionId !== 'ALL') {
+          divToAssign = selectedDivisionId;
+        }
+        return {
+          workerId,
+          status: data.status,
+          overtimeHours: parseFloat(data.overtimeHours) || 0,
+          dailyWageOverride: data.dailyWageOverride ? parseFloat(data.dailyWageOverride) : null,
+          divisionId: divToAssign || null,
+        };
+      });
 
       await api.post('/attendance', {
         date: selectedDate,
@@ -271,18 +284,39 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         </div>
       ) : (() => {
         const filteredWorkers = workers.filter((w) => {
+          const rec = attendanceRecords[w.id];
           const query = searchQuery.toLowerCase().trim();
-          if (!query) return true;
-          return (
-            w.workerId.toLowerCase().includes(query) ||
-            w.fullName.toLowerCase().includes(query)
-          );
+          
+          // 1. Text Search Filter (Worker Name or ID)
+          if (query && !w.workerId.toLowerCase().includes(query) && !w.fullName.toLowerCase().includes(query)) {
+            return false;
+          }
+
+          // 2. Dynamic Division Exclusion Business Logic:
+          if (selectedDivisionId && selectedDivisionId !== 'ALL') {
+            const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId) && Boolean(rec.status);
+            const isMarkedInOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'HALF_DAY') && rec.divisionId && (rec.divisionId !== selectedDivisionId);
+            
+            // If worker is already marked Present/Half-Day at another division today, EXCLUDE from this division!
+            if (isMarkedInOtherDiv) {
+              return false;
+            }
+
+            // Include if worker was marked for this division OR is currently unmarked/available
+            const isUnmarked = !rec || !rec.status;
+            const isDefaultDiv = w.divisionId === selectedDivisionId;
+            return isMarkedInThisDiv || isDefaultDiv || isUnmarked;
+          }
+
+          return true;
         });
 
         if (filteredWorkers.length === 0) {
           return (
-            <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl">
-              No matching workers found for search filter.
+            <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl bg-white p-6">
+              {selectedDivisionId !== 'ALL' 
+                ? 'All available workers have already been marked or assigned to other divisions for this date.' 
+                : 'No matching workers found for search filter.'}
             </div>
           );
         }
@@ -334,62 +368,67 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
               </div>
             </div>
 
-            {/* 1. MOBILE COMPACT CARD LIST (Shown only on mobile screens) */}
-            <div className="block md:hidden space-y-2.5">
+            {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized) */}
+            <div className="block md:hidden space-y-3 pb-16">
               {filteredWorkers.map((w) => {
                 const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                 return (
-                  <div key={w.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-2">
+                  <div key={w.id} className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-sm space-y-3 transition-all">
                     {/* Header info */}
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-[#1e3a8a]/10 text-[#1e3a8a] font-bold text-xs flex items-center justify-center">
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white font-black text-sm flex items-center justify-center shadow-xs">
                           {(w.fullName || '?').charAt(0)}
                         </div>
                         <div>
-                          <div className="font-bold text-slate-800 text-xs leading-tight">{w.fullName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{w.workerId}</div>
+                          <div className="font-extrabold text-slate-900 text-sm leading-tight">{w.fullName}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] text-[#1e3a8a] font-mono font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">{w.workerId}</span>
+                            <span className="text-[11px] text-slate-500 font-medium">{w.designation || 'Worker'}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-0.5">
+                      <div className="flex flex-col items-end gap-1">
                         {getStatusBadge(state.status)}
-                        <div className="text-[10px] text-emerald-700 font-bold font-mono mt-0.5">₹{w.dailyWage}/d</div>
+                        <div className="text-[11px] text-emerald-800 font-bold font-mono">₹{w.dailyWage}/d</div>
                       </div>
                     </div>
 
-                    {/* Attendance status selector (Compact tap buttons) */}
-                    <div className="grid grid-cols-4 gap-1">
-                      {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                        const active = state.status === status;
-                        let colorClasses = '';
-                        if (status === 'PRESENT') colorClasses = active ? 'border-emerald-600 bg-emerald-600 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
-                        if (status === 'ABSENT') colorClasses = active ? 'border-red-600 bg-red-600 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
-                        if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-600 bg-amber-600 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
-                        if (status === 'LEAVE') colorClasses = active ? 'border-slate-700 bg-slate-700 text-white font-bold shadow-sm' : 'border-slate-200 text-slate-600 bg-slate-50';
+                    {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Attendance</div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {([
+                          { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
+                          { key: 'ABSENT', label: 'Absent', short: 'A', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-md' },
+                          { key: 'HALF_DAY', label: 'Half', short: 'HD', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-md' },
+                          { key: 'LEAVE', label: 'Leave', short: 'L', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-md' }
+                        ] as const).map((item) => {
+                          const active = state.status === item.key;
 
-                        return (
-                          <label
-                            key={status}
-                            className={`flex items-center justify-center py-1.5 px-1 border rounded-lg cursor-pointer text-[10px] font-bold uppercase tracking-wider text-center transition-all select-none ${colorClasses}`}
-                          >
-                            <input
-                              type="radio"
-                              name={`status-mobile-${w.id}`}
-                              value={status}
-                              checked={active}
-                              onChange={() => handleStatusChange(w.id, status)}
-                              className="sr-only"
-                            />
-                            <span>{status === 'HALF_DAY' ? 'HD' : status === 'PRESENT' ? 'P' : status === 'ABSENT' ? 'A' : 'L'}</span>
-                          </label>
-                        );
-                      })}
+                          return (
+                            <button
+                              type="button"
+                              key={item.key}
+                              onClick={() => handleStatusChange(w.id, item.key)}
+                              className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center border ${
+                                active
+                                  ? `${item.activeBg} font-black ring-2 ring-offset-1 ring-blue-500/20`
+                                  : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className="text-xs leading-none mb-0.5">{item.icon}</span>
+                              <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
-                    {/* Wage override & Overtime (Compact row) */}
-                    <div className="grid grid-cols-2 gap-2 pt-0.5 text-xs">
-                      <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
-                        <span className="text-slate-400 text-[10px] font-bold">₹</span>
+                    {/* Wage override & Overtime (Enhanced mobile row) */}
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-xs">
+                      <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                        <span className="text-slate-500 text-xs font-bold">₹</span>
                         <input
                           type="number"
                           min="0"
@@ -397,12 +436,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
                           value={state.dailyWageOverride}
                           onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                          className="w-full bg-transparent text-[11px] font-bold text-slate-700 focus:outline-none"
+                          className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
                         />
                       </div>
 
-                      <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
-                        <span className="text-slate-400 text-[10px] font-bold">OT:</span>
+                      <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+                        <span className="text-slate-500 text-[10px] font-bold uppercase">OT:</span>
                         <input
                           type="number"
                           min="0"
@@ -411,9 +450,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           placeholder="0 hrs"
                           value={state.overtimeHours === '0' ? '' : state.overtimeHours}
                           onChange={(e) => handleOtChange(w.id, e.target.value)}
-                          className="w-full bg-transparent text-[11px] font-bold text-slate-700 focus:outline-none"
+                          className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
                         />
-                        <span className="text-slate-400 text-[9px]">hrs</span>
+                        <span className="text-slate-400 text-[10px] font-semibold">hrs</span>
                       </div>
                     </div>
                   </div>
@@ -525,13 +564,27 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
               </table>
             </div>
 
-            <div className="flex justify-end pt-2">
+            {/* DESKTOP SAVE BUTTON */}
+            <div className="hidden md:flex justify-end pt-2">
               <button
                 type="submit"
                 disabled={saving}
                 className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center gap-2"
               >
+                <CheckCircle className="w-4 h-4" />
                 {saving ? 'Saving Sheet...' : 'Save & Submit Attendance'}
+              </button>
+            </div>
+
+            {/* FLOATING MOBILE SAVE BUTTON (STAY FIXED ABOVE BOTTOM NAV) */}
+            <div className="md:hidden fixed bottom-16 left-3 right-3 z-40">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full py-3 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-[0.98] text-white font-extrabold text-xs rounded-xl shadow-xl border border-blue-400/30 flex items-center justify-center gap-2 transition-all"
+              >
+                <CheckCircle className="w-4 h-4 text-emerald-400" />
+                {saving ? 'Saving Attendance Sheet...' : 'Save & Submit Attendance'}
               </button>
             </div>
           </form>

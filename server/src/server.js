@@ -2041,6 +2041,7 @@ app.delete('/api/workers/:id', authenticateToken, async (req, res) => {
 });
 
 // --- DAILY WORKER ATTENDANCE API (DIRECT SQL) ---
+// --- DAILY WORKER ATTENDANCE API (DIRECT SQL) ---
 app.get('/api/attendance', authenticateToken, async (req, res) => {
   try {
     const { date, divisionId } = req.query;
@@ -2049,19 +2050,21 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
     }
 
     let query = `
-      SELECT a."id", a."workerId", a."date", a."status", 
+      SELECT a."id", a."workerId", a."date", a."status", a."divisionId",
              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
              a."dailyWageOverride", a."notes",
+             d."name" as "divisionName",
              json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
       FROM "Attendance" a
       JOIN "Worker" w ON a."workerId" = w."id"
+      LEFT JOIN "Division" d ON a."divisionId" = d."id"
       WHERE a."date"::date = $1::date
     `;
     const params = [date];
 
     if (divisionId && divisionId !== 'ALL' && divisionId !== 'all') {
       params.push(divisionId);
-      query += ` AND w."divisionId" = $${params.length}`;
+      query += ` AND (a."divisionId" = $${params.length} OR (a."divisionId" IS NULL AND w."divisionId" = $${params.length}))`;
     }
 
     const { rows: attendances } = await pool.query(query, params);
@@ -2145,25 +2148,27 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const statuses = attendanceData.map(r => r.status);
       const otHours = attendanceData.map(r => parseFloat(r.overtimeHours) || 0.0);
       const dailyWageOverrides = attendanceData.map(r => r.dailyWageOverride ? parseFloat(r.dailyWageOverride) : null);
+      const divisionIds = attendanceData.map(r => r.divisionId || null);
       const notes = attendanceData.map(r => r.notes || null);
       const userIds = attendanceData.map(r => req.user.id);
 
       await pool.query(
-        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
-         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.nt, u.uid, u.uid, NOW(), NOW()
-         FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[]) 
-         AS u(workerId, dt, st, ot, dw, nt, uid)
+        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, u.nt, u.uid, u.uid, NOW(), NOW()
+         FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[], $8::text[]) 
+         AS u(workerId, dt, st, ot, dw, divId, nt, uid)
          ON CONFLICT ("workerId", "date")
          DO UPDATE SET
            "status" = EXCLUDED."status",
            "overtimeHours" = EXCLUDED."overtimeHours",
            "otHours" = EXCLUDED."otHours",
            "dailyWageOverride" = EXCLUDED."dailyWageOverride",
+           "divisionId" = COALESCE(EXCLUDED."divisionId", "Attendance"."divisionId"),
            "notes" = EXCLUDED."notes",
            "recordedById" = EXCLUDED."recordedById",
            "markedById" = EXCLUDED."markedById",
            "updatedAt" = NOW()`,
-        [workerIds, dates, statuses, otHours, dailyWageOverrides, notes, userIds]
+        [workerIds, dates, statuses, otHours, dailyWageOverrides, divisionIds, notes, userIds]
       );
     }
 
