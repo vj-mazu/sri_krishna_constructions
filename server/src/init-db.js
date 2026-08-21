@@ -317,6 +317,7 @@ export const initializeDatabaseTables = async () => {
 
       -- Attendance division tracking, notes, overtimeHours & dailyWageOverride
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "divisionId" TEXT REFERENCES "Division"("id");
+      ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "secondDivisionId" TEXT REFERENCES "Division"("id");
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "notes" TEXT;
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "overtimeHours" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "otHours" DOUBLE PRECISION NOT NULL DEFAULT 0;

@@ -2153,8 +2153,8 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const userIds = attendanceData.map(r => req.user.id);
 
       await pool.query(
-        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
-         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, u.nt, u.uid, u.uid, NOW(), NOW()
+        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "secondDivisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, NULL, u.nt, u.uid, u.uid, NOW(), NOW()
          FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[], $8::text[]) 
          AS u(workerId, dt, st, ot, dw, divId, nt, uid)
          ON CONFLICT ("workerId", "date")
@@ -2163,7 +2163,16 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
            "overtimeHours" = EXCLUDED."overtimeHours",
            "otHours" = EXCLUDED."otHours",
            "dailyWageOverride" = EXCLUDED."dailyWageOverride",
-           "divisionId" = COALESCE(EXCLUDED."divisionId", "Attendance"."divisionId"),
+           "divisionId" = CASE 
+             WHEN "Attendance"."status" = 'HALF_DAY' AND EXCLUDED."status" = 'HALF_DAY' AND "Attendance"."divisionId" IS NOT NULL AND "Attendance"."divisionId" <> EXCLUDED."divisionId"
+             THEN "Attendance"."divisionId"
+             ELSE COALESCE(EXCLUDED."divisionId", "Attendance"."divisionId")
+           END,
+           "secondDivisionId" = CASE 
+             WHEN "Attendance"."status" = 'HALF_DAY' AND EXCLUDED."status" = 'HALF_DAY' AND "Attendance"."divisionId" IS NOT NULL AND "Attendance"."divisionId" <> EXCLUDED."divisionId"
+             THEN EXCLUDED."divisionId"
+             ELSE "Attendance"."secondDivisionId"
+           END,
            "notes" = EXCLUDED."notes",
            "recordedById" = EXCLUDED."recordedById",
            "markedById" = EXCLUDED."markedById",
@@ -2425,9 +2434,10 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
     const endDate = `${y}-${String(m).padStart(2, '0')}-${String(totalDaysInMonth).padStart(2, '0')} 23:59:59.999`;
 
     const { rows: logs } = await pool.query(
-      `SELECT a.*, d."name" as "divisionName", u."fullName" as "markedByName"
+      `SELECT a.*, d."name" as "divisionName", d2."name" as "secondDivisionName", u."fullName" as "markedByName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
+       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
        LEFT JOIN "User" u ON a."markedById" = u."id"
        WHERE a."workerId" = $1 AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
        ORDER BY a."date" ASC`,
@@ -2480,15 +2490,27 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
       const log = logsByDateStr[curDateStr];
       let status = log ? log.status : (declaredHoliday ? 'GOVT_HOLIDAY' : (isSunday ? 'HOLIDAY' : 'NOT_MARKED'));
       const otHours = log ? (parseFloat(log.otHours) || 0) : 0;
-      const divName = log?.divisionName || worker.divisionName || 'General';
+      
+      const div1Name = log?.divisionName || worker.divisionName || 'General';
+      const div2Name = log?.secondDivisionName || null;
+      let displayDivName = div1Name;
+      if (div2Name && div2Name !== div1Name) {
+        displayDivName = `${div1Name} (0.5d) + ${div2Name} (0.5d)`;
+      }
 
       if (log) {
         if (log.status === 'PRESENT') {
           totalPresent += 1;
-          divisionSummary[divName] = (divisionSummary[divName] || 0) + 1;
+          divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 1;
         } else if (log.status === 'HALF_DAY') {
           totalHalfDay += 1;
-          divisionSummary[divName] = (divisionSummary[divName] || 0) + 0.5;
+          if (div2Name && div2Name !== div1Name) {
+            // Split across two separate divisions: 0.5 to Div 1 and 0.5 to Div 2!
+            divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 0.5;
+            divisionSummary[div2Name] = (divisionSummary[div2Name] || 0) + 0.5;
+          } else {
+            divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 0.5;
+          }
         } else if (log.status === 'ABSENT') {
           totalAbsent += 1;
         } else if (log.status === 'LEAVE') {
@@ -2497,7 +2519,7 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         totalOtHours += otHours;
       } else if (declaredHoliday) {
         totalGovtHolidays += 1;
-        divisionSummary[divName] = (divisionSummary[divName] || 0) + 1;
+        divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 1;
       }
 
       daysList.push({
@@ -2508,7 +2530,9 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         isHoliday: !!declaredHoliday,
         holidayName: declaredHoliday ? declaredHoliday.name : null,
         status,
-        divisionName: divName,
+        divisionName: displayDivName,
+        primaryDivisionName: div1Name,
+        secondDivisionName: div2Name,
         overtimeHours: otHours,
         notes: declaredHoliday ? `🏛️ ${declaredHoliday.name}` : (log?.notes || null),
         markedBy: log?.markedByName || (declaredHoliday ? 'Govt/Company Holiday' : null)
