@@ -458,6 +458,9 @@ app.get('/api/purchase-orders', authenticateToken, async (req, res) => {
 
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
+    const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "PurchaseOrder" po ${whereSql}`, params);
+    const totalCount = countRes.rows[0]?.count || 0;
+
     let cursorWhere = whereSql;
     const queryParams = [...params];
     if (cursor) {
