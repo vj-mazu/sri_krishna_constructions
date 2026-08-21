@@ -3131,6 +3131,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               Total Invoice: {formatCurrency(b.totalAmount)}
                             </span>
                           </div>
+                        );
+                      })()}
                       <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md self-end md:self-auto">
                         Save Sale Record
                       </button>
