@@ -2264,7 +2264,7 @@ app.post('/api/attendance/correction-requests', authenticateToken, async (req, r
   }
 });
 
-app.put('/api/attendance/correction-requests/:id/review', authenticateToken, requireRole(['MANAGER', 'OWNER']), async (req, res) => {
+app.put('/api/attendance/correction-requests/:id/review', authenticateToken, requireRoles(['MANAGER', 'OWNER']), async (req, res) => {
   try {
     const { id } = req.params;
     const { action, rejectionReason } = req.body; // 'APPROVED' or 'REJECTED'
