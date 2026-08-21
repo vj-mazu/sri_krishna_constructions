@@ -416,26 +416,38 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             return false;
           }
 
-          // 2. Strict Division Isolation & Business Logic:
+          // 2. Dynamic Roster & Split Half-Day Business Logic:
           if (selectedDivisionId && selectedDivisionId !== 'ALL') {
             const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
             
-            // 1. If worker has attendance recorded at this division, show them!
+            // 1. If already marked at this division, show them
             if (isMarkedInThisDiv) {
               return true;
             }
 
-            // 2. If worker has ANY attendance recorded at ANY OTHER division (Full Day or Half Day),
-            // EXCLUDE them from this division so they don't show up with buttons or clutter!
-            const isMarkedAtOtherSite = rec && Boolean(rec.status) && Boolean(rec.divisionId) && rec.divisionId !== selectedDivisionId;
-            if (isMarkedAtOtherSite) {
+            // 2. If marked Full Day (PRESENT, ABSENT, LEAVE) at another division, hide from this division
+            const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
+            if (isFullDayAtOtherDiv) {
               return false;
             }
 
-            // 3. If unmarked, show only if this division is the worker's home/registered division
+            // 3. If worker already completed TWO half days at two other divisions, hide from this 3rd division
+            const bothHalfDaysDoneElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.secondDivisionId && rec.divisionId !== selectedDivisionId && rec.secondDivisionId !== selectedDivisionId;
+            if (bothHalfDaysDoneElsewhere) {
+              return false;
+            }
+
+            // 4. If worker has ONLY ONE half day at another division, ALLOW them here so supervisor can mark the 2nd half day!
+            const hasOneHalfDayElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
+            if (hasOneHalfDayElsewhere) {
+              return true;
+            }
+
+            // 5. If unmarked anywhere today, ALLOW them here so any registered worker can be assigned to any division!
             const isUnmarked = !rec || !rec.status;
-            const isDefaultDiv = w.divisionId === selectedDivisionId;
-            return isDefaultDiv && isUnmarked;
+            if (isUnmarked) {
+              return true;
+            }
           }
 
           return true;
