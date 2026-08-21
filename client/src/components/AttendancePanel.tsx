@@ -536,32 +536,44 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Attendance</div>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {([
-                          { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
-                          { key: 'ABSENT', label: 'Absent', short: 'A', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-md' },
-                          { key: 'HALF_DAY', label: 'Half', short: 'HD', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-md' },
-                          { key: 'LEAVE', label: 'Leave', short: 'L', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-md' }
-                        ] as const).map((item) => {
-                          const active = state.status === item.key;
+                      {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId ? (
+                        <div>
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(w.id, 'HALF_DAY')}
+                            className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all"
+                          >
+                            <span>➕ Add 2nd Half Day (0.5d) at this Site</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {([
+                            { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
+                            { key: 'ABSENT', label: 'Absent', short: 'A', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-md' },
+                            { key: 'HALF_DAY', label: 'Half', short: 'HD', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-md' },
+                            { key: 'LEAVE', label: 'Leave', short: 'L', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-md' }
+                          ] as const).map((item) => {
+                            const active = state.status === item.key;
 
-                          return (
-                            <button
-                              type="button"
-                              key={item.key}
-                              onClick={() => handleStatusChange(w.id, item.key)}
-                              className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center border ${
-                                active
-                                  ? `${item.activeBg} font-black ring-2 ring-offset-1 ring-blue-500/20`
-                                  : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
-                              }`}
-                            >
-                              <span className="text-xs leading-none mb-0.5">{item.icon}</span>
-                              <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                            return (
+                              <button
+                                type="button"
+                                key={item.key}
+                                onClick={() => handleStatusChange(w.id, item.key)}
+                                className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center border ${
+                                  active
+                                    ? `${item.activeBg} font-black ring-2 ring-offset-1 ring-blue-500/20`
+                                    : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                <span className="text-xs leading-none mb-0.5">{item.icon}</span>
+                                <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
 
                     {/* Wage override & Overtime (Enhanced mobile row) */}
@@ -628,46 +640,64 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         </td>
                         
                         <td className="px-3 py-2 text-center whitespace-nowrap">
-                          {getStatusBadge(state.status)}
+                          {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-xs">
+                              ⚡ 0.5d at {state.divisionName || 'Site 1'}
+                            </span>
+                          ) : (
+                            getStatusBadge(state.status)
+                          )}
                         </td>
 
                         <td className="px-3 py-2">
-                          <div className="flex justify-center gap-1.5">
-                            {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                              const active = state.status === status;
-                              let colorClasses = '';
-                              if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                              if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                              if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                              if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                          {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId ? (
+                            <div className="flex justify-center">
+                              <button
+                                type="button"
+                                onClick={() => handleStatusChange(w.id, 'HALF_DAY')}
+                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-lg text-[11px] font-black shadow-xs flex items-center gap-1 transition-all"
+                              >
+                                <span>➕ Add 2nd Half Day at this Site</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-center gap-1.5">
+                              {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
+                                const active = state.status === status;
+                                let colorClasses = '';
+                                if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
 
-                              let dotColor = '';
-                              if (status === 'PRESENT') dotColor = 'bg-emerald-500';
-                              if (status === 'ABSENT') dotColor = 'bg-red-500';
-                              if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
-                              if (status === 'LEAVE') dotColor = 'bg-slate-500';
+                                let dotColor = '';
+                                if (status === 'PRESENT') dotColor = 'bg-emerald-500';
+                                if (status === 'ABSENT') dotColor = 'bg-red-500';
+                                if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
+                                if (status === 'LEAVE') dotColor = 'bg-slate-500';
 
-                              return (
-                                <label
-                                  key={status}
-                                  className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
-                                >
-                                  <input
-                                    type="radio"
-                                    name={`status-${w.id}`}
-                                    value={status}
-                                    checked={active}
-                                    onChange={() => handleStatusChange(w.id, status)}
-                                    className="sr-only"
-                                  />
-                                  <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
-                                    {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
-                                  </span>
-                                  <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
-                                </label>
-                              );
-                            })}
-                          </div>
+                                return (
+                                  <label
+                                    key={status}
+                                    className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`status-${w.id}`}
+                                      value={status}
+                                      checked={active}
+                                      onChange={() => handleStatusChange(w.id, status)}
+                                      className="sr-only"
+                                    />
+                                    <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
+                                      {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
+                                    </span>
+                                    <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
                         </td>
                         
                         <td className="px-3 py-2">
