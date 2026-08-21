@@ -579,37 +579,34 @@ app.get('/api/purchase-orders/:id/items', authenticateToken, async (req, res) =>
       params.push(`%${kpclCode}%`);
       whereClauses.push(`poi."kpclCode" ILIKE $${params.length}`);
     }
-
     const whereSql = 'WHERE ' + whereClauses.join(' AND ');
 
     const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "PurchaseOrderItem" poi ${whereSql}`, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
-    let cursorWhere = whereSql;
-    const queryParams = [...params];
+    let offsetNum = 0;
     if (cursor) {
-      queryParams.push(cursor);
-      cursorWhere += ` AND poi."id" > $${queryParams.length}`;
+      // Check if cursor is numeric offset or item id
+      const parsed = parseInt(cursor, 10);
+      if (!isNaN(parsed)) {
+        offsetNum = parsed;
+      }
     }
 
-    queryParams.push(limitNum + 1);
+    const queryParams = [...params, limitNum, offsetNum];
     const querySql = `
       SELECT 
         poi.*,
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as "purchasedQty",
         COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)::float as "soldQty"
       FROM "PurchaseOrderItem" poi
-      ${cursorWhere}
-      ORDER BY poi."id" ASC
-      LIMIT $${queryParams.length}
+      ${whereSql}
+      ORDER BY poi."createdAt" ASC, poi."id" ASC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
     `;
 
     const { rows } = await pool.query(querySql, queryParams);
-    let nextCursor = null;
-    if (rows.length > limitNum) {
-      const extraItem = rows.pop();
-      nextCursor = extraItem.id;
-    }
+    const nextOffset = (offsetNum + rows.length < totalCount) ? (offsetNum + limitNum).toString() : null;
 
     const itemsWithAgg = rows.map(item => ({
       ...item,
@@ -617,7 +614,7 @@ app.get('/api/purchase-orders/:id/items', authenticateToken, async (req, res) =>
       availableForSale: item.purchasedQty - item.soldQty
     }));
 
-    res.json({ items: itemsWithAgg, nextCursor, totalCount });
+    res.json({ items: itemsWithAgg, nextCursor: nextOffset, totalCount });
   } catch (err) {
     console.error('Error fetching PO items:', err);
     res.status(500).json({ error: 'Failed to list PO items' });
@@ -657,14 +654,13 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
     `, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
-    let cursorWhere = whereSql;
-    const queryParams = [...params];
+    let offsetNum = 0;
     if (cursor) {
-      queryParams.push(cursor);
-      cursorWhere += ` AND pur."id" < $${queryParams.length}`;
+      const parsed = parseInt(cursor, 10);
+      if (!isNaN(parsed)) offsetNum = parsed;
     }
 
-    queryParams.push(limitNum + 1);
+    const queryParams = [...params, limitNum, offsetNum];
     const querySql = `
       SELECT 
         pur.*,
@@ -673,19 +669,15 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
       FROM "Purchase" pur
       JOIN "PurchaseOrderItem" poi ON pur."purchaseOrderItemId" = poi.id
       LEFT JOIN "User" u ON pur."addedById" = u.id
-      ${cursorWhere}
-      ORDER BY pur."id" DESC
-      LIMIT $${queryParams.length}
+      ${whereSql}
+      ORDER BY pur."date" DESC, pur."id" DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
     `;
 
     const { rows } = await pool.query(querySql, queryParams);
-    let nextCursor = null;
-    if (rows.length > limitNum) {
-      const extra = rows.pop();
-      nextCursor = extra.id;
-    }
+    const nextOffset = (offsetNum + rows.length < totalCount) ? (offsetNum + limitNum).toString() : null;
 
-    res.json({ purchases: rows, nextCursor, totalCount });
+    res.json({ purchases: rows, nextCursor: nextOffset, totalCount });
   } catch (err) {
     console.error('Error listing purchases:', err);
     res.status(500).json({ error: 'Failed to list purchases' });
@@ -729,14 +721,13 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
     `, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
-    let cursorWhere = whereSql;
-    const queryParams = [...params];
+    let offsetNum = 0;
     if (cursor) {
-      queryParams.push(cursor);
-      cursorWhere += ` AND s."id" < $${queryParams.length}`;
+      const parsed = parseInt(cursor, 10);
+      if (!isNaN(parsed)) offsetNum = parsed;
     }
 
-    queryParams.push(limitNum + 1);
+    const queryParams = [...params, limitNum, offsetNum];
     const querySql = `
       SELECT 
         s.*,
@@ -745,19 +736,15 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
       FROM "Sale" s
       JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
       LEFT JOIN "User" u ON s."addedById" = u.id
-      ${cursorWhere}
-      ORDER BY s."id" DESC
-      LIMIT $${queryParams.length}
+      ${whereSql}
+      ORDER BY s."invoiceDate" DESC, s."id" DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
     `;
 
     const { rows } = await pool.query(querySql, queryParams);
-    let nextCursor = null;
-    if (rows.length > limitNum) {
-      const extra = rows.pop();
-      nextCursor = extra.id;
-    }
+    const nextOffset = (offsetNum + rows.length < totalCount) ? (offsetNum + limitNum).toString() : null;
 
-    res.json({ sales: rows, nextCursor, totalCount });
+    res.json({ sales: rows, nextCursor: nextOffset, totalCount });
   } catch (err) {
     console.error('Error listing sales:', err);
     res.status(500).json({ error: 'Failed to list sales' });
