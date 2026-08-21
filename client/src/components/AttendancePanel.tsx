@@ -532,17 +532,23 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     </div>
 
                     {/* Split Half-Day Context Notice */}
-                    {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && (
+                    {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId && (
                       <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-1.5 text-[11px] text-amber-900 font-medium">
                         <span>⚡</span>
                         <span>Worker is on <strong>Half-Day (0.5d)</strong> at another site. Mark <strong>Half Day (🟡)</strong> here to complete full 1.0 day!</span>
+                      </div>
+                    )}
+                    {state.secondDivisionId && (
+                      <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-1.5 text-[11px] text-emerald-900 font-medium">
+                        <span>🏢</span>
+                        <span>Full 1.0d Split across <strong>2 Sites Completed</strong></span>
                       </div>
                     )}
 
                     {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Attendance</div>
-                      {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId ? (
+                      {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId ? (
                         <div>
                           <button
                             type="button"
@@ -630,44 +636,52 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredWorkers.map((w) => {
-                    const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
-                    return (
-                      <tr key={w.id} className="hover:bg-slate-50/50">
-                        <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
-                          <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
-                          <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
-                          <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
-                          {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && (
-                            <div className="mt-1 inline-block px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold">
-                              ⚡ 0.5d done at {state.divisionName || 'Other Site'}
-                            </div>
-                          )}
-                        </td>
-                        
-                        <td className="px-3 py-2 text-center whitespace-nowrap">
-                          {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-xs">
-                              ⚡ 0.5d at {state.divisionName || 'Site 1'}
-                            </span>
-                          ) : (
-                            getStatusBadge(state.status)
-                          )}
-                        </td>
+                    {filteredWorkers.map((w) => {
+                      const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
+                      const isMarkedAtOtherSiteOnly = state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId;
+                      const isCompletedAtThisSite = state.status === 'HALF_DAY' && (state.divisionId === selectedDivisionId || state.secondDivisionId === selectedDivisionId);
 
-                        <td className="px-3 py-2">
-                          {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId ? (
-                            <div className="flex justify-center">
-                              <button
-                                type="button"
-                                onClick={() => handleStatusChange(w.id, 'HALF_DAY')}
-                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-lg text-[11px] font-black shadow-xs flex items-center gap-1 transition-all"
-                              >
-                                <span>➕ Add 2nd Half Day at this Site</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex justify-center gap-1.5">
+                      return (
+                        <tr key={w.id} className="hover:bg-slate-50/50">
+                          <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
+                            <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
+                            <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
+                            <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
+                            {isMarkedAtOtherSiteOnly && (
+                              <div className="mt-1 inline-block px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold">
+                                ⚡ 0.5d done at {state.divisionName || 'Other Site'}
+                              </div>
+                            )}
+                            {state.secondDivisionId && (
+                              <div className="mt-1 inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-[9px] font-bold">
+                                🏢 Full 1.0d Split across 2 Sites
+                              </div>
+                            )}
+                          </td>
+                          
+                          <td className="px-3 py-2 text-center whitespace-nowrap">
+                            {isMarkedAtOtherSiteOnly ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-xs">
+                                ⚡ 0.5d at {state.divisionName || 'Site 1'}
+                              </span>
+                            ) : (
+                              getStatusBadge(state.status)
+                            )}
+                          </td>
+
+                          <td className="px-3 py-2">
+                            {isMarkedAtOtherSiteOnly ? (
+                              <div className="flex justify-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStatusChange(w.id, 'HALF_DAY')}
+                                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-lg text-[11px] font-black shadow-xs flex items-center gap-1 transition-all"
+                                >
+                                  <span>➕ Add 2nd Half Day at this Site</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex justify-center gap-1.5">
                               {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
                                 const active = state.status === status;
                                 let colorClasses = '';
