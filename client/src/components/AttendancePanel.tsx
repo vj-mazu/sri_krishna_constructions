@@ -541,44 +541,32 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
                     <div>
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Attendance</div>
-                      {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId ? (
-                        <div>
-                          <button
-                            type="button"
-                            onClick={() => handleStatusChange(w.id, 'HALF_DAY')}
-                            className="w-full py-2.5 px-3 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-xl text-xs font-black shadow-md flex items-center justify-center gap-1.5 transition-all"
-                          >
-                            <span>➕ Add 2nd Half Day (0.5d) at this Site</span>
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {([
-                            { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
-                            { key: 'ABSENT', label: 'Absent', short: 'A', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-md' },
-                            { key: 'HALF_DAY', label: 'Half', short: 'HD', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-md' },
-                            { key: 'LEAVE', label: 'Leave', short: 'L', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-md' }
-                          ] as const).map((item) => {
-                            const active = state.status === item.key;
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {([
+                          { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
+                          { key: 'ABSENT', label: 'Absent', short: 'A', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-md' },
+                          { key: 'HALF_DAY', label: 'Half', short: 'HD', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-md' },
+                          { key: 'LEAVE', label: 'Leave', short: 'L', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-md' }
+                        ] as const).map((item) => {
+                          const active = state.status === item.key;
 
-                            return (
-                              <button
-                                type="button"
-                                key={item.key}
-                                onClick={() => handleStatusChange(w.id, item.key)}
-                                className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center border ${
-                                  active
-                                    ? `${item.activeBg} font-black ring-2 ring-offset-1 ring-blue-500/20`
-                                    : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
-                                }`}
-                              >
-                                <span className="text-xs leading-none mb-0.5">{item.icon}</span>
-                                <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
+                          return (
+                            <button
+                              type="button"
+                              key={item.key}
+                              onClick={() => handleStatusChange(w.id, item.key)}
+                              className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center border ${
+                                active
+                                  ? `${item.activeBg} font-black ring-2 ring-offset-1 ring-blue-500/20`
+                                  : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className="text-xs leading-none mb-0.5">{item.icon}</span>
+                              <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Wage override & Overtime (Enhanced mobile row) */}
@@ -653,28 +641,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           </td>
                           
                           <td className="px-3 py-2 text-center whitespace-nowrap">
-                            {isMarkedAtOtherSiteOnly ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-xs">
-                                ⚡ 0.5d at {state.divisionName || 'Site 1'}
-                              </span>
-                            ) : (
-                              getStatusBadge(state.status)
-                            )}
+                            {getStatusBadge(state.status)}
                           </td>
 
                           <td className="px-3 py-2">
-                            {isMarkedAtOtherSiteOnly ? (
-                              <div className="flex justify-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleStatusChange(w.id, 'HALF_DAY')}
-                                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-lg text-[11px] font-black shadow-xs flex items-center gap-1 transition-all"
-                                >
-                                  <span>➕ Add 2nd Half Day at this Site</span>
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="flex justify-center gap-1.5">
+                            <div className="flex justify-center gap-1.5">
                               {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
                                 const active = state.status === status;
                                 let colorClasses = '';
@@ -710,8 +681,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                 );
                               })}
                             </div>
-                          )}
-                        </td>
+                          </td>
                         
                         <td className="px-3 py-2">
                           <div className="flex items-center justify-center gap-1 font-mono">
