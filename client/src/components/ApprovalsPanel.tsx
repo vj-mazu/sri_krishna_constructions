@@ -195,9 +195,9 @@ export const ApprovalsPanel: React.FC = () => {
       )}
 
       {activeTab === 'SALES' && (
-
-      {/* 📱 MOBILE-ONLY CARDS */}
-      <div className="block md:hidden space-y-3">
+        <>
+          {/* 📱 MOBILE-ONLY CARDS */}
+          <div className="block md:hidden space-y-3">
         {loading ? (
           <div className="text-center py-8 text-slate-500 text-xs">Loading approval queue...</div>
         ) : approvals.length === 0 ? (
@@ -456,6 +456,7 @@ export const ApprovalsPanel: React.FC = () => {
           </tbody>
         </table>
       </div>
+      </>
       )}
 
       {/* 🔍 FULL DETAIL INSPECT MODAL FOR OWNER */}
