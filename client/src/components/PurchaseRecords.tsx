@@ -829,15 +829,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     const sgstP = Number(sgstPercent) || 0;
     const igstP = Number(igstPercent) || 0;
 
-    const taxableAmount = Math.max(0, basicAmount - disc + fr + pf);
-    const cgstAmount = taxableAmount * (cgstP / 100);
-    const sgstAmount = taxableAmount * (sgstP / 100);
-    const igstAmount = taxableAmount * (igstP / 100);
-    const totalTax = cgstAmount + sgstAmount + igstAmount;
-    const totalAmount = taxableAmount + totalTax + ins;
+    const taxableAmount = Math.max(0, Math.round((basicAmount - disc + fr + pf) * 100) / 100);
+    const cgstAmount = Math.round(taxableAmount * (cgstP / 100) * 100) / 100;
+    const sgstAmount = Math.round(taxableAmount * (sgstP / 100) * 100) / 100;
+    const igstAmount = Math.round(taxableAmount * (igstP / 100) * 100) / 100;
+    const totalTax = Math.round((cgstAmount + sgstAmount + igstAmount) * 100) / 100;
+    const totalAmount = Math.round((taxableAmount + totalTax + ins) * 100) / 100;
 
     return {
-      basicAmount,
+      basicAmount: Math.round(basicAmount * 100) / 100,
       discount: disc,
       freight: fr,
       pAndF: pf,

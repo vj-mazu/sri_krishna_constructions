@@ -155,8 +155,22 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   }, [selectedDate]);
 
   const handleStatusChange = (workerId: string, status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE') => {
+    const currentRec = attendanceRecords[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
+    const workerObj = workers.find(w => w.id === workerId);
+    const workerName = workerObj?.fullName || 'Worker';
+
+    // Split Half-Day Business Validation:
+    // If worker was already marked HALF_DAY at another division today:
+    const wasHalfDayInOtherDiv = currentRec.status === 'HALF_DAY' && currentRec.divisionId && selectedDivisionId !== 'ALL' && currentRec.divisionId !== selectedDivisionId;
+
+    if (wasHalfDayInOtherDiv && status === 'PRESENT') {
+      const errAlert = `⚠️ Cannot mark full "Present" for ${workerName}. This worker already worked Half-Day at another site today. You can only mark "Half Day" (0.5 day) at this division!`;
+      setError(errAlert);
+      showToast(errAlert, 'error');
+      return;
+    }
+
     setAttendanceRecords((prev) => {
-      const currentRec = prev[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
       return {
         ...prev,
         [workerId]: {
@@ -210,6 +224,19 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         showToast(msg, 'error');
         setSaving(false);
         return;
+      }
+
+      // Check for illegal double-full-day conflicts
+      for (const [workerId, data] of markedEntries) {
+        const workerObj = workers.find(w => w.id === workerId);
+        const wasHalfDayInOtherDiv = data.status === 'HALF_DAY' && data.divisionId && selectedDivisionId !== 'ALL' && data.divisionId !== selectedDivisionId;
+        if (wasHalfDayInOtherDiv && data.status === 'PRESENT') {
+          const err = `Error: Worker ${workerObj?.fullName || workerId} is already marked Half Day at another site. Cannot mark full Present!`;
+          setError(err);
+          showToast(err, 'error');
+          setSaving(false);
+          return;
+        }
       }
 
       // Prepare records with dynamic divisionId for the day
@@ -390,14 +417,20 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             return false;
           }
 
-          // 2. Dynamic Division Exclusion Business Logic:
+          // 2. Dynamic Division Exclusion & Split Half-Day Business Logic:
           if (selectedDivisionId && selectedDivisionId !== 'ALL') {
             const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId) && Boolean(rec.status);
-            const isMarkedInOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'HALF_DAY') && rec.divisionId && (rec.divisionId !== selectedDivisionId);
+            const isFullDayInOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'LEAVE' || rec.status === 'ABSENT') && rec.divisionId && (rec.divisionId !== selectedDivisionId);
+            const isHalfDayInOtherDiv = rec && Boolean(rec.status) && (rec.status === 'HALF_DAY') && rec.divisionId && (rec.divisionId !== selectedDivisionId);
             
-            // If worker is already marked Present/Half-Day at another division today, EXCLUDE from this division!
-            if (isMarkedInOtherDiv) {
+            // If worker is already marked Full Day (PRESENT/ABSENT/LEAVE) at another site today, EXCLUDE from this site!
+            if (isFullDayInOtherDiv) {
               return false;
+            }
+
+            // If worker is marked Half Day at another site, ALLOW them so supervisor can mark the 2nd Half Day here!
+            if (isHalfDayInOtherDiv) {
+              return true;
             }
 
             // Include if worker was marked for this division OR is currently unmarked/available
@@ -413,7 +446,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           return (
             <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl bg-white p-6">
               {selectedDivisionId !== 'ALL' 
-                ? 'All available workers have already been marked or assigned to other divisions for this date.' 
+                ? 'All available workers have already been marked for full-day attendance at other divisions for this date.' 
                 : 'No matching workers found for search filter.'}
             </div>
           );
@@ -491,6 +524,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         <div className="text-[11px] text-emerald-800 font-bold font-mono">₹{w.dailyWage}/d</div>
                       </div>
                     </div>
+
+                    {/* Split Half-Day Context Notice */}
+                    {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && (
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-1.5 text-[11px] text-amber-900 font-medium">
+                        <span>⚡</span>
+                        <span>Worker is on <strong>Half-Day (0.5d)</strong> at another site. Mark <strong>Half Day (🟡)</strong> here to complete full 1.0 day!</span>
+                      </div>
+                    )}
 
                     {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
                     <div>
