@@ -243,10 +243,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       // Prepare records with dynamic divisionId for the day
       const recordsToSave = markedEntries.map(([workerId, data]) => {
-        let divToAssign = data.divisionId;
-        if (!divToAssign && selectedDivisionId !== 'ALL') {
-          divToAssign = selectedDivisionId;
-        }
+        let divToAssign = selectedDivisionId !== 'ALL' ? selectedDivisionId : data.divisionId;
         return {
           workerId,
           status: data.status,
