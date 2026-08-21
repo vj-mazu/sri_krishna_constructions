@@ -2692,8 +2692,103 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </form>
                 )}
 
-                {/* PURCHASES TABLE */}
-                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+                {/* 1. NATIVE MOBILE APP INWARD CARDS (Shown on Mobile) */}
+                <div className="block md:hidden space-y-3">
+                  {purchasesLoading ? (
+                    <div className="p-8 text-center text-slate-500 font-semibold text-xs">Loading purchases...</div>
+                  ) : poPurchases.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl bg-white">No inward purchases recorded yet.</div>
+                  ) : (
+                    poPurchases.map((pur, idx) => {
+                      const basic = (pur.qty || 0) * (pur.rate || 0);
+                      const cgst = basic * ((pur.cgstPercent || 0) / 100);
+                      const sgst = basic * ((pur.sgstPercent || 0) / 100);
+                      const igst = basic * ((pur.igstPercent || 0) / 100);
+                      const total = basic + cgst + sgst + igst;
+
+                      return (
+                        <div key={pur.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                          <div className="flex justify-between items-start border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-full bg-blue-50 text-[#1e3a8a] font-mono font-bold text-xs flex items-center justify-center border border-blue-100">
+                                {idx + 1}
+                              </span>
+                              <div>
+                                <span className="font-mono font-bold text-xs text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                  {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || 'NO PART NO'}
+                                </span>
+                                <div className="font-bold text-slate-800 text-xs mt-1">
+                                  {pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {formatDate(pur.date)}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase">Party / Supplier</div>
+                              <div className="font-bold text-slate-800 truncate">{pur.partyName || '-'}</div>
+                              {pur.partyInvoiceNumber && (
+                                <div className="text-[10px] text-blue-900 font-mono font-bold mt-0.5">Inv: {pur.partyInvoiceNumber}</div>
+                              )}
+                            </div>
+                            <div className="bg-emerald-50/70 p-2 rounded-lg border border-emerald-100 text-right">
+                              <div className="text-[10px] font-bold text-emerald-700 uppercase">Inward Qty & Rate</div>
+                              <div className="font-mono font-black text-emerald-900 text-sm">{pur.qty} <span className="text-xs font-normal">units</span></div>
+                              <div className="text-[10px] text-slate-600 font-mono">@ {formatCurrency(pur.rate)}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Total Amount</span>
+                              <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
+                            </div>
+                            {isManagerOrOwner && (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingPurchase(pur);
+                                    setEditPurchaseForm({
+                                      date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
+                                      qty: pur.qty || 0,
+                                      rate: pur.rate || 0,
+                                      cgstPercent: pur.cgstPercent || 0,
+                                      sgstPercent: pur.sgstPercent || 0,
+                                      igstPercent: pur.igstPercent || 0,
+                                      partyName: pur.partyName || '',
+                                      supplierAddress: pur.supplierAddress || '',
+                                      gstNumber: pur.gstNumber || '',
+                                      partyInvoiceNumber: pur.partyInvoiceNumber || '',
+                                      supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                      vehicleNumber: pur.vehicleNumber || '',
+                                      remarks: pur.remarks || ''
+                                    });
+                                  }}
+                                  className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePurchase(pur.id)}
+                                  className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* 2. DESKTOP EXCEL TABLE (Hidden on Mobile) */}
+                <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
                   <table className={`excel-table w-full text-left ${purchasesTableViewMode === 'fit' ? 'text-[11px]' : 'text-xs'}`}>
                     <thead>
                       <tr>
@@ -3036,8 +3131,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               Total Invoice: {formatCurrency(b.totalAmount)}
                             </span>
                           </div>
-                        );
-                      })()}
                       <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md self-end md:self-auto">
                         Save Sale Record
                       </button>
@@ -3045,8 +3138,112 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </form>
                 )}
 
-                {/* SALES TABLE */}
-                <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+                {/* 1. NATIVE MOBILE APP OUTWARD SALES CARDS (Shown on Mobile) */}
+                <div className="block md:hidden space-y-3">
+                  {salesLoading ? (
+                    <div className="p-8 text-center text-slate-500 font-semibold text-xs">Loading sales...</div>
+                  ) : poSales.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl bg-white">No sales recorded yet.</div>
+                  ) : (
+                    poSales.map((sale, idx) => {
+                      const basic = (sale.qty || 0) * (sale.rate || 0);
+                      const cgst = basic * ((sale.cgstPercent || 0) / 100);
+                      const sgst = basic * ((sale.sgstPercent || 0) / 100);
+                      const igst = basic * ((sale.igstPercent || 0) / 100);
+                      const total = basic + cgst + sgst + igst;
+                      const isApproved = sale.status === 'APPROVED';
+                      const isPending = sale.status === 'PENDING';
+                      const isRejected = sale.status === 'REJECTED';
+
+                      return (
+                        <div key={sale.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                          <div className="flex justify-between items-start border-b border-slate-100 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-6 h-6 rounded-full bg-amber-50 text-amber-900 font-mono font-bold text-xs flex items-center justify-center border border-amber-200">
+                                {idx + 1}
+                              </span>
+                              <div>
+                                <span className="font-mono font-bold text-xs text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                  {sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || 'NO PART NO'}
+                                </span>
+                                <div className="font-bold text-slate-800 text-xs mt-1">
+                                  {sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}
+                                </div>
+                              </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                              isPending ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                              'bg-rose-100 text-rose-800 border border-rose-300'
+                            }`}>
+                              {sale.status}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase">Customer / Buyer</div>
+                              <div className="font-bold text-slate-800 truncate">{sale.partyName || '-'}</div>
+                              {sale.invoiceNumber && (
+                                <div className="text-[10px] text-[#1e3a8a] font-mono font-bold mt-0.5">Inv: #{sale.invoiceNumber}</div>
+                              )}
+                            </div>
+                            <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-100 text-right">
+                              <div className="text-[10px] font-bold text-amber-800 uppercase">Sold Qty & Rate</div>
+                              <div className="font-mono font-black text-amber-950 text-sm">{sale.qty} <span className="text-xs font-normal">units</span></div>
+                              <div className="text-[10px] text-slate-600 font-mono">@ {formatCurrency(sale.rate)}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
+                            <div>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">Total Invoice Value</span>
+                              <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
+                            </div>
+                            {isManagerOrOwner && (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    setEditingSale(sale);
+                                    setEditSaleForm({
+                                      invoiceNumber: sale.invoiceNumber || '',
+                                      invoiceDate: sale.invoiceDate ? new Date(sale.invoiceDate).toISOString().split('T')[0] : '',
+                                      qty: sale.qty || 0,
+                                      rate: sale.rate || 0,
+                                      cgstPercent: sale.cgstPercent || 0,
+                                      sgstPercent: sale.sgstPercent || 0,
+                                      igstPercent: sale.igstPercent || 0,
+                                      partyName: sale.partyName || '',
+                                      supplierAddress: sale.supplierAddress || '',
+                                      companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
+                                      gstNumber: sale.gstNumber || '',
+                                      partyInvoiceNumber: sale.partyInvoiceNumber || '',
+                                      supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                      vehicleNumber: sale.vehicleNumber || '',
+                                      remarks: sale.remarks || ''
+                                    });
+                                  }}
+                                  className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteSale(sale.id)}
+                                  className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* 2. DESKTOP EXCEL SALES TABLE (Hidden on Mobile) */}
+                <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
                   <table className="excel-table w-full text-[11px] text-left">
                     <thead>
                       <tr>
@@ -3104,29 +3301,21 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{sale.partyInvoiceNumber || '-'}</td>
                               <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{sale.supplierInvoiceDate ? formatDate(sale.supplierInvoiceDate) : '-'}</td>
                               <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{sale.vehicleNumber || '-'}</td>
-                              <td className="text-center font-mono font-bold text-blue-800 bg-blue-50/70 px-2 py-1.5">{sale.qty}</td>
+                              <td className="text-center font-mono font-bold text-blue-900 bg-blue-50/50 px-2 py-1.5">{sale.qty}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sale.rate)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
                               <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst)}</td>
-                              <td className="text-center px-2 py-1.5 whitespace-nowrap">
-                                {isPending && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                    ⏳ Pending Owner
-                                  </span>
-                                )}
-                                {isApproved && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
-                                    ✓ Approved
-                                  </span>
-                                )}
-                                {isRejected && (
-                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-900 border border-rose-300" title={sale.rejectionReason || ''}>
-                                    ✕ Rejected
-                                  </span>
-                                )}
+                              <td className="text-center px-2 py-1.5">
+                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                  isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                                  isPending ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                  'bg-rose-100 text-rose-800 border border-rose-300'
+                                }`}>
+                                  {sale.status}
+                                </span>
                               </td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{sale.remarks || '-'}</td>
                               <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{sale.addedBy?.fullName || '-'}</td>
@@ -3146,6 +3335,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           igstPercent: sale.igstPercent || 0,
                                           partyName: sale.partyName || '',
                                           supplierAddress: sale.supplierAddress || '',
+                                          companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
                                           gstNumber: sale.gstNumber || '',
                                           partyInvoiceNumber: sale.partyInvoiceNumber || '',
                                           supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
@@ -3161,7 +3351,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       onClick={() => handleDeleteSale(sale.id)}
                                       className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
-                                      title="Delete Sale"
+                                      title="Delete Sale Record"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
                                     </button>

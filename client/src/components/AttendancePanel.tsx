@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
-import { Calendar, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Calendar, AlertCircle, CheckCircle, RefreshCw, Wifi, WifiOff, CloudUpload } from 'lucide-react';
 
 interface AttendancePanelProps {
   currentUserRole?: string;
@@ -13,11 +13,64 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [workers, setWorkers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string }>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId?: string }>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+
+  // Check offline queue on mount
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
+      if (navigator.onLine) {
+        syncOfflineQueue();
+      }
+    };
+
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    checkOfflineQueueCount();
+
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
+
+  const checkOfflineQueueCount = () => {
+    try {
+      const queue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
+      setOfflinePendingCount(queue.length);
+    } catch {
+      setOfflinePendingCount(0);
+    }
+  };
+
+  const syncOfflineQueue = async () => {
+    try {
+      const queue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
+      if (queue.length === 0) return;
+
+      showToast(`Syncing ${queue.length} offline attendance submissions...`, 'info');
+      
+      for (const item of queue) {
+        await api.post('/attendance', {
+          date: item.date,
+          attendanceData: item.attendanceData,
+        });
+      }
+
+      localStorage.removeItem('skc_offline_attendance_queue');
+      setOfflinePendingCount(0);
+      showToast('All offline attendance records synced successfully to cloud!', 'success');
+      fetchWorkersAndAttendance();
+    } catch (err: any) {
+      console.error('Offline sync error:', err);
+    }
+  };
 
   const fetchDivisions = async () => {
     try {
@@ -174,14 +227,31 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         };
       });
 
-      await api.post('/attendance', {
-        date: selectedDate,
-        attendanceData: recordsToSave,
-      });
+      try {
+        await api.post('/attendance', {
+          date: selectedDate,
+          attendanceData: recordsToSave,
+        });
 
-      setSuccess('Attendance marked successfully!');
-      showToast('Daily attendance saved successfully!', 'success');
-      fetchWorkersAndAttendance();
+        setSuccess('Attendance marked successfully!');
+        showToast('Daily attendance saved successfully!', 'success');
+        fetchWorkersAndAttendance();
+      } catch (networkErr: any) {
+        // If device is offline or network failed, cache in Offline Queue!
+        const existingQueue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
+        // Filter out duplicate submissions for same date
+        const updatedQueue = existingQueue.filter((item: any) => item.date !== selectedDate);
+        updatedQueue.push({
+          date: selectedDate,
+          attendanceData: recordsToSave,
+          timestamp: new Date().toISOString()
+        });
+        localStorage.setItem('skc_offline_attendance_queue', JSON.stringify(updatedQueue));
+        checkOfflineQueueCount();
+
+        setSuccess('💾 Saved Offline! Attendance will automatically sync when network returns.');
+        showToast('Saved in Offline Storage! Will auto-sync when online.', 'info');
+      }
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to save attendance records';
       setError(errMsg);
@@ -201,6 +271,34 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
             Choose a Division and Date to mark daily worker presence and calculate site overtime (OT).
           </p>
+        </div>
+
+        {/* Live Network & Offline Queue Pill */}
+        <div className="flex items-center gap-2">
+          {offlinePendingCount > 0 && (
+            <button
+              onClick={syncOfflineQueue}
+              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-[11px] font-black shadow-xs animate-pulse transition-all"
+            >
+              <CloudUpload className="w-3.5 h-3.5" />
+              <span>Sync {offlinePendingCount} Offline</span>
+            </button>
+          )}
+
+          <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+            isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
+          }`}>
+            {isOnline ? (
+              <>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <Wifi className="w-3 h-3" /> Online
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3 h-3" /> Offline Mode
+              </>
+            )}
+          </div>
         </div>
       </div>
 
