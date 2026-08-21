@@ -8,15 +8,21 @@ const safeParsePayload = (payload: string | null): any => {
 };
 
 export const ApprovalsPanel: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'SALES' | 'ATTENDANCE'>('SALES');
   const [approvals, setApprovals] = useState<any[]>([]);
+  const [attendanceRequests, setAttendanceRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [inspectModal, setInspectModal] = useState<any | null>(null);
 
   const fetchApprovals = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/approvals');
-      setApprovals(res.data.approvals);
+      const [appRes, attRes] = await Promise.all([
+        api.get('/approvals'),
+        api.get('/attendance/correction-requests')
+      ]);
+      setApprovals(appRes.data.approvals || []);
+      setAttendanceRequests(attRes.data.requests || []);
     } catch (err) {
       console.error('Approvals error:', err);
     } finally {
@@ -39,6 +45,16 @@ export const ApprovalsPanel: React.FC = () => {
     }
   };
 
+  const handleAttendanceAction = async (id: string, action: 'APPROVED' | 'REJECTED') => {
+    try {
+      await api.put(`/attendance/correction-requests/${id}/review`, { action });
+      showToast(`Attendance correction ${action.toLowerCase()} successfully!`, 'success');
+      fetchApprovals();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to review attendance request', 'error');
+    }
+  };
+
   const formatCurrency = (amount: number | string | undefined | null) => {
     if (amount === undefined || amount === null || amount === '') return '₹0';
     const num = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
@@ -53,21 +69,132 @@ export const ApprovalsPanel: React.FC = () => {
     return `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`;
   };
 
+  const pendingAttendanceCount = attendanceRequests.filter(r => r.status === 'PENDING').length;
+
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 p-3 sm:p-6 space-y-4">
-      <div className="border-b border-slate-200 pb-3 flex flex-wrap items-center justify-between gap-2">
+      {/* TAB HEADER */}
+      <div className="border-b border-slate-200 pb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-base sm:text-xl font-bold text-slate-800 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-amber-600" /> Pending Owner Approvals
+            <Clock className="w-5 h-5 text-amber-600" /> Pending Owner & Manager Approvals
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Review and approve/reject outward Sale Invoices and Attendance edit requests
+            Review outward Sale Invoices and Supervisor Attendance Edit requests
           </p>
         </div>
-        <span className="px-3 py-1 bg-amber-50 text-amber-900 border border-amber-300 font-bold font-mono text-xs rounded-full">
-          {approvals.length} Pending
-        </span>
+
+        <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl">
+          <button
+            onClick={() => setActiveTab('SALES')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'SALES' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>Invoice Approvals</span>
+            <span className="px-1.5 py-0.2 bg-white/20 text-white rounded-full text-[10px] font-mono">
+              {approvals.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('ATTENDANCE')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              activeTab === 'ATTENDANCE' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span>Attendance Corrections</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+              pendingAttendanceCount > 0 ? 'bg-amber-500 text-white font-black' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {pendingAttendanceCount}
+            </span>
+          </button>
+        </div>
       </div>
+
+      {activeTab === 'ATTENDANCE' && (
+        <div className="space-y-3">
+          <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm bg-white">
+            <table className="w-full text-left text-xs excel-table">
+              <thead>
+                <tr className="bg-sky-950 text-sky-200">
+                  <th className="p-2.5 text-center w-10">SL</th>
+                  <th className="p-2.5">Date</th>
+                  <th className="p-2.5">Worker Name</th>
+                  <th className="p-2.5">Original Marked</th>
+                  <th className="p-2.5 text-emerald-300">Requested Correction</th>
+                  <th className="p-2.5">Reason / Justification</th>
+                  <th className="p-2.5">Requested By</th>
+                  <th className="p-2.5 text-center">Status</th>
+                  <th className="p-2.5 text-center min-w-[140px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={9} className="text-center py-8 text-slate-400">Loading requests...</td></tr>
+                ) : attendanceRequests.length === 0 ? (
+                  <tr><td colSpan={9} className="text-center py-8 text-slate-400">No attendance edit requests submitted.</td></tr>
+                ) : (
+                  attendanceRequests.map((req, idx) => (
+                    <tr key={req.id} className="hover:bg-slate-50 border-b border-slate-200">
+                      <td className="p-2.5 text-center font-mono font-bold bg-slate-50">{idx + 1}</td>
+                      <td className="p-2.5 font-mono font-bold text-slate-800">{formatDate(req.date)}</td>
+                      <td className="p-2.5">
+                        <div className="font-bold text-[#1e3a8a]">{req.workerName}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{req.workerCode}</div>
+                      </td>
+                      <td className="p-2.5">
+                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200">
+                          {req.oldStatus || 'UNMARKED'} ({req.oldDivisionName || 'General'})
+                        </span>
+                      </td>
+                      <td className="p-2.5">
+                        <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold text-[10px] border border-emerald-300">
+                          🟢 {req.newStatus} at {req.newDivisionName}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-slate-600 italic text-[11px] max-w-xs">{req.reason}</td>
+                      <td className="p-2.5 font-semibold text-slate-700">{req.requestedByName}</td>
+                      <td className="p-2.5 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          req.status === 'PENDING' ? 'bg-amber-100 text-amber-900 border border-amber-300' :
+                          req.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' :
+                          'bg-rose-100 text-rose-900 border border-rose-300'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center">
+                        {req.status === 'PENDING' ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => handleAttendanceAction(req.id, 'APPROVED')}
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold shadow-xs flex items-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3 h-3" /> Approve
+                            </button>
+                            <button
+                              onClick={() => handleAttendanceAction(req.id, 'REJECTED')}
+                              className="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold shadow-xs flex items-center gap-1"
+                            >
+                              <XCircle className="w-3 h-3" /> Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 font-mono">Completed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'SALES' && (
 
       {/* 📱 MOBILE-ONLY CARDS */}
       <div className="block md:hidden space-y-3">
@@ -329,6 +456,7 @@ export const ApprovalsPanel: React.FC = () => {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* 🔍 FULL DETAIL INSPECT MODAL FOR OWNER */}
       {inspectModal && (

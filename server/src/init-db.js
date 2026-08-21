@@ -337,7 +337,24 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "totalPayment" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "advanceDeducted" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "finalNetAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
-      ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "divisionSummary" JSONB;
+      -- 11b. Create AttendanceCorrectionRequest Table (Supervisor Edit -> Manager/Admin Approval)
+      CREATE TABLE IF NOT EXISTS "AttendanceCorrectionRequest" (
+        "id" TEXT PRIMARY KEY,
+        "workerId" TEXT NOT NULL REFERENCES "Worker"("id") ON DELETE CASCADE,
+        "date" TIMESTAMP(3) NOT NULL,
+        "oldStatus" TEXT,
+        "oldDivisionName" TEXT,
+        "newStatus" "AttendanceStatus" NOT NULL,
+        "newDivisionId" TEXT NOT NULL REFERENCES "Division"("id"),
+        "newOvertimeHours" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "reason" TEXT NOT NULL,
+        "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+        "requestedById" TEXT NOT NULL REFERENCES "User"("id"),
+        "approvedById" TEXT REFERENCES "User"("id"),
+        "rejectionReason" TEXT,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
 
       -- 12. Create Performance Indexes
       CREATE INDEX IF NOT EXISTS "idx_po_number" ON "PurchaseOrder"("poNumber");

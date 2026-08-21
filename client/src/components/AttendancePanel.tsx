@@ -15,10 +15,25 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId?: string }>>({});
   const [loading, setLoading] = useState(false);
+  const [holidayInfo, setHolidayInfo] = useState<{ date: string; name: string; type: string } | null>(null);
+  const [offlineCount, setOfflineCount] = useState<number>(0);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [editModalWorker, setEditModalWorker] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<{
+    newStatus: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE';
+    newDivisionId: string;
+    newOvertimeHours: string;
+    reason: string;
+  }>({
+    newStatus: 'PRESENT',
+    newDivisionId: '',
+    newOvertimeHours: '0',
+    reason: ''
+  });
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
 
   // Check offline queue on mount
@@ -626,13 +641,16 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     <th className="text-center min-w-[260px] px-3 py-2.5">Attendance Mark</th>
                     <th className="text-center min-w-[120px] px-3 py-2.5">Daily Wage Override (₹)</th>
                     <th className="text-center min-w-[110px] px-3 py-2.5">Overtime Hours (OT)</th>
+                    <th className="text-center min-w-[80px] px-3 py-2.5">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                     {filteredWorkers.map((w) => {
                       const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
-                      const isMarkedAtOtherSiteOnly = state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId;
-                      const isCompletedAtThisSite = state.status === 'HALF_DAY' && (state.divisionId === selectedDivisionId || state.secondDivisionId === selectedDivisionId);
+                      const isMarkedInThisSelectedDiv = selectedDivisionId === 'ALL' 
+                        ? Boolean(state.status) 
+                        : (Boolean(state.status) && (state.divisionId === selectedDivisionId || state.secondDivisionId === selectedDivisionId));
+                      const isMarkedAtOtherSiteOnly = Boolean(state.status) && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId;
 
                       return (
                         <tr key={w.id} className="hover:bg-slate-50/50">
@@ -640,7 +658,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
                             <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
                             <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
-                            {isMarkedAtOtherSiteOnly && (
+                            {isMarkedAtOtherSiteOnly && state.status === 'HALF_DAY' && (
                               <div className="mt-1 inline-block px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold">
                                 ⚡ 0.5d done at {state.divisionName || 'Other Site'}
                               </div>
@@ -653,13 +671,21 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           </td>
                           
                           <td className="px-3 py-2 text-center whitespace-nowrap">
-                            {getStatusBadge(state.status)}
+                            {isMarkedAtOtherSiteOnly && state.status === 'HALF_DAY' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-xs">
+                                ⚡ 0.5d at {state.divisionName || 'Other Site'}
+                              </span>
+                            ) : isMarkedInThisSelectedDiv ? (
+                              getStatusBadge(state.status)
+                            ) : (
+                              getStatusBadge('')
+                            )}
                           </td>
 
                           <td className="px-3 py-2">
                             <div className="flex justify-center gap-1.5">
                               {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                                const active = state.status === status;
+                                const active = isMarkedInThisSelectedDiv && state.status === status;
                                 let colorClasses = '';
                                 if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
                                 if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
@@ -706,7 +732,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                               value={state.dailyWageOverride}
                               onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
                               className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs ${
-                                currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white'
+                                currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'
                               }`}
                             />
                           </div>
@@ -725,6 +751,25 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             />
                             <span className="text-[9px] text-slate-400 font-semibold">h</span>
                           </div>
+                        </td>
+
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditModalWorker(w);
+                              setEditForm({
+                                newStatus: (state.status as any) || 'PRESENT',
+                                newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
+                                newOvertimeHours: state.overtimeHours || '0',
+                                reason: ''
+                              });
+                            }}
+                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold shadow-xs flex items-center justify-center gap-1 mx-auto transition-all"
+                            title="Request Attendance Edit / Correction"
+                          >
+                            <span>✏️ Edit</span>
+                          </button>
                         </td>
                       </tr>
                     );
@@ -759,6 +804,143 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           </form>
         );
       })()}
+
+      {/* 📝 ATTENDANCE CORRECTION REQUEST MODAL (SUPERVISOR -> MANAGER/ADMIN) */}
+      {editModalWorker && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center pt-20 sm:pt-24 pb-8 px-3 overflow-y-auto"
+          onClick={(e) => { if (e.target === e.currentTarget) setEditModalWorker(null); }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-300 overflow-hidden animate-fadeIn">
+            {/* Header */}
+            <div className="bg-[#1e3a8a] text-white p-4 flex justify-between items-center">
+              <div>
+                <h3 className="font-bold text-sm sm:text-base flex items-center gap-1.5">
+                  <span>✏️</span> Request Attendance Correction
+                </h3>
+                <p className="text-[11px] text-blue-200">
+                  {editModalWorker.fullName} ({editModalWorker.workerId}) • {formatDateDMY(selectedDate)}
+                </p>
+              </div>
+              <button
+                onClick={() => setEditModalWorker(null)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Body Form */}
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!editForm.reason.trim()) {
+                  showToast('Please provide a reason for the correction request', 'error');
+                  return;
+                }
+                setEditSubmitting(true);
+                try {
+                  const state = attendanceRecords[editModalWorker.id] || { status: '', divisionName: '' };
+                  await api.post('/attendance/correction-requests', {
+                    workerId: editModalWorker.id,
+                    date: selectedDate,
+                    oldStatus: state.status || 'UNMARKED',
+                    oldDivisionName: state.divisionName || 'Unassigned',
+                    newStatus: editForm.newStatus,
+                    newDivisionId: editForm.newDivisionId,
+                    newOvertimeHours: editForm.newOvertimeHours,
+                    reason: editForm.reason
+                  });
+                  showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
+                  setEditModalWorker(null);
+                } catch (err: any) {
+                  showToast(err.response?.data?.error || 'Failed to submit correction request', 'error');
+                } finally {
+                  setEditSubmitting(false);
+                }
+              }}
+              className="p-5 space-y-4 text-xs"
+            >
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 leading-relaxed text-[11px]">
+                ℹ️ <strong>Approval Workflow:</strong> Submitting this change will send an official request to the <strong>Approvals</strong> panel. Once a Manager or Owner approves it, the database and registers will be updated automatically.
+              </div>
+
+              {/* Corrected Division */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                  Correct Division / Site *
+                </label>
+                <select
+                  value={editForm.newDivisionId}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, newDivisionId: e.target.value }))}
+                  required
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:border-[#1e3a8a] outline-none"
+                >
+                  {divisions.map((d: any) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Corrected Status */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                  Correct Attendance Status *
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((st) => (
+                    <button
+                      type="button"
+                      key={st}
+                      onClick={() => setEditForm(prev => ({ ...prev, newStatus: st }))}
+                      className={`p-2 rounded-xl font-bold text-[11px] border transition-all ${
+                        editForm.newStatus === st 
+                          ? 'bg-[#1e3a8a] text-white border-[#1e3a8a] shadow-sm' 
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {st === 'PRESENT' ? '🟢 Present' : st === 'ABSENT' ? '🔴 Absent' : st === 'HALF_DAY' ? '🟡 Half' : '🟣 Leave'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                  Reason for Correction *
+                </label>
+                <textarea
+                  rows={3}
+                  value={editForm.reason}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
+                  placeholder="e.g. Worker was accidentally marked half day at wrong site, actually worked full day at Site 1..."
+                  required
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:bg-white focus:border-[#1e3a8a] outline-none"
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setEditModalWorker(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editSubmitting}
+                  className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-xl shadow-md flex items-center gap-1.5"
+                >
+                  {editSubmitting ? 'Submitting Request...' : 'Send Request to Manager'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

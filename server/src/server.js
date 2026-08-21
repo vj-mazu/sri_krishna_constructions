@@ -577,22 +577,30 @@ app.get('/api/purchase-orders/:id/items', authenticateToken, async (req, res) =>
     const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "PurchaseOrderItem" poi ${whereSql}`, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
-    params.push(limitNum + 1);
+    let cursorWhere = whereSql;
+    const queryParams = [...params];
+    if (cursor) {
+      queryParams.push(cursor);
+      cursorWhere += ` AND poi."id" > $${queryParams.length}`;
+    }
+
+    queryParams.push(limitNum + 1);
     const querySql = `
       SELECT 
         poi.*,
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as "purchasedQty",
         COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)::float as "soldQty"
       FROM "PurchaseOrderItem" poi
-      ${whereSql}
-      ORDER BY poi."createdAt" ASC
-      LIMIT $${params.length}
+      ${cursorWhere}
+      ORDER BY poi."id" ASC
+      LIMIT $${queryParams.length}
     `;
 
-    const { rows } = await pool.query(querySql, params);
+    const { rows } = await pool.query(querySql, queryParams);
     let nextCursor = null;
     if (rows.length > limitNum) {
-      nextCursor = rows.pop().id;
+      const extraItem = rows.pop();
+      nextCursor = extraItem.id;
     }
 
     const itemsWithAgg = rows.map(item => ({
@@ -641,7 +649,14 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
     `, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
-    params.push(limitNum + 1);
+    let cursorWhere = whereSql;
+    const queryParams = [...params];
+    if (cursor) {
+      queryParams.push(cursor);
+      cursorWhere += ` AND pur."id" < $${queryParams.length}`;
+    }
+
+    queryParams.push(limitNum + 1);
     const querySql = `
       SELECT 
         pur.*,
@@ -650,15 +665,16 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
       FROM "Purchase" pur
       JOIN "PurchaseOrderItem" poi ON pur."purchaseOrderItemId" = poi.id
       LEFT JOIN "User" u ON pur."addedById" = u.id
-      ${whereSql}
-      ORDER BY pur."date" DESC, pur."createdAt" DESC
-      LIMIT $${params.length}
+      ${cursorWhere}
+      ORDER BY pur."id" DESC
+      LIMIT $${queryParams.length}
     `;
 
-    const { rows } = await pool.query(querySql, params);
+    const { rows } = await pool.query(querySql, queryParams);
     let nextCursor = null;
     if (rows.length > limitNum) {
-      nextCursor = rows.pop().id;
+      const extra = rows.pop();
+      nextCursor = extra.id;
     }
 
     res.json({ purchases: rows, nextCursor, totalCount });
@@ -705,7 +721,14 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
     `, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
-    params.push(limitNum + 1);
+    let cursorWhere = whereSql;
+    const queryParams = [...params];
+    if (cursor) {
+      queryParams.push(cursor);
+      cursorWhere += ` AND s."id" < $${queryParams.length}`;
+    }
+
+    queryParams.push(limitNum + 1);
     const querySql = `
       SELECT 
         s.*,
@@ -714,15 +737,16 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
       FROM "Sale" s
       JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
       LEFT JOIN "User" u ON s."addedById" = u.id
-      ${whereSql}
-      ORDER BY s."invoiceDate" DESC, s."createdAt" DESC
-      LIMIT $${params.length}
+      ${cursorWhere}
+      ORDER BY s."id" DESC
+      LIMIT $${queryParams.length}
     `;
 
-    const { rows } = await pool.query(querySql, params);
+    const { rows } = await pool.query(querySql, queryParams);
     let nextCursor = null;
     if (rows.length > limitNum) {
-      nextCursor = rows.pop().id;
+      const extra = rows.pop();
+      nextCursor = extra.id;
     }
 
     res.json({ sales: rows, nextCursor, totalCount });
@@ -2187,6 +2211,100 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Attendance submit error:', err);
     res.status(500).json({ error: 'Failed to record daily attendance' });
+  }
+});
+
+// --- ATTENDANCE CORRECTION REQUESTS (SUPERVISOR EDIT -> MANAGER/ADMIN APPROVAL) ---
+app.get('/api/attendance/correction-requests', authenticateToken, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.*, 
+              w."fullName" as "workerName", w."workerId" as "workerCode", w."dailyWage",
+              d."name" as "newDivisionName",
+              u."fullName" as "requestedByName",
+              a."fullName" as "approvedByName"
+       FROM "AttendanceCorrectionRequest" r
+       JOIN "Worker" w ON r."workerId" = w."id"
+       JOIN "Division" d ON r."newDivisionId" = d."id"
+       JOIN "User" u ON r."requestedById" = u."id"
+       LEFT JOIN "User" a ON r."approvedById" = a."id"
+       ORDER BY r."createdAt" DESC`
+    );
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error('Fetch correction requests error:', err);
+    res.status(500).json({ error: 'Failed to load attendance correction requests' });
+  }
+});
+
+app.post('/api/attendance/correction-requests', authenticateToken, async (req, res) => {
+  try {
+    const { workerId, date, oldStatus, oldDivisionName, newStatus, newDivisionId, newOvertimeHours, reason } = req.body;
+    if (!workerId || !date || !newStatus || !newDivisionId || !reason) {
+      return res.status(400).json({ error: 'Worker, date, new status, division, and reason are required' });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO "AttendanceCorrectionRequest" 
+       ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "reason", "status", "requestedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5::"AttendanceStatus", $6, $7, $8, 'PENDING', $9, NOW(), NOW())
+       RETURNING *`,
+      [workerId, date, oldStatus || null, oldDivisionName || null, newStatus, newDivisionId, parseFloat(newOvertimeHours) || 0, reason, req.user.id]
+    );
+
+    res.json({ message: 'Attendance correction request submitted to Manager/Admin for approval!', request: rows[0] });
+  } catch (err) {
+    console.error('Submit correction request error:', err);
+    res.status(500).json({ error: 'Failed to submit attendance correction request' });
+  }
+});
+
+app.put('/api/attendance/correction-requests/:id/review', authenticateToken, requireRole(['MANAGER', 'OWNER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, rejectionReason } = req.body; // 'APPROVED' or 'REJECTED'
+
+    if (!action || (action !== 'APPROVED' && action !== 'REJECTED')) {
+      return res.status(400).json({ error: 'Action must be APPROVED or REJECTED' });
+    }
+
+    const { rows: reqRows } = await pool.query(
+      `SELECT * FROM "AttendanceCorrectionRequest" WHERE "id" = $1`,
+      [id]
+    );
+    if (reqRows.length === 0) return res.status(404).json({ error: 'Correction request not found' });
+    const corrReq = reqRows[0];
+
+    if (action === 'APPROVED') {
+      // 1. Update Attendance table directly with corrected values!
+      await pool.query(
+        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "divisionId", "secondDivisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, $1, $2, $3::"AttendanceStatus", $4, $4, $5, NULL, $6, $7, $7, NOW(), NOW())
+         ON CONFLICT ("workerId", "date")
+         DO UPDATE SET
+           "status" = EXCLUDED."status",
+           "overtimeHours" = EXCLUDED."overtimeHours",
+           "otHours" = EXCLUDED."otHours",
+           "divisionId" = EXCLUDED."divisionId",
+           "secondDivisionId" = NULL,
+           "notes" = EXCLUDED."notes",
+           "updatedAt" = NOW()`,
+        [corrReq.workerId, corrReq.date, corrReq.newStatus, corrReq.newOvertimeHours, corrReq.newDivisionId, `Corrected: ${corrReq.reason}`, req.user.id]
+      );
+    }
+
+    // 2. Update the correction request record status
+    await pool.query(
+      `UPDATE "AttendanceCorrectionRequest"
+       SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW()
+       WHERE "id" = $4`,
+      [action, req.user.id, rejectionReason || null, id]
+    );
+
+    res.json({ message: `Attendance correction request ${action.toLowerCase()} successfully!` });
+  } catch (err) {
+    console.error('Review correction request error:', err);
+    res.status(500).json({ error: 'Failed to process attendance correction review' });
   }
 });
 
