@@ -1,7 +1,7 @@
 import React from 'react';
 import { Download, Printer, X } from 'lucide-react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
 
 export const SaleInvoiceModal: React.FC<{ sale: any; onClose: () => void }> = ({ sale, onClose }) => {
@@ -25,22 +25,23 @@ export const SaleInvoiceModal: React.FC<{ sale: any; onClose: () => void }> = ({
   // Format currency helpers
   const fmt = (n: number) => n.toLocaleString('en-IN');
 
-    const downloadPdf = () => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageWidth = 210;
-    const margin = 12;
-    const contentWidth = pageWidth - (margin * 2); // 186mm
+  const downloadPdf = () => {
+    try {
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pageWidth = 210;
+      const margin = 12;
+      const contentWidth = pageWidth - (margin * 2); // 186mm
 
-    let y = 10;
+      let y = 10;
 
-    // 1. TOP HEADER WITH RED ORIGINAL LOGO & BUSINESS INFO
-    if (SKC_LOGO_BASE64) {
-      try {
-        doc.addImage(SKC_LOGO_BASE64, 'PNG', margin, y, 25, 25);
-      } catch (e) {
-        console.error('Logo render error:', e);
+      // 1. TOP HEADER WITH RED ORIGINAL LOGO & BUSINESS INFO
+      if (SKC_LOGO_BASE64) {
+        try {
+          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin, y, 25, 25);
+        } catch (e) {
+          console.warn('Logo render fallback:', e);
+        }
       }
-    }
 
     // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red)
     doc.setTextColor(218, 18, 18);
@@ -157,7 +158,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any; onClose: () => void }> = ({
       ]
     ];
 
-    (doc as any).autoTable({
+    autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
       head: [
@@ -193,7 +194,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any; onClose: () => void }> = ({
       }
     });
 
-    const finalTableY = (doc as any).lastAutoTable.finalY;
+    const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 35);
 
     // 6. TAX TOTALS & SIGNATURE FOOTER
     let fy = finalTableY + 4;
@@ -237,7 +238,11 @@ export const SaleInvoiceModal: React.FC<{ sale: any; onClose: () => void }> = ({
     doc.text('Page 1 of 1', pageWidth / 2, 288, { align: 'center' });
 
     doc.save(`TAX_INVOICE_${invoiceNo.replaceAll('/', '_')}.pdf`);
-  };
+  } catch (error) {
+    console.error('Failed to generate Tax Invoice PDF:', error);
+    alert('Error generating PDF. Please check console for details.');
+  }
+};
 
   return (
     <div className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
