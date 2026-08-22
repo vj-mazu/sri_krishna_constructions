@@ -929,17 +929,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         const sgst = basic * ((sale.sgstPercent || 0) / 100);
         const igst = basic * ((sale.igstPercent || 0) / 100);
         return {
-          'SL NO': i + 1,
-          'Part Number': sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-',
-          'Item Name': sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-',
-          'Invoice Number': sale.invoiceNumber || '-',
-          'Invoice Date': formatDate(sale.invoiceDate),
+          'SL NO': (parseInt(salesCursor || '0', 10) || 0) + i + 1,
           'Party Name': sale.partyName || '-',
           'Party Address': sale.supplierAddress || '-',
           'Our GST No': sale.companyGstNumber || '-',
           'Party GST No': sale.gstNumber || '-',
           'Party Invoice / DC No': sale.partyInvoiceNumber || '-',
           'Party Invoice Date': sale.supplierInvoiceDate ? formatDate(sale.supplierInvoiceDate) : '-',
+          'Part Number': sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-',
+          'Item Name': sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-',
+          'Invoice Number': sale.invoiceNumber || '-',
+          'Invoice Date': formatDate(sale.invoiceDate),
           'Vehicle No': sale.vehicleNumber || '-',
           'Sold Qty': sale.qty || 0,
           'Rate': sale.rate || 0,
@@ -3255,16 +3255,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <thead>
                       <tr>
                         <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Invoice No</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Date</th>
-                        <th className="px-2 py-1.5 min-w-[110px]">Party Name</th>
-                        <th className="px-2 py-1.5 min-w-[120px]">Party Address</th>
+                        <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
+                        <th className="px-2 py-1.5 min-w-[130px]">Party Address</th>
                         <th className="px-2 py-1.5 min-w-[100px]">Our GST No</th>
                         <th className="px-2 py-1.5 min-w-[100px]">Party GST No</th>
                         <th className="px-2 py-1.5 min-w-[100px]">Party Inv / DC No</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Party Inv Date</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Invoice No</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Invoice Date</th>
                         <th className="px-2 py-1.5 min-w-[90px]">Vehicle No</th>
                         <th className="text-center px-2 py-1.5 whitespace-nowrap bg-blue-900 text-blue-100 font-bold">Sold Qty</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Rate</th>
@@ -3298,16 +3298,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           return (
                             <tr key={sale.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
                               <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
-                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
-                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
-                              <td className="font-mono font-bold text-[#1e3a8a] px-2 py-1.5 break-all">{sale.invoiceNumber || '-'}</td>
-                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(sale.invoiceDate)}</td>
                               <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{sale.partyName || '-'}</td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{sale.supplierAddress || '-'}</td>
                               <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px] bg-slate-50">{sale.companyGstNumber || '-'}</td>
                               <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{sale.gstNumber || '-'}</td>
                               <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{sale.partyInvoiceNumber || '-'}</td>
                               <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{sale.supplierInvoiceDate ? formatDate(sale.supplierInvoiceDate) : '-'}</td>
+                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
+                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
+                              <td className="font-mono font-bold text-[#1e3a8a] px-2 py-1.5 break-all">{sale.invoiceNumber || '-'}</td>
+                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(sale.invoiceDate)}</td>
                               <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{sale.vehicleNumber || '-'}</td>
                               <td className="text-center font-mono font-bold text-blue-900 bg-blue-50/50 px-2 py-1.5">{sale.qty}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sale.rate)}</td>
