@@ -1790,31 +1790,31 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       {/* AUTHENTIC PHYSICAL "REGISTER BOOK" MODAL */}
       {drilldownWorkerId && (
         <div 
-          className="fixed inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto"
+          className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col justify-start items-center p-3 sm:p-6 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) handleCloseRegisterBook(); }}
         >
-          <div className="bg-[#fcfaf2] rounded-xl sm:rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37]/40 flex flex-col max-h-[92vh] overflow-hidden animate-fadeIn my-auto">
+          <div className="bg-[#fcfaf2] rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col my-auto max-h-[88vh] overflow-hidden animate-fadeIn relative z-[10000]">
             {/* REGISTER BOOK TOP BINDING HEADER */}
-            <div className="bg-gradient-to-r from-[#2b1810] via-[#4a2612] to-[#2b1810] text-[#f5eed7] p-3 sm:p-4 md:p-5 flex justify-between items-center border-b-4 border-[#b8860b] shadow-md shrink-0">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-[#b8860b]/20 border border-[#b8860b] flex items-center justify-center shadow-inner flex-shrink-0">
-                  <BookOpen className="w-4 h-4 sm:w-6 sm:h-6 text-[#d4af37]" />
+            <div className="bg-gradient-to-r from-[#2b1810] via-[#4a2612] to-[#2b1810] text-[#f5eed7] p-3.5 sm:p-5 flex justify-between items-center border-b-4 border-[#b8860b] shadow-lg shrink-0">
+              <div className="flex items-center gap-2.5 sm:gap-3.5">
+                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-[#b8860b]/25 border border-[#b8860b] flex items-center justify-center shadow-inner flex-shrink-0">
+                  <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-[#d4af37]" />
                 </div>
                 <div>
-                  <h3 className="font-serif text-sm sm:text-lg md:text-xl font-bold tracking-wide text-[#fdf6e2] uppercase leading-tight">
+                  <h3 className="font-serif text-sm sm:text-lg md:text-xl font-black tracking-wide text-[#fdf6e2] uppercase leading-tight">
                     Sri Krishna Constructions - Daily Attendance Register
                   </h3>
-                  <p className="text-[10px] sm:text-[11px] text-[#dfcfb0] font-sans">
+                  <p className="text-[10px] sm:text-xs text-[#dfcfb0] font-medium tracking-wide mt-0.5">
                     MUSTER ROLL & ATTENDANCE RECORD • {monthName.toUpperCase()} {selectedYear}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleCloseRegisterBook}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-[#f5eed7] flex items-center justify-center transition-colors flex-shrink-0 ml-2"
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/15 hover:bg-rose-600 hover:text-white active:scale-95 text-[#f5eed7] flex items-center justify-center transition-all flex-shrink-0 ml-2 font-bold"
                 title="Close"
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -2111,10 +2111,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
         return (
           <div 
-            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[999] flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto"
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col justify-start items-center p-3 sm:p-6 overflow-y-auto"
             onClick={(e) => { if (e.target === e.currentTarget) setSlipModalWorker(null); }}
           >
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col max-h-[92vh] overflow-hidden animate-fadeIn my-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col my-auto max-h-[88vh] overflow-hidden animate-fadeIn relative z-[10000]">
               {/* SLIP MODAL HEADER BAR */}
               <div className="bg-[#1e3a8a] text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">
