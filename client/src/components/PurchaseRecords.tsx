@@ -3770,6 +3770,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
             </form>
           </div>
         </div>
+      )}
+
       {/* TAX INVOICE MODAL & PDF PREVIEW */}
       {previewSaleInvoice && (
         <SaleInvoiceModal
