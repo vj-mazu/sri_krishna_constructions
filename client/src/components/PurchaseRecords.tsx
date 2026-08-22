@@ -2980,7 +2980,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     {selectedSaleIds.length > 0 && (
                       <button
                         onClick={() => {
-                          const chosenSales = poSales.filter(s => selectedSaleIds.includes(s.id));
+                          const chosenSales = poSales
+                            .filter(s => selectedSaleIds.includes(s.id))
+                            .map(s => ({ ...s, purchaseOrder: selectedPo }));
                           if (chosenSales.length > 0) {
                             setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
                           }
@@ -3484,6 +3486,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
             )}
           </div>
         </div>
+
+        {/* TAX INVOICE MODAL & PDF PREVIEW (INSIDE PO DETAIL WORKSPACE) */}
+        {previewSaleInvoice && (
+          <SaleInvoiceModal
+            sale={previewSaleInvoice}
+            onClose={() => setPreviewSaleInvoice(null)}
+          />
+        )}
       </div>
     );
   }
