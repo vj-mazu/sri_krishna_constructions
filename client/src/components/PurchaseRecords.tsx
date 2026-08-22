@@ -901,15 +901,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         const sgst = basic * ((pur.sgstPercent || 0) / 100);
         const igst = basic * ((pur.igstPercent || 0) / 100);
         return {
-          'SL NO': i + 1,
-          'Part Number': pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-',
-          'Item Name': pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-',
-          'Inward Date': formatDate(pur.date),
+          'SL NO': (parseInt(purchasesCursor || '0', 10) || 0) + i + 1,
           'Party Name': pur.partyName || '-',
           'Supplier Address': pur.supplierAddress || '-',
           'Supplier GSTIN': pur.gstNumber || '-',
           'Party Invoice No': pur.partyInvoiceNumber || '-',
           'Supplier Invoice Date': pur.supplierInvoiceDate ? formatDate(pur.supplierInvoiceDate) : '-',
+          'Part Number': pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-',
+          'Item Name': pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-',
+          'Inward Date': formatDate(pur.date),
           'Vehicle No': pur.vehicleNumber || '-',
           'Inward Qty': pur.qty || 0,
           'Rate': pur.rate || 0,
@@ -2332,10 +2332,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       ) : (
                         poItems.map((item, idx) => {
                           const basicCost = (item.qty || 0) * (item.rate || 0);
+                          const serialNo = (parseInt(itemsCursor || '0', 10) || 0) + idx + 1;
                           return (
                             <React.Fragment key={item.id}>
                               <tr className="hover:bg-slate-50/80 border-t-2 border-slate-400 bg-white">
-                                <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
+                                <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{serialNo}</td>
                                 <td className="font-mono font-bold text-[#1e3a8a]">{item.kpclCode || '-'}</td>
                                 <td className="font-bold text-slate-800">{item.itemName}</td>
                                 <td className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap max-w-xs">{item.specifications || '-'}</td>
@@ -2796,14 +2797,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <thead>
                       <tr>
                         <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Date</th>
-                        <th className="px-2 py-1.5 min-w-[110px]">Party Name</th>
-                        <th className="px-2 py-1.5 min-w-[120px]">Supplier Address</th>
+                        <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
+                        <th className="px-2 py-1.5 min-w-[130px]">Supplier Address</th>
                         <th className="px-2 py-1.5 min-w-[100px]">GST No</th>
                         <th className="px-2 py-1.5 min-w-[100px]">Party Inv No</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Supplier Date</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Inward Date</th>
                         <th className="px-2 py-1.5 min-w-[90px]">Vehicle No</th>
                         <th className="text-center px-2 py-1.5 whitespace-nowrap">Inward Qty</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Rate</th>
@@ -2828,17 +2829,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const cgst = basic * ((pur.cgstPercent || 0) / 100);
                           const sgst = basic * ((pur.sgstPercent || 0) / 100);
                           const igst = basic * ((pur.igstPercent || 0) / 100);
+                          const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
                           return (
                             <tr key={pur.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
-                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{idx + 1}</td>
-                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</td>
-                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
-                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(pur.date)}</td>
+                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
                               <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{pur.partyName || '-'}</td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{pur.supplierAddress || '-'}</td>
                               <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{pur.gstNumber || '-'}</td>
                               <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{pur.partyInvoiceNumber || '-'}</td>
                               <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{pur.supplierInvoiceDate ? formatDate(pur.supplierInvoiceDate) : '-'}</td>
+                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</td>
+                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
+                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(pur.date)}</td>
                               <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{pur.vehicleNumber || '-'}</td>
                               <td className="text-center font-mono font-bold text-emerald-700 bg-emerald-50/50 px-2 py-1.5">{pur.qty}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(pur.rate)}</td>
@@ -3291,10 +3293,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const isApproved = sale.status === 'APPROVED';
                           const isPending = sale.status === 'PENDING';
                           const isRejected = sale.status === 'REJECTED';
+                          const serialNo = (parseInt(salesCursor || '0', 10) || 0) + idx + 1;
 
                           return (
                             <tr key={sale.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
-                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{idx + 1}</td>
+                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
                               <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
                               <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
                               <td className="font-mono font-bold text-[#1e3a8a] px-2 py-1.5 break-all">{sale.invoiceNumber || '-'}</td>
