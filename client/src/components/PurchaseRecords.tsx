@@ -391,6 +391,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [divisions, setDivisions] = useState<Array<{ id: string; name: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
+  const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
   // Fetch divisions for PO creation/edit dropdowns
   const fetchDivisions = async () => {
@@ -2976,6 +2977,19 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </div>
 
                   <div className="flex items-center gap-2">
+                    {selectedSaleIds.length > 0 && (
+                      <button
+                        onClick={() => {
+                          const chosenSales = poSales.filter(s => selectedSaleIds.includes(s.id));
+                          if (chosenSales.length > 0) {
+                            setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md animate-pulse"
+                      >
+                        <Receipt className="w-3.5 h-3.5" /> View & Download Invoice ({selectedSaleIds.length} Selected)
+                      </button>
+                    )}
                     <button 
                       onClick={() => exportToExcel(poSales, `PO_${selectedPo.poNumber}_Sales`)}
                       className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold"
@@ -3168,6 +3182,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <div key={sale.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                           <div className="flex justify-between items-start border-b border-slate-100 pb-2">
                             <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedSaleIds.includes(sale.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedSaleIds(prev => [...prev, sale.id]);
+                                  } else {
+                                    setSelectedSaleIds(prev => prev.filter(id => id !== sale.id));
+                                  }
+                                }}
+                                className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer mt-0.5"
+                              />
                               <span className="w-6 h-6 rounded-full bg-amber-50 text-amber-900 font-mono font-bold text-xs flex items-center justify-center border border-amber-200">
                                 {idx + 1}
                               </span>
@@ -3265,6 +3291,21 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   <table className="excel-table w-full text-[11px] text-left">
                     <thead>
                       <tr>
+                        <th className="text-center w-8 bg-sky-950 text-sky-200 border-r border-sky-800 px-1 py-1.5">
+                          <input
+                            type="checkbox"
+                            checked={poSales.length > 0 && selectedSaleIds.length === poSales.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSaleIds(poSales.map(s => s.id));
+                              } else {
+                                setSelectedSaleIds([]);
+                              }
+                            }}
+                            className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer"
+                            title="Select All"
+                          />
+                        </th>
                         <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
                         <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
                         <th className="px-2 py-1.5 min-w-[130px]">Party Address</th>
@@ -3292,9 +3333,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </thead>
                     <tbody>
                       {salesLoading ? (
-                        <tr><td colSpan={23} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
+                        <tr><td colSpan={24} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
                       ) : poSales.length === 0 ? (
-                        <tr><td colSpan={23} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
+                        <tr><td colSpan={24} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
                       ) : (
                         poSales.map((sale, idx) => {
                           const basic = (sale.qty || 0) * (sale.rate || 0);
@@ -3305,9 +3346,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const isPending = sale.status === 'PENDING';
                           const isRejected = sale.status === 'REJECTED';
                           const serialNo = (parseInt(salesCursor || '0', 10) || 0) + idx + 1;
+                          const isSelected = selectedSaleIds.includes(sale.id);
 
                           return (
-                            <tr key={sale.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
+                            <tr key={sale.id} className={`hover:bg-slate-50 border-b-2 border-slate-300 ${isSelected ? 'bg-blue-50/70' : ''}`}>
+                              <td className="text-center px-1 py-1.5 border-r border-slate-200">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedSaleIds(prev => [...prev, sale.id]);
+                                    } else {
+                                      setSelectedSaleIds(prev => prev.filter(id => id !== sale.id));
+                                    }
+                                  }}
+                                  className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer"
+                                />
+                              </td>
                               <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
                               <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{sale.partyName || '-'}</td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{sale.supplierAddress || '-'}</td>
