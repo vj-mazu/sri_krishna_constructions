@@ -8,6 +8,7 @@ import {
 import api from '../api';
 import { showToast } from '../toast';
 import * as XLSX from 'xlsx';
+import { SaleInvoiceModal } from './SaleInvoiceModal';
 
 interface PurchaseRecordsProps {
   currentUserRole: string;
@@ -389,6 +390,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [poRemarksText, setPoRemarksText] = useState('');
   const [divisions, setDivisions] = useState<Array<{ id: string; name: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
 
   // Fetch divisions for PO creation/edit dropdowns
   const fetchDivisions = async () => {
@@ -3207,41 +3209,50 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <span className="text-[10px] font-bold text-slate-500 uppercase">Total Invoice Value</span>
                               <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
                             </div>
-                            {isManagerOrOwner && (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => {
-                                    setEditingSale(sale);
-                                    setEditSaleForm({
-                                      invoiceNumber: sale.invoiceNumber || '',
-                                      invoiceDate: sale.invoiceDate ? new Date(sale.invoiceDate).toISOString().split('T')[0] : '',
-                                      qty: sale.qty || 0,
-                                      rate: sale.rate || 0,
-                                      cgstPercent: sale.cgstPercent || 0,
-                                      sgstPercent: sale.sgstPercent || 0,
-                                      igstPercent: sale.igstPercent || 0,
-                                      partyName: sale.partyName || '',
-                                      supplierAddress: sale.supplierAddress || '',
-                                      companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
-                                      gstNumber: sale.gstNumber || '',
-                                      partyInvoiceNumber: sale.partyInvoiceNumber || '',
-                                      supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
-                                      vehicleNumber: sale.vehicleNumber || '',
-                                      remarks: sale.remarks || ''
-                                    });
-                                  }}
-                                  className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteSale(sale.id)}
-                                  className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setPreviewSaleInvoice({ ...sale, purchaseOrder: selectedPo })}
+                                className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
+                                title="View & Download Tax Invoice"
+                              >
+                                <Receipt className="w-3.5 h-3.5" />
+                              </button>
+                              {isManagerOrOwner && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingSale(sale);
+                                      setEditSaleForm({
+                                        invoiceNumber: sale.invoiceNumber || '',
+                                        invoiceDate: sale.invoiceDate ? new Date(sale.invoiceDate).toISOString().split('T')[0] : '',
+                                        qty: sale.qty || 0,
+                                        rate: sale.rate || 0,
+                                        cgstPercent: sale.cgstPercent || 0,
+                                        sgstPercent: sale.sgstPercent || 0,
+                                        igstPercent: sale.igstPercent || 0,
+                                        partyName: sale.partyName || '',
+                                        supplierAddress: sale.supplierAddress || '',
+                                        companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
+                                        gstNumber: sale.gstNumber || '',
+                                        partyInvoiceNumber: sale.partyInvoiceNumber || '',
+                                        supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                        vehicleNumber: sale.vehicleNumber || '',
+                                        remarks: sale.remarks || ''
+                                      });
+                                    }}
+                                    className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSale(sale.id)}
+                                    className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -3328,43 +3339,52 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{sale.remarks || '-'}</td>
                               <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{sale.addedBy?.fullName || '-'}</td>
                               <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
-                                {isManagerOrOwner && (
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button
-                                      onClick={() => {
-                                        setEditingSale(sale);
-                                        setEditSaleForm({
-                                          invoiceNumber: sale.invoiceNumber || '',
-                                          invoiceDate: sale.invoiceDate ? new Date(sale.invoiceDate).toISOString().split('T')[0] : '',
-                                          qty: sale.qty || 0,
-                                          rate: sale.rate || 0,
-                                          cgstPercent: sale.cgstPercent || 0,
-                                          sgstPercent: sale.sgstPercent || 0,
-                                          igstPercent: sale.igstPercent || 0,
-                                          partyName: sale.partyName || '',
-                                          supplierAddress: sale.supplierAddress || '',
-                                          companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
-                                          gstNumber: sale.gstNumber || '',
-                                          partyInvoiceNumber: sale.partyInvoiceNumber || '',
-                                          supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
-                                          vehicleNumber: sale.vehicleNumber || '',
-                                          remarks: sale.remarks || ''
-                                        });
-                                      }}
-                                      className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
-                                      title="Edit Sale Record"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteSale(sale.id)}
-                                      className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
-                                      title="Delete Sale Record"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => setPreviewSaleInvoice({ ...sale, purchaseOrder: selectedPo })}
+                                    className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
+                                    title="View & Download Tax Invoice"
+                                  >
+                                    <Receipt className="w-3.5 h-3.5" />
+                                  </button>
+                                  {isManagerOrOwner && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setEditingSale(sale);
+                                          setEditSaleForm({
+                                            invoiceNumber: sale.invoiceNumber || '',
+                                            invoiceDate: sale.invoiceDate ? new Date(sale.invoiceDate).toISOString().split('T')[0] : '',
+                                            qty: sale.qty || 0,
+                                            rate: sale.rate || 0,
+                                            cgstPercent: sale.cgstPercent || 0,
+                                            sgstPercent: sale.sgstPercent || 0,
+                                            igstPercent: sale.igstPercent || 0,
+                                            partyName: sale.partyName || '',
+                                            supplierAddress: sale.supplierAddress || '',
+                                            companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
+                                            gstNumber: sale.gstNumber || '',
+                                            partyInvoiceNumber: sale.partyInvoiceNumber || '',
+                                            supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                            vehicleNumber: sale.vehicleNumber || '',
+                                            remarks: sale.remarks || ''
+                                          });
+                                        }}
+                                        className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
+                                        title="Edit Sale Record"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteSale(sale.id)}
+                                        className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
+                                        title="Delete Sale Record"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -3750,6 +3770,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
             </form>
           </div>
         </div>
+      {/* TAX INVOICE MODAL & PDF PREVIEW */}
+      {previewSaleInvoice && (
+        <SaleInvoiceModal
+          sale={previewSaleInvoice}
+          onClose={() => setPreviewSaleInvoice(null)}
+        />
       )}
     </div>
   );

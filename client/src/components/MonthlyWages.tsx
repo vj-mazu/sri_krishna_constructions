@@ -890,6 +890,16 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
+    // Add Logo to Header
+    if (logoBase64 || SKC_LOGO_BASE64) {
+      try {
+        const logoData = logoBase64 || SKC_LOGO_BASE64;
+        doc.addImage(logoData, 'PNG', 14, 6, 16, 16);
+      } catch (err) {
+        console.error('EPFO PDF logo add error:', err);
+      }
+    }
+
     // Document Title (Centered on A4 portrait width = 210mm)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);

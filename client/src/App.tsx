@@ -8,6 +8,7 @@ import { ApprovalsPanel } from './components/ApprovalsPanel';
 import { DashboardOverview } from './components/DashboardOverview';
 import { AttendancePanel } from './components/AttendancePanel';
 import { MonthlyWages } from './components/MonthlyWages';
+import { SKC_LOGO_BASE64 } from './logoBase64';
 
 import { 
   Building2, 
@@ -240,8 +241,18 @@ export function App() {
           {/* Logo / Brand Name & Mobile User Badge */}
           <div className="flex items-center justify-between w-full md:w-auto gap-4">
             <div className="flex items-center gap-2.5 shrink-0">
-              <div className="w-8 h-8 bg-gradient-to-tr from-white to-blue-50 rounded-xl flex items-center justify-center shadow-md border border-white/20">
-                <Building2 className="w-4.5 h-4.5 text-[#1e3a8a] stroke-[2.5]" />
+              <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center shadow-md border border-white/30 overflow-hidden p-0.5">
+                <img 
+                  src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
+                  alt="SKC Logo" 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+                <Building2 className="hidden w-4.5 h-4.5 text-[#1e3a8a] stroke-[2.5]" />
               </div>
               <div>
                 <h1 className="font-black text-sm tracking-tight text-white uppercase leading-none">

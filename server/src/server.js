@@ -15,28 +15,41 @@ import crypto from 'crypto';
 
 dotenv.config();
 
-import fs from 'fs';
-// Synchronous logo extraction from Excel
+// Synchronous logo extraction from Downloads or Excel
 try {
+  const directLogoPath = 'C:\\Users\\maju\\Downloads\\ChatGPT Image Aug 22, 2026, 07_49_17 PM.png';
   const excelLogoPath = 'C:\\Users\\maju\\Downloads\\SKC LOGO.xlsx';
-  if (fs.existsSync(excelLogoPath)) {
+  let logoBuf = null;
+  let logoExt = 'png';
+
+  if (fs.existsSync(directLogoPath)) {
+    logoBuf = fs.readFileSync(directLogoPath);
+    logoExt = 'png';
+  } else if (fs.existsSync(excelLogoPath)) {
     const wb = new ExcelJS.Workbook();
-    wb.xlsx.readFile(excelLogoPath).then(() => {
-      let logoBuf = null;
-      let logoExt = 'png';
+    const wbPromise = wb.xlsx.readFile(excelLogoPath);
+    wbPromise.then(() => {
       if (wb.media && wb.media.length > 0) {
         logoBuf = wb.media[0].buffer;
         logoExt = wb.media[0].extension || 'png';
-      }
-      if (logoBuf) {
-        const base64Str = `data:image/${logoExt};base64,${Buffer.from(logoBuf).toString('base64')}`;
-        const targetTsFile = path.join(__dirname, '../../client/src/logoBase64.ts');
-        const targetPngFile = path.join(__dirname, '../../client/public/skc_logo.png');
-        fs.writeFileSync(targetTsFile, `export const SKC_LOGO_BASE64 = "${base64Str}";\n`);
-        fs.writeFileSync(targetPngFile, logoBuf);
-        console.log('✅ Extracted HD SKC Logo from Excel successfully!');
+        if (logoBuf) {
+          const base64Str = `data:image/${logoExt};base64,${Buffer.from(logoBuf).toString('base64')}`;
+          const targetTsFile = path.join(__dirname, '../../client/src/logoBase64.ts');
+          const targetPngFile = path.join(__dirname, '../../client/public/skc_logo.png');
+          fs.writeFileSync(targetTsFile, `export const SKC_LOGO_BASE64 = "${base64Str}";\n`);
+          fs.writeFileSync(targetPngFile, logoBuf);
+        }
       }
     }).catch(e => console.error('Logo read error:', e.message));
+  }
+
+  if (logoBuf) {
+    const base64Str = `data:image/${logoExt};base64,${Buffer.from(logoBuf).toString('base64')}`;
+    const targetTsFile = path.join(__dirname, '../../client/src/logoBase64.ts');
+    const targetPngFile = path.join(__dirname, '../../client/public/skc_logo.png');
+    fs.writeFileSync(targetTsFile, `export const SKC_LOGO_BASE64 = "${base64Str}";\n`);
+    fs.writeFileSync(targetPngFile, logoBuf);
+    console.log('✅ Loaded Original SKC Red Peacock Logo and saved to logoBase64.ts & skc_logo.png');
   }
 } catch (err) {
   console.error('Logo extraction setup error:', err.message);
