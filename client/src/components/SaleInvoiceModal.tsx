@@ -273,44 +273,52 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[96vh] flex flex-col overflow-hidden relative z-[10000] border-2 border-slate-300">
+    <div 
+      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-start p-2 sm:p-6 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* MODAL CONTAINER */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden relative z-[100000] border-2 border-slate-300 my-auto">
         
-        {/* MODAL TOP CONTROL BAR */}
-        <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white px-5 py-3 flex items-center justify-between shrink-0 shadow-md">
-          <div className="flex items-center gap-2">
+        {/* MODAL TOP CONTROL BAR (STICKY AT TOP) */}
+        <div className="sticky top-0 z-20 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-lg border-b border-blue-900">
+          <div className="flex items-center gap-2.5">
             <span className="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
               📄 Tax Invoice Preview: <span className="font-mono text-sky-200">{invoiceNo}</span>
-              <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full font-normal">
-                {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} selected
-              </span>
+            </span>
+            <span className="text-xs bg-sky-900/60 border border-sky-400/40 text-sky-100 px-2.5 py-0.5 rounded-full font-semibold hidden sm:inline-block">
+              {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''}
             </span>
           </div>
+          
           <div className="flex items-center gap-2">
             <button
               onClick={() => window.print()}
               className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
             >
-              <Printer className="w-4 h-4" /> Print
+              <Printer className="w-3.5 h-3.5" /> Print
             </button>
             <button
               onClick={downloadPdf}
               className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
             >
-              <Download className="w-4 h-4" /> Download Official PDF
+              <Download className="w-3.5 h-3.5" /> Download Official PDF
             </button>
             <button 
               onClick={onClose} 
-              className="w-8 h-8 rounded-full bg-white/10 hover:bg-rose-600 text-white flex items-center justify-center transition-all ml-1"
+              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ml-1 cursor-pointer"
+              title="Close Preview (Esc)"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 stroke-[3]" /> Close
             </button>
           </div>
         </div>
 
         {/* AUTHENTIC TAX INVOICE SHEET (MATCHING PHOTO EXACTLY) */}
-        <div className="p-4 sm:p-8 overflow-y-auto bg-slate-100 flex justify-center">
-          <div className="bg-white p-6 sm:p-8 rounded shadow-lg border border-slate-400 w-full max-w-3xl text-black font-sans text-xs">
+        <div className="p-3 sm:p-8 overflow-y-auto bg-slate-200/90 flex justify-center max-h-[80vh]">
+          <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-slate-300 w-full max-w-3xl text-black font-sans text-xs">
             
             {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
             <div className="flex items-start gap-4 pb-3 border-b-2 border-black">
@@ -424,46 +432,71 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
             </div>
 
             {/* 6. TAX TOTALS SUMMARY */}
-            <div className="flex justify-end mt-3">
-              <div className="w-72 border border-black divide-y divide-black text-[11px]">
-                <div className="p-1.5 flex justify-between">
-                  <span>Basic Amount:</span>
+            <div className="flex justify-end mt-4">
+              <div className="w-80 border-2 border-black divide-y divide-black text-[11px] bg-slate-50/50">
+                <div className="p-2 flex justify-between">
+                  <span className="font-semibold">Basic Amount:</span>
                   <span className="font-mono font-bold">₹{fmt(totalBasic)}</span>
                 </div>
                 {totalCgst > 0 && (
-                  <div className="p-1.5 flex justify-between">
+                  <div className="p-2 flex justify-between">
                     <span>CGST ({primarySale.cgstPercent || 9}%):</span>
                     <span className="font-mono font-bold">₹{fmt(totalCgst)}</span>
                   </div>
                 )}
                 {totalSgst > 0 && (
-                  <div className="p-1.5 flex justify-between">
+                  <div className="p-2 flex justify-between">
                     <span>SGST ({primarySale.sgstPercent || 9}%):</span>
                     <span className="font-mono font-bold">₹{fmt(totalSgst)}</span>
                   </div>
                 )}
                 {totalIgst > 0 && (
-                  <div className="p-1.5 flex justify-between">
+                  <div className="p-2 flex justify-between">
                     <span>IGST ({primarySale.igstPercent || 18}%):</span>
                     <span className="font-mono font-bold">₹{fmt(totalIgst)}</span>
                   </div>
                 )}
-                <div className="p-2 flex justify-between bg-slate-50 font-black text-xs">
-                  <span>TOTAL AMOUNT:</span>
-                  <span className="font-mono text-sm text-blue-900">₹{fmt(totalInvoiceAmount)}</span>
+                <div className="p-2.5 flex justify-between bg-blue-50/80 font-black text-xs border-t-2 border-black">
+                  <span className="text-[#1e3a8a]">TOTAL AMOUNT:</span>
+                  <span className="font-mono text-sm text-[#1e3a8a]">₹{fmt(totalInvoiceAmount)}</span>
                 </div>
               </div>
             </div>
 
             {/* 7. SIGNATURES */}
-            <div className="flex justify-between items-end mt-16 pt-4 text-xs font-bold">
-              <div>Receiver's Signature with Seal</div>
+            <div className="flex justify-between items-end mt-12 pt-4 text-xs font-bold border-t border-slate-200">
+              <div>
+                <div className="w-48 border-b border-black mb-2"></div>
+                <div>Receiver's Signature with Seal</div>
+              </div>
               <div className="text-center">
                 <div>For SRI KRISHNA CONSTRUCTIONS</div>
-                <div className="mt-8 font-normal text-slate-600">Authorised Signatory</div>
+                <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
+                <div className="font-normal text-slate-600 text-[11px]">Authorised Signatory</div>
               </div>
             </div>
 
+          </div>
+        </div>
+
+        {/* BOTTOM MODAL FOOTER */}
+        <div className="bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-between items-center shrink-0">
+          <span className="text-xs text-slate-500 font-medium">
+            Standard Tax Invoice (A4 Formatted)
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-all"
+            >
+              Close
+            </button>
+            <button
+              onClick={downloadPdf}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
+            >
+              <Download className="w-3.5 h-3.5" /> Download PDF
+            </button>
           </div>
         </div>
 
