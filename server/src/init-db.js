@@ -36,12 +36,15 @@ export const initializeDatabaseTables = async () => {
       const targetTsFile = path.join(__dirname, '../../client/src/logoBase64.ts');
       const targetPngFile = path.join(__dirname, '../../client/public/skc_logo.png');
       
-      fs.writeFileSync(targetTsFile, `export const SKC_LOGO_BASE64 = "${base64Str}";\n`);
-      fs.writeFileSync(targetPngFile, logoBuf);
-      console.log('✅ Loaded Original SKC Red Peacock Logo and saved to logoBase64.ts & skc_logo.png');
+      if (fs.existsSync(path.dirname(targetTsFile))) {
+        fs.writeFileSync(targetTsFile, `export const SKC_LOGO_BASE64 = "${base64Str}";\n`);
+      }
+      if (fs.existsSync(path.dirname(targetPngFile))) {
+        fs.writeFileSync(targetPngFile, logoBuf);
+      }
     }
   } catch (err) {
-    console.error('Logo extraction during init-db error:', err.message);
+    // Silent fallback on cloud environments where local download paths do not exist
   }
 
   const connectionString = process.env.DATABASE_URL;
