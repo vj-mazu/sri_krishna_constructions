@@ -59,6 +59,27 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   // Table Responsive View Mode: 'fit' (fits desktop/tablet without scroll) | 'scroll' (wide ledger)
   const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('fit');
 
+  // Global Escape key handler + scroll lock for modals
+  useEffect(() => {
+    const anyModalOpen = !!slipModalWorker || !!drilldownWorkerId;
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleEscapeKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          if (slipModalWorker) setSlipModalWorker(null);
+          else if (drilldownWorkerId) { setDrilldownWorkerId(null); setDrilldownData(null); }
+        }
+      };
+      document.addEventListener('keydown', handleEscapeKey);
+      return () => {
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', handleEscapeKey);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [slipModalWorker, drilldownWorkerId]);
+
   const formatIndianCurrency = (val: number | string | undefined | null) => {
     if (val === undefined || val === null || val === '') return '₹0';
     const num = typeof val === 'string' ? parseFloat(val) : (val || 0);
@@ -172,9 +193,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const getRowCalculations = (w: any) => {
     const presentDays = parseFloat(w.presentDays) || 0;
     const halfDays = parseFloat(w.halfDays) || 0;
-    const workingDays = w.workingDays !== undefined && w.workingDays !== null 
-      ? (parseFloat(w.workingDays) || 0) 
-      : (presentDays + (halfDays * 0.5));
+    const workingDays = w.workingDays !== undefined ? parseFloat(w.workingDays) || 0 : (parseFloat(w.presentDays) || 0) + ((parseFloat(w.halfDays) || 0) * 0.5);
 
     const dailyWage = parseFloat(w.dailyWage) || 0;
     const dailyAllowance = parseFloat(w.dailyAllowance) || 0;
@@ -217,7 +236,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const extraVal = customExtra[w.workerId] !== undefined ? customExtra[w.workerId] : parseFloat(w.extraAmount || 0);
     const extra = extraVal === '' ? 0 : parseFloat(extraVal as string) || 0;
     
-    const finalNetAmount = totalPayment - advance + extra;
+    const finalNetAmount = Math.max(0, totalPayment - advance + extra);
 
     return {
       workingDays,
@@ -277,8 +296,27 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       setSuccess(successMsg);
       showToast(successMsg, 'success');
       
+      // Before re-fetch, save current overrides
+      const savedCustomPf = { ...customPf };
+      const savedCustomEsi = { ...customEsi };
+      const savedCustomOtAllowance = { ...customOtAllowance };
+      const savedCustomAdvance = { ...customAdvance };
+      const savedCustomExtra = { ...customExtra };
+
       // Refresh entire report to pull fresh advanceBalance and MonthlyPayment records from database
       await handleCalculateWages();
+
+      // Restore overrides (remove the approved worker's entry)
+      delete savedCustomPf[worker.workerId];
+      delete savedCustomEsi[worker.workerId];
+      delete savedCustomOtAllowance[worker.workerId];
+      delete savedCustomAdvance[worker.workerId];
+      delete savedCustomExtra[worker.workerId];
+      setCustomPf(savedCustomPf);
+      setCustomEsi(savedCustomEsi);
+      setCustomOtAllowance(savedCustomOtAllowance);
+      setCustomAdvance(savedCustomAdvance);
+      setCustomExtra(savedCustomExtra);
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to approve wage payout.';
       setError(errMsg);

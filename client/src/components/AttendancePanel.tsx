@@ -277,16 +277,19 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         fetchWorkersAndAttendance();
       } catch (networkErr: any) {
         // If device is offline or network failed, cache in Offline Queue!
-        const existingQueue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
-        // Filter out duplicate submissions for same date
-        const updatedQueue = existingQueue.filter((item: any) => item.date !== selectedDate);
-        updatedQueue.push({
-          date: selectedDate,
-          attendanceData: recordsToSave,
-          timestamp: new Date().toISOString()
-        });
-        localStorage.setItem('skc_offline_attendance_queue', JSON.stringify(updatedQueue));
-        checkOfflineQueueCount();
+        try {
+          const existingQueue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
+          const updatedQueue = existingQueue.filter((item: any) => item.date !== selectedDate);
+          updatedQueue.push({
+            date: selectedDate,
+            attendanceData: recordsToSave,
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('skc_offline_attendance_queue', JSON.stringify(updatedQueue));
+          checkOfflineQueueCount();
+        } catch (e) {
+          console.warn('localStorage unavailable:', e);
+        }
 
         setSuccess('💾 Saved Offline! Attendance will automatically sync when network returns.');
         showToast('Saved in Offline Storage! Will auto-sync when online.', 'info');

@@ -7,7 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -307,13 +307,8 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    // 2. Check password: match via bcrypt OR plain text fallback
-    let validPassword = false;
-    try {
-      validPassword = await bcrypt.compare(cleanPassword, user.password);
-    } catch (e) {
-      validPassword = false;
-    }
+    // 2. Check password: match via bcrypt
+    const validPassword = await bcrypt.compare(cleanPassword, user.password);
 
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid username or password' });
@@ -1203,7 +1198,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('Error recording sale:', err);
-    res.status(500).json({ error: err.message || 'Failed to record sale' });
+    res.status(500).json({ error: 'Failed to record sale' });
   } finally {
     client.release();
   }
@@ -2971,28 +2966,26 @@ app.post('/api/export/excel', authenticateToken, async (req, res) => {
 });
 
 // --- DATABASE BACKUP API ---
-app.post('/api/backup/database', authenticateToken, requireRoles(['OWNER']), async (req, res) => {
-  try {
-    const dbUrl = process.env.DATABASE_URL;
-    if (!dbUrl) {
-      return res.status(500).json({ error: 'DATABASE_URL not configured' });
-    }
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `sri_krishna_backup_${timestamp}.sql`;
-    
-    const dumpOutput = execSync(`pg_dump "${dbUrl}" --no-owner --no-privileges`, {
-      encoding: 'utf-8',
-      maxBuffer: 100 * 1024 * 1024,
-      timeout: 120000
-    });
-
-    res.setHeader('Content-Type', 'application/sql');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(dumpOutput);
-  } catch (err) {
-    console.error('Database backup error:', err.message);
-    res.status(500).json({ error: 'Failed to generate database backup. Ensure pg_dump is installed and DATABASE_URL is correct.' });
-  }
+app.post('/api/backup/database', authenticateToken, requireRoles(['OWNER']), (req, res) => {
+  const dbUrl = process.env.DATABASE_URL;
+  if (!dbUrl) return res.status(500).json({ error: 'DATABASE_URL not configured' });
+  
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const filename = `sri_krishna_backup_${timestamp}.sql`;
+  
+  res.setHeader('Content-Type', 'application/sql');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  
+  const dump = spawn('pg_dump', [dbUrl, '--no-owner', '--no-privileges']);
+  dump.stdout.pipe(res);
+  dump.stderr.on('data', (data) => console.error(`pg_dump stderr: ${data}`));
+  dump.on('error', (err) => {
+    console.error('pg_dump spawn error:', err.message);
+    if (!res.headersSent) res.status(500).json({ error: 'Backup failed' });
+  });
+  dump.on('close', (code) => {
+    if (code !== 0 && !res.headersSent) res.status(500).json({ error: 'Backup process failed' });
+  });
 });
 
 // --- JSON DATA EXPORT BACKUP ---
@@ -3001,14 +2994,14 @@ app.get('/api/backup/json-export', authenticateToken, requireRoles(['OWNER']), a
     const [users, divisions, workers, purchaseOrders, poItems, purchases, sales, attendance, payments, approvals] = await Promise.all([
       pool.query('SELECT "id","username","fullName","mobileNumber","role","createdAt" FROM "User" ORDER BY "createdAt"'),
       pool.query('SELECT * FROM "Division" ORDER BY "name"'),
-      pool.query('SELECT * FROM "Worker" ORDER BY "fullName"'),
+      pool.query('SELECT * FROM "Worker" ORDER BY "fullName" LIMIT 10000'),
       pool.query('SELECT * FROM "PurchaseOrder" ORDER BY "date" DESC'),
       pool.query('SELECT * FROM "PurchaseOrderItem" ORDER BY "id"'),
-      pool.query('SELECT * FROM "Purchase" ORDER BY "date" DESC'),
-      pool.query('SELECT * FROM "Sale" ORDER BY "invoiceDate" DESC'),
+      pool.query('SELECT * FROM "Purchase" ORDER BY "date" DESC LIMIT 50000'),
+      pool.query('SELECT * FROM "Sale" ORDER BY "invoiceDate" DESC LIMIT 50000'),
       pool.query('SELECT * FROM "Attendance" ORDER BY "date" DESC LIMIT 50000'),
-      pool.query('SELECT * FROM "MonthlyPayment" ORDER BY "year" DESC, "month" DESC'),
-      pool.query('SELECT * FROM "ApprovalRequest" ORDER BY "createdAt" DESC')
+      pool.query('SELECT * FROM "MonthlyPayment" ORDER BY "year" DESC, "month" DESC LIMIT 50000'),
+      pool.query('SELECT * FROM "ApprovalRequest" ORDER BY "createdAt" DESC LIMIT 10000')
     ]);
 
     const backup = {
@@ -3060,7 +3053,7 @@ app.get('*', (req, res) => {
 });
 
 // START SERVER AND RUN AUTO MIGRATIONS & SEEDING
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`🚀 IAC Stocks Server running on port ${PORT}`);
   try {
     // 1. Automatically create all PostgreSQL tables via raw SQL if they do not exist
@@ -3073,3 +3066,15 @@ app.listen(PORT, async () => {
     console.error('Database startup log:', err.message);
   }
 });
+
+const gracefulShutdown = async () => {
+  console.log('Shutting down gracefully...');
+  server.close(async () => {
+    await pool.end();
+    console.log('Database pool closed.');
+    process.exit(0);
+  });
+  setTimeout(() => process.exit(1), 10000);
+};
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);

@@ -147,30 +147,47 @@ export const StockGrid: React.FC = () => {
     return '-';
   };
 
-  const exportToExcel = () => {
-    const exportData = items.map((item, idx) => ({
-      'Sl No': idx + 1,
-      'PO Number': getDisplayPoNumber(item),
-      'KPCL Code': item.kpclCode,
-      'Item Name': item.itemName,
-      'Specifications': item.specifications,
-      'Part Number': item.partNumber,
-      'Make': item.make,
-      'HSN Code': item.hsnCode,
-      'Unit': item.unit,
-      'Ordered Qty': item.orderedQty,
-      'Inward Purchased': item.totalPurchased,
-      'Total Sold': item.totalSold,
-      'Remaining to Arrive': item.remainingToReceive,
-      'Balance Stock': item.balanceStock
-    }));
+  const exportToExcel = async () => {
+    try {
+      const params: any = { limit: 10000 };
+      if (debouncedSearch) params.search = debouncedSearch;
+      if (debouncedPoNumber) params.poNumber = debouncedPoNumber;
+      if (debouncedPartNumber) params.partNumber = debouncedPartNumber;
+      if (debouncedKpclCode) params.kpclCode = debouncedKpclCode;
+      if (debouncedMake) params.make = debouncedMake;
+      if (stockStatusFilter) params.stockStatus = stockStatusFilter;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      
+      const response = await api.get('/stock-summary', { params });
+      const allItems = response.data.items || [];
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock Summary');
-    
-    const dateStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(workbook, `Stock_Summary_${dateStr}.xlsx`);
+      const exportData = allItems.map((item: any, idx: number) => ({
+        'Sl No': idx + 1,
+        'PO Number': getDisplayPoNumber(item),
+        'KPCL Code': item.kpclCode,
+        'Item Name': item.itemName,
+        'Specifications': item.specifications,
+        'Part Number': item.partNumber,
+        'Make': item.make,
+        'HSN Code': item.hsnCode,
+        'Unit': item.unit,
+        'Ordered Qty': item.orderedQty,
+        'Inward Purchased': item.totalPurchased,
+        'Total Sold': item.totalSold,
+        'Remaining to Arrive': item.remainingToReceive,
+        'Balance Stock': item.balanceStock
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(exportData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Stock Summary');
+      
+      const dateStr = new Date().toISOString().split('T')[0];
+      XLSX.writeFile(workbook, `Stock_Summary_${dateStr}.xlsx`);
+    } catch (err) {
+      console.error('Failed to export stock summary:', err);
+    }
   };
 
   const getBalanceBadge = (balance: number) => {

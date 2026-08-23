@@ -551,6 +551,32 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   }, [selectedPo, activeTab, itemsCursor, purchasesCursor, salesCursor, fetchPoItems, fetchPoPurchases, fetchPoSales]);
 
+  // Global Escape key handler for all modals + body scroll lock
+  useEffect(() => {
+    const anyModalOpen = showAddItem || showAddPurchase || showAddSale || !!editingPurchase || !!editingSale || !!previewSaleInvoice;
+    
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleEscapeKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          if (previewSaleInvoice) setPreviewSaleInvoice(null);
+          else if (editingPurchase) { setEditingPurchase(null); }
+          else if (editingSale) { setEditingSale(null); }
+          else if (showAddSale) setShowAddSale(false);
+          else if (showAddPurchase) setShowAddPurchase(false);
+          else if (showAddItem) setShowAddItem(false);
+        }
+      };
+      document.addEventListener('keydown', handleEscapeKey);
+      return () => {
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', handleEscapeKey);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [showAddItem, showAddPurchase, showAddSale, editingPurchase, editingSale, previewSaleInvoice]);
+
   // --- ACTIONS: ADD ITEM (DOUBLE SUBMISSION PROTECTED) ---
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();

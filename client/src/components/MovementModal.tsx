@@ -1,8 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import api from '../api';
+import { showToast } from '../toast';
+import { X, ArrowDownToLine, ArrowUpFromLine, AlertCircle } from 'lucide-react';
 
-export const MovementModal: React.FC<any> = () => {
-  return null;
-};
+export const MovementModal: React.FC<any> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  category = 'GENERAL',
+  initialItemCode = '',
+  movementType = 'INWARD'
+}) => {
+  const [itemCode, setItemCode] = useState(initialItemCode);
+  const [quantity, setQuantity] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [invoiceRefNo, setInvoiceRefNo] = useState('');
+  const [remarks, setRemarks] = useState('');
+  const [movementDate, setMovementDate] = useState(new Date().toISOString().slice(0, 10));
+  const [stockError, setStockError] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingItemDetails, setLoadingItemDetails] = useState(false);
+
+  // Category specific state
+  const [itemName, setItemName] = useState('');
+  const [unit, setUnit] = useState('NO');
+  const [brandOffered, setBrandOffered] = useState('');
+  const [gstPercentage, setGstPercentage] = useState('');
+  const [hsnCode, setHsnCode] = useState('');
+  const [biddersCompliance, setBiddersCompliance] = useState('');
+  const [partNo, setPartNo] = useState('');
+  const [specifications, setSpecifications] = useState('');
+  const [basicRateRs, setBasicRateRs] = useState('');
+  const [basicRateRsAlt, setBasicRateRsAlt] = useState('');
+  const [skcRate1, setSkcRate1] = useState('');
+  const [skcRate2, setSkcRate2] = useState('');
+  const [diffPercentage, setDiffPercentage] = useState('');
+  const [baseQty, setBaseQty] = useState('1');
+
   useEffect(() => {
     if (isOpen) {
       setItemCode(initialItemCode);
