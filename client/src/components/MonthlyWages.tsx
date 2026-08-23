@@ -459,25 +459,14 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
     const centerX = margin + col1Width + (col2Width / 2);
 
-    if (logoBase64) {
+    const activeLogo = SKC_LOGO_BASE64 || logoBase64;
+    if (activeLogo) {
       try {
-        // High-definition square emblem rendering
+        // High-definition original red circular emblem rendering
         const logoSize = 22;
-        doc.addImage(logoBase64, 'JPEG', centerX - (logoSize / 2), startY + 9.5, logoSize, logoSize);
+        doc.addImage(activeLogo, 'PNG', centerX - (logoSize / 2), startY + 9.5, logoSize, logoSize);
       } catch (err) {
-        // Fallback drawing if base64 format mismatch
-        doc.setDrawColor(212, 175, 55);
-        doc.setLineWidth(0.6);
-        doc.circle(centerX, startY + 18, 7.5, 'S');
-        doc.setFillColor(30, 41, 59);
-        doc.circle(centerX, startY + 18, 7, 'F');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(251, 191, 36);
-        doc.text('SKC', centerX, startY + 20.5, { align: 'center' });
-        doc.setFontSize(6);
-        doc.setTextColor(0, 0, 0);
-        doc.text('SALES & SERVICE', centerX, startY + 29, { align: 'center' });
+        console.warn('Salary slip logo render fallback:', err);
       }
     } else {
       // Vector Emblem Drawing
@@ -2181,28 +2170,13 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         <div className="w-full bg-slate-200 border-b border-black py-1 font-bold text-[11px] uppercase tracking-wider">
                           SALARY SLIP
                         </div>
-                        <div className="py-1 flex flex-col items-center justify-center">
-                          {/* REAL EXTRACTED HD LOGO IMAGE FROM EXCEL */}
+                        <div className="py-1.5 flex flex-col items-center justify-center">
+                          {/* ORIGINAL SKC RED CIRCULAR LOGO */}
                           <img
-                            src={logoBase64 || '/api/logo/skc-logo'}
-                            alt="SKC Logo"
-                            className="h-14 w-auto max-w-[110px] object-contain"
-                            onError={(e) => {
-                              // If image fails, render styled emblem
-                              const target = e.currentTarget;
-                              target.style.display = 'none';
-                              const fallback = target.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
+                            src={SKC_LOGO_BASE64 || '/skc_logo.png'}
+                            alt="SRI KRISHNA CONSTRUCTIONS"
+                            className="h-16 w-16 object-contain"
                           />
-                          {/* Fallback emblem if image endpoint is offline */}
-                          <div className="hidden flex-col items-center justify-center">
-                            <div className="w-11 h-11 rounded-full border-2 border-[#d4af37] bg-[#1e293b] flex flex-col items-center justify-center shadow">
-                              <span className="text-[#f59e0b] font-black text-xs">SKC</span>
-                              <span className="text-[5.5px] text-amber-200 font-bold">ESTD 2019</span>
-                            </div>
-                            <div className="text-[8px] font-black text-slate-900 mt-0.5">SALES & SERVICE</div>
-                          </div>
                         </div>
                         <div className="h-0.5"></div>
                       </div>
