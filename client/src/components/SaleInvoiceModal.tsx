@@ -274,16 +274,16 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex flex-col items-center justify-start p-2 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       {/* MODAL CONTAINER */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden relative z-[100000] border-2 border-slate-300 my-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden relative z-[100000] border-2 border-slate-300">
         
-        {/* MODAL TOP CONTROL BAR (STICKY AT TOP) */}
-        <div className="sticky top-0 z-20 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3.5 flex items-center justify-between shadow-lg border-b border-blue-900">
+        {/* MODAL TOP CONTROL BAR */}
+        <div className="shrink-0 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md border-b border-blue-900 z-10">
           <div className="flex items-center gap-2.5">
             <span className="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
               📄 Tax Invoice Preview: <span className="font-mono text-sky-200">{invoiceNo}</span>
@@ -296,28 +296,28 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
           <div className="flex items-center gap-2">
             <button
               onClick={() => window.print()}
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all"
+              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" /> Print
             </button>
             <button
               onClick={downloadPdf}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" /> Download Official PDF
             </button>
             <button 
               onClick={onClose} 
-              className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ml-1 cursor-pointer"
-              title="Close Preview (Esc)"
+              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ml-1 cursor-pointer"
+              title="Close Preview"
             >
               <X className="w-4 h-4 stroke-[3]" /> Close
             </button>
           </div>
         </div>
 
-        {/* AUTHENTIC TAX INVOICE SHEET (MATCHING PHOTO EXACTLY) */}
-        <div className="p-3 sm:p-8 overflow-y-auto bg-slate-200/90 flex justify-center max-h-[80vh]">
+        {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/90 flex justify-center items-start">
           <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-slate-300 w-full max-w-3xl text-black font-sans text-xs">
             
             {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
