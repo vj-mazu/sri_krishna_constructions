@@ -14,6 +14,14 @@ export const LoginModal: React.FC<LoginProps> = ({ onLoginSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!username.trim()) {
+      setError('Username is required');
+      return;
+    }
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
     setLoading(true);
     setError('');
 

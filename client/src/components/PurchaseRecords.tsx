@@ -858,11 +858,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     const sgstP = Number(sgstPercent) || 0;
     const igstP = Number(igstPercent) || 0;
 
-    const taxableAmount = Math.max(0, Math.round((basicAmount - disc + fr + pf) * 100) / 100);
-    const cgstAmount = Math.round(taxableAmount * (cgstP / 100) * 100) / 100;
-    const sgstAmount = Math.round(taxableAmount * (sgstP / 100) * 100) / 100;
-    const igstAmount = Math.round(taxableAmount * (igstP / 100) * 100) / 100;
-    const totalTax = Math.round((cgstAmount + sgstAmount + igstAmount) * 100) / 100;
+    const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
+    const taxableAmount = Math.max(0, round2(basicAmount - disc + fr + pf));
+    const cgstAmount = round2(taxableAmount * (cgstP / 100));
+    const sgstAmount = round2(taxableAmount * (sgstP / 100));
+    const igstAmount = round2(taxableAmount * (igstP / 100));
+    const totalTax = round2(cgstAmount + sgstAmount + igstAmount);
     // Round off total amount to the nearest whole integer (e.g. 25,393.60 -> 25,394)
     const exactTotal = taxableAmount + totalTax + ins;
     const totalAmount = Math.round(exactTotal);

@@ -1,10 +1,23 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Download, Printer, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
+import { showToast } from '../toast';
 
 export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void }> = ({ sale, onClose }) => {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
   if (!sale) return null;
   
   // Normalize to array of sales
@@ -18,9 +31,10 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
   const orderDate = primarySale.poDate ? new Date(primarySale.poDate).toLocaleDateString('en-GB') : (primarySale.purchaseOrder?.date ? new Date(primarySale.purchaseOrder.date).toLocaleDateString('en-GB') : '09/06/2025');
 
   // Format currency helper
-  const fmt = (n: number) => Math.round(n).toLocaleString('en-IN');
+  const fmt = (n: number) => Math.round(n + Number.EPSILON).toLocaleString('en-IN');
+  const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
-  // Calculate totals across all items
+  // Calculate totals across all items with precision
   let totalBasic = 0;
   let totalCgst = 0;
   let totalSgst = 0;
@@ -30,15 +44,15 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
     const itm = s.purchaseOrderItem || s.item || {};
     const q = Number(s.qty || s.quantity || 0);
     const r = Number(s.rate || s.unitPrice || 0);
-    const b = q * r;
-    const cg = b * (Number(s.cgstPercent || 0) / 100);
-    const sg = b * (Number(s.sgstPercent || 0) / 100);
-    const ig = b * (Number(s.igstPercent || 0) / 100);
+    const b = round2(q * r);
+    const cg = round2(b * (Number(s.cgstPercent || 0) / 100));
+    const sg = round2(b * (Number(s.sgstPercent || 0) / 100));
+    const ig = round2(b * (Number(s.igstPercent || 0) / 100));
 
-    totalBasic += b;
-    totalCgst += cg;
-    totalSgst += sg;
-    totalIgst += ig;
+    totalBasic = round2(totalBasic + b);
+    totalCgst = round2(totalCgst + cg);
+    totalSgst = round2(totalSgst + sg);
+    totalIgst = round2(totalIgst + ig);
 
     return {
       slNo: idx + 1,
@@ -53,7 +67,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
     };
   });
 
-  const totalInvoiceAmount = Math.round(totalBasic + totalCgst + totalSgst + totalIgst);
+  const totalInvoiceAmount = Math.round(totalBasic + totalCgst + totalSgst + totalIgst + Number.EPSILON);
 
   const downloadPdf = () => {
     try {
@@ -190,7 +204,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
         startY: y,
         margin: { left: margin, right: margin },
         head: [
-          ['SI.\nNO', 'KPCL ITEM\nCODE', 'Discription', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
+          ['SI.\nNO', 'KPCL ITEM\nCODE', 'Description', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
         ],
         body: tableBody,
         theme: 'grid',
@@ -268,7 +282,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       doc.save(`TAX_INVOICE_${invoiceNo.replaceAll('/', '_')}.pdf`);
     } catch (error) {
       console.error('Failed to generate Tax Invoice PDF:', error);
-      alert('Error generating PDF. Please check console for details.');
+      showToast('Error generating PDF. Please check console for details.', 'error');
     }
   };
 
@@ -403,7 +417,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                   <tr className="border-b border-black text-center font-bold bg-slate-50">
                     <th className="p-2 border-r border-black w-10">SI. NO</th>
                     <th className="p-2 border-r border-black w-28">KPCL ITEM CODE</th>
-                    <th className="p-2 border-r border-black">Discription</th>
+                    <th className="p-2 border-r border-black">Description</th>
                     <th className="p-2 border-r border-black min-w-[180px]">ITEM NAME & SPECIFICATION</th>
                     <th className="p-2 border-r border-black w-14">UNIT</th>
                     <th className="p-2 border-r border-black w-14">QTY</th>

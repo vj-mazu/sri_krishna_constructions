@@ -2062,7 +2062,20 @@ app.delete('/api/workers/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only Owner or Manager can delete worker records' });
     }
 
-    // Cleanly cascade delete any dummy attendance or payments associated with this worker
+    // Check worker exists and if they have an unsettled advance balance
+    const { rows: workerRows } = await pool.query(`SELECT "fullName", "advanceBalance" FROM "Worker" WHERE "id" = $1`, [id]);
+    if (workerRows.length === 0) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+    const worker = workerRows[0];
+    const advBal = parseFloat(worker.advanceBalance) || 0;
+    if (advBal > 0) {
+      return res.status(400).json({ 
+        error: `Cannot delete worker '${worker.fullName}'. They have an outstanding advance balance of ₹${advBal}. Settle the advance first.` 
+      });
+    }
+
+    // Cleanly cascade delete any attendance or payments associated with this worker
     await pool.query(`DELETE FROM "Attendance" WHERE "workerId" = $1`, [id]);
     await pool.query(`DELETE FROM "MonthlyPayment" WHERE "workerId" = $1`, [id]);
     await pool.query(`DELETE FROM "Worker" WHERE "id" = $1`, [id]);
@@ -2781,7 +2794,14 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
     try {
       await client.query('BEGIN');
 
-      const { rows: existingRows } = await client.query(`SELECT "advanceDeducted" FROM "MonthlyPayment" WHERE "workerId" = $1 AND "month" = $2 AND "year" = $3`, [workerId, m, y]);
+      // Lock worker row FOR UPDATE to guarantee ACID concurrency on advance balance adjustments
+      const { rows: workerCheck } = await client.query(`SELECT "id", "advanceBalance", "advanceTaken" FROM "Worker" WHERE "id" = $1 FOR UPDATE`, [workerId]);
+      if (workerCheck.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Worker not found' });
+      }
+
+      const { rows: existingRows } = await client.query(`SELECT "advanceDeducted" FROM "MonthlyPayment" WHERE "workerId" = $1 AND "month" = $2 AND "year" = $3 FOR UPDATE`, [workerId, m, y]);
       const prevAdvanceDeducted = existingRows.length > 0 ? (parseFloat(existingRows[0].advanceDeducted) || 0) : 0;
 
       const { rows } = await client.query(
@@ -2995,8 +3015,8 @@ app.get('/api/backup/json-export', authenticateToken, requireRoles(['OWNER']), a
       pool.query('SELECT "id","username","fullName","mobileNumber","role","createdAt" FROM "User" ORDER BY "createdAt"'),
       pool.query('SELECT * FROM "Division" ORDER BY "name"'),
       pool.query('SELECT * FROM "Worker" ORDER BY "fullName" LIMIT 10000'),
-      pool.query('SELECT * FROM "PurchaseOrder" ORDER BY "date" DESC'),
-      pool.query('SELECT * FROM "PurchaseOrderItem" ORDER BY "id"'),
+      pool.query('SELECT * FROM "PurchaseOrder" ORDER BY "date" DESC LIMIT 50000'),
+      pool.query('SELECT * FROM "PurchaseOrderItem" ORDER BY "id" LIMIT 50000'),
       pool.query('SELECT * FROM "Purchase" ORDER BY "date" DESC LIMIT 50000'),
       pool.query('SELECT * FROM "Sale" ORDER BY "invoiceDate" DESC LIMIT 50000'),
       pool.query('SELECT * FROM "Attendance" ORDER BY "date" DESC LIMIT 50000'),
