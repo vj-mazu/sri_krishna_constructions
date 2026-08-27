@@ -1327,6 +1327,68 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
 
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
+    const { stockType } = req.query;
+
+    // If requesting ONLY individual stocks
+    if (stockType === 'INDIVIDUAL') {
+      let indWhere = [];
+      let indParams = [];
+
+      if (search && search.trim()) {
+        indParams.push(`%${search.trim()}%`);
+        indWhere.push(`(s."itemName" ILIKE $${indParams.length} OR s."partNumber" ILIKE $${indParams.length} OR s."remarks" ILIKE $${indParams.length})`);
+      }
+      if (partNumber && partNumber.trim()) {
+        indParams.push(`%${partNumber.trim()}%`);
+        indWhere.push(`s."partNumber" ILIKE $${indParams.length}`);
+      }
+
+      const indWhereSql = indWhere.length > 0 ? 'WHERE ' + indWhere.join(' AND ') : '';
+      const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "IndividualStock" s ${indWhereSql}`, indParams);
+      const totalCount = countRes.rows[0]?.count || 0;
+
+      indParams.push(limitNum);
+      const indSql = `
+        SELECT 
+          s.id,
+          'INDIVIDUAL' as "stockType",
+          '-' as "poNumber",
+          NULL as "poDate",
+          '-' as "kpclCode",
+          s."itemName",
+          COALESCE(s."remarks", 'Standalone Individual Stock') as "specifications",
+          COALESCE(s."partNumber", '-') as "partNumber",
+          'DIRECT' as "make",
+          '-' as "hsnCode",
+          s."unit",
+          s."openingStock" as "orderedQty",
+          (s."openingStock" + COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0))::float as "totalPurchased",
+          COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)::float as "totalSold"
+        FROM "IndividualStock" s
+        ${indWhereSql}
+        ORDER BY s."createdAt" DESC
+        LIMIT $${indParams.length}
+      `;
+
+      const { rows } = await pool.query(indSql, indParams);
+      const summary = rows.map(item => {
+        const ordered = parseFloat(item.orderedQty || 0);
+        const purchased = parseFloat(item.totalPurchased || 0);
+        const sold = parseFloat(item.totalSold || 0);
+        return {
+          ...item,
+          stockType: 'INDIVIDUAL',
+          orderedQty: ordered,
+          totalPurchased: purchased,
+          totalSold: sold,
+          balanceStock: Math.max(0, purchased - sold),
+          remainingToReceive: 0
+        };
+      });
+
+      return res.json({ items: summary, nextCursor: null, totalCount });
+    }
+
     const countRes = await pool.query(
       `SELECT COUNT(*)::int as count 
        FROM "PurchaseOrderItem" poi 
@@ -1340,6 +1402,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
     const querySql = `
       SELECT 
         poi.id,
+        'PO' as "stockType",
         poi."purchaseOrderId",
         poi."kpclCode",
         poi."itemName",
@@ -1390,6 +1453,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
 
       return {
         id: item.id,
+        stockType: 'PO',
         purchaseOrderId: poId,
         poNumber: poNum,
         poDate: item.poDate || item.podate || null,
@@ -1415,7 +1479,381 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
   }
 });
 
-// --- EDIT / DELETE APPROVAL WORKFLOWS ---
+// --- INDIVIDUAL STOCKS (NON-PO STANDALONE INVENTORY) APIS ---
+
+// GET /api/individual-stocks - List all individual stock items with aggregated balances
+app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
+  try {
+    const { search, cursor, limit = 50 } = req.query;
+    const limitNum = parseInt(limit, 10) || 50;
+
+    let whereClauses = [];
+    let params = [];
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim()}%`);
+      whereClauses.push(`(s."itemName" ILIKE $${params.length} OR s."partNumber" ILIKE $${params.length} OR s."remarks" ILIKE $${params.length})`);
+    }
+
+    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+    const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "IndividualStock" s ${whereSql}`, params);
+    const totalCount = countRes.rows[0]?.count || 0;
+
+    let offsetNum = 0;
+    if (cursor) {
+      const parsed = parseInt(cursor, 10);
+      if (!isNaN(parsed)) offsetNum = parsed;
+    }
+
+    const queryParams = [...params, limitNum, offsetNum];
+    const querySql = `
+      SELECT 
+        s.*,
+        json_build_object('fullName', u."fullName") as "addedBy",
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0)::float as "totalInward",
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)::float as "totalSold",
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'PENDING'), 0)::float as "pendingSold"
+      FROM "IndividualStock" s
+      LEFT JOIN "User" u ON s."addedById" = u.id
+      ${whereSql}
+      ORDER BY s."createdAt" DESC, s."id" DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
+    `;
+
+    const { rows } = await pool.query(querySql, queryParams);
+    const nextOffset = (offsetNum + rows.length < totalCount) ? (offsetNum + limitNum).toString() : null;
+
+    const itemsWithBalance = rows.map(item => {
+      const opening = parseFloat(item.openingStock) || 0;
+      const inward = parseFloat(item.totalInward) || 0;
+      const sold = parseFloat(item.totalSold) || 0;
+      const balance = opening + inward - sold;
+      return {
+        ...item,
+        openingStock: opening,
+        totalInward: inward,
+        totalSold: sold,
+        balanceStock: Math.max(0, balance),
+        pendingSold: parseFloat(item.pendingSold) || 0
+      };
+    });
+
+    res.json({ items: itemsWithBalance, nextCursor: nextOffset, totalCount });
+  } catch (err) {
+    console.error('Error fetching individual stocks:', err);
+    res.status(500).json({ error: 'Failed to list individual stocks' });
+  }
+});
+
+// POST /api/individual-stocks - Create new individual stock item (Owner/Manager)
+app.post('/api/individual-stocks', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { itemName, partNumber, unit = 'NOS', openingStock = 0, remarks } = req.body;
+    if (!itemName || !itemName.trim()) {
+      return res.status(400).json({ error: 'Item Name is required' });
+    }
+
+    const openStockNum = parseFloat(openingStock) || 0;
+
+    const { rows } = await pool.query(
+      `INSERT INTO "IndividualStock" ("id", "itemName", "partNumber", "unit", "openingStock", "currentStock", "remarks", "addedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $4, $5, $6, NOW(), NOW())
+       RETURNING *`,
+      [itemName.trim(), partNumber ? partNumber.trim().toUpperCase() : null, unit.trim().toUpperCase(), openStockNum, remarks ? remarks.trim() : null, req.user.id]
+    );
+
+    res.status(201).json({ message: 'Individual Stock created successfully!', item: rows[0] });
+  } catch (err) {
+    console.error('Error creating individual stock:', err);
+    res.status(500).json({ error: 'Failed to create individual stock item' });
+  }
+});
+
+// PUT /api/individual-stocks/:id - Update individual stock item (Owner/Manager)
+app.put('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { itemName, partNumber, unit, openingStock, remarks } = req.body;
+
+    const { rows } = await pool.query(
+      `UPDATE "IndividualStock"
+       SET "itemName" = COALESCE($1, "itemName"),
+           "partNumber" = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE "partNumber" END,
+           "unit" = COALESCE($3, "unit"),
+           "openingStock" = COALESCE($4, "openingStock"),
+           "remarks" = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE "remarks" END,
+           "updatedAt" = NOW()
+       WHERE "id" = $6
+       RETURNING *`,
+      [
+        itemName ? itemName.trim() : null,
+        partNumber !== undefined ? (partNumber ? partNumber.trim().toUpperCase() : null) : null,
+        unit ? unit.trim().toUpperCase() : null,
+        openingStock !== undefined ? parseFloat(openingStock) || 0 : null,
+        remarks !== undefined ? (remarks ? remarks.trim() : null) : null,
+        id
+      ]
+    );
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Individual stock item not found' });
+    res.json({ message: 'Individual stock updated successfully!', item: rows[0] });
+  } catch (err) {
+    console.error('Error updating individual stock:', err);
+    res.status(500).json({ error: 'Failed to update individual stock' });
+  }
+});
+
+// DELETE /api/individual-stocks/:id - Delete individual stock item (Owner/Manager)
+app.delete('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const checkTx = await pool.query(`SELECT COUNT(*)::int as count FROM "IndividualStockTransaction" WHERE "stockId" = $1`, [id]);
+    if (checkTx.rows[0]?.count > 0) {
+      return res.status(400).json({ error: 'Cannot delete individual stock item with existing purchase or sale transaction history' });
+    }
+
+    const delRes = await pool.query(`DELETE FROM "IndividualStock" WHERE id = $1 RETURNING *`, [id]);
+    if (delRes.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+
+    res.json({ message: 'Individual stock item deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting individual stock:', err);
+    res.status(500).json({ error: 'Failed to delete individual stock item' });
+  }
+});
+
+// GET /api/individual-stocks/:id/transactions - Get transaction history for an item
+app.get('/api/individual-stocks/:id/transactions', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `SELECT tx.*, 
+              json_build_object('fullName', u."fullName") as "addedBy",
+              json_build_object('fullName', au."fullName") as "approvedBy"
+       FROM "IndividualStockTransaction" tx
+       LEFT JOIN "User" u ON tx."addedById" = u.id
+       LEFT JOIN "User" au ON tx."approvedById" = au.id
+       WHERE tx."stockId" = $1
+       ORDER BY tx."date" DESC, tx."createdAt" DESC`,
+      [id]
+    );
+
+    res.json({ transactions: rows });
+  } catch (err) {
+    console.error('Error listing transactions:', err);
+    res.status(500).json({ error: 'Failed to list transactions' });
+  }
+});
+
+// POST /api/individual-stocks/purchase - Inward Purchase for Individual Stock (ACID safe)
+app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const d = req.body;
+    if (!d.stockId) return res.status(400).json({ error: 'Stock item selection is required' });
+    if (!d.date) return res.status(400).json({ error: 'Purchase date is required' });
+
+    const qty = parseFloat(d.qty) || 0;
+    const rate = parseFloat(d.rate) || 0;
+    if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
+
+    const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+    const cgstP = parseFloat(d.cgstPercent) || 0;
+    const sgstP = parseFloat(d.sgstPercent) || 0;
+    const igstP = parseFloat(d.igstPercent) || 0;
+    const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+
+    await client.query('BEGIN');
+
+    // Row-level lock on the stock item
+    const stockRes = await client.query(`SELECT * FROM "IndividualStock" WHERE id = $1 FOR UPDATE`, [d.stockId]);
+    if (stockRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Individual stock item not found' });
+    }
+
+    const { rows: txRows } = await client.query(
+      `INSERT INTO "IndividualStockTransaction" (
+        "id", "stockId", "type", "date", "qty", "rate", "basicAmount",
+        "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+        "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
+        "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber", "remarks", "status", "addedById", "createdAt"
+      ) VALUES (
+        gen_random_uuid()::text, $1, 'INWARD', $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, '29DWKPP3582H1ZV',
+        $16, $17, $18, $19, 'APPROVED', $20, NOW()
+      ) RETURNING *`,
+      [
+        d.stockId, new Date(d.date), qty, rate, basicAmount,
+        cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
+        totalAmount,
+        d.partyName ? d.partyName.trim() : null,
+        d.supplierAddress ? d.supplierAddress.trim() : null,
+        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
+        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
+        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
+        req.user.id
+      ]
+    );
+
+    // Update currentStock on master record
+    await client.query(
+      `UPDATE "IndividualStock"
+       SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW()
+       WHERE id = $2`,
+      [qty, d.stockId]
+    );
+
+    await client.query('COMMIT');
+    res.status(201).json({ message: 'Inward purchase recorded successfully!', transaction: txRows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error recording individual purchase:', err);
+    res.status(500).json({ error: 'Failed to record inward purchase' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/individual-stocks/sale - Outward Sale Request for Individual Stock (Routes to Approval)
+app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const d = req.body;
+    if (!d.stockId) return res.status(400).json({ error: 'Stock item selection is required' });
+    if (!d.invoiceNumber || !d.invoiceNumber.trim()) return res.status(400).json({ error: 'Invoice Number is required' });
+    if (!d.invoiceDate) return res.status(400).json({ error: 'Invoice Date is required' });
+
+    const qty = parseFloat(d.qty) || 0;
+    const rate = parseFloat(d.rate) || 0;
+    if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
+
+    const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+    const cgstP = parseFloat(d.cgstPercent) || 0;
+    const sgstP = parseFloat(d.sgstPercent) || 0;
+    const igstP = parseFloat(d.igstPercent) || 0;
+    const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+
+    await client.query('BEGIN');
+
+    // Row-level lock on the stock item to compute available balance accurately
+    const stockRes = await client.query(
+      `SELECT s.*,
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0)::float as "totalInward",
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)::float as "totalSold"
+       FROM "IndividualStock" s
+       WHERE s.id = $1
+       FOR UPDATE`,
+      [d.stockId]
+    );
+
+    if (stockRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Individual stock item not found' });
+    }
+
+    const stock = stockRes.rows[0];
+    const availableBalance = (parseFloat(stock.openingStock) || 0) + stock.totalInward - stock.totalSold;
+
+    if (qty > availableBalance) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Requested quantity (${qty}) exceeds available stock balance (${availableBalance})` });
+    }
+
+    // Determine initial status: If OWNER creates it, auto-approve; otherwise PENDING
+    const isOwner = req.user.role === 'OWNER';
+    const txStatus = isOwner ? 'APPROVED' : 'PENDING';
+
+    const { rows: txRows } = await client.query(
+      `INSERT INTO "IndividualStockTransaction" (
+        "id", "stockId", "type", "date", "qty", "rate", "basicAmount",
+        "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+        "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
+        "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt"
+      ) VALUES (
+        gen_random_uuid()::text, $1, 'OUTWARD', $2, $3, $4, $5,
+        $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, '29DWKPP3582H1ZV',
+        $16, $17, $18, $19, $20, $21, $22, $23, NOW()
+      ) RETURNING *`,
+      [
+        d.stockId, new Date(d.invoiceDate), qty, rate, basicAmount,
+        cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
+        totalAmount,
+        d.partyName ? d.partyName.trim() : null,
+        d.supplierAddress ? d.supplierAddress.trim() : null,
+        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
+        d.invoiceNumber.trim().toUpperCase(),
+        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
+        txStatus,
+        isOwner ? req.user.id : null,
+        isOwner ? new Date() : null,
+        req.user.id
+      ]
+    );
+
+    const transaction = txRows[0];
+
+    // If Owner created, immediately update currentStock; otherwise create ApprovalRequest
+    if (isOwner) {
+      await client.query(
+        `UPDATE "IndividualStock"
+         SET "currentStock" = GREATEST(0, "currentStock" - $1), "updatedAt" = NOW()
+         WHERE id = $2`,
+        [qty, d.stockId]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'INDIVIDUAL_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify({
+            transactionId: transaction.id,
+            stockId: d.stockId,
+            itemName: stock.itemName,
+            partNumber: stock.partNumber,
+            invoiceNumber: d.invoiceNumber,
+            invoiceDate: d.invoiceDate,
+            qty,
+            rate,
+            totalAmount,
+            partyName: d.partyName,
+            gstNumber: d.gstNumber,
+            vehicleNumber: d.vehicleNumber,
+            remarks: d.remarks
+          }),
+          `Individual Stock Outward Sale: ${stock.itemName} (${qty} ${stock.unit || 'NOS'} @ ₹${rate}) for Invoice #${d.invoiceNumber}`
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      message: isOwner ? 'Outward sale recorded and approved!' : 'Sale submitted for Owner approval!',
+      transaction,
+      isPendingApproval: !isOwner
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error recording individual sale:', err);
+    res.status(500).json({ error: 'Failed to process sale request' });
+  } finally {
+    client.release();
+  }
+});
 app.post('/api/approvals/request', authenticateToken, async (req, res) => {
   try {
     const { type, payload, reason } = req.body;
@@ -1543,7 +1981,65 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
     }
     const approval = checkRes.rows[0];
 
-    if (approval.type === 'SALE_ENTRY') {
+    if (approval.type === 'INDIVIDUAL_SALE') {
+      // Individual sales approved by OWNER or MANAGER
+      const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+      const txId = payload.transactionId;
+      const stockId = payload.stockId;
+      const qty = parseFloat(payload.qty) || 0;
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        if (status === 'APPROVED') {
+          // Lock stock row and verify sufficient balance
+          const stockCheck = await client.query(`SELECT * FROM "IndividualStock" WHERE id = $1 FOR UPDATE`, [stockId]);
+          if (stockCheck.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Individual stock item not found' });
+          }
+
+          // Update transaction status to APPROVED
+          await client.query(
+            `UPDATE "IndividualStockTransaction"
+             SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW()
+             WHERE id = $2`,
+            [req.user.id, txId]
+          );
+
+          // Deduct from currentStock
+          await client.query(
+            `UPDATE "IndividualStock"
+             SET "currentStock" = GREATEST(0, "currentStock" - $1), "updatedAt" = NOW()
+             WHERE id = $2`,
+            [qty, stockId]
+          );
+        } else if (status === 'REJECTED') {
+          await client.query(
+            `UPDATE "IndividualStockTransaction"
+             SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW()
+             WHERE id = $3`,
+            [rejectionReason || 'Rejected by Approver', req.user.id, txId]
+          );
+        }
+
+        await client.query(
+          `UPDATE "ApprovalRequest"
+           SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW()
+           WHERE id = $4`,
+          [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+        );
+
+        await client.query('COMMIT');
+        return res.json({ message: `Individual sale request ${status.toLowerCase()} successfully!` });
+      } catch (decisionErr) {
+        await client.query('ROLLBACK');
+        throw decisionErr;
+      } finally {
+        client.release();
+      }
+    } else if (approval.type === 'SALE_ENTRY') {
       // Sales must be approved by OWNER ONLY
       if (req.user.role !== 'OWNER') {
         return res.status(403).json({ error: 'Sale approvals must be reviewed and approved by the OWNER only.' });
@@ -3011,7 +3507,7 @@ app.post('/api/backup/database', authenticateToken, requireRoles(['OWNER']), (re
 // --- JSON DATA EXPORT BACKUP ---
 app.get('/api/backup/json-export', authenticateToken, requireRoles(['OWNER']), async (req, res) => {
   try {
-    const [users, divisions, workers, purchaseOrders, poItems, purchases, sales, attendance, payments, approvals] = await Promise.all([
+    const [users, divisions, workers, purchaseOrders, poItems, purchases, sales, attendance, payments, approvals, individualStocks, indTransactions] = await Promise.all([
       pool.query('SELECT "id","username","fullName","mobileNumber","role","createdAt" FROM "User" ORDER BY "createdAt"'),
       pool.query('SELECT * FROM "Division" ORDER BY "name"'),
       pool.query('SELECT * FROM "Worker" ORDER BY "fullName" LIMIT 10000'),
@@ -3021,7 +3517,9 @@ app.get('/api/backup/json-export', authenticateToken, requireRoles(['OWNER']), a
       pool.query('SELECT * FROM "Sale" ORDER BY "invoiceDate" DESC LIMIT 50000'),
       pool.query('SELECT * FROM "Attendance" ORDER BY "date" DESC LIMIT 50000'),
       pool.query('SELECT * FROM "MonthlyPayment" ORDER BY "year" DESC, "month" DESC LIMIT 50000'),
-      pool.query('SELECT * FROM "ApprovalRequest" ORDER BY "createdAt" DESC LIMIT 10000')
+      pool.query('SELECT * FROM "ApprovalRequest" ORDER BY "createdAt" DESC LIMIT 10000'),
+      pool.query('SELECT * FROM "IndividualStock" ORDER BY "createdAt" DESC LIMIT 50000'),
+      pool.query('SELECT * FROM "IndividualStockTransaction" ORDER BY "date" DESC LIMIT 50000')
     ]);
 
     const backup = {
@@ -3038,7 +3536,9 @@ app.get('/api/backup/json-export', authenticateToken, requireRoles(['OWNER']), a
         sales: sales.rows,
         attendance: attendance.rows,
         monthlyPayments: payments.rows,
-        approvalRequests: approvals.rows
+        approvalRequests: approvals.rows,
+        individualStocks: individualStocks.rows,
+        individualStockTransactions: indTransactions.rows
       },
       recordCounts: {
         users: users.rows.length,
@@ -3050,7 +3550,9 @@ app.get('/api/backup/json-export', authenticateToken, requireRoles(['OWNER']), a
         sales: sales.rows.length,
         attendance: attendance.rows.length,
         monthlyPayments: payments.rows.length,
-        approvalRequests: approvals.rows.length
+        approvalRequests: approvals.rows.length,
+        individualStocks: individualStocks.rows.length,
+        individualStockTransactions: indTransactions.rows.length
       }
     };
 

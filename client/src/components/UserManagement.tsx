@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
-import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit } from 'lucide-react';
+import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History } from 'lucide-react';
 
 interface UserManagementProps {
   currentUserRole: string;
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'divisions' | 'workers' | 'pos' | 'holidays'>(
+  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'divisions' | 'workers' | 'pos' | 'holidays' | 'individual_stocks'>(
     currentUserRole === 'SUPERVISOR' ? 'workers' : 'accounts'
   );
   const [error, setError] = useState('');
@@ -97,6 +97,226 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   
   // Edit PO State
   const [editingPO, setEditingPO] = useState<any>(null);
+  // --- INDIVIDUAL STOCKS (STANDALONE NON-PO INVENTORY) STATE ---
+  const [individualStocks, setIndividualStocks] = useState<any[]>([]);
+  const [indStockSearch, setIndStockSearch] = useState('');
+  const [indStockItemName, setIndStockItemName] = useState('');
+  const [indStockPartNumber, setIndStockPartNumber] = useState('');
+  const [indStockUnit, setIndStockUnit] = useState('NOS');
+  const [indStockOpening, setIndStockOpening] = useState('');
+  const [indStockRemarks, setIndStockRemarks] = useState('');
+  const [showAddIndStockForm, setShowAddIndStockForm] = useState(false);
+  const [editingIndStock, setEditingIndStock] = useState<any>(null);
+
+  // Inward Purchase Modal for Individual Stock
+  const [purchaseModalItem, setPurchaseModalItem] = useState<any>(null);
+  const [indPurchaseForm, setIndPurchaseForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    qty: '',
+    rate: '',
+    partyName: '',
+    supplierAddress: '',
+    gstNumber: '',
+    partyInvoiceNumber: '',
+    supplierInvoiceDate: '',
+    vehicleNumber: '',
+    cgstPercent: '9',
+    sgstPercent: '9',
+    igstPercent: '0',
+    remarks: ''
+  });
+
+  // Outward Sale Modal for Individual Stock
+  const [saleModalItem, setSaleModalItem] = useState<any>(null);
+  const [indSaleForm, setIndSaleForm] = useState({
+    invoiceNumber: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    qty: '',
+    rate: '',
+    partyName: '',
+    supplierAddress: '',
+    gstNumber: '',
+    vehicleNumber: '',
+    cgstPercent: '9',
+    sgstPercent: '9',
+    igstPercent: '0',
+    remarks: ''
+  });
+
+  // Transactions History Modal
+  const [txHistoryItem, setTxHistoryItem] = useState<any>(null);
+  const [transactionsList, setTransactionsList] = useState<any[]>([]);
+
+  const fetchIndividualStocks = async () => {
+    try {
+      const res = await api.get('/individual-stocks');
+      setIndividualStocks(res.data.items || []);
+    } catch (err: any) {
+      console.error('Failed to load individual stocks:', err);
+      showToast(err.response?.data?.error || 'Failed to load individual stocks', 'error');
+    }
+  };
+
+  const handleCreateIndStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessages();
+    if (!indStockItemName.trim()) {
+      showToast('Item Name is required', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.post('/individual-stocks', {
+        itemName: indStockItemName.trim(),
+        partNumber: indStockPartNumber.trim() || undefined,
+        unit: indStockUnit.trim() || 'NOS',
+        openingStock: parseFloat(indStockOpening) || 0,
+        remarks: indStockRemarks.trim() || undefined
+      });
+      showToast(`Individual Stock '${indStockItemName}' registered successfully!`, 'success');
+      setIndStockItemName('');
+      setIndStockPartNumber('');
+      setIndStockUnit('NOS');
+      setIndStockOpening('');
+      setIndStockRemarks('');
+      setShowAddIndStockForm(false);
+      fetchIndividualStocks();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to create individual stock', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateIndStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingIndStock) return;
+    clearMessages();
+
+    try {
+      setLoading(true);
+      await api.put(`/individual-stocks/${editingIndStock.id}`, {
+        itemName: editingIndStock.itemName.trim(),
+        partNumber: editingIndStock.partNumber?.trim() || null,
+        unit: editingIndStock.unit || 'NOS',
+        openingStock: parseFloat(editingIndStock.openingStock) || 0,
+        remarks: editingIndStock.remarks || null
+      });
+      showToast('Individual stock item updated successfully!', 'success');
+      setEditingIndStock(null);
+      fetchIndividualStocks();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to update item', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteIndStock = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete '${name}'?`)) return;
+    try {
+      await api.delete(`/individual-stocks/${id}`);
+      showToast('Item deleted successfully', 'success');
+      fetchIndividualStocks();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to delete item', 'error');
+    }
+  };
+
+  const handleRecordIndPurchase = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!purchaseModalItem) return;
+    const qty = parseFloat(indPurchaseForm.qty) || 0;
+    const rate = parseFloat(indPurchaseForm.rate) || 0;
+    if (qty <= 0) {
+      showToast('Quantity must be greater than 0', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.post('/individual-stocks/purchase', {
+        stockId: purchaseModalItem.id,
+        date: indPurchaseForm.date,
+        qty,
+        rate,
+        partyName: indPurchaseForm.partyName.trim() || undefined,
+        supplierAddress: indPurchaseForm.supplierAddress.trim() || undefined,
+        gstNumber: indPurchaseForm.gstNumber.trim() || undefined,
+        partyInvoiceNumber: indPurchaseForm.partyInvoiceNumber.trim() || undefined,
+        supplierInvoiceDate: indPurchaseForm.supplierInvoiceDate || undefined,
+        vehicleNumber: indPurchaseForm.vehicleNumber.trim() || undefined,
+        cgstPercent: parseFloat(indPurchaseForm.cgstPercent) || 0,
+        sgstPercent: parseFloat(indPurchaseForm.sgstPercent) || 0,
+        igstPercent: parseFloat(indPurchaseForm.igstPercent) || 0,
+        remarks: indPurchaseForm.remarks.trim() || undefined
+      });
+      showToast(`Inward purchase of ${qty} ${purchaseModalItem.unit || 'NOS'} recorded successfully!`, 'success');
+      setPurchaseModalItem(null);
+      fetchIndividualStocks();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to record inward purchase', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecordIndSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saleModalItem) return;
+    const qty = parseFloat(indSaleForm.qty) || 0;
+    const rate = parseFloat(indSaleForm.rate) || 0;
+    if (!indSaleForm.invoiceNumber.trim()) {
+      showToast('Invoice Number is required', 'error');
+      return;
+    }
+    if (qty <= 0) {
+      showToast('Quantity must be greater than 0', 'error');
+      return;
+    }
+    if (qty > saleModalItem.balanceStock) {
+      showToast(`Quantity (${qty}) exceeds available stock balance (${saleModalItem.balanceStock})`, 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.post('/individual-stocks/sale', {
+        stockId: saleModalItem.id,
+        invoiceNumber: indSaleForm.invoiceNumber.trim(),
+        invoiceDate: indSaleForm.invoiceDate,
+        qty,
+        rate,
+        partyName: indSaleForm.partyName.trim() || undefined,
+        supplierAddress: indSaleForm.supplierAddress.trim() || undefined,
+        gstNumber: indSaleForm.gstNumber.trim() || undefined,
+        vehicleNumber: indSaleForm.vehicleNumber.trim() || undefined,
+        cgstPercent: parseFloat(indSaleForm.cgstPercent) || 0,
+        sgstPercent: parseFloat(indSaleForm.sgstPercent) || 0,
+        igstPercent: parseFloat(indSaleForm.igstPercent) || 0,
+        remarks: indSaleForm.remarks.trim() || undefined
+      });
+      showToast(res.data.message || 'Sale submitted successfully!', 'success');
+      setSaleModalItem(null);
+      fetchIndividualStocks();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to record sale', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenTxHistory = async (item: any) => {
+    setTxHistoryItem(item);
+    try {
+      const res = await api.get(`/individual-stocks/${item.id}/transactions`);
+      setTransactionsList(res.data.transactions || []);
+    } catch (err: any) {
+      showToast('Failed to load transaction history', 'error');
+    }
+  };
+
   // --- HOLIDAYS (CALENDAR) STATE ---
   const [holidays, setHolidays] = useState<any[]>([]);
   const [holidayDate, setHolidayDate] = useState(new Date().toISOString().split('T')[0]);
@@ -208,7 +428,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   useEffect(() => {
-    const promises: Promise<void>[] = [fetchDivisions(), fetchWorkers()];
+    const promises: Promise<void>[] = [fetchDivisions(), fetchWorkers(), fetchIndividualStocks()];
     if (currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') {
       promises.push(fetchUsers(), fetchPurchaseOrders(), fetchHolidays());
     }
@@ -703,6 +923,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 <span>🏛️</span> Holidays
               </button>
             )}
+            <button
+              onClick={() => { setActiveSubTab('individual_stocks'); clearMessages(); fetchIndividualStocks(); }}
+              className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center flex items-center gap-1 ${
+                activeSubTab === 'individual_stocks' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5" /> Individual Stocks
+            </button>
           </div>
         </div>
 
@@ -2132,6 +2360,949 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+      {/* --- SUB-TAB: INDIVIDUAL STOCKS (STANDALONE NON-PO INVENTORY) --- */}
+      {activeSubTab === 'individual_stocks' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap justify-between items-center gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Package className="w-4 h-4 text-[#1e3a8a]" /> Individual Stocks (Non-PO Items)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Register and manage stock purchased directly without a PO. Record inward purchases, sales with owner approval, and track balances.
+              </p>
+            </div>
+
+            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+              <button
+                onClick={() => setShowAddIndStockForm(!showAddIndStockForm)}
+                className="px-3.5 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 shadow"
+              >
+                <Package className="w-4 h-4" /> {showAddIndStockForm ? 'Hide Form' : '+ Add Individual Stock'}
+              </button>
+            )}
+          </div>
+
+          {/* ADD INDIVIDUAL STOCK FORM */}
+          {showAddIndStockForm && (
+            <form onSubmit={handleCreateIndStock} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4 animate-fadeIn">
+              <h4 className="font-bold text-xs text-[#1e3a8a] uppercase flex items-center gap-1.5">
+                <Package className="w-4 h-4" /> Register Standalone Stock Item
+              </h4>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                <div className="lg:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Item Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={indStockItemName}
+                    onChange={(e) => setIndStockItemName(e.target.value.toUpperCase())}
+                    placeholder="e.g. BALL BEARING 6205, COUPLING RUBBER, WELDING RODS"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Part Number / Item Code
+                  </label>
+                  <input
+                    type="text"
+                    value={indStockPartNumber}
+                    onChange={(e) => setIndStockPartNumber(e.target.value.toUpperCase())}
+                    placeholder="Optional Part No"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Unit of Measurement
+                  </label>
+                  <select
+                    value={indStockUnit}
+                    onChange={(e) => setIndStockUnit(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-semibold"
+                  >
+                    <option value="NOS">NOS (Numbers)</option>
+                    <option value="SET">SET</option>
+                    <option value="MTR">MTR (Meters)</option>
+                    <option value="KGS">KGS (Kilograms)</option>
+                    <option value="LTR">LTR (Liters)</option>
+                    <option value="PKT">PKT (Packets)</option>
+                    <option value="BOX">BOX</option>
+                    <option value="PAIR">PAIR</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Opening Stock Quantity
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={indStockOpening}
+                    onChange={(e) => setIndStockOpening(e.target.value)}
+                    placeholder="0"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono"
+                  />
+                </div>
+
+                <div className="lg:col-span-3">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Remarks / Purpose
+                  </label>
+                  <input
+                    type="text"
+                    value={indStockRemarks}
+                    onChange={(e) => setIndStockRemarks(e.target.value)}
+                    placeholder="e.g. Purchased directly for site maintenance, emergency spares, etc."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowAddIndStockForm(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                >
+                  <Package className="w-3.5 h-3.5" /> {loading ? 'Saving...' : 'Save Stock Item'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* SEARCH & STATS BAR */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div className="relative flex-1 min-w-[240px]">
+              <input
+                type="text"
+                value={indStockSearch}
+                onChange={(e) => setIndStockSearch(e.target.value)}
+                placeholder="Search individual stocks by Item Name, Part No, or Remarks..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none"
+              />
+              <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs font-semibold text-slate-600">
+              <span>Total Items: <strong className="text-slate-900">{individualStocks.length}</strong></span>
+            </div>
+          </div>
+
+          {/* INDIVIDUAL STOCKS TABLE */}
+          <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+            <table className="w-full text-left text-xs excel-table">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Part No</th>
+                  <th>Unit</th>
+                  <th className="text-right">Opening</th>
+                  <th className="text-right">Total Inward</th>
+                  <th className="text-right">Total Sold</th>
+                  <th className="text-right">Available Stock</th>
+                  <th>Remarks</th>
+                  <th className="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {individualStocks.filter(s => {
+                  if (!indStockSearch) return true;
+                  const q = indStockSearch.toLowerCase();
+                  return (s.itemName || '').toLowerCase().includes(q) ||
+                         (s.partNumber || '').toLowerCase().includes(q) ||
+                         (s.remarks || '').toLowerCase().includes(q);
+                }).length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-slate-400">
+                      No individual stock items registered yet. Click <strong>+ Add Individual Stock</strong> to create one.
+                    </td>
+                  </tr>
+                ) : (
+                  individualStocks
+                    .filter(s => {
+                      if (!indStockSearch) return true;
+                      const q = indStockSearch.toLowerCase();
+                      return (s.itemName || '').toLowerCase().includes(q) ||
+                             (s.partNumber || '').toLowerCase().includes(q) ||
+                             (s.remarks || '').toLowerCase().includes(q);
+                    })
+                    .map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td className="font-bold text-slate-900">
+                          {item.itemName}
+                        </td>
+                        <td className="font-mono text-slate-600">
+                          {item.partNumber || '-'}
+                        </td>
+                        <td>
+                          <span className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] font-bold text-slate-700">
+                            {item.unit || 'NOS'}
+                          </span>
+                        </td>
+                        <td className="text-right font-mono text-slate-600">
+                          {item.openingStock || 0}
+                        </td>
+                        <td className="text-right font-mono font-bold text-emerald-700">
+                          +{item.totalInward || 0}
+                        </td>
+                        <td className="text-right font-mono font-bold text-blue-700">
+                          -{item.totalSold || 0}
+                          {item.pendingSold > 0 && (
+                            <span className="text-[10px] text-amber-600 block">({item.pendingSold} pending)</span>
+                          )}
+                        </td>
+                        <td className="text-right font-mono font-black text-sm">
+                          <span className={`px-2 py-0.5 rounded-full ${
+                            (item.balanceStock || 0) > 0 
+                              ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}>
+                            {item.balanceStock || 0} {item.unit || 'NOS'}
+                          </span>
+                        </td>
+                        <td className="text-slate-500 max-w-xs truncate" title={item.remarks || ''}>
+                          {item.remarks || '-'}
+                        </td>
+                        <td>
+                          <div className="flex items-center justify-center gap-1.5">
+                            {/* Inward Purchase Button */}
+                            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                              <button
+                                onClick={() => {
+                                  setPurchaseModalItem(item);
+                                  setIndPurchaseForm({
+                                    date: new Date().toISOString().split('T')[0],
+                                    qty: '',
+                                    rate: '',
+                                    partyName: '',
+                                    supplierAddress: '',
+                                    gstNumber: '',
+                                    partyInvoiceNumber: '',
+                                    supplierInvoiceDate: '',
+                                    vehicleNumber: '',
+                                    cgstPercent: '9',
+                                    sgstPercent: '9',
+                                    igstPercent: '0',
+                                    remarks: ''
+                                  });
+                                }}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded font-semibold text-[11px] flex items-center gap-1"
+                                title="Record Inward Purchase"
+                              >
+                                <ArrowDownToLine className="w-3 h-3" /> Inward
+                              </button>
+                            )}
+
+                            {/* Outward Sale Button */}
+                            <button
+                              onClick={() => {
+                                setSaleModalItem(item);
+                                setIndSaleForm({
+                                  invoiceNumber: '',
+                                  invoiceDate: new Date().toISOString().split('T')[0],
+                                  qty: '',
+                                  rate: '',
+                                  partyName: '',
+                                  supplierAddress: '',
+                                  gstNumber: '',
+                                  vehicleNumber: '',
+                                  cgstPercent: '9',
+                                  sgstPercent: '9',
+                                  igstPercent: '0',
+                                  remarks: ''
+                                });
+                              }}
+                              className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded font-semibold text-[11px] flex items-center gap-1"
+                              title="Record Outward Sale"
+                            >
+                              <ArrowUpFromLine className="w-3 h-3" /> Sale
+                            </button>
+
+                            {/* History Button */}
+                            <button
+                              onClick={() => handleOpenTxHistory(item)}
+                              className="p-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300"
+                              title="View Transactions History"
+                            >
+                              <History className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Edit Button */}
+                            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                              <button
+                                onClick={() => setEditingIndStock(item)}
+                                className="p-1 text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 rounded border border-amber-300"
+                                title="Edit Stock Details"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+
+                            {/* Delete Button */}
+                            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                              <button
+                                onClick={() => handleDeleteIndStock(item.id, item.itemName)}
+                                className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded border border-red-300"
+                                title="Delete Item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* MODAL: INWARD PURCHASE (FULL GST FIELDS) */}
+          {purchaseModalItem && (
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-6">
+                <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-6 py-4 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-base flex items-center gap-2">
+                      <ArrowDownToLine className="w-5 h-5 text-emerald-300" /> Record Inward Purchase (Individual Stock)
+                    </h3>
+                    <p className="text-xs text-emerald-200 mt-0.5">
+                      Item: <strong>{purchaseModalItem.itemName}</strong> ({purchaseModalItem.partNumber || 'No Part Number'})
+                    </p>
+                  </div>
+                  <button onClick={() => setPurchaseModalItem(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
+                </div>
+
+                <form onSubmit={handleRecordIndPurchase} className="p-6 space-y-4 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Inward Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={indPurchaseForm.date}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, date: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Quantity Inward <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        required
+                        value={indPurchaseForm.qty}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, qty: e.target.value })}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Unit Purchase Rate (₹) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        required
+                        value={indPurchaseForm.rate}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, rate: e.target.value })}
+                        placeholder="0.00"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Party / Supplier Name
+                      </label>
+                      <input
+                        type="text"
+                        value={indPurchaseForm.partyName}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, partyName: e.target.value })}
+                        placeholder="e.g. SKF Bearing Distributor"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Supplier GSTIN Number
+                      </label>
+                      <input
+                        type="text"
+                        value={indPurchaseForm.gstNumber}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, gstNumber: e.target.value.toUpperCase() })}
+                        placeholder="29XXXXXXXXXXXXX"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Party Bill / Invoice Number
+                      </label>
+                      <input
+                        type="text"
+                        value={indPurchaseForm.partyInvoiceNumber}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, partyInvoiceNumber: e.target.value.toUpperCase() })}
+                        placeholder="Vendor Invoice #"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Supplier Invoice Date
+                      </label>
+                      <input
+                        type="date"
+                        value={indPurchaseForm.supplierInvoiceDate}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, supplierInvoiceDate: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Vehicle Number
+                      </label>
+                      <input
+                        type="text"
+                        value={indPurchaseForm.vehicleNumber}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, vehicleNumber: e.target.value.toUpperCase() })}
+                        placeholder="KA 36C 1234"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono uppercase"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">CGST %</label>
+                        <input
+                          type="number"
+                          value={indPurchaseForm.cgstPercent}
+                          onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, cgstPercent: e.target.value })}
+                          className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">SGST %</label>
+                        <input
+                          type="number"
+                          value={indPurchaseForm.sgstPercent}
+                          onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, sgstPercent: e.target.value })}
+                          className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">IGST %</label>
+                        <input
+                          type="number"
+                          value={indPurchaseForm.igstPercent}
+                          onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, igstPercent: e.target.value })}
+                          className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Address</label>
+                      <input
+                        type="text"
+                        value={indPurchaseForm.supplierAddress}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, supplierAddress: e.target.value })}
+                        placeholder="Street, City, State, PIN"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                      <input
+                        type="text"
+                        value={indPurchaseForm.remarks}
+                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, remarks: e.target.value })}
+                        placeholder="Optional remarks"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Summary Box */}
+                  <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex justify-between items-center text-xs">
+                    <div>
+                      <span className="text-emerald-800 font-semibold">Basic: ₹{(Number(indPurchaseForm.qty || 0) * Number(indPurchaseForm.rate || 0)).toLocaleString('en-IN')}</span>
+                      <span className="text-emerald-700 ml-3">Tax: {Number(indPurchaseForm.cgstPercent || 0) + Number(indPurchaseForm.sgstPercent || 0) + Number(indPurchaseForm.igstPercent || 0)}%</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-emerald-950 text-sm">
+                        Total Inward Amount: ₹{Math.round(
+                          (Number(indPurchaseForm.qty || 0) * Number(indPurchaseForm.rate || 0)) * 
+                          (1 + (Number(indPurchaseForm.cgstPercent || 0) + Number(indPurchaseForm.sgstPercent || 0) + Number(indPurchaseForm.igstPercent || 0)) / 100)
+                        ).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setPurchaseModalItem(null)}
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                    >
+                      <ArrowDownToLine className="w-3.5 h-3.5" /> {loading ? 'Saving...' : 'Confirm Inward Purchase'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: OUTWARD SALE (REQUIRES OWNER APPROVAL) */}
+          {saleModalItem && (
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-6">
+                <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-base flex items-center gap-2">
+                      <ArrowUpFromLine className="w-5 h-5 text-blue-300" /> Record Outward Sale (Individual Stock)
+                    </h3>
+                    <p className="text-xs text-blue-200 mt-0.5">
+                      Item: <strong>{saleModalItem.itemName}</strong> | Available Balance: <span className="font-bold font-mono text-emerald-300">{saleModalItem.balanceStock} {saleModalItem.unit || 'NOS'}</span>
+                    </p>
+                  </div>
+                  <button onClick={() => setSaleModalItem(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
+                </div>
+
+                <form onSubmit={handleRecordIndSale} className="p-6 space-y-4 text-xs">
+                  {currentUserRole !== 'OWNER' && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2">
+                      <span>🛡️</span>
+                      <span>
+                        <strong>Note:</strong> Sales on Individual Stock submitted by {currentUserRole} will be placed under <strong>Pending Approvals</strong> and require Owner review before stock deduction.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Invoice Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={indSaleForm.invoiceNumber}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, invoiceNumber: e.target.value.toUpperCase() })}
+                        placeholder="e.g. SKC/2026/01"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Invoice Date <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        required
+                        value={indSaleForm.invoiceDate}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, invoiceDate: e.target.value })}
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Quantity to Sell <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.01"
+                        max={saleModalItem.balanceStock}
+                        required
+                        value={indSaleForm.qty}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, qty: e.target.value })}
+                        placeholder="0"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Selling Rate (₹) <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        required
+                        value={indSaleForm.rate}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, rate: e.target.value })}
+                        placeholder="0.00"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Buyer / Customer Name
+                      </label>
+                      <input
+                        type="text"
+                        value={indSaleForm.partyName}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, partyName: e.target.value })}
+                        placeholder="e.g. KPCL Raichur"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Buyer GSTIN Number
+                      </label>
+                      <input
+                        type="text"
+                        value={indSaleForm.gstNumber}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, gstNumber: e.target.value.toUpperCase() })}
+                        placeholder="29XXXXXXXXXXXXX"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Dispatch Vehicle Number
+                      </label>
+                      <input
+                        type="text"
+                        value={indSaleForm.vehicleNumber}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, vehicleNumber: e.target.value.toUpperCase() })}
+                        placeholder="KA 36C 2722"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono uppercase"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-1">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">CGST %</label>
+                        <input
+                          type="number"
+                          value={indSaleForm.cgstPercent}
+                          onChange={(e) => setIndSaleForm({ ...indSaleForm, cgstPercent: e.target.value })}
+                          className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">SGST %</label>
+                        <input
+                          type="number"
+                          value={indSaleForm.sgstPercent}
+                          onChange={(e) => setIndSaleForm({ ...indSaleForm, sgstPercent: e.target.value })}
+                          className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">IGST %</label>
+                        <input
+                          type="number"
+                          value={indSaleForm.igstPercent}
+                          onChange={(e) => setIndSaleForm({ ...indSaleForm, igstPercent: e.target.value })}
+                          className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GSTIN</label>
+                      <input
+                        type="text"
+                        disabled
+                        value="29DWKPP3582H1ZV"
+                        className="w-full px-2.5 py-1.5 border border-slate-200 bg-slate-100 rounded-lg text-slate-600 font-mono"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Customer Delivery Address</label>
+                      <input
+                        type="text"
+                        value={indSaleForm.supplierAddress}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, supplierAddress: e.target.value })}
+                        placeholder="Plant Premises, Shaktinagara, Raichur"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-3">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                      <input
+                        type="text"
+                        value={indSaleForm.remarks}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, remarks: e.target.value })}
+                        placeholder="Optional sale dispatch notes"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Summary Box */}
+                  <div className="bg-blue-50 p-3 rounded-xl border border-blue-200 flex justify-between items-center text-xs">
+                    <div>
+                      <span className="text-blue-900 font-semibold">Basic Value: ₹{(Number(indSaleForm.qty || 0) * Number(indSaleForm.rate || 0)).toLocaleString('en-IN')}</span>
+                      <span className="text-blue-700 ml-3">Tax: {Number(indSaleForm.cgstPercent || 0) + Number(indSaleForm.sgstPercent || 0) + Number(indSaleForm.igstPercent || 0)}%</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold text-blue-950 text-sm">
+                        Total Invoice Value: ₹{Math.round(
+                          (Number(indSaleForm.qty || 0) * Number(indSaleForm.rate || 0)) * 
+                          (1 + (Number(indSaleForm.cgstPercent || 0) + Number(indSaleForm.sgstPercent || 0) + Number(indSaleForm.igstPercent || 0)) / 100)
+                        ).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setSaleModalItem(null)}
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                    >
+                      <ArrowUpFromLine className="w-3.5 h-3.5" /> {loading ? 'Submitting...' : currentUserRole === 'OWNER' ? 'Confirm Sale' : 'Submit for Owner Approval'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: TRANSACTION HISTORY */}
+          {txHistoryItem && (
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-6">
+                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-bold text-base flex items-center gap-2">
+                      <History className="w-5 h-5 text-sky-200" /> Transaction Ledger: {txHistoryItem.itemName}
+                    </h3>
+                    <p className="text-xs text-sky-200 mt-0.5">
+                      Part No: <strong>{txHistoryItem.partNumber || '-'}</strong> | Unit: <strong>{txHistoryItem.unit || 'NOS'}</strong>
+                    </p>
+                  </div>
+                  <button onClick={() => setTxHistoryItem(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
+                </div>
+
+                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                  <table className="w-full text-left text-xs excel-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Invoice / Bill #</th>
+                        <th>Party Name & GSTIN</th>
+                        <th className="text-right">Qty</th>
+                        <th className="text-right">Rate</th>
+                        <th className="text-right">Total (₹)</th>
+                        <th>Status</th>
+                        <th>Recorded By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {transactionsList.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="p-8 text-center text-slate-400">
+                            No inward or outward transactions recorded yet for this item.
+                          </td>
+                        </tr>
+                      ) : (
+                        transactionsList.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50">
+                            <td className="font-mono text-slate-800">
+                              {new Date(tx.date).toLocaleDateString('en-GB')}
+                            </td>
+                            <td>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                tx.type === 'INWARD' 
+                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
+                                  : 'bg-blue-100 text-blue-900 border border-blue-300'
+                              }`}>
+                                {tx.type === 'INWARD' ? '📥 INWARD' : '📤 OUTWARD'}
+                              </span>
+                            </td>
+                            <td className="font-mono font-bold text-slate-900">
+                              {tx.partyInvoiceNumber || '-'}
+                            </td>
+                            <td>
+                              <div className="font-bold text-slate-800">{tx.partyName || '-'}</div>
+                              {tx.gstNumber && <div className="text-[10px] text-slate-500 font-mono">GST: {tx.gstNumber}</div>}
+                            </td>
+                            <td className={`text-right font-mono font-bold ${tx.type === 'INWARD' ? 'text-emerald-700' : 'text-blue-700'}`}>
+                              {tx.type === 'INWARD' ? '+' : '-'}{tx.qty}
+                            </td>
+                            <td className="text-right font-mono text-slate-700">
+                              ₹{parseFloat(tx.rate || 0).toLocaleString('en-IN')}
+                            </td>
+                            <td className="text-right font-mono font-bold text-slate-900">
+                              ₹{Math.round(parseFloat(tx.totalAmount || 0)).toLocaleString('en-IN')}
+                            </td>
+                            <td>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                tx.status === 'APPROVED' 
+                                  ? 'bg-emerald-100 text-emerald-800' 
+                                  : tx.status === 'PENDING' 
+                                  ? 'bg-amber-100 text-amber-800' 
+                                  : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                {tx.status}
+                              </span>
+                            </td>
+                            <td className="text-slate-500 text-[11px]">
+                              {tx.addedBy?.fullName || '-'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={() => setTxHistoryItem(null)}
+                    className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODAL: EDIT INDIVIDUAL STOCK DETAILS */}
+          {editingIndStock && (
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden">
+                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center">
+                  <h3 className="font-bold text-sm">Edit Stock Details</h3>
+                  <button onClick={() => setEditingIndStock(null)} className="text-white/80 hover:text-white">✕</button>
+                </div>
+                <form onSubmit={handleUpdateIndStock} className="p-6 space-y-4 text-xs">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingIndStock.itemName}
+                      onChange={(e) => setEditingIndStock({ ...editingIndStock, itemName: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Part Number</label>
+                    <input
+                      type="text"
+                      value={editingIndStock.partNumber || ''}
+                      onChange={(e) => setEditingIndStock({ ...editingIndStock, partNumber: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
+                    <select
+                      value={editingIndStock.unit || 'NOS'}
+                      onChange={(e) => setEditingIndStock({ ...editingIndStock, unit: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-semibold"
+                    >
+                      <option value="NOS">NOS</option>
+                      <option value="SET">SET</option>
+                      <option value="MTR">MTR</option>
+                      <option value="KGS">KGS</option>
+                      <option value="LTR">LTR</option>
+                      <option value="PKT">PKT</option>
+                      <option value="BOX">BOX</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Opening Stock</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={editingIndStock.openingStock || 0}
+                      onChange={(e) => setEditingIndStock({ ...editingIndStock, openingStock: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                    <input
+                      type="text"
+                      value={editingIndStock.remarks || ''}
+                      onChange={(e) => setEditingIndStock({ ...editingIndStock, remarks: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a]"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setEditingIndStock(null)}
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs"
+                    >
+                      Save Changes
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

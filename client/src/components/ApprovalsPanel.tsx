@@ -205,7 +205,8 @@ export const ApprovalsPanel: React.FC = () => {
         ) : (
           approvals.map((a, i) => {
             const p = typeof a.payload === 'string' ? safeParsePayload(a.payload) : a.payload;
-            const isSale = a.type === 'SALE_ENTRY';
+            const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE';
+            const isIndSale = a.type === 'INDIVIDUAL_SALE';
 
             return (
               <div key={a.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
@@ -215,8 +216,14 @@ export const ApprovalsPanel: React.FC = () => {
                       {i + 1}
                     </span>
                     <div>
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${isSale ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
-                        {isSale ? 'SALE INVOICE' : a.type}
+                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                        isIndSale 
+                          ? 'bg-purple-100 text-purple-900 border border-purple-300' 
+                          : isSale 
+                          ? 'bg-blue-100 text-blue-900 border border-blue-300' 
+                          : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      }`}>
+                        {isIndSale ? 'INDIVIDUAL STOCK SALE' : isSale ? 'SALE INVOICE' : a.type}
                       </span>
                       <div className="font-mono font-bold text-xs text-[#1e3a8a] mt-0.5">
                         {isSale ? `Inv #${p?.invoiceNumber || '-'}` : (p?.date || 'Attendance')}
@@ -348,15 +355,22 @@ export const ApprovalsPanel: React.FC = () => {
             ) : (
               approvals.map((a, i) => {
                 const p = typeof a.payload === 'string' ? safeParsePayload(a.payload) : a.payload;
-                const isSale = a.type === 'SALE_ENTRY';
+                const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE';
+                const isIndSale = a.type === 'INDIVIDUAL_SALE';
                 const basic = p?.basicAmount || ((p?.qty || 0) * (p?.rate || 0));
 
                 return (
                   <tr key={a.id} className="hover:bg-slate-50 border-b-2 border-slate-200">
                     <td className="font-mono text-center font-bold bg-slate-100 text-[#1e3a8a] px-2 py-2">{i + 1}</td>
                     <td className="px-2 py-2 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${isSale ? 'bg-blue-100 text-blue-900 border border-blue-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}`}>
-                        {isSale ? 'SALE INVOICE' : a.type}
+                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                        isIndSale
+                          ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                          : isSale
+                          ? 'bg-blue-100 text-blue-900 border border-blue-300'
+                          : 'bg-amber-100 text-amber-800 border border-amber-300'
+                      }`}>
+                        {isIndSale ? 'INDIVIDUAL SALE' : isSale ? 'SALE INVOICE' : a.type}
                       </span>
                     </td>
                     <td className="px-2 py-2">
@@ -481,8 +495,9 @@ export const ApprovalsPanel: React.FC = () => {
             </div>
 
             <div className="space-y-3.5 text-xs overflow-y-auto pr-1">
-              {inspectModal.type === 'SALE_ENTRY' ? (() => {
+              {(inspectModal.type === 'SALE_ENTRY' || inspectModal.type === 'INDIVIDUAL_SALE') ? (() => {
                 const p = typeof inspectModal.payload === 'string' ? safeParsePayload(inspectModal.payload) : inspectModal.payload;
+                const isInd = inspectModal.type === 'INDIVIDUAL_SALE';
                 const basic = p?.basicAmount || ((p?.qty || 0) * (p?.rate || 0));
                 const cgst = p?.cgstAmount || (basic * ((p?.cgstPercent || 0) / 100));
                 const sgst = p?.sgstAmount || (basic * ((p?.sgstPercent || 0) / 100));

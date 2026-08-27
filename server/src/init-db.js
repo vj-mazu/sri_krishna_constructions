@@ -90,8 +90,9 @@ export const initializeDatabaseTables = async () => {
         WHEN duplicate_object THEN null;
       END $$;
 
-      -- Add SALE_ENTRY to ApprovalType enum if not already present
+      -- Add SALE_ENTRY and INDIVIDUAL_SALE to ApprovalType enum if not already present
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY';
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'INDIVIDUAL_SALE';
 
       DO $$ BEGIN
         CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
@@ -271,6 +272,52 @@ export const initializeDatabaseTables = async () => {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 11. Create IndividualStock Table (Non-PO Standalone Inventory)
+      CREATE TABLE IF NOT EXISTS "IndividualStock" (
+        "id" TEXT PRIMARY KEY,
+        "itemName" TEXT NOT NULL,
+        "partNumber" TEXT,
+        "unit" TEXT NOT NULL DEFAULT 'NOS',
+        "openingStock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "currentStock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "remarks" TEXT,
+        "addedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 12. Create IndividualStockTransaction Table (Full GST Inward & Outward with Approval)
+      CREATE TABLE IF NOT EXISTS "IndividualStockTransaction" (
+        "id" TEXT PRIMARY KEY,
+        "stockId" TEXT NOT NULL REFERENCES "IndividualStock"("id") ON DELETE CASCADE,
+        "type" TEXT NOT NULL, -- 'INWARD' (Purchase) or 'OUTWARD' (Sale)
+        "date" TIMESTAMP(3) NOT NULL,
+        "qty" DOUBLE PRECISION NOT NULL,
+        "rate" DOUBLE PRECISION NOT NULL,
+        "basicAmount" DOUBLE PRECISION NOT NULL,
+        "cgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "sgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "igstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "cgstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "sgstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "igstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "totalAmount" DOUBLE PRECISION NOT NULL,
+        "partyName" TEXT,
+        "supplierAddress" TEXT,
+        "gstNumber" TEXT, -- Party GSTIN
+        "companyGstNumber" TEXT DEFAULT '29DWKPP3582H1ZV', -- SKC GSTIN
+        "partyInvoiceNumber" TEXT, -- Party Invoice / Bill No
+        "supplierInvoiceDate" TIMESTAMP(3),
+        "vehicleNumber" TEXT,
+        "remarks" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'APPROVED', -- 'APPROVED' for Inward, 'PENDING' / 'APPROVED' / 'REJECTED' for Outward
+        "approvedById" TEXT REFERENCES "User"("id"),
+        "approvedAt" TIMESTAMP(3),
+        "rejectionReason" TEXT,
+        "addedById" TEXT NOT NULL REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Schema Column Synchronizations
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
@@ -416,6 +463,21 @@ export const initializeDatabaseTables = async () => {
       -- Holiday lookups
       CREATE INDEX IF NOT EXISTS idx_holiday_date ON "Holiday"("date");
       CREATE INDEX IF NOT EXISTS idx_holiday_addedby ON "Holiday"("addedById");
+
+      -- Individual Stock & Transaction high-performance indexes
+      CREATE INDEX IF NOT EXISTS idx_indstock_itemname ON "IndividualStock"("itemName");
+      CREATE INDEX IF NOT EXISTS idx_indstock_partno ON "IndividualStock"("partNumber");
+      CREATE INDEX IF NOT EXISTS idx_indstock_created ON "IndividualStock"("createdAt" DESC);
+      CREATE INDEX IF NOT EXISTS idx_indstock_addedby ON "IndividualStock"("addedById");
+
+      CREATE INDEX IF NOT EXISTS idx_indtx_stockid ON "IndividualStockTransaction"("stockId");
+      CREATE INDEX IF NOT EXISTS idx_indtx_type ON "IndividualStockTransaction"("type");
+      CREATE INDEX IF NOT EXISTS idx_indtx_date ON "IndividualStockTransaction"("date" DESC);
+      CREATE INDEX IF NOT EXISTS idx_indtx_status ON "IndividualStockTransaction"("status");
+      CREATE INDEX IF NOT EXISTS idx_indtx_party ON "IndividualStockTransaction"("partyName");
+      CREATE INDEX IF NOT EXISTS idx_indtx_invno ON "IndividualStockTransaction"("partyInvoiceNumber");
+      CREATE INDEX IF NOT EXISTS idx_indtx_addedby ON "IndividualStockTransaction"("addedById");
+      CREATE INDEX IF NOT EXISTS idx_indtx_approvedby ON "IndividualStockTransaction"("approvedById");
     `);
 
     client.release();

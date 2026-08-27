@@ -41,7 +41,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
   let totalIgst = 0;
 
   const itemsRows = salesList.map((s, idx) => {
-    const itm = s.purchaseOrderItem || s.item || {};
+    const itm = s.purchaseOrderItem || s.item || s.stock || {};
     const q = Number(s.qty || s.quantity || 0);
     const r = Number(s.rate || s.unitPrice || 0);
     const b = round2(q * r);
@@ -56,11 +56,11 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
     return {
       slNo: idx + 1,
-      kpclCode: itm.kpclCode || '635020105R',
-      itemName: itm.itemName || 'PACKING (LP CYL. TO I/O COVER)',
-      specifications: itm.specifications || 'GASKET/PACKING (LP CYLINDER TO I/O COVER) COMPRESSOR\nMAKE-KIRLOSKAR, Model:T-BTD-PM\nP.NO-2790010550\nMake : Kirloskar Equivalent',
+      kpclCode: itm.kpclCode || s.kpclCode || '-',
+      itemName: itm.itemName || s.itemName || 'STANDALONE ITEM',
+      specifications: itm.specifications || s.remarks || 'DIRECT PURCHASE / SALE',
       partNumber: itm.partNumber || s.partNumber || '',
-      unit: itm.unit || "No's",
+      unit: itm.unit || s.unit || "NOS",
       qty: q,
       rate: r,
       amount: b

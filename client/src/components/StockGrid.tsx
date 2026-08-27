@@ -18,6 +18,7 @@ function useDebounce<T>(value: T, delay: number): T {
 
 interface StockItem {
   id: string;
+  stockType?: 'PO' | 'INDIVIDUAL';
   poNumber?: string;
   poDate?: string;
   kpclCode: string;
@@ -40,6 +41,7 @@ export const StockGrid: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [poMap, setPoMap] = useState<Record<string, string>>({});
   
+  const [stockTypeFilter, setStockTypeFilter] = useState<'ALL' | 'PO' | 'INDIVIDUAL'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [poNumberFilter, setPoNumberFilter] = useState('');
   const [partNumberFilter, setPartNumberFilter] = useState('');
@@ -82,6 +84,7 @@ export const StockGrid: React.FC = () => {
     try {
       const params: any = { limit: 50 };
       if (cursor) params.cursor = cursor;
+      if (stockTypeFilter && stockTypeFilter !== 'ALL') params.stockType = stockTypeFilter;
       if (debouncedSearch) params.search = debouncedSearch;
       if (debouncedPoNumber) params.poNumber = debouncedPoNumber;
       if (debouncedPartNumber) params.partNumber = debouncedPartNumber;
@@ -103,13 +106,13 @@ export const StockGrid: React.FC = () => {
       setLoading(false);
       setResponseTime(Math.round(performance.now() - startTime));
     }
-  }, [debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, stockStatusFilter, dateFrom, dateTo]);
+  }, [stockTypeFilter, debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, stockStatusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     setCursorHistory([]);
     setCurrentCursor(undefined);
     fetchStock(undefined);
-  }, [debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, stockStatusFilter, dateFrom, dateTo, fetchStock]);
+  }, [stockTypeFilter, debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, stockStatusFilter, dateFrom, dateTo, fetchStock]);
 
   const handleNext = () => {
     if (nextCursor) {
@@ -271,6 +274,34 @@ export const StockGrid: React.FC = () => {
 
       {/* 6 MAIN FILTERS BAR */}
       <div className="bg-white p-2.5 sm:p-4 rounded-xl sm:rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-2 sm:gap-3 items-center">
+        {/* 0. STOCK TYPE TOGGLE BUTTONS */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+          <button
+            onClick={() => setStockTypeFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              stockTypeFilter === 'ALL' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            All Stocks
+          </button>
+          <button
+            onClick={() => setStockTypeFilter('PO')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              stockTypeFilter === 'PO' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            PO Stocks
+          </button>
+          <button
+            onClick={() => setStockTypeFilter('INDIVIDUAL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+              stockTypeFilter === 'INDIVIDUAL' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" /> Individual Stocks
+          </button>
+        </div>
+
         {/* 1. KEYWORD SEARCH */}
         <div className="relative flex-1 min-w-[180px]">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -479,7 +510,15 @@ export const StockGrid: React.FC = () => {
                 items.map((item, idx) => (
                   <tr key={item.id || idx} className="hover:bg-slate-50 border-b border-slate-200">
                     <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{idx + 1}</td>
-                    <td className="font-mono font-bold text-[#1e3a8a]">{getDisplayPoNumber(item)}</td>
+                    <td className="font-mono font-bold text-[#1e3a8a]">
+                      {item.stockType === 'INDIVIDUAL' ? (
+                        <span className="px-2 py-0.5 bg-purple-100 text-purple-900 border border-purple-300 rounded font-bold text-[10px]">
+                          INDIVIDUAL
+                        </span>
+                      ) : (
+                        getDisplayPoNumber(item)
+                      )}
+                    </td>
                     <td className="font-mono font-bold text-slate-700">{item.kpclCode}</td>
                     <td className="font-bold text-slate-900">{item.itemName}</td>
                     <td className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap max-w-xs">{item.specifications || '-'}</td>
