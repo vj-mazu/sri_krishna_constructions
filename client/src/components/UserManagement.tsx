@@ -97,6 +97,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   
   // Edit PO State
   const [editingPO, setEditingPO] = useState<any>(null);
+  const [editPONumber, setEditPONumber] = useState('');
+  const [editPODivisionId, setEditPODivisionId] = useState('');
+  const [editPODate, setEditPODate] = useState('');
+  const [editPOAmount, setEditPOAmount] = useState('');
   // --- INDIVIDUAL STOCKS (STANDALONE NON-PO INVENTORY) STATE ---
   const [individualStocks, setIndividualStocks] = useState<any[]>([]);
   const [indStockSearch, setIndStockSearch] = useState('');
