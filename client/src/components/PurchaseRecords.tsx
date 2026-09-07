@@ -336,12 +336,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   const [purchaseForm, setPurchaseForm] = useState({
     itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
-    partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
+    partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
+    receivedItemName: '', receivedPartNumber: ''
   });
 
   const [saleForm, setSaleForm] = useState({
     itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
-    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
+    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
   });
 
   // --- EDIT MODAL STATES ---
@@ -393,10 +394,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
   const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
-  // Fetch divisions for PO creation/edit dropdowns
+  // Fetch divisions for PO creation/edit dropdowns (Filtered to PO Divisions/Clients)
   const fetchDivisions = async () => {
     try {
-      const res = await api.get('/divisions');
+      const res = await api.get('/divisions', { params: { type: 'PO_CLIENT' } });
       const list = res.data?.divisions || (Array.isArray(res.data) ? res.data : []);
       setDivisions(list);
     } catch (err) {
@@ -645,7 +646,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       setShowAddPurchase(false);
       setPurchaseForm({
         itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
-        partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
+        partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
+        receivedItemName: '', receivedPartNumber: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoPurchases(selectedPo.id, purchasesCursor);
@@ -673,7 +675,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       setShowAddSale(false);
       setSaleForm({
         itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
-        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
+        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoSales(selectedPo.id, salesCursor);
@@ -1087,7 +1089,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         </div>
 
         {/* WORKSPACE CONTAINER */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-visible">
           {/* DISTINCT COLOR-CODED SUB-TABS */}
           <div className="flex border-b border-slate-200 bg-slate-50/50">
             <button
@@ -2077,202 +2079,204 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                 {/* ADD ITEM FORM */}
                 {showAddItem && (
-                  <form onSubmit={handleAddItem} className="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-xl space-y-5 animate-fadeIn">
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                  <form onSubmit={handleAddItem} className="bg-white rounded-2xl border-2 border-slate-200 shadow-xl animate-fadeIn overflow-visible">
+                    <div className="flex items-center justify-between border-b border-slate-200 p-4 bg-slate-50 rounded-t-2xl">
                       <div>
                         <h3 className="font-bold text-base text-slate-800">New Item Registration</h3>
                         <p className="text-xs text-slate-500">Official PO specification and pricing entry</p>
                       </div>
-                      <span className="bg-slate-100 text-[#1e3a8a] px-3 py-1 rounded-full text-xs font-bold font-mono">
+                      <span className="bg-white border border-slate-200 text-[#1e3a8a] px-3 py-1 rounded-full text-xs font-bold font-mono">
                         PO: {selectedPo.poNumber}
                       </span>
                     </div>
 
-                    {/* SECTION 1: ITEM IDENTIFICATION */}
-                    <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
-                        <Package className="w-3.5 h-3.5 text-[#1e3a8a]" /> 1. Item Identification & Specifications
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                        {/* 1. KPCL Item Code */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">KPCL Item Code *</label>
-                          <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.kpclCode} onChange={e => handleItemChange('kpclCode', e.target.value)} placeholder="e.g. 635020311R" />
+                    <div className="p-5 space-y-4">
+                      {/* SECTION 1: ITEM IDENTIFICATION */}
+                      <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
+                          <Package className="w-3.5 h-3.5 text-[#1e3a8a]" /> 1. Item Identification & Specifications
                         </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          {/* 1. KPCL Item Code */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">KPCL Item Code *</label>
+                            <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.kpclCode} onChange={e => handleItemChange('kpclCode', e.target.value)} placeholder="e.g. 635020311R" />
+                          </div>
 
-                        {/* 2. Item Name */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Item Name *</label>
-                          <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.itemName} onChange={e => handleItemChange('itemName', e.target.value)} placeholder="e.g. VALVE HOLDER" />
-                        </div>
+                          {/* 2. Item Name */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Item Name *</label>
+                            <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.itemName} onChange={e => handleItemChange('itemName', e.target.value)} placeholder="e.g. VALVE HOLDER" />
+                          </div>
 
-                        {/* 3. Part Number */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Part Number * (Unique)</label>
-                          <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.partNumber} onChange={e => handleItemChange('partNumber', e.target.value)} placeholder="e.g. AR-163" />
-                        </div>
+                          {/* 3. Part Number */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Part Number * (Unique)</label>
+                            <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.partNumber} onChange={e => handleItemChange('partNumber', e.target.value)} placeholder="e.g. AR-163" />
+                          </div>
 
-                        {/* 4. Make / Model */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Make / Model</label>
-                          <input type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.make} onChange={e => handleItemChange('make', e.target.value)} placeholder="e.g. KIRLOSKAR" />
-                        </div>
+                          {/* 4. Make / Model */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Make / Model</label>
+                            <input type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.make} onChange={e => handleItemChange('make', e.target.value)} placeholder="e.g. KIRLOSKAR" />
+                          </div>
 
-                        {/* 5. HSN Code */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">HSN Code</label>
-                          <input type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono uppercase focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.hsnCode} onChange={e => handleItemChange('hsnCode', e.target.value)} placeholder="84149090" />
-                        </div>
+                          {/* 5. HSN Code */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">HSN Code</label>
+                            <input type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono uppercase focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.hsnCode} onChange={e => handleItemChange('hsnCode', e.target.value)} placeholder="84149090" />
+                          </div>
 
-                        {/* 6. Unit */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Unit</label>
-                          <input type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.unit} onChange={e => handleItemChange('unit', e.target.value)} placeholder="NOS" />
-                        </div>
+                          {/* 6. Unit */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Unit</label>
+                            <input type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.unit} onChange={e => handleItemChange('unit', e.target.value)} placeholder="NOS" />
+                          </div>
 
-                        {/* 7. Detailed Specifications */}
-                        <div className="col-span-full">
-                          <label className="block font-bold text-slate-700 mb-1">Detailed Specifications (Multi-line text)</label>
-                          <textarea className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs h-16 font-mono focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.specifications} onChange={e => handleItemChange('specifications', e.target.value)} placeholder="HP CYLINDER SUCTION VALVE HOLDER&#10;COMPRESSOR MAKE- KIRLOSKAR&#10;Model:T-BTD-PM..." />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* SECTION 2: QUANTITY & PRICING */}
-                    <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
-                        <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> 2. Quantity & Base Pricing
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-                        {/* Quantity Ordered */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Quantity Ordered *</label>
-                          <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.qty || ''} onChange={e => handleItemChange('qty', Number(e.target.value))} placeholder="e.g. 40.000" />
-                        </div>
-
-                        {/* Unit Rate */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Unit Rate (₹) *</label>
-                          <input required type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.rate || ''} onChange={e => handleItemChange('rate', Number(e.target.value))} placeholder="e.g. 1579.66" />
-                          {itemForm.rate > 0 && (
-                            <div className="text-[10px] font-bold text-indigo-600 font-mono mt-1">
-                              Rate: {formatCurrency(itemForm.rate)}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Basic Amount Preview */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Basic Amount (₹)</label>
-                          <div className="w-full p-2 bg-slate-100 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 flex items-center h-[34px]">
-                            {formatCurrency((itemForm.qty || 0) * (itemForm.rate || 0))}
+                          {/* 7. Detailed Specifications */}
+                          <div className="col-span-full">
+                            <label className="block font-bold text-slate-700 mb-1">Detailed Specifications (Multi-line text)</label>
+                            <textarea className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs h-16 font-mono focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" value={itemForm.specifications} onChange={e => handleItemChange('specifications', e.target.value)} placeholder="HP CYLINDER SUCTION VALVE HOLDER&#10;COMPRESSOR MAKE- KIRLOSKAR&#10;Model:T-BTD-PM..." />
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* SECTION 3: TAXES & EXTRA CHARGES */}
-                    <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
-                        <Receipt className="w-3.5 h-3.5 text-blue-600" /> 3. Additional Charges, Discounts & GST Taxes
+                      {/* SECTION 2: QUANTITY & PRICING */}
+                      <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
+                          <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> 2. Quantity & Base Pricing
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                          {/* Quantity Ordered */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Quantity Ordered *</label>
+                            <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.qty || ''} onChange={e => handleItemChange('qty', Number(e.target.value))} placeholder="e.g. 40.000" />
+                          </div>
+
+                          {/* Unit Rate */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Unit Rate (₹) *</label>
+                            <input required type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.rate || ''} onChange={e => handleItemChange('rate', Number(e.target.value))} placeholder="e.g. 1579.66" />
+                            {itemForm.rate > 0 && (
+                              <div className="text-[10px] font-bold text-indigo-600 font-mono mt-1">
+                                Rate: {formatCurrency(itemForm.rate)}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Basic Amount Preview */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Basic Amount (₹)</label>
+                            <div className="w-full p-2 bg-slate-100 border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 flex items-center h-[34px]">
+                              {formatCurrency((itemForm.qty || 0) * (itemForm.rate || 0))}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                        {/* Discount */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Discount (₹)</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.discount ?? ''} onChange={e => handleItemChange('discount', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-rose-700 font-mono mt-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                                Disc: -{formatCurrency(b.discount)}
-                              </div>
-                            );
-                          })()}
-                        </div>
 
-                        {/* Freight */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Freight (₹)</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.freight ?? ''} onChange={e => handleItemChange('freight', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-slate-700 font-mono mt-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                                Freight: +{formatCurrency(b.freight)}
-                              </div>
-                            );
-                          })()}
+                      {/* SECTION 3: TAXES & EXTRA CHARGES */}
+                      <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                        <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
+                          <Receipt className="w-3.5 h-3.5 text-blue-600" /> 3. Additional Charges, Discounts & GST Taxes
                         </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                          {/* Discount */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Discount (₹)</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.discount ?? ''} onChange={e => handleItemChange('discount', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-rose-700 font-mono mt-1 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                                  Disc: -{formatCurrency(b.discount)}
+                                </div>
+                              );
+                            })()}
+                          </div>
 
-                        {/* P&F */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">P&F (₹) [Pack & Fwd]</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.pAndF ?? ''} onChange={e => handleItemChange('pAndF', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-slate-700 font-mono mt-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                                P&F: +{formatCurrency(b.pAndF)}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                          {/* Freight */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Freight (₹)</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.freight ?? ''} onChange={e => handleItemChange('freight', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-slate-700 font-mono mt-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                                  Freight: +{formatCurrency(b.freight)}
+                                </div>
+                              );
+                            })()}
+                          </div>
 
-                        {/* Insurance */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Insurance (₹)</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.insurance ?? ''} onChange={e => handleItemChange('insurance', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-slate-700 font-mono mt-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
-                                Insurance: +{formatCurrency(b.insurance)}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                          {/* P&F */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">P&F (₹) [Pack & Fwd]</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.pAndF ?? ''} onChange={e => handleItemChange('pAndF', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-slate-700 font-mono mt-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                                  P&F: +{formatCurrency(b.pAndF)}
+                                </div>
+                              );
+                            })()}
+                          </div>
 
-                        {/* CGST % */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">CGST %</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.cgstPercent ?? ''} onChange={e => handleItemChange('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="e.g. 9" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-emerald-700 font-mono mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                CGST {b.cgstPercent}%: {formatCurrency(b.cgstAmount)}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                          {/* Insurance */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">Insurance (₹)</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.insurance ?? ''} onChange={e => handleItemChange('insurance', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="0.00" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-slate-700 font-mono mt-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                                  Insurance: +{formatCurrency(b.insurance)}
+                                </div>
+                              );
+                            })()}
+                          </div>
 
-                        {/* SGST % */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">SGST %</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.sgstPercent ?? ''} onChange={e => handleItemChange('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="e.g. 9" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-emerald-700 font-mono mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                                SGST {b.sgstPercent}%: {formatCurrency(b.sgstAmount)}
-                              </div>
-                            );
-                          })()}
-                        </div>
+                          {/* CGST % */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">CGST %</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.cgstPercent ?? ''} onChange={e => handleItemChange('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="e.g. 9" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-emerald-700 font-mono mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  CGST {b.cgstPercent}%: {formatCurrency(b.cgstAmount)}
+                                </div>
+                              );
+                            })()}
+                          </div>
 
-                        {/* IGST % */}
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">IGST %</label>
-                          <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.igstPercent ?? ''} onChange={e => handleItemChange('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="e.g. 0" />
-                          {(() => {
-                            const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
-                            return (
-                              <div className="text-[10px] font-bold text-indigo-700 font-mono mt-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                                IGST {b.igstPercent}%: {formatCurrency(b.igstAmount)}
-                              </div>
-                            );
-                          })()}
+                          {/* SGST % */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">SGST %</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.sgstPercent ?? ''} onChange={e => handleItemChange('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="e.g. 9" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-emerald-700 font-mono mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  SGST {b.sgstPercent}%: {formatCurrency(b.sgstAmount)}
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* IGST % */}
+                          <div>
+                            <label className="block font-bold text-slate-700 mb-1">IGST %</label>
+                            <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-[#667eea] focus:border-transparent outline-none" value={itemForm.igstPercent ?? ''} onChange={e => handleItemChange('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))} placeholder="e.g. 0" />
+                            {(() => {
+                              const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
+                              return (
+                                <div className="text-[10px] font-bold text-indigo-700 font-mono mt-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                  IGST {b.igstPercent}%: {formatCurrency(b.igstAmount)}
+                                </div>
+                              );
+                            })()}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2281,7 +2285,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     {(() => {
                       const b = calculateBreakdown(itemForm.qty, itemForm.rate, itemForm.cgstPercent, itemForm.sgstPercent, itemForm.igstPercent, itemForm.discount, itemForm.freight, itemForm.pAndF, itemForm.insurance);
                       return (
-                        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-4 rounded-xl text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+                        <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-4 rounded-b-2xl text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg border-t border-slate-700">
                           <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono">
                             <span className="text-white/80">Basic: <strong className="text-white font-bold">{formatCurrency(b.basicAmount)}</strong></span>
                             {b.discount > 0 && (
@@ -2334,9 +2338,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 )}
 
                 {/* ITEMS SPREADSHEET TABLE */}
-                <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <div className="overflow-x-auto max-h-[70vh] overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-sm">
                   <table className="excel-table w-full text-xs text-left">
-                    <thead>
+                    <thead className="sticky top-0 z-10 shadow-sm">
                       <tr>
                         <th className="text-center w-12 bg-sky-950 text-sky-200 font-bold border-r border-sky-800">SL NO</th>
                         <th>KPCL Code</th>
@@ -2584,14 +2588,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                 {/* INWARD PURCHASE FORM */}
                 {showAddPurchase && (
-                  <form onSubmit={handleAddPurchase} className="bg-emerald-50/40 p-5 rounded-2xl border border-emerald-100 grid grid-cols-1 md:grid-cols-4 gap-3.5 animate-fadeIn">
-                    <div className="col-span-full font-bold text-sm text-emerald-800 border-b border-emerald-100 pb-2">
+                  <form onSubmit={handleAddPurchase} className="bg-emerald-50/40 rounded-2xl border border-emerald-200 animate-fadeIn shadow-lg overflow-visible">
+                    <div className="font-bold text-sm text-emerald-800 border-b border-emerald-200 p-4 bg-emerald-100/60 rounded-t-2xl">
                       Record Inward Material Receipt
                     </div>
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
-                      </label>
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-3.5">
+                      <div className="col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
+                        </label>
                       <SearchableItemSelect
                         items={allItemsForSelection}
                         selectedItemId={purchaseForm.itemId}
@@ -2603,6 +2608,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               ...prev,
                               itemId: item.id,
                               rate: item.rate,
+                              receivedItemName: item.itemName || '',
+                              receivedPartNumber: item.partNumber || '',
                               cgstPercent: item.cgstPercent || 0,
                               sgstPercent: item.sgstPercent || 0,
                               igstPercent: item.igstPercent || 0
@@ -2621,6 +2628,33 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Received *</label>
                       <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={purchaseForm.qty || ''} onChange={e => handlePurchaseChange('qty', Number(e.target.value))} />
+                    </div>
+
+                    {/* PHYSICAL GOODS ARRIVAL NAME & PART NUMBER (EDITABLE IF DIFFERENT FROM PO) */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Received Item Name <span className="text-[10px] text-slate-400 font-normal">(If different on box)</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="Item name on vendor invoice or package" 
+                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:ring-1 focus:ring-emerald-600 outline-none" 
+                        value={purchaseForm.receivedItemName || ''} 
+                        onChange={e => handlePurchaseChange('receivedItemName', e.target.value)} 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Received Part Number <span className="text-[10px] text-slate-400 font-normal">(If different on box)</span>
+                      </label>
+                      <input 
+                        type="text" 
+                        placeholder="Part number on vendor invoice or package" 
+                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-slate-900 focus:ring-1 focus:ring-emerald-600 outline-none" 
+                        value={purchaseForm.receivedPartNumber || ''} 
+                        onChange={e => handlePurchaseChange('receivedPartNumber', e.target.value.toUpperCase())} 
+                      />
                     </div>
 
                     {/* SUPPLIER & INVOICE DETAILS SECTION */}
@@ -2705,7 +2739,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       })()}
                     </div>
 
-                    <div className="col-span-full bg-white p-3.5 rounded-xl border border-emerald-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                    </div>
+
+                    <div className="bg-white p-3.5 border-t border-emerald-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                       {(() => {
                         const b = calculateBreakdown(purchaseForm.qty, purchaseForm.rate, purchaseForm.cgstPercent, purchaseForm.sgstPercent, purchaseForm.igstPercent);
                         return (
@@ -2720,9 +2756,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           </div>
                         );
                       })()}
-                      <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md self-end md:self-auto">
-                        Save Inward Purchase
-                      </button>
+                      <div className="flex items-center gap-2 self-end md:self-auto">
+                        <button type="button" onClick={() => setShowAddPurchase(false)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">
+                          Cancel
+                        </button>
+                        <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md">
+                          Save Inward Purchase
+                        </button>
+                      </div>
                     </div>
                   </form>
                 )}
@@ -2750,11 +2791,21 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               </span>
                               <div>
                                 <span className="font-mono font-bold text-xs text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                                  {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || 'NO PART NO'}
+                                  {pur.receivedPartNumber || pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || 'NO PART NO'}
                                 </span>
+                                {pur.receivedPartNumber && pur.receivedPartNumber !== (pur.purchaseOrderItem?.partNumber || pur.item?.partNumber) && (
+                                  <span className="text-[10px] text-slate-400 font-mono ml-1.5">
+                                    (PO: {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber})
+                                  </span>
+                                )}
                                 <div className="font-bold text-slate-800 text-xs mt-1">
-                                  {pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
+                                  {pur.receivedItemName || pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
                                 </div>
+                                {pur.receivedItemName && pur.receivedItemName !== (pur.purchaseOrderItem?.itemName || pur.item?.itemName) && (
+                                  <div className="text-[10px] text-slate-400">
+                                    PO: {pur.purchaseOrderItem?.itemName || pur.item?.itemName}
+                                  </div>
+                                )}
                               </div>
                             </div>
                             <span className="text-[10px] text-slate-400 font-mono">
@@ -2823,9 +2874,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 </div>
 
                 {/* 2. DESKTOP EXCEL TABLE (Hidden on Mobile) */}
-                <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+                <div className="hidden md:block overflow-x-auto max-h-[70vh] overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-sm">
                   <table className={`excel-table w-full text-left ${purchasesTableViewMode === 'fit' ? 'text-[11px]' : 'text-xs'}`}>
-                    <thead>
+                    <thead className="sticky top-0 z-20 shadow-sm">
                       <tr>
                         <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
                         <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
@@ -2868,9 +2919,34 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{pur.supplierAddress || '-'}</td>
                               <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{pur.gstNumber || '-'}</td>
                               <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{pur.partyInvoiceNumber || '-'}</td>
-                              <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{pur.supplierInvoiceDate ? formatDate(pur.supplierInvoiceDate) : '-'}</td>
-                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</td>
-                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</td>
+                              <td className="font-mono text-slate-700 px-2 py-1.5 break-all">
+                                {pur.receivedPartNumber && pur.receivedPartNumber !== (pur.purchaseOrderItem?.partNumber || pur.item?.partNumber) ? (
+                                  <div className="leading-tight">
+                                    <div className="font-bold text-slate-900 font-mono text-xs">
+                                      {pur.receivedPartNumber}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400 font-mono">
+                                      PO: {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="font-bold text-slate-800">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</span>
+                                )}
+                              </td>
+                              <td className="text-slate-800 px-2 py-1.5 break-words max-w-[140px]">
+                                {pur.receivedItemName && pur.receivedItemName !== (pur.purchaseOrderItem?.itemName || pur.item?.itemName) ? (
+                                  <div className="leading-tight">
+                                    <div className="font-bold text-slate-900 text-xs">
+                                      {pur.receivedItemName}
+                                    </div>
+                                    <div className="text-[10px] text-slate-400">
+                                      PO: {pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="font-semibold">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</span>
+                                )}
+                              </td>
                               <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(pur.date)}</td>
                               <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{pur.vehicleNumber || '-'}</td>
                               <td className="text-center font-mono font-bold text-emerald-700 bg-emerald-50/50 px-2 py-1.5">{pur.qty}</td>
@@ -3039,137 +3115,152 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                 {/* SALE ENTRY FORM */}
                 {showAddSale && (
-                  <form onSubmit={handleAddSale} className="bg-amber-50/40 p-5 rounded-2xl border border-amber-100 grid grid-cols-1 md:grid-cols-4 gap-3.5 animate-fadeIn">
-                    <div className="col-span-full font-bold text-sm text-amber-800 border-b border-amber-100 pb-2">
+                  <form onSubmit={handleAddSale} className="bg-amber-50/40 rounded-2xl border border-amber-200 animate-fadeIn shadow-lg overflow-visible">
+                    <div className="font-bold text-sm text-amber-800 border-b border-amber-200 p-4 bg-amber-100/60 rounded-t-2xl">
                       Record Sales / Dispatch Invoice
                     </div>
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
-                      </label>
-                      <SearchableItemSelect
-                        items={allItemsForSelection}
-                        selectedItemId={saleForm.itemId}
-                        placeholder="🔍 Type Part Number, Item Name, or KPCL Code to search..."
-                        type="sale"
-                        onSelect={(item) => {
-                          if (item) {
-                            setSaleForm(prev => ({
-                              ...prev,
-                              itemId: item.id,
-                              rate: item.rate,
-                              cgstPercent: item.cgstPercent || 0,
-                              sgstPercent: item.sgstPercent || 0,
-                              igstPercent: item.igstPercent || 0
-                            }));
-                          } else {
-                            handleSaleChange('itemId', '');
-                          }
-                        }}
-                      />
-                    </div>
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-3.5">
+                      <div className="col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
+                        </label>
+                        <SearchableItemSelect
+                          items={allItemsForSelection}
+                          selectedItemId={saleForm.itemId}
+                          placeholder="🔍 Type Part Number, Item Name, or KPCL Code to search..."
+                          type="sale"
+                          onSelect={(item) => {
+                            if (item) {
+                              setSaleForm(prev => ({
+                                ...prev,
+                                itemId: item.id,
+                                rate: item.rate,
+                                cgstPercent: item.cgstPercent || 0,
+                                sgstPercent: item.sgstPercent || 0,
+                                igstPercent: item.igstPercent || 0
+                              }));
+                            } else {
+                              handleSaleChange('itemId', '');
+                            }
+                          }}
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Number *</label>
-                      <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold uppercase" value={saleForm.invoiceNumber} onChange={e => handleSaleChange('invoiceNumber', e.target.value.toUpperCase())} placeholder="INV-2026-001" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
-                      <input required type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.invoiceDate} onChange={e => handleSaleChange('invoiceDate', e.target.value)} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Number *</label>
+                        <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold uppercase" value={saleForm.invoiceNumber} onChange={e => handleSaleChange('invoiceNumber', e.target.value.toUpperCase())} placeholder="INV-2026-001" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
+                        <input required type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.invoiceDate} onChange={e => handleSaleChange('invoiceDate', e.target.value)} />
+                      </div>
 
-                    {/* PARTY DETAILS SECTION */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Name</label>
-                      <input type="text" placeholder="e.g. KPCL / Client Corp" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold" value={saleForm.partyName || ''} onChange={e => handleSaleChange('partyName', e.target.value)} />
-                    </div>
+                      {/* PARTY DETAILS SECTION */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Name</label>
+                        <input type="text" placeholder="e.g. KPCL / Client Corp" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold" value={saleForm.partyName || ''} onChange={e => handleSaleChange('partyName', e.target.value)} />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Address</label>
-                      <input type="text" placeholder="e.g. BTPS Project Site, Kudligi" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierAddress || ''} onChange={e => handleSaleChange('supplierAddress', e.target.value)} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Address</label>
+                        <input type="text" placeholder="e.g. BTPS Project Site, Kudligi" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierAddress || ''} onChange={e => handleSaleChange('supplierAddress', e.target.value)} />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GST No (Our GST)</label>
-                      <input type="text" placeholder="e.g. 29SKC12345F1Z9" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.companyGstNumber || ''} onChange={e => handleSaleChange('companyGstNumber', e.target.value.toUpperCase())} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GST No (Our GST)</label>
+                        <input type="text" placeholder="e.g. 29SKC12345F1Z9" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.companyGstNumber || ''} onChange={e => handleSaleChange('companyGstNumber', e.target.value.toUpperCase())} />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GST No</label>
-                      <input type="text" placeholder="e.g. 29ABCDE1234F1Z5" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.gstNumber || ''} onChange={e => handleSaleChange('gstNumber', e.target.value.toUpperCase())} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GST No</label>
+                        <input type="text" placeholder="e.g. 29ABCDE1234F1Z5" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.gstNumber || ''} onChange={e => handleSaleChange('gstNumber', e.target.value.toUpperCase())} />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
-                      <input type="text" placeholder="e.g. DC-9901" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900" value={saleForm.partyInvoiceNumber || ''} onChange={e => handleSaleChange('partyInvoiceNumber', e.target.value.toUpperCase())} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
+                        <input type="text" placeholder="e.g. DC-9901" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900" value={saleForm.partyInvoiceNumber || ''} onChange={e => handleSaleChange('partyInvoiceNumber', e.target.value.toUpperCase())} />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC Date</label>
-                      <input type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierInvoiceDate || ''} onChange={e => handleSaleChange('supplierInvoiceDate', e.target.value)} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC Date</label>
+                        <input type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierInvoiceDate || ''} onChange={e => handleSaleChange('supplierInvoiceDate', e.target.value)} />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle No</label>
-                      <input type="text" placeholder="e.g. KA-34-A-1234" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold" value={saleForm.vehicleNumber || ''} onChange={e => handleSaleChange('vehicleNumber', e.target.value.toUpperCase())} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle No</label>
+                        <input type="text" placeholder="e.g. KA-34-A-1234" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold" value={saleForm.vehicleNumber || ''} onChange={e => handleSaleChange('vehicleNumber', e.target.value.toUpperCase())} />
+                      </div>
 
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
-                      <input type="text" placeholder="Dispatch remarks, client PO ref, gate pass details..." className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.remarks || ''} onChange={e => handleSaleChange('remarks', e.target.value)} />
-                    </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                          E-Way Bill Number <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                        </label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. 231456789012" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" 
+                          value={saleForm.eWayBillNumber || ''} 
+                          onChange={e => handleSaleChange('eWayBillNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Sold *</label>
-                      <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.qty || ''} onChange={e => handleSaleChange('qty', Number(e.target.value))} />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Sale Rate (₹) *</label>
-                      <input required type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono" value={saleForm.rate || ''} onChange={e => handleSaleChange('rate', Number(e.target.value))} />
-                      {saleForm.rate > 0 && (
-                        <div className="text-[10px] font-bold text-blue-600 font-mono mt-0.5">
-                          Format: {formatCurrency(saleForm.rate)}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST %</label>
-                      <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.cgstPercent ?? ''} onChange={e => handleSaleChange('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                      {(() => {
-                        const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                        return (
-                          <div className="text-[10px] font-bold text-blue-700 font-mono mt-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                            CGST {b.cgstPercent}%: {formatCurrency(b.cgstAmount)}
+                      <div className="col-span-full">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                        <input type="text" placeholder="Dispatch remarks, client PO ref, gate pass details..." className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.remarks || ''} onChange={e => handleSaleChange('remarks', e.target.value)} />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Sold *</label>
+                        <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.qty || ''} onChange={e => handleSaleChange('qty', Number(e.target.value))} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Sale Rate (₹) *</label>
+                        <input required type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono" value={saleForm.rate || ''} onChange={e => handleSaleChange('rate', Number(e.target.value))} />
+                        {saleForm.rate > 0 && (
+                          <div className="text-[10px] font-bold text-blue-600 font-mono mt-0.5">
+                            Format: {formatCurrency(saleForm.rate)}
                           </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST %</label>
-                      <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.sgstPercent ?? ''} onChange={e => handleSaleChange('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                      {(() => {
-                        const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                        return (
-                          <div className="text-[10px] font-bold text-blue-700 font-mono mt-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                            SGST {b.sgstPercent}%: {formatCurrency(b.sgstAmount)}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST %</label>
-                      <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.igstPercent ?? ''} onChange={e => handleSaleChange('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                      {(() => {
-                        const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                        return (
-                          <div className="text-[10px] font-bold text-indigo-700 font-mono mt-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                            IGST {b.igstPercent}%: {formatCurrency(b.igstAmount)}
-                          </div>
-                        );
-                      })()}
+                        )}
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST %</label>
+                        <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.cgstPercent ?? ''} onChange={e => handleSaleChange('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
+                        {(() => {
+                          const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
+                          return (
+                            <div className="text-[10px] font-bold text-blue-700 font-mono mt-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              CGST {b.cgstPercent}%: {formatCurrency(b.cgstAmount)}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST %</label>
+                        <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.sgstPercent ?? ''} onChange={e => handleSaleChange('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
+                        {(() => {
+                          const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
+                          return (
+                            <div className="text-[10px] font-bold text-blue-700 font-mono mt-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              SGST {b.sgstPercent}%: {formatCurrency(b.sgstAmount)}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST %</label>
+                        <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.igstPercent ?? ''} onChange={e => handleSaleChange('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
+                        {(() => {
+                          const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
+                          return (
+                            <div className="text-[10px] font-bold text-indigo-700 font-mono mt-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                              IGST {b.igstPercent}%: {formatCurrency(b.igstAmount)}
+                            </div>
+                          );
+                        })()}
+                      </div>
                     </div>
 
-                    <div className="col-span-full bg-white p-3.5 rounded-xl border border-amber-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                    <div className="bg-white p-3.5 border-t border-amber-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                       {(() => {
                         const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
                         return (
@@ -3184,9 +3275,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           </div>
                         );
                       })()}
-                      <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md self-end md:self-auto">
-                        Save Sale Record
-                      </button>
+                      <div className="flex items-center gap-2 self-end md:self-auto">
+                        <button type="button" onClick={() => setShowAddSale(false)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">
+                          Cancel
+                        </button>
+                        <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md">
+                          Save Sale Record
+                        </button>
+                      </div>
                     </div>
                   </form>
                 )}
@@ -3317,9 +3413,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 </div>
 
                 {/* 2. DESKTOP EXCEL SALES TABLE (Hidden on Mobile) */}
-                <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-sm">
+                <div className="hidden md:block overflow-x-auto max-h-[70vh] overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-sm">
                   <table className="excel-table w-full text-[11px] text-left">
-                    <thead>
+                    <thead className="sticky top-0 z-20 shadow-sm">
                       <tr>
                         <th className="text-center w-8 bg-sky-950 text-sky-200 border-r border-sky-800 px-1 py-1.5">
                           <input

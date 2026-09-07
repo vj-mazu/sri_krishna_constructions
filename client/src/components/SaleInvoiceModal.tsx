@@ -163,7 +163,8 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       doc.line(margin, ly + 19, margin + colHalf, ly + 19);
 
       doc.setFontSize(7.2);
-      doc.text(`Vehicle No : ${primarySale.vehicleNumber || 'KA 36C 2722'}`, margin + 2, ly + 23.5);
+      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}${primarySale.eWayBillNumber ? `  |  E-Way Bill: ${primarySale.eWayBillNumber}` : ''}`;
+      doc.text(vehicleLine, margin + 2, ly + 23.5);
 
       // Right Column items
       let ry = y + 4;
@@ -387,8 +388,13 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                   <div className="text-[10px] text-slate-700">Phone 9449596504 Fax 8532247846</div>
                   <div className="font-bold mt-1">GST NO: {primarySale.gstNumber || '29AAACK8032D1ZQ'}</div>
                 </div>
-                <div className="p-1.5 font-bold">
-                  Vehicle No : <span className="font-mono uppercase">{primarySale.vehicleNumber || 'KA 36C 2722'}</span>
+                <div className="p-1.5 font-bold flex flex-wrap items-center justify-between gap-2">
+                  <span>Vehicle No : <span className="font-mono uppercase">{primarySale.vehicleNumber || '-'}</span></span>
+                  {primarySale.eWayBillNumber && (
+                    <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      E-Way Bill: <span className="font-mono">{primarySale.eWayBillNumber}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 

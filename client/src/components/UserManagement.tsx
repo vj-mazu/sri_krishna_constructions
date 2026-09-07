@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
-import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History } from 'lucide-react';
+import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2 } from 'lucide-react';
 
 interface UserManagementProps {
   currentUserRole: string;
@@ -39,10 +39,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editAccountPassword, setEditAccountPassword] = useState('');
 
   // --- DIVISIONS STATE ---
+  const [divisionCategoryTab, setDivisionCategoryTab] = useState<'ATTENDANCE' | 'PO_CLIENT'>('ATTENDANCE');
   const [divisions, setDivisions] = useState<any[]>([]);
   const [divisionName, setDivisionName] = useState('');
   const [editingDivision, setEditingDivision] = useState<any>(null);
   const [editDivisionName, setEditDivisionName] = useState('');
+  const [editDivisionType, setEditDivisionType] = useState<'ATTENDANCE' | 'PO_CLIENT'>('ATTENDANCE');
 
   // --- WORKERS STATE ---
   const [workers, setWorkers] = useState<any[]>([]);
@@ -104,13 +106,22 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   // --- INDIVIDUAL STOCKS (STANDALONE NON-PO INVENTORY) STATE ---
   const [individualStocks, setIndividualStocks] = useState<any[]>([]);
   const [indStockSearch, setIndStockSearch] = useState('');
+  const [indStockKpclCode, setIndStockKpclCode] = useState('');
   const [indStockItemName, setIndStockItemName] = useState('');
+  const [indStockSpecifications, setIndStockSpecifications] = useState('');
   const [indStockPartNumber, setIndStockPartNumber] = useState('');
+  const [indStockMake, setIndStockMake] = useState('');
+  const [indStockHsnCode, setIndStockHsnCode] = useState('');
   const [indStockUnit, setIndStockUnit] = useState('NOS');
   const [indStockOpening, setIndStockOpening] = useState('');
+  const [indStockRate, setIndStockRate] = useState('');
+  const [indStockCgstPercent, setIndStockCgstPercent] = useState('9');
+  const [indStockSgstPercent, setIndStockSgstPercent] = useState('9');
+  const [indStockIgstPercent, setIndStockIgstPercent] = useState('0');
   const [indStockRemarks, setIndStockRemarks] = useState('');
   const [showAddIndStockForm, setShowAddIndStockForm] = useState(false);
   const [editingIndStock, setEditingIndStock] = useState<any>(null);
+  const [inspectIndStock, setInspectIndStock] = useState<any>(null);
 
   // Inward Purchase Modal for Individual Stock
   const [purchaseModalItem, setPurchaseModalItem] = useState<any>(null);
@@ -141,6 +152,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     supplierAddress: '',
     gstNumber: '',
     vehicleNumber: '',
+    eWayBillNumber: '',
     cgstPercent: '9',
     sgstPercent: '9',
     igstPercent: '0',
@@ -172,17 +184,33 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     try {
       setLoading(true);
       await api.post('/individual-stocks', {
+        kpclCode: indStockKpclCode.trim() || undefined,
         itemName: indStockItemName.trim(),
+        specifications: indStockSpecifications.trim() || undefined,
         partNumber: indStockPartNumber.trim() || undefined,
+        make: indStockMake.trim() || undefined,
+        hsnCode: indStockHsnCode.trim() || undefined,
         unit: indStockUnit.trim() || 'NOS',
         openingStock: parseFloat(indStockOpening) || 0,
+        rate: parseFloat(indStockRate) || 0,
+        cgstPercent: parseFloat(indStockCgstPercent) || 0,
+        sgstPercent: parseFloat(indStockSgstPercent) || 0,
+        igstPercent: parseFloat(indStockIgstPercent) || 0,
         remarks: indStockRemarks.trim() || undefined
       });
       showToast(`Individual Stock '${indStockItemName}' registered successfully!`, 'success');
+      setIndStockKpclCode('');
       setIndStockItemName('');
+      setIndStockSpecifications('');
       setIndStockPartNumber('');
+      setIndStockMake('');
+      setIndStockHsnCode('');
       setIndStockUnit('NOS');
       setIndStockOpening('');
+      setIndStockRate('');
+      setIndStockCgstPercent('9');
+      setIndStockSgstPercent('9');
+      setIndStockIgstPercent('0');
       setIndStockRemarks('');
       setShowAddIndStockForm(false);
       fetchIndividualStocks();
@@ -201,10 +229,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     try {
       setLoading(true);
       await api.put(`/individual-stocks/${editingIndStock.id}`, {
+        kpclCode: editingIndStock.kpclCode?.trim() || null,
         itemName: editingIndStock.itemName.trim(),
+        specifications: editingIndStock.specifications?.trim() || null,
         partNumber: editingIndStock.partNumber?.trim() || null,
+        make: editingIndStock.make?.trim() || null,
+        hsnCode: editingIndStock.hsnCode?.trim() || null,
         unit: editingIndStock.unit || 'NOS',
         openingStock: parseFloat(editingIndStock.openingStock) || 0,
+        rate: parseFloat(editingIndStock.rate) || 0,
+        cgstPercent: parseFloat(editingIndStock.cgstPercent) || 0,
+        sgstPercent: parseFloat(editingIndStock.sgstPercent) || 0,
+        igstPercent: parseFloat(editingIndStock.igstPercent) || 0,
         remarks: editingIndStock.remarks || null
       });
       showToast('Individual stock item updated successfully!', 'success');
@@ -296,6 +332,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         supplierAddress: indSaleForm.supplierAddress.trim() || undefined,
         gstNumber: indSaleForm.gstNumber.trim() || undefined,
         vehicleNumber: indSaleForm.vehicleNumber.trim() || undefined,
+        eWayBillNumber: indSaleForm.eWayBillNumber.trim() || undefined,
         cgstPercent: parseFloat(indSaleForm.cgstPercent) || 0,
         sgstPercent: parseFloat(indSaleForm.sgstPercent) || 0,
         igstPercent: parseFloat(indSaleForm.igstPercent) || 0,
@@ -548,8 +585,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     if (!divisionName.trim()) return;
 
     try {
-      await api.post('/divisions', { name: divisionName.trim() });
-      const msg = `Division '${divisionName}' registered successfully!`;
+      await api.post('/divisions', { 
+        name: divisionName.trim(),
+        type: divisionCategoryTab 
+      });
+      const catLabel = divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division' : 'PO Division / Client';
+      const msg = `${catLabel} '${divisionName}' registered successfully!`;
       setSuccess(msg);
       showToast(msg, 'success');
       setDivisionName('');
@@ -568,7 +609,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
     try {
       setLoading(true);
-      await api.put(`/divisions/${editingDivision.id}`, { name: editDivisionName.trim() });
+      await api.put(`/divisions/${editingDivision.id}`, { 
+        name: editDivisionName.trim(),
+        type: editDivisionType 
+      });
       const msg = `Division '${editDivisionName}' updated successfully!`;
       setSuccess(msg);
       showToast(msg, 'success');
@@ -1203,62 +1247,127 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       {/* --- SUB-TAB: DIVISIONS --- */}
       {activeSubTab === 'divisions' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-800">Site Divisions Master</h3>
+          <div className="flex flex-wrap justify-between items-center gap-3 border-b border-slate-200 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Master Divisions & Clients</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Organize separate divisions for Worker Attendance and Client PO Orders.
+              </p>
+            </div>
+
+            {/* BUILT-IN TWO TABS: ATTENDANCE DIVISIONS vs PO DIVISIONS / CLIENTS */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setDivisionCategoryTab('ATTENDANCE')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  divisionCategoryTab === 'ATTENDANCE'
+                    ? 'bg-[#1e3a8a] text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>Attendance Divisions</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  divisionCategoryTab === 'ATTENDANCE' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDivisionCategoryTab('PO_CLIENT')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  divisionCategoryTab === 'PO_CLIENT'
+                    ? 'bg-[#1e3a8a] text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span>PO Divisions / Clients</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                  divisionCategoryTab === 'PO_CLIENT' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                }`}>
+                  {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT').length}
+                </span>
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleCreateDivision} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             <div className="flex-1 text-xs">
-              <label className="block font-semibold text-slate-700 mb-1">New Division Name (e.g. Electrical, Bricklaying) *</label>
+              <label className="block font-semibold text-slate-700 mb-1">
+                New {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division Name (e.g. Workshop, Boiler, Shift A)' : 'PO Division / Client Name (e.g. RTPS, BTPS, ISGEC)'} *
+              </label>
               <input
                 type="text"
                 required
                 value={divisionName}
                 onChange={(e) => setDivisionName(e.target.value)}
-                placeholder="Enter division name"
-                className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                placeholder={divisionCategoryTab === 'ATTENDANCE' ? 'Enter attendance division name' : 'Enter client / PO division name'}
+                className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-medium"
               />
             </div>
             <button
               type="submit"
-              className="px-4 py-2.5 bg-[#667eea] text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow h-fit w-full sm:w-auto"
+              className="px-4 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow h-fit w-full sm:w-auto"
             >
-              <FolderPlus className="w-4 h-4" /> Create Division
+              <FolderPlus className="w-4 h-4" /> Add {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division' : 'PO Division'}
             </button>
           </form>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {divisions.map((d) => (
-              <div key={d.id} className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-sm">
-                <div>
-                  <h4 className="font-bold text-slate-800">{d.name}</h4>
-                  <span className="text-[10px] text-slate-400 font-medium">Registered Workers: {d._count?.workers || 0}</span>
+          {/* DIVISIONS GRID FILTERED BY ACTIVE SUB-CATEGORY */}
+          {(() => {
+            const filteredDivs = divisions.filter(d => (d.type || 'PO_CLIENT') === divisionCategoryTab);
+            if (filteredDivs.length === 0) {
+              return (
+                <div className="p-8 text-center text-slate-400 bg-white border border-dashed rounded-xl text-xs">
+                  No {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Divisions' : 'PO Divisions / Clients'} created yet. Add one above.
                 </div>
-                {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => {
-                        setEditingDivision(d);
-                        setEditDivisionName(d.name);
-                        clearMessages();
-                      }}
-                      className="p-1.5 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                      title="Edit Division Name"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteDivision(d.id, d.name)}
-                      className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                      title="Delete Division"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              );
+            }
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredDivs.map((d) => (
+                  <div key={d.id} className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-sm">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-slate-800">{d.name}</h4>
+                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
+                          d.type === 'ATTENDANCE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                        }`}>
+                          {d.type === 'ATTENDANCE' ? 'Attendance' : 'PO / Client'}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-slate-400 font-medium mt-1 block">Registered Workers: {d._count?.workers || 0}</span>
+                    </div>
+                    {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setEditingDivision(d);
+                            setEditDivisionName(d.name);
+                            setEditDivisionType(d.type || 'PO_CLIENT');
+                            clearMessages();
+                          }}
+                          className="p-1.5 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          title="Edit Division"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDivision(d.id, d.name)}
+                          className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                          title="Delete Division"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           {/* EDIT DIVISION MODAL */}
           {editingDivision && (
@@ -1279,10 +1388,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       value={editDivisionName}
                       onChange={(e) => setEditDivisionName(e.target.value)}
                       placeholder="Enter new division name"
-                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium"
                     />
                   </div>
-                  <div className="flex justify-end gap-2 pt-4">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Division Type *</label>
+                    <select
+                      value={editDivisionType}
+                      onChange={(e: any) => setEditDivisionType(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white"
+                    >
+                      <option value="ATTENDANCE">Attendance Division (Workers / Shifts)</option>
+                      <option value="PO_CLIENT">PO Division / Client (Contracts / Invoicing)</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
                     <button
                       type="button"
                       onClick={() => setEditingDivision(null)}
@@ -2389,45 +2509,103 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             )}
           </div>
 
-          {/* ADD INDIVIDUAL STOCK FORM */}
+          {/* ADD INDIVIDUAL STOCK FORM (ITEM MASTER COMPLETE FIELDS) */}
           {showAddIndStockForm && (
-            <form onSubmit={handleCreateIndStock} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4 animate-fadeIn">
-              <h4 className="font-bold text-xs text-[#1e3a8a] uppercase flex items-center gap-1.5">
-                <Package className="w-4 h-4" /> Register Standalone Stock Item
-              </h4>
+            <form onSubmit={handleCreateIndStock} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 animate-fadeIn shadow-sm">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-2.5">
+                <h4 className="font-bold text-xs text-[#1e3a8a] uppercase flex items-center gap-2">
+                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Add Standalone Item (Item Master)
+                </h4>
+                <button
+                  type="button"
+                  onClick={() => setShowAddIndStockForm(false)}
+                  className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                >
+                  ✕ Close
+                </button>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-                <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {/* 1. KPCL Code */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">KPCL Code</label>
+                  <input
+                    type="text"
+                    value={indStockKpclCode}
+                    onChange={(e) => setIndStockKpclCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. 10.45.01"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono"
+                  />
+                </div>
+
+                {/* 2. Item Name */}
+                <div className="sm:col-span-2 lg:col-span-3">
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Item Name <span className="text-red-500">*</span>
+                    Item Name / Description <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     required
                     value={indStockItemName}
                     onChange={(e) => setIndStockItemName(e.target.value.toUpperCase())}
-                    placeholder="e.g. BALL BEARING 6205, COUPLING RUBBER, WELDING RODS"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none"
+                    placeholder="e.g. 11KV INDOOR VCB BREAKER, BALL BEARING 6205, HT CABLE 3CX240 SQMM"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-semibold"
                   />
                 </div>
 
+                {/* 3. Detailed Specifications */}
+                <div className="col-span-full">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Detailed Technical Specifications</label>
+                  <textarea
+                    rows={2}
+                    value={indStockSpecifications}
+                    onChange={(e) => setIndStockSpecifications(e.target.value)}
+                    placeholder="e.g. 11KV, 1250A, 25KA FOR 3 SEC, WITH CT/PT 100/5A CLASS 0.2S, MAKE ABB / SCHNEIDER"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono text-xs"
+                  />
+                </div>
+
+                {/* 4. Part Number */}
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Part Number / Item Code
+                    Part Number / Cat Code
                   </label>
                   <input
                     type="text"
                     value={indStockPartNumber}
                     onChange={(e) => setIndStockPartNumber(e.target.value.toUpperCase())}
-                    placeholder="Optional Part No"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono"
+                    placeholder="e.g. ABB-VCB-11-1250"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono uppercase"
                   />
                 </div>
 
+                {/* 5. Make / Brand */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Unit of Measurement
-                  </label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Make / Brand / Model</label>
+                  <input
+                    type="text"
+                    value={indStockMake}
+                    onChange={(e) => setIndStockMake(e.target.value.toUpperCase())}
+                    placeholder="e.g. ABB / SCHNEIDER / SKF"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none uppercase"
+                  />
+                </div>
+
+                {/* 6. HSN Code */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">HSN Code</label>
+                  <input
+                    type="text"
+                    value={indStockHsnCode}
+                    onChange={(e) => setIndStockHsnCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. 85372000"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono uppercase"
+                  />
+                </div>
+
+                {/* 7. Unit */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
                   <select
                     value={indStockUnit}
                     onChange={(e) => setIndStockUnit(e.target.value)}
@@ -2441,13 +2619,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     <option value="PKT">PKT (Packets)</option>
                     <option value="BOX">BOX</option>
                     <option value="PAIR">PAIR</option>
+                    <option value="ROLL">ROLL</option>
+                    <option value="BAG">BAG</option>
                   </select>
                 </div>
 
+                {/* 8. Opening Stock */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Opening Stock Quantity
-                  </label>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Opening Quantity</label>
                   <input
                     type="number"
                     step="any"
@@ -2459,10 +2638,60 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
 
-                <div className="lg:col-span-3">
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                    Remarks / Purpose
-                  </label>
+                {/* 9. Unit Rate */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Standard Unit Rate (₹)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={indStockRate}
+                    onChange={(e) => setIndStockRate(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-mono"
+                  />
+                </div>
+
+                {/* 10. GST Rates */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">GST Tax Rates (%)</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">CGST %</span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={indStockCgstPercent}
+                        onChange={(e) => setIndStockCgstPercent(e.target.value)}
+                        className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">SGST %</span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={indStockSgstPercent}
+                        onChange={(e) => setIndStockSgstPercent(e.target.value)}
+                        className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">IGST %</span>
+                      <input
+                        type="number"
+                        step="any"
+                        value={indStockIgstPercent}
+                        onChange={(e) => setIndStockIgstPercent(e.target.value)}
+                        className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 11. Remarks */}
+                <div className="col-span-full">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Purpose</label>
                   <input
                     type="text"
                     value={indStockRemarks}
@@ -2472,6 +2701,35 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
               </div>
+
+              {/* LIVE BREAKDOWN CALCULATION CARD */}
+              {(() => {
+                const openQty = parseFloat(indStockOpening) || 0;
+                const r = parseFloat(indStockRate) || 0;
+                const basic = Math.round((openQty * r + Number.EPSILON) * 100) / 100;
+                const cg = parseFloat(indStockCgstPercent) || 0;
+                const sg = parseFloat(indStockSgstPercent) || 0;
+                const ig = parseFloat(indStockIgstPercent) || 0;
+                const cgAmt = Math.round((basic * (cg / 100) + Number.EPSILON) * 100) / 100;
+                const sgAmt = Math.round((basic * (sg / 100) + Number.EPSILON) * 100) / 100;
+                const igAmt = Math.round((basic * (ig / 100) + Number.EPSILON) * 100) / 100;
+                const total = Math.round((basic + cgAmt + sgAmt + igAmt + Number.EPSILON) * 100) / 100;
+
+                return (
+                  <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 flex flex-wrap justify-between items-center text-xs font-mono">
+                    <div className="flex gap-4">
+                      <span>Basic: <strong className="text-slate-900">₹{basic.toLocaleString('en-IN')}</strong></span>
+                      <span>CGST: <strong className="text-blue-800">+{cgAmt.toLocaleString('en-IN')}</strong></span>
+                      <span>SGST: <strong className="text-blue-800">+{sgAmt.toLocaleString('en-IN')}</strong></span>
+                      {igAmt > 0 && <span>IGST: <strong className="text-blue-800">+{igAmt.toLocaleString('en-IN')}</strong></span>}
+                    </div>
+                    <div>
+                      <span className="text-slate-600">Total Opening Value: </span>
+                      <strong className="text-blue-950 text-sm font-black">₹{total.toLocaleString('en-IN')}</strong>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
@@ -2499,7 +2757,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 type="text"
                 value={indStockSearch}
                 onChange={(e) => setIndStockSearch(e.target.value)}
-                placeholder="Search individual stocks by Item Name, Part No, or Remarks..."
+                placeholder="Search individual stocks by Item Name, Part No, KPCL Code, Make, HSN..."
                 className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none"
               />
               <span className="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
@@ -2510,15 +2768,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           </div>
 
-          {/* INDIVIDUAL STOCKS TABLE */}
+          {/* INDIVIDUAL STOCKS TABLE (RICH ITEM MASTER VIEW) */}
           <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
             <table className="w-full text-left text-xs excel-table">
               <thead>
                 <tr>
-                  <th>Item Name</th>
-                  <th>Part No</th>
+                  <th>KPCL Code</th>
+                  <th>Item Name & Description</th>
+                  <th>Part No / Make</th>
+                  <th>HSN</th>
                   <th>Unit</th>
                   <th className="text-right">Opening</th>
+                  <th className="text-right">Unit Rate</th>
                   <th className="text-right">Total Inward</th>
                   <th className="text-right">Total Sold</th>
                   <th className="text-right">Available Stock</th>
@@ -2532,10 +2793,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   const q = indStockSearch.toLowerCase();
                   return (s.itemName || '').toLowerCase().includes(q) ||
                          (s.partNumber || '').toLowerCase().includes(q) ||
+                         (s.kpclCode || '').toLowerCase().includes(q) ||
+                         (s.make || '').toLowerCase().includes(q) ||
+                         (s.hsnCode || '').toLowerCase().includes(q) ||
+                         (s.specifications || '').toLowerCase().includes(q) ||
                          (s.remarks || '').toLowerCase().includes(q);
                 }).length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="p-8 text-center text-slate-400">
+                    <td colSpan={12} className="p-8 text-center text-slate-400">
                       No individual stock items registered yet. Click <strong>+ Add Individual Stock</strong> to create one.
                     </td>
                   </tr>
@@ -2546,15 +2811,31 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       const q = indStockSearch.toLowerCase();
                       return (s.itemName || '').toLowerCase().includes(q) ||
                              (s.partNumber || '').toLowerCase().includes(q) ||
+                             (s.kpclCode || '').toLowerCase().includes(q) ||
+                             (s.make || '').toLowerCase().includes(q) ||
+                             (s.hsnCode || '').toLowerCase().includes(q) ||
+                             (s.specifications || '').toLowerCase().includes(q) ||
                              (s.remarks || '').toLowerCase().includes(q);
                     })
                     .map((item) => (
                       <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="font-bold text-slate-900">
-                          {item.itemName}
+                        <td className="font-mono font-bold text-[#1e3a8a]">
+                          {item.kpclCode || '-'}
+                        </td>
+                        <td>
+                          <div className="font-bold text-slate-900">{item.itemName}</div>
+                          {item.specifications && (
+                            <div className="text-[10px] text-slate-500 max-w-xs truncate" title={item.specifications}>
+                              {item.specifications}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="font-mono text-slate-700 font-bold">{item.partNumber || '-'}</div>
+                          {item.make && <div className="text-[10px] text-slate-500 font-semibold">{item.make}</div>}
                         </td>
                         <td className="font-mono text-slate-600">
-                          {item.partNumber || '-'}
+                          {item.hsnCode || '-'}
                         </td>
                         <td>
                           <span className="px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px] font-bold text-slate-700">
@@ -2563,6 +2844,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         </td>
                         <td className="text-right font-mono text-slate-600">
                           {item.openingStock || 0}
+                        </td>
+                        <td className="text-right font-mono text-slate-700 font-semibold">
+                          ₹{parseFloat(item.rate || 0).toLocaleString('en-IN')}
                         </td>
                         <td className="text-right font-mono font-bold text-emerald-700">
                           +{item.totalInward || 0}
@@ -2595,16 +2879,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                                   setIndPurchaseForm({
                                     date: new Date().toISOString().split('T')[0],
                                     qty: '',
-                                    rate: '',
+                                    rate: item.rate ? item.rate.toString() : '',
                                     partyName: '',
                                     supplierAddress: '',
                                     gstNumber: '',
                                     partyInvoiceNumber: '',
                                     supplierInvoiceDate: '',
                                     vehicleNumber: '',
-                                    cgstPercent: '9',
-                                    sgstPercent: '9',
-                                    igstPercent: '0',
+                                    cgstPercent: item.cgstPercent ? item.cgstPercent.toString() : '9',
+                                    sgstPercent: item.sgstPercent ? item.sgstPercent.toString() : '9',
+                                    igstPercent: item.igstPercent ? item.igstPercent.toString() : '0',
                                     remarks: ''
                                   });
                                 }}
@@ -2623,14 +2907,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                                   invoiceNumber: '',
                                   invoiceDate: new Date().toISOString().split('T')[0],
                                   qty: '',
-                                  rate: '',
+                                  rate: item.rate ? item.rate.toString() : '',
                                   partyName: '',
                                   supplierAddress: '',
                                   gstNumber: '',
                                   vehicleNumber: '',
-                                  cgstPercent: '9',
-                                  sgstPercent: '9',
-                                  igstPercent: '0',
+                                  eWayBillNumber: '',
+                                  cgstPercent: item.cgstPercent ? item.cgstPercent.toString() : '9',
+                                  sgstPercent: item.sgstPercent ? item.sgstPercent.toString() : '9',
+                                  igstPercent: item.igstPercent ? item.igstPercent.toString() : '0',
                                   remarks: ''
                                 });
                               }}
@@ -2638,6 +2923,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                               title="Record Outward Sale"
                             >
                               <ArrowUpFromLine className="w-3 h-3" /> Sale
+                            </button>
+
+                            {/* Inspect / View Button */}
+                            <button
+                              onClick={() => setInspectIndStock(item)}
+                              className="p-1 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300"
+                              title="View Full Item Master Details"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
                             </button>
 
                             {/* History Button */}
@@ -2682,11 +2976,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
           {/* MODAL: INWARD PURCHASE (FULL GST FIELDS) */}
           {purchaseModalItem && (
             <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-6">
-                <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-6 py-4 flex justify-between items-center">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
+                <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
-                      <ArrowDownToLine className="w-5 h-5 text-emerald-300" /> Record Inward Purchase (Individual Stock)
+                      <ArrowDownToLine className="w-5 h-5 text-emerald-300" /> Record Inward Purchase (Standalone Item)
                     </h3>
                     <p className="text-xs text-emerald-200 mt-0.5">
                       Item: <strong>{purchaseModalItem.itemName}</strong> ({purchaseModalItem.partNumber || 'No Part Number'})
@@ -2695,7 +2989,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   <button onClick={() => setPurchaseModalItem(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
                 </div>
 
-                <form onSubmit={handleRecordIndPurchase} className="p-6 space-y-4 text-xs">
+                <form onSubmit={handleRecordIndPurchase} className="p-6 space-y-4 text-xs overflow-y-auto">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -2721,70 +3015,62 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         required
                         value={indPurchaseForm.qty}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, qty: e.target.value })}
-                        placeholder="0"
+                        placeholder="e.g. 10"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold"
                       />
                     </div>
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Unit Purchase Rate (₹) <span className="text-red-500">*</span>
+                        Unit Rate (₹) <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
                         step="any"
-                        min="0"
+                        min="0.01"
                         required
                         value={indPurchaseForm.rate}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, rate: e.target.value })}
-                        placeholder="0.00"
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
+                        placeholder="e.g. 1250"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono font-bold"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Party / Supplier Name
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier / Party Name</label>
                       <input
                         type="text"
                         value={indPurchaseForm.partyName}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, partyName: e.target.value })}
-                        placeholder="e.g. SKF Bearing Distributor"
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                        placeholder="e.g. VRL Logistics / Sharma Hardware"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-semibold"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Supplier GSTIN Number
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier GSTIN</label>
                       <input
                         type="text"
                         value={indPurchaseForm.gstNumber}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, gstNumber: e.target.value.toUpperCase() })}
-                        placeholder="29XXXXXXXXXXXXX"
+                        placeholder="29AAAAA0000A1Z5"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Party Bill / Invoice Number
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Bill / Invoice #</label>
                       <input
                         type="text"
                         value={indPurchaseForm.partyInvoiceNumber}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, partyInvoiceNumber: e.target.value.toUpperCase() })}
-                        placeholder="Vendor Invoice #"
+                        placeholder="INV-2026-981"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Supplier Invoice Date
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
                       <input
                         type="date"
                         value={indPurchaseForm.supplierInvoiceDate}
@@ -2794,23 +3080,22 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Vehicle Number
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle Number <span className="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
                       <input
                         type="text"
                         value={indPurchaseForm.vehicleNumber}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, vehicleNumber: e.target.value.toUpperCase() })}
-                        placeholder="KA 36C 1234"
+                        placeholder="KA-37-M-1234 (Optional)"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600 font-mono uppercase"
                       />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1">
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-600 mb-1">CGST %</label>
                         <input
                           type="number"
+                          step="any"
                           value={indPurchaseForm.cgstPercent}
                           onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, cgstPercent: e.target.value })}
                           className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
@@ -2820,6 +3105,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <label className="block text-[10px] font-bold text-slate-600 mb-1">SGST %</label>
                         <input
                           type="number"
+                          step="any"
                           value={indPurchaseForm.sgstPercent}
                           onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, sgstPercent: e.target.value })}
                           className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
@@ -2829,6 +3115,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <label className="block text-[10px] font-bold text-slate-600 mb-1">IGST %</label>
                         <input
                           type="number"
+                          step="any"
                           value={indPurchaseForm.igstPercent}
                           onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, igstPercent: e.target.value })}
                           className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
@@ -2842,7 +3129,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         type="text"
                         value={indPurchaseForm.supplierAddress}
                         onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, supplierAddress: e.target.value })}
-                        placeholder="Street, City, State, PIN"
+                        placeholder="Industrial Area, Hyderabad"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
                       />
                     </div>
@@ -2899,11 +3186,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
           {/* MODAL: OUTWARD SALE (REQUIRES OWNER APPROVAL) */}
           {saleModalItem && (
             <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-6">
-                <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
+                <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
-                      <ArrowUpFromLine className="w-5 h-5 text-blue-300" /> Record Outward Sale (Individual Stock)
+                      <ArrowUpFromLine className="w-5 h-5 text-blue-300" /> Record Outward Sale (Standalone Item)
                     </h3>
                     <p className="text-xs text-blue-200 mt-0.5">
                       Item: <strong>{saleModalItem.itemName}</strong> | Available Balance: <span className="font-bold font-mono text-emerald-300">{saleModalItem.balanceStock} {saleModalItem.unit || 'NOS'}</span>
@@ -2912,7 +3199,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   <button onClick={() => setSaleModalItem(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
                 </div>
 
-                <form onSubmit={handleRecordIndSale} className="p-6 space-y-4 text-xs">
+                <form onSubmit={handleRecordIndSale} className="p-6 space-y-4 text-xs overflow-y-auto">
                   {currentUserRole !== 'OWNER' && (
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-center gap-2">
                       <span>🛡️</span>
@@ -2952,7 +3239,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Quantity to Sell <span className="text-red-500">*</span>
+                        Quantity Sold <span className="text-red-500">*</span>
                       </label>
                       <input
                         type="number"
@@ -2962,7 +3249,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         required
                         value={indSaleForm.qty}
                         onChange={(e) => setIndSaleForm({ ...indSaleForm, qty: e.target.value })}
-                        placeholder="0"
+                        placeholder={`Max: ${saleModalItem.balanceStock}`}
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono font-bold"
                       />
                     </div>
@@ -2974,59 +3261,65 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       <input
                         type="number"
                         step="any"
-                        min="0"
+                        min="0.01"
                         required
                         value={indSaleForm.rate}
                         onChange={(e) => setIndSaleForm({ ...indSaleForm, rate: e.target.value })}
-                        placeholder="0.00"
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono"
+                        placeholder="e.g. 1500"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono font-bold"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Buyer / Customer Name
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Buyer / Client Name</label>
                       <input
                         type="text"
                         value={indSaleForm.partyName}
                         onChange={(e) => setIndSaleForm({ ...indSaleForm, partyName: e.target.value })}
-                        placeholder="e.g. KPCL Raichur"
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                        placeholder="KPCL / Shaktinagar Plant"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-semibold"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Buyer GSTIN Number
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Buyer GSTIN</label>
                       <input
                         type="text"
                         value={indSaleForm.gstNumber}
                         onChange={(e) => setIndSaleForm({ ...indSaleForm, gstNumber: e.target.value.toUpperCase() })}
-                        placeholder="29XXXXXXXXXXXXX"
+                        placeholder="29AAAAA0000A1Z5"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Dispatch Vehicle Number
-                      </label>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle Number <span className="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
                       <input
                         type="text"
                         value={indSaleForm.vehicleNumber}
                         onChange={(e) => setIndSaleForm({ ...indSaleForm, vehicleNumber: e.target.value.toUpperCase() })}
-                        placeholder="KA 36C 2722"
+                        placeholder="KA-37-M-1234 (Optional)"
                         className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono uppercase"
                       />
                     </div>
 
-                    <div className="grid grid-cols-3 gap-1">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number <span className="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                      <input
+                        type="text"
+                        value={indSaleForm.eWayBillNumber}
+                        onChange={(e) => setIndSaleForm({ ...indSaleForm, eWayBillNumber: e.target.value.toUpperCase() })}
+                        placeholder="541289654123 (Optional)"
+                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600 font-mono uppercase"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2">
                       <div>
                         <label className="block text-[10px] font-bold text-slate-600 mb-1">CGST %</label>
                         <input
                           type="number"
+                          step="any"
                           value={indSaleForm.cgstPercent}
                           onChange={(e) => setIndSaleForm({ ...indSaleForm, cgstPercent: e.target.value })}
                           className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
@@ -3036,6 +3329,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <label className="block text-[10px] font-bold text-slate-600 mb-1">SGST %</label>
                         <input
                           type="number"
+                          step="any"
                           value={indSaleForm.sgstPercent}
                           onChange={(e) => setIndSaleForm({ ...indSaleForm, sgstPercent: e.target.value })}
                           className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
@@ -3045,6 +3339,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <label className="block text-[10px] font-bold text-slate-600 mb-1">IGST %</label>
                         <input
                           type="number"
+                          step="any"
                           value={indSaleForm.igstPercent}
                           onChange={(e) => setIndSaleForm({ ...indSaleForm, igstPercent: e.target.value })}
                           className="w-full px-1.5 py-1.5 border border-slate-300 rounded outline-none font-mono text-center"
@@ -3122,6 +3417,89 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           )}
 
+          {/* MODAL: VIEW / INSPECT ITEM MASTER DETAILS */}
+          {inspectIndStock && (
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
+                <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-2.5">
+                    <Package className="w-5 h-5 text-sky-300" />
+                    <div>
+                      <h3 className="font-bold text-base">{inspectIndStock.itemName}</h3>
+                      <p className="text-xs text-sky-200">Part No: {inspectIndStock.partNumber || '-'} | KPCL Code: {inspectIndStock.kpclCode || '-'}</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setInspectIndStock(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
+                </div>
+
+                <div className="p-6 space-y-4 text-xs overflow-y-auto">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200 font-mono">
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Unit</span>
+                      <strong className="text-slate-900">{inspectIndStock.unit || 'NOS'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Standard Rate</span>
+                      <strong className="text-slate-900">₹{parseFloat(inspectIndStock.rate || 0).toLocaleString('en-IN')}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">Make / Brand</span>
+                      <strong className="text-slate-900">{inspectIndStock.make || '-'}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-500 block">HSN Code</span>
+                      <strong className="text-slate-900">{inspectIndStock.hsnCode || '-'}</strong>
+                    </div>
+                  </div>
+
+                  {inspectIndStock.specifications && (
+                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 font-bold block mb-1 uppercase tracking-wider">Technical Specifications</span>
+                      <p className="text-slate-800 font-mono whitespace-pre-wrap leading-relaxed">{inspectIndStock.specifications}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-3 bg-emerald-50/70 p-3.5 rounded-xl border border-emerald-200 font-mono text-center">
+                    <div>
+                      <span className="text-[10px] text-emerald-800 block">Opening Qty</span>
+                      <strong className="text-slate-900 text-sm">{inspectIndStock.openingStock || 0}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-emerald-800 block">Total Inward</span>
+                      <strong className="text-emerald-700 text-sm">+{inspectIndStock.totalInward || 0}</strong>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-emerald-800 block">Total Sold</span>
+                      <strong className="text-blue-700 text-sm">-{inspectIndStock.totalSold || 0}</strong>
+                    </div>
+                  </div>
+
+                  <div className="bg-blue-50 p-3.5 rounded-xl border border-blue-200 flex justify-between items-center font-mono">
+                    <span className="font-bold text-blue-900">Current Balance Stock:</span>
+                    <span className="text-base font-black px-3 py-1 bg-white rounded-lg border border-blue-300 text-blue-950">
+                      {inspectIndStock.balanceStock || 0} {inspectIndStock.unit || 'NOS'}
+                    </span>
+                  </div>
+
+                  {inspectIndStock.remarks && (
+                    <div className="text-slate-500 text-[11px] pt-1">
+                      <strong>Remarks:</strong> {inspectIndStock.remarks}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-end">
+                  <button
+                    onClick={() => setInspectIndStock(null)}
+                    className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* MODAL: TRANSACTION HISTORY */}
           {txHistoryItem && (
             <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
@@ -3162,20 +3540,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         </tr>
                       ) : (
                         transactionsList.map((tx) => (
-                          <tr key={tx.id} className="hover:bg-slate-50">
-                            <td className="font-mono text-slate-800">
-                              {new Date(tx.date).toLocaleDateString('en-GB')}
+                          <tr key={tx.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="font-mono">
+                              {new Date(tx.date).toLocaleDateString('en-IN')}
                             </td>
                             <td>
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                tx.type === 'INWARD' 
-                                  ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' 
-                                  : 'bg-blue-100 text-blue-900 border border-blue-300'
+                                tx.type === 'INWARD' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
                               }`}>
-                                {tx.type === 'INWARD' ? '📥 INWARD' : '📤 OUTWARD'}
+                                {tx.type === 'INWARD' ? 'INWARD (Purchase)' : 'OUTWARD (Sale)'}
                               </span>
                             </td>
-                            <td className="font-mono font-bold text-slate-900">
+                            <td className="font-mono font-bold">
                               {tx.partyInvoiceNumber || '-'}
                             </td>
                             <td>
@@ -3224,69 +3600,165 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           )}
 
-          {/* MODAL: EDIT INDIVIDUAL STOCK DETAILS */}
+          {/* MODAL: EDIT INDIVIDUAL STOCK DETAILS (FULL ITEM MASTER) */}
           {editingIndStock && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden">
-                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center">
-                  <h3 className="font-bold text-sm">Edit Stock Details</h3>
+            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
+                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
+                  <h3 className="font-bold text-sm flex items-center gap-2">
+                    <Edit className="w-4 h-4 text-sky-300" /> Edit Item Master Details
+                  </h3>
                   <button onClick={() => setEditingIndStock(null)} className="text-white/80 hover:text-white">✕</button>
                 </div>
-                <form onSubmit={handleUpdateIndStock} className="p-6 space-y-4 text-xs">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={editingIndStock.itemName}
-                      onChange={(e) => setEditingIndStock({ ...editingIndStock, itemName: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a]"
-                    />
+                <form onSubmit={handleUpdateIndStock} className="p-6 space-y-4 text-xs overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">KPCL Code</label>
+                      <input
+                        type="text"
+                        value={editingIndStock.kpclCode || ''}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, kpclCode: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={editingIndStock.itemName}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, itemName: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-bold"
+                      />
+                    </div>
+
+                    <div className="col-span-full">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Specifications</label>
+                      <textarea
+                        rows={2}
+                        value={editingIndStock.specifications || ''}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, specifications: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Part Number</label>
+                      <input
+                        type="text"
+                        value={editingIndStock.partNumber || ''}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, partNumber: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono uppercase"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Make / Brand</label>
+                      <input
+                        type="text"
+                        value={editingIndStock.make || ''}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, make: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] uppercase"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">HSN Code</label>
+                      <input
+                        type="text"
+                        value={editingIndStock.hsnCode || ''}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, hsnCode: e.target.value.toUpperCase() })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono uppercase"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
+                      <select
+                        value={editingIndStock.unit || 'NOS'}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, unit: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-semibold"
+                      >
+                        <option value="NOS">NOS</option>
+                        <option value="SET">SET</option>
+                        <option value="MTR">MTR</option>
+                        <option value="KGS">KGS</option>
+                        <option value="LTR">LTR</option>
+                        <option value="PKT">PKT</option>
+                        <option value="BOX">BOX</option>
+                        <option value="PAIR">PAIR</option>
+                        <option value="ROLL">ROLL</option>
+                        <option value="BAG">BAG</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Opening Stock</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editingIndStock.openingStock || 0}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, openingStock: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit Rate (₹)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        value={editingIndStock.rate || 0}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, rate: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 col-span-full sm:col-span-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">CGST %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={editingIndStock.cgstPercent ?? 9}
+                          onChange={(e) => setEditingIndStock({ ...editingIndStock, cgstPercent: e.target.value })}
+                          className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">SGST %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={editingIndStock.sgstPercent ?? 9}
+                          onChange={(e) => setEditingIndStock({ ...editingIndStock, sgstPercent: e.target.value })}
+                          className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-600 mb-1">IGST %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={editingIndStock.igstPercent ?? 0}
+                          onChange={(e) => setEditingIndStock({ ...editingIndStock, igstPercent: e.target.value })}
+                          className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="col-span-full">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                      <input
+                        type="text"
+                        value={editingIndStock.remarks || ''}
+                        onChange={(e) => setEditingIndStock({ ...editingIndStock, remarks: e.target.value })}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a]"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Part Number</label>
-                    <input
-                      type="text"
-                      value={editingIndStock.partNumber || ''}
-                      onChange={(e) => setEditingIndStock({ ...editingIndStock, partNumber: e.target.value.toUpperCase() })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit</label>
-                    <select
-                      value={editingIndStock.unit || 'NOS'}
-                      onChange={(e) => setEditingIndStock({ ...editingIndStock, unit: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-semibold"
-                    >
-                      <option value="NOS">NOS</option>
-                      <option value="SET">SET</option>
-                      <option value="MTR">MTR</option>
-                      <option value="KGS">KGS</option>
-                      <option value="LTR">LTR</option>
-                      <option value="PKT">PKT</option>
-                      <option value="BOX">BOX</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Opening Stock</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={editingIndStock.openingStock || 0}
-                      onChange={(e) => setEditingIndStock({ ...editingIndStock, openingStock: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a] font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
-                    <input
-                      type="text"
-                      value={editingIndStock.remarks || ''}
-                      onChange={(e) => setEditingIndStock({ ...editingIndStock, remarks: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-[#1e3a8a]"
-                    />
-                  </div>
+
                   <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                     <button
                       type="button"
@@ -3298,7 +3770,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs"
+                      className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow"
                     >
                       Save Changes
                     </button>

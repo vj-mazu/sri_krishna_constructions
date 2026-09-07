@@ -979,12 +979,12 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
         "id", "purchaseOrderItemId", "date", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
         "totalAmount", "partyName", "supplierAddress", "gstNumber", "partyInvoiceNumber",
-        "supplierInvoiceDate", "vehicleNumber", "remarks", "addedById", "createdAt"
+        "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "addedById", "createdAt"
       ) VALUES (
         gen_random_uuid()::text, $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, NOW()
+        $17, $18, $19, $20, $21, $22, NOW()
       ) RETURNING *`,
       [
         d.purchaseOrderItemId, new Date(d.date), qty, rate, basicAmount,
@@ -997,6 +997,8 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
+        d.receivedItemName ? d.receivedItemName.trim() : null,
+        d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null,
         req.user.id
       ]
     );
@@ -1037,8 +1039,9 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
            "totalAmount" = $10, "date" = $11,
            "partyName" = $12, "supplierAddress" = $13, "gstNumber" = $14,
            "partyInvoiceNumber" = $15, "supplierInvoiceDate" = $16,
-           "vehicleNumber" = $17, "remarks" = $18
-       WHERE id = $19
+           "vehicleNumber" = $17, "remarks" = $18,
+           "receivedItemName" = $19, "receivedPartNumber" = $20
+       WHERE id = $21
        RETURNING *`,
       [
         qty, rate, basicAmount,
@@ -1052,6 +1055,8 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
+        d.receivedItemName !== undefined ? (d.receivedItemName ? d.receivedItemName.trim() : null) : null,
+        d.receivedPartNumber !== undefined ? (d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null) : null,
         id
       ]
     );
@@ -1125,12 +1130,12 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
         "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
         "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber", "partyInvoiceNumber",
-        "supplierInvoiceDate", "vehicleNumber", "remarks", "status", "addedById", "createdAt"
+        "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "status", "addedById", "createdAt"
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
         $14, $15, $16, $17, $18, $19,
-        $20, $21, $22, 'PENDING', $23, NOW()
+        $20, $21, $22, $23, 'PENDING', $24, NOW()
       ) RETURNING *`,
       [
         saleId, d.purchaseOrderItemId, d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
@@ -1145,6 +1150,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
         d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
         req.user.id
       ]
@@ -1184,6 +1190,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
           partyInvoiceNumber: d.partyInvoiceNumber || '-',
           supplierInvoiceDate: d.supplierInvoiceDate || null,
           vehicleNumber: d.vehicleNumber || '-',
+          eWayBillNumber: d.eWayBillNumber || '-',
           remarks: d.remarks || '-'
         }),
         `Sale Invoice #${d.invoiceNumber || '-'} (${qty} units of ${partNumber}) submitted for Owner Approval`
@@ -1354,12 +1361,12 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
           'INDIVIDUAL' as "stockType",
           '-' as "poNumber",
           NULL as "poDate",
-          '-' as "kpclCode",
+          COALESCE(s."kpclCode", '-') as "kpclCode",
           s."itemName",
-          COALESCE(s."remarks", 'Standalone Individual Stock') as "specifications",
+          COALESCE(s."specifications", s."remarks", 'Standalone Item') as "specifications",
           COALESCE(s."partNumber", '-') as "partNumber",
-          'DIRECT' as "make",
-          '-' as "hsnCode",
+          COALESCE(s."make", 'DIRECT') as "make",
+          COALESCE(s."hsnCode", '-') as "hsnCode",
           s."unit",
           s."openingStock" as "orderedQty",
           (s."openingStock" + COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0))::float as "totalPurchased",
@@ -1492,7 +1499,7 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
 
     if (search && search.trim()) {
       params.push(`%${search.trim()}%`);
-      whereClauses.push(`(s."itemName" ILIKE $${params.length} OR s."partNumber" ILIKE $${params.length} OR s."remarks" ILIKE $${params.length})`);
+      whereClauses.push(`(s."itemName" ILIKE $${params.length} OR s."partNumber" ILIKE $${params.length} OR s."kpclCode" ILIKE $${params.length} OR s."make" ILIKE $${params.length} OR s."hsnCode" ILIKE $${params.length} OR s."specifications" ILIKE $${params.length} OR s."remarks" ILIKE $${params.length})`);
     }
 
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
@@ -1546,21 +1553,63 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/individual-stocks - Create new individual stock item (Owner/Manager)
+// POST /api/individual-stocks - Create new individual stock item with full Item Master fields (Owner/Manager)
 app.post('/api/individual-stocks', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { itemName, partNumber, unit = 'NOS', openingStock = 0, remarks } = req.body;
+    const { 
+      kpclCode, 
+      itemName, 
+      specifications, 
+      partNumber, 
+      make, 
+      hsnCode, 
+      unit = 'NOS', 
+      openingStock = 0, 
+      rate = 0, 
+      cgstPercent = 9, 
+      sgstPercent = 9, 
+      igstPercent = 0, 
+      remarks 
+    } = req.body;
+
     if (!itemName || !itemName.trim()) {
       return res.status(400).json({ error: 'Item Name is required' });
     }
 
     const openStockNum = parseFloat(openingStock) || 0;
+    const rateNum = parseFloat(rate) || 0;
+    const basicAmt = Math.round((openStockNum * rateNum + Number.EPSILON) * 100) / 100;
+    const cgstP = parseFloat(cgstPercent) || 0;
+    const sgstP = parseFloat(sgstPercent) || 0;
+    const igstP = parseFloat(igstPercent) || 0;
 
     const { rows } = await pool.query(
-      `INSERT INTO "IndividualStock" ("id", "itemName", "partNumber", "unit", "openingStock", "currentStock", "remarks", "addedById", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $4, $5, $6, NOW(), NOW())
-       RETURNING *`,
-      [itemName.trim(), partNumber ? partNumber.trim().toUpperCase() : null, unit.trim().toUpperCase(), openStockNum, remarks ? remarks.trim() : null, req.user.id]
+      `INSERT INTO "IndividualStock" (
+        "id", "kpclCode", "itemName", "specifications", "partNumber", "make", "hsnCode", 
+        "unit", "openingStock", "rate", "basicAmount", "cgstPercent", "sgstPercent", "igstPercent", 
+        "currentStock", "remarks", "addedById", "createdAt", "updatedAt"
+      ) VALUES (
+        gen_random_uuid()::text, $1, $2, $3, $4, $5, $6,
+        $7, $8, $9, $10, $11, $12, $13,
+        $8, $14, $15, NOW(), NOW()
+      ) RETURNING *`,
+      [
+        kpclCode ? kpclCode.trim().toUpperCase() : null,
+        itemName.trim(),
+        specifications ? specifications.trim() : null,
+        partNumber ? partNumber.trim().toUpperCase() : null,
+        make ? make.trim().toUpperCase() : null,
+        hsnCode ? hsnCode.trim().toUpperCase() : null,
+        unit ? unit.trim().toUpperCase() : 'NOS',
+        openStockNum,
+        rateNum,
+        basicAmt,
+        cgstP,
+        sgstP,
+        igstP,
+        remarks ? remarks.trim() : null,
+        req.user.id
+      ]
     );
 
     res.status(201).json({ message: 'Individual Stock created successfully!', item: rows[0] });
@@ -1574,23 +1623,60 @@ app.post('/api/individual-stocks', authenticateToken, requireRoles(['OWNER', 'MA
 app.put('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { itemName, partNumber, unit, openingStock, remarks } = req.body;
+    const { 
+      kpclCode, 
+      itemName, 
+      specifications, 
+      partNumber, 
+      make, 
+      hsnCode, 
+      unit, 
+      openingStock, 
+      rate, 
+      cgstPercent, 
+      sgstPercent, 
+      igstPercent, 
+      remarks 
+    } = req.body;
+
+    const openStockNum = openingStock !== undefined ? (parseFloat(openingStock) || 0) : undefined;
+    const rateNum = rate !== undefined ? (parseFloat(rate) || 0) : undefined;
+    const cgstP = cgstPercent !== undefined ? (parseFloat(cgstPercent) || 0) : undefined;
+    const sgstP = sgstPercent !== undefined ? (parseFloat(sgstPercent) || 0) : undefined;
+    const igstP = igstPercent !== undefined ? (parseFloat(igstPercent) || 0) : undefined;
 
     const { rows } = await pool.query(
       `UPDATE "IndividualStock"
-       SET "itemName" = COALESCE($1, "itemName"),
-           "partNumber" = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE "partNumber" END,
-           "unit" = COALESCE($3, "unit"),
-           "openingStock" = COALESCE($4, "openingStock"),
-           "remarks" = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE "remarks" END,
+       SET "kpclCode" = CASE WHEN $1::text IS NOT NULL THEN $1 ELSE "kpclCode" END,
+           "itemName" = COALESCE($2, "itemName"),
+           "specifications" = CASE WHEN $3::text IS NOT NULL THEN $3 ELSE "specifications" END,
+           "partNumber" = CASE WHEN $4::text IS NOT NULL THEN $4 ELSE "partNumber" END,
+           "make" = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE "make" END,
+           "hsnCode" = CASE WHEN $6::text IS NOT NULL THEN $6 ELSE "hsnCode" END,
+           "unit" = COALESCE($7, "unit"),
+           "openingStock" = COALESCE($8, "openingStock"),
+           "rate" = COALESCE($9, "rate"),
+           "basicAmount" = CASE WHEN $8::float IS NOT NULL AND $9::float IS NOT NULL THEN ROUND(($8::numeric * $9::numeric), 2) ELSE "basicAmount" END,
+           "cgstPercent" = COALESCE($10, "cgstPercent"),
+           "sgstPercent" = COALESCE($11, "sgstPercent"),
+           "igstPercent" = COALESCE($12, "igstPercent"),
+           "remarks" = CASE WHEN $13::text IS NOT NULL THEN $13 ELSE "remarks" END,
            "updatedAt" = NOW()
-       WHERE "id" = $6
+       WHERE "id" = $14
        RETURNING *`,
       [
+        kpclCode !== undefined ? (kpclCode ? kpclCode.trim().toUpperCase() : null) : null,
         itemName ? itemName.trim() : null,
+        specifications !== undefined ? (specifications ? specifications.trim() : null) : null,
         partNumber !== undefined ? (partNumber ? partNumber.trim().toUpperCase() : null) : null,
+        make !== undefined ? (make ? make.trim().toUpperCase() : null) : null,
+        hsnCode !== undefined ? (hsnCode ? hsnCode.trim().toUpperCase() : null) : null,
         unit ? unit.trim().toUpperCase() : null,
-        openingStock !== undefined ? parseFloat(openingStock) || 0 : null,
+        openStockNum !== undefined ? openStockNum : null,
+        rateNum !== undefined ? rateNum : null,
+        cgstP !== undefined ? cgstP : null,
+        sgstP !== undefined ? sgstP : null,
+        igstP !== undefined ? igstP : null,
         remarks !== undefined ? (remarks ? remarks.trim() : null) : null,
         id
       ]
@@ -1779,12 +1865,12 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
         "id", "stockId", "type", "date", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
         "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
-        "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt"
+        "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt"
       ) VALUES (
         gen_random_uuid()::text, $1, 'OUTWARD', $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, '29DWKPP3582H1ZV',
-        $16, $17, $18, $19, $20, $21, $22, $23, NOW()
+        $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW()
       ) RETURNING *`,
       [
         d.stockId, new Date(d.invoiceDate), qty, rate, basicAmount,
@@ -1796,6 +1882,7 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
         d.invoiceNumber.trim().toUpperCase(),
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
         txStatus,
         isOwner ? req.user.id : null,
@@ -1829,13 +1916,25 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
             invoiceDate: d.invoiceDate,
             qty,
             rate,
+            basicAmount,
+            cgstPercent: cgstP,
+            sgstPercent: sgstP,
+            igstPercent: igstP,
+            cgstAmount,
+            sgstAmount,
+            igstAmount,
             totalAmount,
-            partyName: d.partyName,
-            gstNumber: d.gstNumber,
-            vehicleNumber: d.vehicleNumber,
-            remarks: d.remarks
+            partyName: d.partyName || '-',
+            supplierAddress: d.supplierAddress || '-',
+            companyGstNumber: '29DWKPP3582H1ZV',
+            gstNumber: d.gstNumber || '-',
+            partyInvoiceNumber: d.invoiceNumber,
+            supplierInvoiceDate: d.supplierInvoiceDate || null,
+            vehicleNumber: d.vehicleNumber || '-',
+            eWayBillNumber: d.eWayBillNumber || '-',
+            remarks: d.remarks || '-'
           }),
-          `Individual Stock Outward Sale: ${stock.itemName} (${qty} ${stock.unit || 'NOS'} @ ₹${rate}) for Invoice #${d.invoiceNumber}`
+          `Individual Stock Sale #${d.invoiceNumber} (${qty} ${stock.unit || 'units'} of ${stock.itemName}) submitted for Owner Approval`
         ]
       );
     }
@@ -2106,10 +2205,405 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
       [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
     );
 
-    res.json({ message: `Approval request ${status.toLowerCase()}`, approval: updateRes.rows[0] });
+    res.json({ message: `Approval request ${status.toLowerCase()} successfully`, approval: updateRes.rows[0] });
   } catch (err) {
-    console.error('Error processing approval decision:', err);
-    res.status(500).json({ error: 'Failed to process approval decision' });
+    console.error('Error in approval action:', err);
+    res.status(500).json({ error: 'Failed to process approval action' });
+  }
+});
+
+// --- WORK ORDERS (DIRECT SALES / BILLING ONLY) API ---
+// GET /api/work-orders - List all Work Orders
+app.get('/api/work-orders', authenticateToken, async (req, res) => {
+  try {
+    const { search, dateFrom, dateTo } = req.query;
+    let query = `
+      SELECT wo.*,
+             u."fullName" as "addedByName"
+      FROM "WorkOrder" wo
+      LEFT JOIN "User" u ON wo."addedById" = u.id
+    `;
+    const whereClauses = [];
+    const params = [];
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      whereClauses.push(`(
+        LOWER(wo."workOrderNumber") LIKE $${params.length} OR
+        LOWER(wo."invoiceNumber") LIKE $${params.length} OR
+        LOWER(wo."partyName") LIKE $${params.length} OR
+        LOWER(COALESCE(wo."partyGstNumber", '')) LIKE $${params.length} OR
+        LOWER(wo."itemName") LIKE $${params.length} OR
+        LOWER(COALESCE(wo."partNumber", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(wo."vehicleNumber", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(wo."eWayBillNumber", '')) LIKE $${params.length}
+      )`);
+    }
+
+    if (dateFrom) {
+      params.push(dateFrom);
+      whereClauses.push(`wo."invoiceDate"::date >= $${params.length}::date`);
+    }
+
+    if (dateTo) {
+      params.push(dateTo);
+      whereClauses.push(`wo."invoiceDate"::date <= $${params.length}::date`);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    query += ` ORDER BY wo."invoiceDate" DESC, wo."createdAt" DESC`;
+
+    const { rows } = await pool.query(query, params);
+    res.json({ workOrders: rows, totalCount: rows.length });
+  } catch (err) {
+    console.error('Error fetching work orders:', err);
+    res.status(500).json({ error: 'Failed to fetch work orders' });
+  }
+});
+
+// POST /api/work-orders - Create new Work Order Direct Sale
+app.post('/api/work-orders', authenticateToken, async (req, res) => {
+  try {
+    const d = req.body;
+    if (!d.workOrderNumber || !d.workOrderNumber.trim()) {
+      return res.status(400).json({ error: 'Work Order Number is required' });
+    }
+    if (!d.invoiceNumber || !d.invoiceNumber.trim()) {
+      return res.status(400).json({ error: 'Invoice Number is required' });
+    }
+    if (!d.partyName || !d.partyName.trim()) {
+      return res.status(400).json({ error: 'Party / Client Name is required' });
+    }
+    if (!d.itemName || !d.itemName.trim()) {
+      return res.status(400).json({ error: 'Item Name is required' });
+    }
+
+    const qty = parseFloat(d.qty) || 0;
+    const rate = parseFloat(d.rate) || 0;
+    if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
+
+    const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+    const cgstP = parseFloat(d.cgstPercent) || 0;
+    const sgstP = parseFloat(d.sgstPercent) || 0;
+    const igstP = parseFloat(d.igstPercent) || 0;
+    const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+
+    const { rows } = await pool.query(
+      `INSERT INTO "WorkOrder" (
+        "id", "workOrderNumber", "workOrderDate", "invoiceNumber", "invoiceDate",
+        "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
+        "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
+        "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+        "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "addedById", "createdAt", "updatedAt"
+      ) VALUES (
+        gen_random_uuid()::text, $1, $2, $3, $4,
+        $5, $6, $7, $8, $9,
+        $10, $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, $21, $22,
+        $23, $24, $25, $26, 'APPROVED', $27, NOW(), NOW()
+      ) RETURNING *`,
+      [
+        d.workOrderNumber.trim().toUpperCase(),
+        d.workOrderDate ? new Date(d.workOrderDate) : new Date(),
+        d.invoiceNumber.trim().toUpperCase(),
+        d.invoiceDate ? new Date(d.invoiceDate) : new Date(),
+        d.partyName.trim(),
+        d.partyAddress ? d.partyAddress.trim() : null,
+        d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null,
+        d.companyName ? d.companyName.trim() : 'Sri Krishna Constructions',
+        d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : '29DWKPP3582H1ZV',
+        d.itemName.trim(),
+        d.description ? d.description.trim() : null,
+        d.partNumber ? d.partNumber.trim().toUpperCase() : null,
+        d.unit ? d.unit.trim().toUpperCase() : 'NOS',
+        qty,
+        rate,
+        basicAmount,
+        cgstP,
+        sgstP,
+        igstP,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
+        totalAmount,
+        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
+        d.remarks ? d.remarks.trim() : null,
+        req.user.id
+      ]
+    );
+
+    res.status(201).json({ message: 'Work Order direct sale recorded successfully!', workOrder: rows[0] });
+  } catch (err) {
+    console.error('Error creating work order:', err);
+    res.status(500).json({ error: 'Failed to create work order entry' });
+  }
+});
+
+// PUT /api/work-orders/:id - Update Work Order
+app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const d = req.body;
+
+    const qty = parseFloat(d.qty) || 0;
+    const rate = parseFloat(d.rate) || 0;
+    if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
+
+    const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+    const cgstP = parseFloat(d.cgstPercent) || 0;
+    const sgstP = parseFloat(d.sgstPercent) || 0;
+    const igstP = parseFloat(d.igstPercent) || 0;
+    const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+
+    const { rows } = await pool.query(
+      `UPDATE "WorkOrder"
+       SET "workOrderNumber" = COALESCE($1, "workOrderNumber"),
+           "workOrderDate" = COALESCE($2, "workOrderDate"),
+           "invoiceNumber" = COALESCE($3, "invoiceNumber"),
+           "invoiceDate" = COALESCE($4, "invoiceDate"),
+           "partyName" = COALESCE($5, "partyName"),
+           "partyAddress" = $6,
+           "partyGstNumber" = $7,
+           "companyName" = COALESCE($8, "companyName"),
+           "companyGstNumber" = COALESCE($9, "companyGstNumber"),
+           "itemName" = COALESCE($10, "itemName"),
+           "description" = $11,
+           "partNumber" = $12,
+           "unit" = COALESCE($13, "unit"),
+           "qty" = $14,
+           "rate" = $15,
+           "basicAmount" = $16,
+           "cgstPercent" = $17,
+           "sgstPercent" = $18,
+           "igstPercent" = $19,
+           "cgstAmount" = $20,
+           "sgstAmount" = $21,
+           "igstAmount" = $22,
+           "totalAmount" = $23,
+           "vehicleNumber" = $24,
+           "eWayBillNumber" = $25,
+           "remarks" = $26,
+           "updatedAt" = NOW()
+       WHERE "id" = $27
+       RETURNING *`,
+      [
+        d.workOrderNumber ? d.workOrderNumber.trim().toUpperCase() : null,
+        d.workOrderDate ? new Date(d.workOrderDate) : null,
+        d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
+        d.invoiceDate ? new Date(d.invoiceDate) : null,
+        d.partyName ? d.partyName.trim() : null,
+        d.partyAddress !== undefined ? (d.partyAddress ? d.partyAddress.trim() : null) : null,
+        d.partyGstNumber !== undefined ? (d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null) : null,
+        d.companyName ? d.companyName.trim() : null,
+        d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null,
+        d.itemName ? d.itemName.trim() : null,
+        d.description !== undefined ? (d.description ? d.description.trim() : null) : null,
+        d.partNumber !== undefined ? (d.partNumber ? d.partNumber.trim().toUpperCase() : null) : null,
+        d.unit ? d.unit.trim().toUpperCase() : null,
+        qty,
+        rate,
+        basicAmount,
+        cgstP,
+        sgstP,
+        igstP,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
+        totalAmount,
+        d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : null,
+        d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : null,
+        d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : null,
+        id
+      ]
+    );
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Work Order not found' });
+    res.json({ message: 'Work Order updated successfully', workOrder: rows[0] });
+  } catch (err) {
+    console.error('Error updating work order:', err);
+    res.status(500).json({ error: 'Failed to update work order' });
+  }
+});
+
+// DELETE /api/work-orders/:id - Delete Work Order
+app.delete('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(`DELETE FROM "WorkOrder" WHERE "id" = $1 RETURNING *`, [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Work Order not found' });
+    res.json({ message: 'Work Order deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting work order:', err);
+    res.status(500).json({ error: 'Failed to delete work order' });
+  }
+});
+
+// --- GLOBAL SALES LEDGER API (CONTINUOUS SEQUENTIAL SL NO ACROSS ALL SALES & WORK ORDERS) ---
+app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
+  try {
+    const { search, dateFrom, dateTo } = req.query;
+
+    // Combined query of PO Sales, Individual Stock Outward Sales, and Work Order Direct Sales
+    const querySql = `
+      WITH all_sales AS (
+        -- 1. PO Sales
+        SELECT 
+          s.id,
+          'PO' as "sourceType",
+          s."invoiceNumber",
+          s."invoiceDate" as "date",
+          COALESCE(s."partyName", po."poNumber", '-') as "clientDepartment",
+          s."gstNumber" as "clientGst",
+          'Sales' as "nameOfWork",
+          s."vehicleNumber",
+          s."eWayBillNumber",
+          s.qty,
+          s.rate,
+          s."basicAmount",
+          s."cgstPercent",
+          s."sgstPercent",
+          s."igstPercent",
+          s."cgstAmount",
+          s."sgstAmount",
+          s."igstAmount",
+          s."totalAmount",
+          s."status",
+          s."remarks",
+          s."createdAt",
+          poi."itemName" as "itemName",
+          poi."partNumber" as "partNumber",
+          poi."kpclCode" as "kpclCode",
+          poi."unit" as "unit",
+          po."poNumber" as "poNumber",
+          '-' as "workOrderNumber",
+          NULL::timestamp as "workOrderDate",
+          'Sri Krishna Constructions' as "companyName",
+          '29DWKPP3582H1ZV' as "companyGstNumber"
+        FROM "Sale" s
+        JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+        LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+
+        UNION ALL
+
+        -- 2. Individual Stock Outward Sales
+        SELECT 
+          tx.id,
+          'INDIVIDUAL' as "sourceType",
+          COALESCE(tx."partyInvoiceNumber", '-') as "invoiceNumber",
+          tx."date" as "date",
+          COALESCE(tx."partyName", 'DIRECT CLIENT') as "clientDepartment",
+          tx."gstNumber" as "clientGst",
+          'Sales' as "nameOfWork",
+          tx."vehicleNumber",
+          tx."eWayBillNumber",
+          tx.qty,
+          tx.rate,
+          tx."basicAmount",
+          tx."cgstPercent",
+          tx."sgstPercent",
+          tx."igstPercent",
+          tx."cgstAmount",
+          tx."sgstAmount",
+          tx."igstAmount",
+          tx."totalAmount",
+          tx."status",
+          tx."remarks",
+          tx."createdAt",
+          ind."itemName" as "itemName",
+          ind."partNumber" as "partNumber",
+          '-' as "kpclCode",
+          ind."unit" as "unit",
+          '-' as "poNumber",
+          '-' as "workOrderNumber",
+          NULL::timestamp as "workOrderDate",
+          'Sri Krishna Constructions' as "companyName",
+          '29DWKPP3582H1ZV' as "companyGstNumber"
+        FROM "IndividualStockTransaction" tx
+        JOIN "IndividualStock" ind ON tx."stockId" = ind.id
+        WHERE tx.type = 'OUTWARD'
+
+        UNION ALL
+
+        -- 3. Work Order Direct Sales (Sales Ledger Integrated)
+        SELECT 
+          wo.id,
+          'WORK_ORDER' as "sourceType",
+          wo."invoiceNumber",
+          wo."invoiceDate" as "date",
+          wo."partyName" as "clientDepartment",
+          wo."partyGstNumber" as "clientGst",
+          'Work Order Sales' as "nameOfWork",
+          wo."vehicleNumber",
+          wo."eWayBillNumber",
+          wo.qty,
+          wo.rate,
+          wo."basicAmount",
+          wo."cgstPercent",
+          wo."sgstPercent",
+          wo."igstPercent",
+          wo."cgstAmount",
+          wo."sgstAmount",
+          wo."igstAmount",
+          wo."totalAmount",
+          wo."status",
+          wo."remarks",
+          wo."createdAt",
+          wo."itemName" as "itemName",
+          COALESCE(wo."partNumber", '-') as "partNumber",
+          '-' as "kpclCode",
+          wo."unit" as "unit",
+          '-' as "poNumber",
+          wo."workOrderNumber" as "workOrderNumber",
+          wo."workOrderDate" as "workOrderDate",
+          wo."companyName" as "companyName",
+          wo."companyGstNumber" as "companyGstNumber"
+        FROM "WorkOrder" wo
+      )
+      SELECT 
+        ROW_NUMBER() OVER (ORDER BY "date" ASC, "createdAt" ASC)::int as "slNo",
+        all_sales.*
+      FROM all_sales
+      ORDER BY "date" DESC, "createdAt" DESC
+    `;
+
+    const { rows } = await pool.query(querySql);
+
+    // Apply optional client-side/in-memory filters if specified
+    let filtered = rows;
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      filtered = filtered.filter(r => 
+        (r.invoiceNumber && r.invoiceNumber.toLowerCase().includes(q)) ||
+        (r.clientDepartment && r.clientDepartment.toLowerCase().includes(q)) ||
+        (r.clientGst && r.clientGst.toLowerCase().includes(q)) ||
+        (r.vehicleNumber && r.vehicleNumber.toLowerCase().includes(q)) ||
+        (r.eWayBillNumber && r.eWayBillNumber.toLowerCase().includes(q)) ||
+        (r.itemName && r.itemName.toLowerCase().includes(q)) ||
+        (r.partNumber && r.partNumber.toLowerCase().includes(q)) ||
+        (r.workOrderNumber && r.workOrderNumber.toLowerCase().includes(q))
+      );
+    }
+    if (dateFrom) {
+      filtered = filtered.filter(r => new Date(r.date) >= new Date(dateFrom));
+    }
+    if (dateTo) {
+      filtered = filtered.filter(r => new Date(r.date) <= new Date(dateTo));
+    }
+
+    res.json({ sales: filtered, totalCount: filtered.length });
+  } catch (err) {
+    console.error('Error fetching sales ledger:', err);
+    res.status(500).json({ error: 'Failed to fetch sales ledger' });
   }
 });
 
@@ -2248,18 +2742,27 @@ app.delete('/api/users/:id', authenticateToken, requireRoles(['OWNER']), async (
   }
 });
 
-// --- WORKER DIVISIONS API ---
+// --- WORKER DIVISIONS API (ATTENDANCE DIVISIONS & PO DIVISIONS/CLIENTS) ---
 app.get('/api/divisions', authenticateToken, async (req, res) => {
   try {
+    const { type } = req.query;
+    let whereClause = '';
+    const params = [];
+    if (type) {
+      params.push(type.toUpperCase());
+      whereClause = `WHERE d."type" = $1`;
+    }
+
     const { rows: divisions } = await pool.query(`
-      SELECT d."id", d."name", d."createdAt", d."updatedAt",
+      SELECT d."id", d."name", COALESCE(d."type", 'PO_CLIENT') as "type", d."createdAt", d."updatedAt",
              COUNT(w."id")::int as "workerCount",
              json_build_object('workers', COUNT(w."id")::int) as "_count"
       FROM "Division" d
       LEFT JOIN "Worker" w ON d."id" = w."divisionId"
-      GROUP BY d."id", d."name", d."createdAt", d."updatedAt"
+      ${whereClause}
+      GROUP BY d."id", d."name", d."type", d."createdAt", d."updatedAt"
       ORDER BY d."name" ASC
-    `);
+    `, params);
     res.json({ divisions });
   } catch (err) {
     console.error('Fetch divisions error:', err);
@@ -2269,19 +2772,26 @@ app.get('/api/divisions', authenticateToken, async (req, res) => {
 
 app.post('/api/divisions', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, type } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Division name is required' });
     }
-    const existing = await prisma.division.findUnique({ where: { name: name.trim() } });
-    if (existing) {
+    const cleanName = name.trim();
+    const divType = (type && type.toUpperCase() === 'ATTENDANCE') ? 'ATTENDANCE' : 'PO_CLIENT';
+
+    const existing = await pool.query('SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1)', [cleanName]);
+    if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Division name already exists' });
     }
-    const division = await prisma.division.create({
-      data: { name: name.trim() }
-    });
-    res.status(201).json({ division });
+    const { rows } = await pool.query(
+      `INSERT INTO "Division" ("id", "name", "type", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, NOW(), NOW())
+       RETURNING *`,
+      [cleanName, divType]
+    );
+    res.status(201).json({ division: rows[0] });
   } catch (err) {
+    console.error('Create division error:', err);
     res.status(500).json({ error: 'Failed to create division' });
   }
 });
@@ -2289,22 +2799,26 @@ app.post('/api/divisions', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
 app.put('/api/divisions/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, type } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Division name is required' });
     }
-    const existing = await prisma.division.findFirst({
-      where: { name: name.trim(), NOT: { id } }
-    });
-    if (existing) {
+    const cleanName = name.trim();
+    const existing = await pool.query('SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1) AND "id" != $2', [cleanName, id]);
+    if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Division name already exists' });
     }
-    const division = await prisma.division.update({
-      where: { id },
-      data: { name: name.trim() },
-      include: { _count: { select: { workers: true } } }
-    });
-    res.json({ division, message: 'Division updated successfully' });
+    const { rows } = await pool.query(
+      `UPDATE "Division"
+       SET "name" = $1,
+           "type" = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE "type" END,
+           "updatedAt" = NOW()
+       WHERE "id" = $3
+       RETURNING *`,
+      [cleanName, type ? type.toUpperCase() : null, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Division not found' });
+    res.json({ division: rows[0], message: 'Division updated successfully' });
   } catch (err) {
     console.error('Update division error:', err);
     res.status(500).json({ error: 'Failed to update division' });
@@ -2623,13 +3137,21 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
 
 app.post('/api/attendance', authenticateToken, async (req, res) => {
   try {
-    const { date, attendanceData } = req.body; // attendanceData: [{ workerId, status, overtimeHours }]
-    if (!date || !attendanceData || !Array.isArray(attendanceData)) {
+    const { date, attendanceData, clearedWorkerIds } = req.body; // attendanceData: [{ workerId, status, overtimeHours }], clearedWorkerIds: [workerId]
+    if (!date || (!attendanceData && !clearedWorkerIds)) {
       return res.status(400).json({ error: 'Date and valid attendance data are required' });
     }
 
+    // If any workers are unselected/cleared, delete their attendance record for this date
+    if (clearedWorkerIds && Array.isArray(clearedWorkerIds) && clearedWorkerIds.length > 0) {
+      await pool.query(
+        `DELETE FROM "Attendance" WHERE "date"::date = $1::date AND "workerId" = ANY($2::text[])`,
+        [date, clearedWorkerIds]
+      );
+    }
+
     const queryDateStr = `${date} 00:00:00`;
-    const workerIds = attendanceData.map(r => r.workerId);
+    const workerIds = (attendanceData || []).map(r => r.workerId);
 
     // Check if attendance has already been logged for these workers on this date (Direct SQL)
     const { rows: existingLogs } = await pool.query(

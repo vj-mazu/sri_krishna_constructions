@@ -1827,10 +1827,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       {/* AUTHENTIC PHYSICAL "REGISTER BOOK" MODAL */}
       {drilldownWorkerId && (
         <div 
-          className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col justify-start items-center p-3 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) handleCloseRegisterBook(); }}
         >
-          <div className="bg-[#fcfaf2] rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col my-auto max-h-[88vh] overflow-hidden animate-fadeIn relative z-[10000]">
+          <div className="bg-[#fcfaf2] rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col my-auto max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
             {/* REGISTER BOOK TOP BINDING HEADER */}
             <div className="bg-gradient-to-r from-[#2b1810] via-[#4a2612] to-[#2b1810] text-[#f5eed7] p-3.5 sm:p-5 flex justify-between items-center border-b-4 border-[#b8860b] shadow-lg shrink-0">
               <div className="flex items-center gap-2.5 sm:gap-3.5">
@@ -2148,10 +2148,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
         return (
           <div 
-            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex flex-col justify-start items-center p-3 sm:p-6 overflow-y-auto"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
             onClick={(e) => { if (e.target === e.currentTarget) setSlipModalWorker(null); }}
           >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col my-auto max-h-[88vh] overflow-hidden animate-fadeIn relative z-[10000]">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col my-auto max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
               {/* SLIP MODAL HEADER BAR */}
               <div className="bg-[#1e3a8a] text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2">

@@ -8,6 +8,8 @@ import { ApprovalsPanel } from './components/ApprovalsPanel';
 import { DashboardOverview } from './components/DashboardOverview';
 import { AttendancePanel } from './components/AttendancePanel';
 import { MonthlyWages } from './components/MonthlyWages';
+import { SalesLedger } from './components/SalesLedger';
+import { WorkOrders } from './components/WorkOrders';
 import { SKC_LOGO_BASE64 } from './logoBase64';
 
 import { 
@@ -21,6 +23,7 @@ import {
   Wallet,
   Download,
   Smartphone,
+  Receipt,
   X
 } from 'lucide-react';
 
@@ -305,6 +308,18 @@ export function App() {
                   Purchase Orders
                 </button>
 
+                {/* WORK ORDERS (Direct Sales / Billing Only) */}
+                <button
+                  onClick={() => setActiveTab('work_orders')}
+                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                    activeTab === 'work_orders'
+                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
+                  }`}
+                >
+                  Work Orders
+                </button>
+
                 <button
                   onClick={() => setActiveTab('stock')}
                   className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
@@ -314,6 +329,18 @@ export function App() {
                   }`}
                 >
                   Stock
+                </button>
+
+                {/* SALES LEDGER (Continuous Official 2026-27 Sheet) */}
+                <button
+                  onClick={() => setActiveTab('sales_ledger')}
+                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                    activeTab === 'sales_ledger'
+                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
+                  }`}
+                >
+                  <span>Sales Ledger</span>
                 </button>
               </>
             )}
@@ -402,7 +429,9 @@ export function App() {
       <main className="flex-1 max-w-[1700px] w-full mx-auto p-2 sm:p-6 md:p-8 pb-20 md:pb-8 animate-fadeIn">
         {activeTab === 'dashboard' && user.role !== 'SUPERVISOR' && <DashboardOverview onSelectTab={(t) => setActiveTab(t)} />}
         {activeTab === 'purchase_orders' && user.role !== 'SUPERVISOR' && <PurchaseRecords currentUserRole={user.role} />}
+        {activeTab === 'work_orders' && user.role !== 'SUPERVISOR' && <WorkOrders currentUserRole={user.role} />}
         {activeTab === 'stock' && user.role !== 'SUPERVISOR' && <StockGrid />}
+        {activeTab === 'sales_ledger' && user.role !== 'SUPERVISOR' && <SalesLedger />}
         {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
         {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
         {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}
@@ -436,6 +465,20 @@ export function App() {
           >
             <FileSpreadsheet className={`w-4 h-4 ${activeTab === 'purchase_orders' ? 'stroke-[2.5]' : ''}`} />
             <span className="text-[10px] tracking-tight mt-0.5 font-medium">Orders</span>
+          </button>
+        )}
+
+        {user.role !== 'SUPERVISOR' && (
+          <button
+            onClick={() => setActiveTab('work_orders')}
+            className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
+              activeTab === 'work_orders'
+                ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Receipt className={`w-4 h-4 ${activeTab === 'work_orders' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">WO Sales</span>
           </button>
         )}
 

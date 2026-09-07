@@ -275,10 +275,19 @@ export const initializeDatabaseTables = async () => {
       -- 11. Create IndividualStock Table (Non-PO Standalone Inventory)
       CREATE TABLE IF NOT EXISTS "IndividualStock" (
         "id" TEXT PRIMARY KEY,
+        "kpclCode" TEXT,
         "itemName" TEXT NOT NULL,
+        "specifications" TEXT,
         "partNumber" TEXT,
+        "make" TEXT,
+        "hsnCode" TEXT,
         "unit" TEXT NOT NULL DEFAULT 'NOS',
         "openingStock" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "rate" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "basicAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "cgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 9,
+        "sgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 9,
+        "igstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
         "currentStock" DOUBLE PRECISION NOT NULL DEFAULT 0,
         "remarks" TEXT,
         "addedById" TEXT REFERENCES "User"("id"),
@@ -318,6 +327,41 @@ export const initializeDatabaseTables = async () => {
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 13. Create WorkOrder Table (Direct Sales / Billing without Inward Purchases)
+      CREATE TABLE IF NOT EXISTS "WorkOrder" (
+        "id" TEXT PRIMARY KEY,
+        "workOrderNumber" TEXT NOT NULL,
+        "workOrderDate" TIMESTAMP(3) NOT NULL,
+        "invoiceNumber" TEXT NOT NULL,
+        "invoiceDate" TIMESTAMP(3) NOT NULL,
+        "partyName" TEXT NOT NULL,
+        "partyAddress" TEXT,
+        "partyGstNumber" TEXT,
+        "companyName" TEXT NOT NULL DEFAULT 'Sri Krishna Constructions',
+        "companyGstNumber" TEXT NOT NULL DEFAULT '29DWKPP3582H1ZV',
+        "itemName" TEXT NOT NULL,
+        "description" TEXT,
+        "partNumber" TEXT,
+        "unit" TEXT NOT NULL DEFAULT 'NOS',
+        "qty" DOUBLE PRECISION NOT NULL,
+        "rate" DOUBLE PRECISION NOT NULL,
+        "basicAmount" DOUBLE PRECISION NOT NULL,
+        "cgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "sgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "igstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "cgstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "sgstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "igstAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "totalAmount" DOUBLE PRECISION NOT NULL,
+        "vehicleNumber" TEXT,
+        "eWayBillNumber" TEXT,
+        "remarks" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'APPROVED',
+        "addedById" TEXT NOT NULL REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- Schema Column Synchronizations
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
@@ -330,7 +374,10 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "PurchaseOrderItem" ADD COLUMN IF NOT EXISTS "pAndF" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "PurchaseOrderItem" ADD COLUMN IF NOT EXISTS "insurance" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
-      -- Purchase inward supplier details (Party Name, Supplier Address, GST Number, Party Invoice No, Invoice Date, Vehicle No, Remarks)
+      -- Division category type: 'ATTENDANCE' (Workers/Rosters) vs 'PO_CLIENT' (Client Orders/Billing)
+      ALTER TABLE "Division" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'PO_CLIENT';
+
+      -- Purchase inward supplier details & physical box item name/part number (when different from PO)
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "supplierAddress" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "gstNumber" TEXT;
@@ -338,8 +385,10 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "supplierInvoiceDate" TIMESTAMP(3);
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "vehicleNumber" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "remarks" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "receivedItemName" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "receivedPartNumber" TEXT;
 
-      -- Sale outward buyer/party details & mandatory Owner approval system
+      -- Sale outward buyer/party details, eWayBillNumber & mandatory Owner approval system
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "supplierAddress" TEXT;
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "gstNumber" TEXT;
@@ -347,11 +396,15 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "partyInvoiceNumber" TEXT;
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "supplierInvoiceDate" TIMESTAMP(3);
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "vehicleNumber" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "eWayBillNumber" TEXT;
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "remarks" TEXT;
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'APPROVED';
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
+
+      -- Individual Stock Transaction eWayBillNumber
+      ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "eWayBillNumber" TEXT;
 
       -- Worker master enhancements (Father Name, Designation, Daily Allowance, Advance Balance, Statutory & Bank Details)
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
@@ -388,9 +441,20 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "netBaseAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "otPayment" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "otAllowance" DOUBLE PRECISION NOT NULL DEFAULT 0;
-      ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "totalPayment" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "advanceDeducted" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "finalNetAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+      -- Individual Stock Rich Item Master Synchronization
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "kpclCode" TEXT;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "specifications" TEXT;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "make" TEXT;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "hsnCode" TEXT;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "rate" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "basicAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "cgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 9;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "sgstPercent" DOUBLE PRECISION NOT NULL DEFAULT 9;
+      ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "igstPercent" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
       -- 11b. Create AttendanceCorrectionRequest Table (Supervisor Edit -> Manager/Admin Approval)
       CREATE TABLE IF NOT EXISTS "AttendanceCorrectionRequest" (
         "id" TEXT PRIMARY KEY,
@@ -478,6 +542,15 @@ export const initializeDatabaseTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_indtx_invno ON "IndividualStockTransaction"("partyInvoiceNumber");
       CREATE INDEX IF NOT EXISTS idx_indtx_addedby ON "IndividualStockTransaction"("addedById");
       CREATE INDEX IF NOT EXISTS idx_indtx_approvedby ON "IndividualStockTransaction"("approvedById");
+
+      -- Work Order performance indexes
+      CREATE INDEX IF NOT EXISTS idx_wo_wonumber ON "WorkOrder"("workOrderNumber");
+      CREATE INDEX IF NOT EXISTS idx_wo_invnumber ON "WorkOrder"("invoiceNumber");
+      CREATE INDEX IF NOT EXISTS idx_wo_invdate ON "WorkOrder"("invoiceDate" DESC);
+      CREATE INDEX IF NOT EXISTS idx_wo_party ON "WorkOrder"("partyName");
+      CREATE INDEX IF NOT EXISTS idx_wo_partno ON "WorkOrder"("partNumber");
+      CREATE INDEX IF NOT EXISTS idx_wo_itemname ON "WorkOrder"("itemName");
+      CREATE INDEX IF NOT EXISTS idx_wo_created ON "WorkOrder"("createdAt" DESC);
     `);
 
     client.release();

@@ -89,7 +89,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const fetchDivisions = async () => {
     try {
-      const res = await api.get('/divisions');
+      const res = await api.get('/divisions', { params: { type: 'ATTENDANCE' } });
       const divList = res.data.divisions || [];
       setDivisions(divList);
       // Default to ALL divisions
@@ -169,10 +169,35 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     fetchWorkersAndAttendance();
   }, [selectedDate, selectedDivisionId]);
 
-  const handleStatusChange = (workerId: string, status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE') => {
+  const handleStatusChange = (workerId: string, status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | '') => {
     const currentRec = attendanceRecords[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
     const workerObj = workers.find(w => w.id === workerId);
     const workerName = workerObj?.fullName || 'Worker';
+
+    // If clicking the current status, toggle it off to unselect/unmarked
+    if (status !== '' && currentRec.status === status) {
+      setAttendanceRecords((prev) => ({
+        ...prev,
+        [workerId]: {
+          ...currentRec,
+          status: '',
+        },
+      }));
+      showToast(`Unselected attendance for ${workerName}`, 'info');
+      return;
+    }
+
+    if (status === '') {
+      setAttendanceRecords((prev) => ({
+        ...prev,
+        [workerId]: {
+          ...currentRec,
+          status: '',
+        },
+      }));
+      showToast(`Cleared attendance for ${workerName}`, 'info');
+      return;
+    }
 
     // Split Half-Day Business Validation:
     // If worker was already marked HALF_DAY at another division today:
@@ -230,10 +255,15 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       setError('');
       setSuccess('');
 
-      // Filter only records that have a status chosen
+      // Filter records with a status chosen
       const markedEntries = Object.entries(attendanceRecords).filter(([_, data]) => Boolean(data.status));
       
-      if (markedEntries.length === 0) {
+      // Also identify any workers who were previously marked on this date but are now unmarked/cleared
+      const clearedWorkerIds = Object.entries(attendanceRecords)
+        .filter(([_, data]) => !data.status)
+        .map(([workerId]) => workerId);
+
+      if (markedEntries.length === 0 && clearedWorkerIds.length === 0) {
         const msg = 'Please select attendance status (Present, Absent, Half, Leave) for at least one worker before saving.';
         setError(msg);
         showToast(msg, 'error');
@@ -270,6 +300,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         await api.post('/attendance', {
           date: selectedDate,
           attendanceData: recordsToSave,
+          clearedWorkerIds: clearedWorkerIds,
         });
 
         setSuccess('Attendance marked successfully!');
@@ -283,6 +314,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           updatedQueue.push({
             date: selectedDate,
             attendanceData: recordsToSave,
+            clearedWorkerIds: clearedWorkerIds,
             timestamp: new Date().toISOString()
           });
           localStorage.setItem('skc_offline_attendance_queue', JSON.stringify(updatedQueue));
@@ -568,7 +600,18 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
                     {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
                     <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Attendance</div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Select Attendance</span>
+                        {state.status && (
+                          <button
+                            type="button"
+                            onClick={() => handleStatusChange(w.id, '')}
+                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 transition-colors"
+                          >
+                            ✖ Clear / Unselect
+                          </button>
+                        )}
+                      </div>
                       <div className="grid grid-cols-4 gap-1.5">
                         {([
                           { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
@@ -684,7 +727,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           </td>
 
                           <td className="px-3 py-2">
-                            <div className="flex justify-center gap-1.5">
+                            <div className="flex items-center justify-center gap-1.5">
                               {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
                                 const active = isMarkedInThisSelectedDiv && state.status === status;
                                 let colorClasses = '';
@@ -700,25 +743,30 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                 if (status === 'LEAVE') dotColor = 'bg-slate-500';
 
                                 return (
-                                  <label
+                                  <button
+                                    type="button"
                                     key={status}
+                                    onClick={() => handleStatusChange(w.id, status)}
                                     className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
+                                    title={active ? 'Click to unselect / clear' : `Mark as ${status}`}
                                   >
-                                    <input
-                                      type="radio"
-                                      name={`status-${w.id}`}
-                                      value={status}
-                                      checked={active}
-                                      onChange={() => handleStatusChange(w.id, status)}
-                                      className="sr-only"
-                                    />
                                     <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
                                       {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
                                     </span>
                                     <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
-                                  </label>
+                                  </button>
                                 );
                               })}
+                              {state.status && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleStatusChange(w.id, '')}
+                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 text-[10px] transition-colors"
+                                  title="Clear / Unselect attendance"
+                                >
+                                  ✖
+                                </button>
+                              )}
                             </div>
                           </td>
                         
