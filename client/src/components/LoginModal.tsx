@@ -37,7 +37,7 @@ export const LoginModal: React.FC<LoginProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-[#1e3a8a] via-[#172554] to-[#0f172a] z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-gradient-to-br from-[#1e3a8a] via-[#172554] to-[#0f172a] z-[99999] flex items-center justify-center p-4">
       {/* Ambient background glow */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>

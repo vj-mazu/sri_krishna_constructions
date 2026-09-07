@@ -10,6 +10,7 @@ import { AttendancePanel } from './components/AttendancePanel';
 import { MonthlyWages } from './components/MonthlyWages';
 import { SalesLedger } from './components/SalesLedger';
 import { WorkOrders } from './components/WorkOrders';
+import { AdvanceLedger } from './components/AdvanceLedger';
 import { SKC_LOGO_BASE64 } from './logoBase64';
 
 import { 
@@ -24,12 +25,15 @@ import {
   Download,
   Smartphone,
   Receipt,
+  ChevronDown,
+  BookOpen,
   X
 } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   
   // PWA Install Prompt state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -282,13 +286,13 @@ export function App() {
             </div>
           </div>
 
-          {/* Desktop Navigation Tabs */}
+          {/* Desktop Navigation Tabs with Interactive Dropdowns */}
           <nav className="hidden md:flex flex-1 items-center gap-1.5 justify-center">
             {user.role !== 'SUPERVISOR' && (
               <>
                 <button
                   onClick={() => setActiveTab('dashboard')}
-                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                     activeTab === 'dashboard'
                       ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                       : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -297,51 +301,98 @@ export function App() {
                   Dashboard
                 </button>
 
-                <button
-                  onClick={() => setActiveTab('purchase_orders')}
-                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'purchase_orders'
-                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
-                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
-                  }`}
+                {/* 1. ORDERS & BILLING DROPDOWN (PO & WORK ORDERS) */}
+                <div 
+                  className="relative"
+                  onMouseEnter={() => setOpenDropdown('orders')}
+                  onMouseLeave={() => setOpenDropdown(null)}
                 >
-                  Purchase Orders
-                </button>
+                  <button
+                    onClick={() => setActiveTab('purchase_orders')}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
+                      activeTab === 'purchase_orders' || activeTab === 'work_orders'
+                        ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                        : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
+                    }`}
+                  >
+                    <span>Orders &amp; Billing</span>
+                    <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                  </button>
 
-                {/* WORK ORDERS (Direct Sales / Billing Only) */}
-                <button
-                  onClick={() => setActiveTab('work_orders')}
-                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'work_orders'
-                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
-                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
-                  }`}
-                >
-                  Work Orders
-                </button>
+                  {openDropdown === 'orders' && (
+                    <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800">
+                      <button
+                        onClick={() => { setActiveTab('purchase_orders'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'purchase_orders' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-4 h-4 text-blue-700" />
+                        <span>Purchase Orders</span>
+                      </button>
+                      <button
+                        onClick={() => { setActiveTab('work_orders'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'work_orders' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <Receipt className="w-4 h-4 text-emerald-700" />
+                        <span>Work Orders</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
-                <button
-                  onClick={() => setActiveTab('stock')}
-                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
-                    activeTab === 'stock'
-                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
-                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
-                  }`}
+                {/* 2. STOCKS & LEDGERS DROPDOWN (STOCK SUMMARY, SALES LEDGER, ADVANCE LEDGER) */}
+                <div 
+                  className="relative"
+                  onMouseEnter={() => setOpenDropdown('stocks')}
+                  onMouseLeave={() => setOpenDropdown(null)}
                 >
-                  Stock
-                </button>
+                  <button
+                    onClick={() => setActiveTab('stock')}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
+                      activeTab === 'stock' || activeTab === 'sales_ledger' || activeTab === 'advance_ledger'
+                        ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
+                        : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
+                    }`}
+                  >
+                    <span>Stocks &amp; Ledgers</span>
+                    <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                  </button>
 
-                {/* SALES LEDGER (Continuous Official 2026-27 Sheet) */}
-                <button
-                  onClick={() => setActiveTab('sales_ledger')}
-                  className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
-                    activeTab === 'sales_ledger'
-                      ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
-                      : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
-                  }`}
-                >
-                  <span>Sales Ledger</span>
-                </button>
+                  {openDropdown === 'stocks' && (
+                    <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800">
+                      <button
+                        onClick={() => { setActiveTab('stock'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <Package className="w-4 h-4 text-indigo-700" />
+                        <span>Stock Summary</span>
+                      </button>
+                      <button
+                        onClick={() => { setActiveTab('sales_ledger'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'sales_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <BookOpen className="w-4 h-4 text-emerald-700" />
+                        <span>Sales Ledger</span>
+                      </button>
+                      <button
+                        onClick={() => { setActiveTab('advance_ledger'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'advance_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <Wallet className="w-4 h-4 text-amber-700" />
+                        <span>Advance Ledger</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </>
             )}
 
@@ -349,7 +400,7 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
               <button
                 onClick={() => setActiveTab('attendance')}
-                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                   activeTab === 'attendance'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -363,7 +414,7 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
                 onClick={() => setActiveTab('wages')}
-                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                   activeTab === 'wages'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -377,7 +428,7 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
                 onClick={() => setActiveTab('approvals')}
-                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
                   activeTab === 'approvals'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -396,7 +447,7 @@ export function App() {
             {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
               <button
                 onClick={() => setActiveTab('master_creation')}
-                className={`px-3.5 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
                   activeTab === 'master_creation'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -432,6 +483,7 @@ export function App() {
         {activeTab === 'work_orders' && user.role !== 'SUPERVISOR' && <WorkOrders currentUserRole={user.role} />}
         {activeTab === 'stock' && user.role !== 'SUPERVISOR' && <StockGrid />}
         {activeTab === 'sales_ledger' && user.role !== 'SUPERVISOR' && <SalesLedger />}
+        {activeTab === 'advance_ledger' && user.role !== 'SUPERVISOR' && <AdvanceLedger currentUserRole={user.role} />}
         {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
         {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
         {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}
@@ -470,15 +522,15 @@ export function App() {
 
         {user.role !== 'SUPERVISOR' && (
           <button
-            onClick={() => setActiveTab('work_orders')}
+            onClick={() => setActiveTab('advance_ledger')}
             className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
-              activeTab === 'work_orders'
+              activeTab === 'advance_ledger'
                 ? 'text-white font-extrabold bg-blue-600 shadow-md shadow-blue-600/40'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Receipt className={`w-4 h-4 ${activeTab === 'work_orders' ? 'stroke-[2.5]' : ''}`} />
-            <span className="text-[10px] tracking-tight mt-0.5 font-medium">WO Sales</span>
+            <Wallet className={`w-4 h-4 ${activeTab === 'advance_ledger' ? 'stroke-[2.5]' : ''}`} />
+            <span className="text-[10px] tracking-tight mt-0.5 font-medium">Advance</span>
           </button>
         )}
 

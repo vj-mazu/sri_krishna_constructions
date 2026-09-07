@@ -14,7 +14,8 @@ import {
   Download,
   Send,
   Share2,
-  Receipt
+  Receipt,
+  Clock
 } from 'lucide-react';
 import { showToast } from '../toast';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
@@ -40,7 +41,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   // Editable row overrides per worker: workerId -> amount
   const [customPf, setCustomPf] = useState<Record<string, number | string>>({});
   const [customEsi, setCustomEsi] = useState<Record<string, number | string>>({});
-  const [customOtAllowance, setCustomOtAllowance] = useState<Record<string, number | string>>({});
   const [customAdvance, setCustomAdvance] = useState<Record<string, number | string>>({});
   const [customExtra, setCustomExtra] = useState<Record<string, number | string>>({});
 
@@ -57,7 +57,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [activeWageTab, setActiveWageTab] = useState<'register' | 'esipf'>('register');
 
   // Table Responsive View Mode: 'fit' (fits desktop/tablet without scroll) | 'scroll' (wide ledger)
-  const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('fit');
+  const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('scroll');
 
   // Global Escape key handler + scroll lock for modals
   useEffect(() => {
@@ -161,21 +161,18 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       // Prepopulate editable fields from server data
       const initialPf: Record<string, number | string> = {};
       const initialEsi: Record<string, number | string> = {};
-      const initialOtAllow: Record<string, number | string> = {};
       const initialAdv: Record<string, number | string> = {};
       const initialExt: Record<string, number | string> = {};
 
       data.forEach((w: any) => {
         if (w.pfAmount !== undefined && w.pfAmount !== null) initialPf[w.workerId] = parseFloat(w.pfAmount) || 0;
         if (w.esiAmount !== undefined && w.esiAmount !== null) initialEsi[w.workerId] = parseFloat(w.esiAmount) || 0;
-        if (w.otAllowance !== undefined && w.otAllowance !== null) initialOtAllow[w.workerId] = parseFloat(w.otAllowance) || 0;
         if (w.advanceDeducted !== undefined && w.advanceDeducted !== null) initialAdv[w.workerId] = parseFloat(w.advanceDeducted) || 0;
         if (w.extraAmount !== undefined && w.extraAmount !== null) initialExt[w.workerId] = parseFloat(w.extraAmount) || 0;
       });
 
       setCustomPf(initialPf);
       setCustomEsi(initialEsi);
-      setCustomOtAllowance(initialOtAllow);
       setCustomAdvance(initialAdv);
       setCustomExtra(initialExt);
     } catch (err: any) {
@@ -225,13 +222,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       ? (parseFloat(w.otPayment) || 0)
       : Math.round(otHours * (otHourlyRate || (dailyWage / 8)));
 
-    const workerDefaultOtAllow = parseFloat(w.otAllowance ?? 0) || 0;
-    const otAllowanceVal = customOtAllowance[w.workerId] !== undefined 
-      ? customOtAllowance[w.workerId] 
-      : (otHours > 0 ? workerDefaultOtAllow : 0);
-    const otAllowance = otAllowanceVal === '' ? 0 : parseFloat(otAllowanceVal as string) || 0;
-
-    const totalPayment = netBaseAmount + otPayment + otAllowance;
+    const totalPayment = netBaseAmount + otPayment;
     
     const extraVal = customExtra[w.workerId] !== undefined ? customExtra[w.workerId] : parseFloat(w.extraAmount || 0);
     const extra = extraVal === '' ? 0 : parseFloat(extraVal as string) || 0;
@@ -252,7 +243,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       netBaseAmount,
       otHours,
       otPayment,
-      otAllowance,
       totalPayment,
       advance,
       remainingAdvance,
@@ -283,7 +273,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         esiAmount: calc.esi,
         netBaseAmount: calc.netBaseAmount,
         otPayment: calc.otPayment,
-        otAllowance: calc.otAllowance,
         totalPayment: calc.totalPayment,
         advanceDeducted: calc.advance,
         extraAmount: calc.extra,
@@ -299,7 +288,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       // Before re-fetch, save current overrides
       const savedCustomPf = { ...customPf };
       const savedCustomEsi = { ...customEsi };
-      const savedCustomOtAllowance = { ...customOtAllowance };
       const savedCustomAdvance = { ...customAdvance };
       const savedCustomExtra = { ...customExtra };
 
@@ -309,12 +297,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       // Restore overrides (remove the approved worker's entry)
       delete savedCustomPf[worker.workerId];
       delete savedCustomEsi[worker.workerId];
-      delete savedCustomOtAllowance[worker.workerId];
       delete savedCustomAdvance[worker.workerId];
       delete savedCustomExtra[worker.workerId];
       setCustomPf(savedCustomPf);
       setCustomEsi(savedCustomEsi);
-      setCustomOtAllowance(savedCustomOtAllowance);
       setCustomAdvance(savedCustomAdvance);
       setCustomExtra(savedCustomExtra);
     } catch (err: any) {
@@ -353,7 +339,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           esiAmount: calc.esi,
           netBaseAmount: calc.netBaseAmount,
           otPayment: calc.otPayment,
-          otAllowance: calc.otAllowance,
           totalPayment: calc.totalPayment,
           advanceDeducted: calc.advance,
           extraAmount: calc.extra,
@@ -392,7 +377,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         esiAmount: calc.esi,
         netBaseAmount: calc.netBaseAmount,
         otPayment: calc.otPayment,
-        otAllowance: calc.otAllowance,
         totalPayment: calc.totalPayment,
         advanceDeducted: calc.advance,
         remainingAdvance: calc.remainingAdvance,
@@ -837,7 +821,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         'NET AMOUNT (Base)': calc.netBaseAmount,
         'O.T. Hours': calc.otHours,
         'OT Payment': calc.otPayment,
-        'OT ALLOWANCE': calc.otAllowance,
         'TOTAL PAYMENT': calc.totalPayment,
         'Advance Taken': calc.advanceTaken,
         'Advance Deducted': calc.advance,
@@ -875,7 +858,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
       const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
       const conEarned = 0;
-      const grossEarned = calc.grossPayment + calc.otPayment + calc.otAllowance;
+      const grossEarned = calc.grossPayment + calc.otPayment;
       const epfBase = Math.min(15000, basicAndVdaEarned);
       const grossEarn = grossEarned;
 
@@ -962,7 +945,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       const totMonthly = basicMonthly + vdaMonthly;
 
       const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
-      const grossEarned = calc.grossPayment + calc.otPayment + calc.otAllowance;
+      const grossEarned = calc.grossPayment + calc.otPayment;
       const epfBase = Math.min(15000, basicAndVdaEarned);
       const grossEarn = grossEarned;
       const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
@@ -1123,7 +1106,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     acc.esi += calc.esi;
     acc.netBaseAmount += calc.netBaseAmount;
     acc.otPayment += calc.otPayment;
-    acc.otAllowance += calc.otAllowance;
     acc.totalPayment += calc.totalPayment;
     acc.advanceTaken += calc.advanceTaken;
     acc.advance += calc.advance;
@@ -1140,7 +1122,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     esi: 0,
     netBaseAmount: 0,
     otPayment: 0,
-    otAllowance: 0,
     totalPayment: 0,
     advanceTaken: 0,
     advance: 0,
@@ -1184,7 +1165,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
           }`}
         >
-          <Receipt className="w-4 h-4 text-amber-300" /> ESI PF Sheet (Salary Statement)
+          <Receipt className="w-4 h-4 text-amber-300" /> ESI PF Sheet
         </button>
       </div>
 
@@ -1302,7 +1283,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 className="flex-1 py-1.5 sm:py-2 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
                 title="Download ESI PF Salary Statement PDF (Portrait A4)"
               >
-                <FileText className="w-3.5 h-3.5" /> Download PDF (Portrait A4)
+                <FileText className="w-3.5 h-3.5" /> Download PDF
               </button>
             </>
           )}
@@ -1387,7 +1368,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
                 const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
                 const conEarned = 0;
-                const grossEarned = calc.grossPayment + calc.otPayment + calc.otAllowance;
+                const grossEarned = calc.grossPayment + calc.otPayment;
                 const epfBase = Math.min(15000, basicAndVdaEarned);
                 const grossEarn = grossEarned;
                 const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
@@ -1556,10 +1537,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 <th className="text-right py-2.5 px-1 bg-[#0f172a] text-amber-300">Gross</th>
                 <th className="text-center py-2.5 px-1 bg-red-950 text-red-200">P.F.</th>
                 <th className="text-center py-2.5 px-1 bg-red-950 text-red-200">ESI</th>
-                <th className="text-right py-2.5 px-1 bg-slate-800">Net Base</th>
+                <th className="text-center py-2.5 px-1 bg-slate-800">Net Base</th>
                 <th className="text-center py-2.5 px-1">OT.Hr</th>
                 <th className="text-right py-2.5 px-1">OT.Pay</th>
-                <th className="text-center py-2.5 px-1 bg-amber-950 text-amber-200">OT Allow</th>
                 <th className="text-right py-2.5 px-1 bg-emerald-950 text-emerald-300">Total Pay</th>
                 <th className="text-right py-2.5 px-1 bg-amber-950/80 text-amber-200">Adv.Take</th>
                 <th className="text-center py-2.5 px-1 bg-amber-900 text-amber-100">Adv.Ded</th>
@@ -1580,7 +1560,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     <td className="font-mono text-center text-slate-500 font-bold py-1 px-1">{index + 1}</td>
 
                     {/* 2. Worker Name & Drilldown Trigger */}
-                    <td className="py-1 px-1.5">
+                    <td className="py-1 px-1.5 min-w-[140px]">
                       <div 
                         onClick={() => handleOpenRegisterBook(w.workerId)}
                         className="cursor-pointer group flex items-start justify-between"
@@ -1661,32 +1641,15 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     {/* 13. OT Payment */}
                     <td className="text-right font-mono font-semibold text-slate-700 py-1 px-1">{formatIndianCurrency(calc.otPayment)}</td>
 
-                    {/* 14. OT ALLOWANCE (Entered Manually) */}
-                    <td className="text-center py-1 px-0.5">
-                      <input
-                        type="number"
-                        min="0"
-                        value={customOtAllowance[w.workerId] !== undefined ? customOtAllowance[w.workerId] : (w.otAllowance ?? '')}
-                        onChange={(e) => {
-                          const raw = e.target.value;
-                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
-                          setCustomOtAllowance(prev => ({ ...prev, [w.workerId]: val }));
-                        }}
-                        placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-slate-800 bg-amber-50/60 border border-amber-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500"
-                        title="Enter OT Allowance manually"
-                      />
-                    </td>
-
-                    {/* 15. Total Payment */}
+                    {/* 14. Total Payment */}
                     <td className="text-right font-mono font-bold bg-emerald-50/70 text-emerald-900 py-1 px-1">{formatIndianCurrency(calc.totalPayment)}</td>
 
-                    {/* 16. Advance Taken */}
+                    {/* 15. Advance Taken */}
                     <td className="text-right font-mono font-semibold text-slate-800 bg-amber-50/20 py-1 px-1">
                       {formatIndianCurrency(calc.advanceTaken)}
                     </td>
 
-                    {/* 17. Advance Deduct (Editable) */}
+                    {/* 16. Advance Deduct (Editable) */}
                     <td className="text-center bg-amber-50/50 py-1 px-0.5">
                       <input
                         type="number"
@@ -1698,17 +1661,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomAdvance(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-amber-900 bg-white border border-amber-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
-                        title="Enter advance payment deduction for this month"
+                        className="w-16 text-right font-mono font-bold text-amber-900 bg-amber-100/60 border border-amber-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500"
+                        title="Enter Advance deduction for this month"
                       />
                     </td>
 
-                    {/* 18. Advance Remaining Balance */}
+                    {/* 17. Advance Remaining Balance */}
                     <td className="text-right font-mono font-bold text-amber-900 bg-amber-50/40 py-1 px-1">
                       {formatIndianCurrency(calc.remainingAdvance)}
                     </td>
 
-                    {/* 19. Extra Bonus (Editable) */}
+                    {/* 18. Extra Bonus (Editable) */}
                     <td className="text-center py-1 px-0.5">
                       <input
                         type="number"
@@ -1720,73 +1683,68 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomExtra(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-indigo-800 bg-indigo-50/60 border border-indigo-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                        title="Enter extra bonus / incentives"
+                        className="w-14 text-right font-mono font-bold text-indigo-700 bg-indigo-50/40 border border-indigo-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        title="Enter Extra payment (e.g. bonus, adjustment)"
                       />
                     </td>
 
-                    {/* 20. Final Net Amount */}
-                    <td className={`text-left font-mono font-black text-xs xl:text-sm px-2 py-1 relative ${calc.finalNetAmount < 0 ? 'bg-red-100 text-red-900 border-2 border-red-500' : 'bg-gradient-to-r from-orange-50 to-amber-100 text-orange-950'}`}>
-                      {formatIndianCurrency(calc.finalNetAmount)}
-                      {calc.finalNetAmount < 0 && (
-                        <span title="Negative Net Amount" className="absolute right-2 top-1/2 -translate-y-1/2">
-                          <AlertCircle className="w-4 h-4 text-red-600" />
-                        </span>
-                      )}
+                    {/* 19. Final Net Amount */}
+                    <td className="text-left font-mono font-black py-1 px-2 bg-gradient-to-r from-amber-100 via-orange-100 to-amber-200 text-slate-950 border-r border-amber-300">
+                      <span className="text-xs font-black">{formatIndianCurrency(calc.finalNetAmount)}</span>
                     </td>
 
                     {/* Status */}
                     <td className="text-center py-1 px-1">
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full font-bold text-[8.5px] ${
-                          w.paymentStatus === 'APPROVED'
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                            : 'bg-amber-100 text-amber-800 border border-amber-300'
-                        }`}
-                      >
-                        {w.paymentStatus === 'APPROVED' ? 'PAID' : 'PENDING'}
-                      </span>
+                      {w.paymentStatus === 'APPROVED' ? (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                          <Check className="w-2.5 h-2.5" /> Approved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                          <Clock className="w-2.5 h-2.5" /> Pending
+                        </span>
+                      )}
                     </td>
 
                     {/* Actions */}
                     <td className="text-center py-1 px-1">
                       <div className="flex items-center justify-center gap-1">
-                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                          <button
-                            onClick={() => handleApprovePayment(w)}
-                            className={`p-1 text-white font-bold rounded text-[9.5px] flex items-center gap-0.5 transition-colors shadow-sm ${
-                              w.paymentStatus === 'APPROVED'
-                                ? 'bg-emerald-600 hover:bg-emerald-700'
-                                : 'bg-[#1e3a8a] hover:bg-[#1e40af]'
-                            }`}
-                            title="Save & Approve Payout"
-                          >
-                            <Check className="w-3 h-3" />
-                          </button>
-                        )}
-                        
                         <button
                           onClick={() => setSlipModalWorker(w)}
-                          className="p-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[9.5px] flex items-center gap-0.5 transition-colors shadow-sm"
-                          title="View Official Salary Slip & Print"
+                          className="p-1 text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
+                          title="Preview Salary Slip"
                         >
                           <FileText className="w-3 h-3" />
                         </button>
 
                         <button
                           onClick={() => generateSalarySlipPdf(w, true)}
-                          className="p-1 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded text-[9.5px] flex items-center gap-0.5 transition-colors shadow-sm"
-                          title="Download Portrait PDF Slip"
+                          className="p-1 text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded border border-slate-300 transition-colors"
+                          title="Download Official Salary Slip PDF"
                         >
                           <Download className="w-3 h-3" />
                         </button>
+
+                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                          <button
+                            onClick={() => handleApprovePayment(w)}
+                            className={`p-1 rounded text-white font-bold transition-all shadow-xs ${
+                              w.paymentStatus === 'APPROVED' 
+                                ? 'bg-emerald-600 hover:bg-emerald-700' 
+                                : 'bg-[#1e3a8a] hover:bg-[#1e40af]'
+                            }`}
+                            title={w.paymentStatus === 'APPROVED' ? 'Re-approve / Update Payout' : 'Approve Salary Payment'}
+                          >
+                            <Check className="w-3 h-3" />
+                          </button>
+                        )}
                         
                         <button
                           onClick={() => handleDispatchSlip(w)}
-                          className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded text-[9.5px] flex items-center gap-0.5 transition-colors shadow-sm"
-                          title="Send WhatsApp payslip"
+                          className="p-1 text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 rounded border border-emerald-200 transition-colors"
+                          title="Send Payslip to Worker via WhatsApp"
                         >
-                          <MessageSquare className="w-3 h-3" />
+                          <Share2 className="w-3 h-3" />
                         </button>
                       </div>
                     </td>
@@ -1808,7 +1766,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   <td className="text-right py-2 px-1 bg-slate-700/90 border-t border-slate-600">{formatIndianCurrency(totals.netBaseAmount)}</td>
                   <td className="text-center py-2 px-1 border-t border-slate-600">-</td>
                   <td className="text-right py-2 px-1 border-t border-slate-600">{formatIndianCurrency(totals.otPayment)}</td>
-                  <td className="text-center py-2 px-1 bg-amber-900/70 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.otAllowance)}</td>
                   <td className="text-right py-2 px-1 bg-emerald-900/90 text-emerald-300 border-t border-emerald-700">{formatIndianCurrency(totals.totalPayment)}</td>
                   <td className="text-right py-2 px-1 bg-amber-900/60 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.advanceTaken)}</td>
                   <td className="text-center py-2 px-1 bg-amber-800 text-amber-100 border-t border-amber-700">{formatIndianCurrency(totals.advance)}</td>
@@ -1872,7 +1829,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <div>
                         <h4 className="text-base font-bold text-[#1e3a8a] flex items-center gap-2">
                           {drilldownData.worker.fullName}
-                          <span className="text-xs font-normal text-slate-500 font-mono">({drilldownData.worker.empId})</span>
                         </h4>
                         <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
                           <span><strong>Father's Name:</strong> {drilldownData.worker.fatherName}</span>
@@ -1889,12 +1845,6 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           <span><strong>Advance Taken:</strong> <span className="font-bold text-slate-800 font-mono">₹{Number(drilldownData.worker.advanceTaken || drilldownData.worker.advanceBalance || 0).toLocaleString('en-IN')}</span></span>
                           <span>•</span>
                           <span><strong>Advance Balance:</strong> <span className="font-bold text-amber-900 font-mono">₹{Number(drilldownData.worker.advanceBalance || 0).toLocaleString('en-IN')}</span></span>
-                          {drilldownData.worker.otAllowance > 0 && (
-                            <>
-                              <span>•</span>
-                              <span><strong>OT Allowance:</strong> <span className="font-bold text-amber-800 font-mono">₹{Number(drilldownData.worker.otAllowance).toLocaleString('en-IN')}</span></span>
-                            </>
-                          )}
                         </div>
                       </div>
                     </div>

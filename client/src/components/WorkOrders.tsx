@@ -292,7 +292,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               Work Orders & Direct Sales
             </h1>
             <p className="text-xs text-blue-100 mt-0.5">
-              Direct billing jobs & sales contracts (Integrated with Sales Ledger)
+              Direct billing jobs & sales contracts
             </p>
           </div>
         </div>

@@ -289,16 +289,16 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden"
+      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 sm:pt-6 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* MODAL CONTAINER */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[92vh] max-h-[92vh] flex flex-col overflow-hidden relative z-[100000] border-2 border-slate-300">
+      {/* CLEAN FULL-SCREEN MODAL CONTAINER (matches salary slip style) */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 my-auto animate-fadeIn">
         
-        {/* MODAL TOP CONTROL BAR */}
-        <div className="shrink-0 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md border-b border-blue-900 z-10">
+        {/* MODAL TOP CONTROL BAR (ALWAYS STICKY AT TOP) */}
+        <div className="shrink-0 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md border-b border-blue-900">
           <div className="flex items-center gap-2.5">
             <span className="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
               📄 Tax Invoice Preview: <span className="font-mono text-sky-200">{invoiceNo}</span>
@@ -332,8 +332,8 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
         </div>
 
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-200/90 flex justify-center items-start">
-          <div className="bg-white p-6 sm:p-8 rounded-lg shadow-xl border border-slate-300 w-full max-w-3xl text-black font-sans text-xs">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center items-start">
+          <div className="bg-white p-5 sm:p-8 rounded shadow-md border border-slate-300 w-full max-w-3xl text-black font-sans text-xs">
             
             {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
             <div className="flex items-start gap-4 pb-3 border-b-2 border-black">

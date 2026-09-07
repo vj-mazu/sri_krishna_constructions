@@ -385,7 +385,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             onChange={(e) => setSelectedDivisionId(e.target.value)}
             className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
           >
-            <option value="ALL">🏢 All Divisions (All Sites)</option>
+            <option value="ALL">🏢 All Divisions</option>
             {divisions.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
@@ -857,10 +857,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       {/* 📝 ATTENDANCE CORRECTION REQUEST MODAL (SUPERVISOR -> MANAGER/ADMIN) */}
       {editModalWorker && (
         <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-start justify-center pt-20 sm:pt-24 pb-8 px-3 overflow-y-auto"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setEditModalWorker(null); }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-300 overflow-hidden animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-300 overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">
             {/* Header */}
             <div className="bg-[#1e3a8a] text-white p-4 flex justify-between items-center">
               <div>
@@ -868,7 +868,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   <span>✏️</span> Request Attendance Correction
                 </h3>
                 <p className="text-[11px] text-blue-200">
-                  {editModalWorker.fullName} ({editModalWorker.workerId}) • {formatDateDMY(selectedDate)}
+                  {editModalWorker.fullName} • {formatDateDMY(selectedDate)}
                 </p>
               </div>
               <button

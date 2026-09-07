@@ -353,7 +353,7 @@ export const MovementModal: React.FC<any> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-200 flex flex-col max-h-[90vh]">
         <div className="bg-gradient-to-r from-[#667eea] to-[#764ba2] px-6 py-4 text-white flex justify-between items-center shrink-0">
           <div className="flex items-center gap-2">

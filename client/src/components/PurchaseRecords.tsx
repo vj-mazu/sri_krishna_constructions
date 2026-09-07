@@ -1129,7 +1129,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           <div className="p-6">
             {/* 1. EDIT PO MODAL */}
             {editingPoModal && (
-              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
@@ -1218,8 +1218,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 1.1 QUICK PO REMARKS MODAL */}
             {poRemarksModal && (
-              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-8">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
                     <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
                       <FileText className="w-5 h-5 text-amber-600" />
@@ -1260,7 +1260,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 2. EDIT ITEM MODAL */}
             {editingItem && (
-              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
@@ -1307,7 +1307,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                     {/* 4. Part Number */}
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Part Number * (Unique)</label>
+                      <label className="block font-semibold text-slate-700 mb-1">Part Number *</label>
                       <input
                         type="text"
                         required
@@ -1559,7 +1559,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 3. EDIT INWARD PURCHASE MODAL */}
             {editingPurchase && (
-              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <div>
@@ -1754,7 +1754,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       );
                     })()}
 
-                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0">
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
                       <button
                         type="button"
                         onClick={() => setEditingPurchase(null)}
@@ -1776,7 +1776,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 4. EDIT SALE MODAL */}
             {editingSale && (
-              <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <div>
@@ -1900,9 +1900,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-blue-900 text-xs"
                         />
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Party Invoice / DC Date</label>
                         <input
@@ -1912,6 +1909,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           className="w-full p-2 border border-slate-300 rounded text-xs"
                         />
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Vehicle No</label>
                         <input
@@ -1922,17 +1922,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-xs"
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
-                      <input
-                        type="text"
-                        placeholder="Delivery notes, driver info, inspection remarks..."
-                        value={editSaleForm.remarks || ''}
-                        onChange={e => setEditSaleForm(prev => ({ ...prev, remarks: e.target.value }))}
-                        className="w-full p-2 border border-slate-300 rounded text-xs"
-                      />
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
+                        <input
+                          type="text"
+                          placeholder="Delivery notes, driver info, inspection remarks..."
+                          value={editSaleForm.remarks || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, remarks: e.target.value }))}
+                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                        />
+                      </div>
                     </div>
 
                     {/* TAX PERCENTAGES */}
@@ -1969,7 +1968,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </div>
                     </div>
 
-                    {/* LIVE CALCULATION BREAKDOWN PREVIEW */}
+                    {/* LIVE SALE SUMMARY */}
                     {(() => {
                       const qty = Number(editSaleForm.qty || 0);
                       const rate = Number(editSaleForm.rate || 0);
@@ -1986,18 +1985,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                           <div className="flex flex-wrap gap-2 text-[11px]">
                             <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(basic)}</strong></span>
-                            <span className="text-blue-700">CGST ({cgstP}%): +{formatCurrency(cgst)}</span>
-                            <span className="text-blue-700">SGST ({sgstP}%): +{formatCurrency(sgst)}</span>
+                            <span className="text-blue-800">CGST ({cgstP}%): +{formatCurrency(cgst)}</span>
+                            <span className="text-blue-800">SGST ({sgstP}%): +{formatCurrency(sgst)}</span>
                             {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{formatCurrency(igst)}</span>}
                           </div>
-                          <span className="text-sm font-black text-blue-800 bg-white px-2.5 py-1 rounded-lg border border-blue-300 shadow-sm">
-                            Total Sale Value: {formatCurrency(total)}
+                          <span className="text-sm font-black text-blue-900 bg-white px-2.5 py-1 rounded-lg border border-blue-300 shadow-sm">
+                            Total Sale: {formatCurrency(total)}
                           </span>
                         </div>
                       );
                     })()}
 
-                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0">
+                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
                       <button
                         type="button"
                         onClick={() => setEditingSale(null)}
@@ -2007,7 +2006,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </button>
                       <button
                         type="submit"
-                        className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow font-semibold"
+                        className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg shadow font-semibold"
                       >
                         Update Sale
                       </button>
@@ -2111,7 +2110,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                           {/* 3. Part Number */}
                           <div>
-                            <label className="block font-bold text-slate-700 mb-1">Part Number * (Unique)</label>
+                            <label className="block font-bold text-slate-700 mb-1">Part Number *</label>
                             <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none" value={itemForm.partNumber} onChange={e => handleItemChange('partNumber', e.target.value)} placeholder="e.g. AR-163" />
                           </div>
 
@@ -3837,8 +3836,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
       {/* QUICK PO REMARKS MODAL (AVAILABLE ON MAIN PO LIST VIEW) */}
       {poRemarksModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-8">
+        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-auto">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <FileText className="w-5 h-5 text-amber-600" />
@@ -3879,12 +3878,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
       {/* EDIT PO MODAL (AVAILABLE ON MAIN PO LIST VIEW) */}
       {editingPoModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-8">
-            <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-              Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPoModal.poNumber}</span>
-            </h3>
-            <form onSubmit={handleUpdatePoHeader} className="space-y-4 text-xs">
+        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100 shrink-0">
+              <h3 className="text-base font-bold text-slate-800">
+                Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPoModal.poNumber}</span>
+              </h3>
+              <button onClick={() => setEditingPoModal(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
+            </div>
+            <form onSubmit={handleUpdatePoHeader} className="space-y-4 text-xs overflow-y-auto pr-1">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">PO Number *</label>
                 <input
@@ -3942,7 +3944,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
                 />
               </div>
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
                 <button
                   type="button"
                   onClick={() => setEditingPoModal(null)}

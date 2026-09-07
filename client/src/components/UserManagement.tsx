@@ -57,8 +57,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [dailyWage, setDailyWage] = useState('');
   const [dailyAllowance, setDailyAllowance] = useState('');
   const [advanceTaken, setAdvanceTaken] = useState('');
+  const [advanceTakenDate, setAdvanceTakenDate] = useState('');
+  const [advanceReason, setAdvanceReason] = useState('');
+  const [advanceReturnDate, setAdvanceReturnDate] = useState('');
   const [advanceBalance, setAdvanceBalance] = useState('');
-  const [otAllowance, setOtAllowance] = useState('');
   const [otHourlyRate, setOtHourlyRate] = useState('');
   const [workerDivisionId, setWorkerDivisionId] = useState('');
   const [workerPfNumber, setWorkerPfNumber] = useState('');
@@ -78,8 +80,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editWage, setEditWage] = useState('');
   const [editDailyAllowance, setEditDailyAllowance] = useState('');
   const [editAdvanceTaken, setEditAdvanceTaken] = useState('');
+  const [editAdvanceTakenDate, setEditAdvanceTakenDate] = useState('');
+  const [editAdvanceReason, setEditAdvanceReason] = useState('');
+  const [editAdvanceReturnDate, setEditAdvanceReturnDate] = useState('');
   const [editAdvanceBalance, setEditAdvanceBalance] = useState('');
-  const [editOtAllowance, setEditOtAllowance] = useState('');
   const [editOtRate, setEditOtRate] = useState('');
   const [editWorkerDivisionId, setEditWorkerDivisionId] = useState('');
   const [editPfNumber, setEditPfNumber] = useState('');
@@ -678,8 +682,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         dailyWage: parseFloat(dailyWage),
         dailyAllowance: dailyAllowance ? parseFloat(dailyAllowance) : 0,
         advanceTaken: advanceTaken ? parseFloat(advanceTaken) : (advanceBalance ? parseFloat(advanceBalance) : 0),
+        advanceTakenDate: advanceTakenDate || undefined,
+        advanceReason: advanceReason.trim() || undefined,
+        advanceReturnDate: advanceReturnDate || undefined,
         advanceBalance: advanceBalance ? parseFloat(advanceBalance) : (advanceTaken ? parseFloat(advanceTaken) : 0),
-        otAllowance: otAllowance ? parseFloat(otAllowance) : 0,
         otHourlyRate: otHourlyRate ? parseFloat(otHourlyRate) : parseFloat(dailyWage) / 8,
         divisionId: workerDivisionId,
         pfNumber: workerPfNumber.trim() || undefined,
@@ -702,8 +708,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       setDailyWage('');
       setDailyAllowance('');
       setAdvanceTaken('');
+      setAdvanceTakenDate('');
+      setAdvanceReason('');
+      setAdvanceReturnDate('');
       setAdvanceBalance('');
-      setOtAllowance('');
       setOtHourlyRate('');
       setWorkerDivisionId('');
       setWorkerPfNumber('');
@@ -767,8 +775,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         dailyWage: parseFloat(editWage),
         dailyAllowance: editDailyAllowance ? parseFloat(editDailyAllowance) : 0,
         advanceTaken: editAdvanceTaken ? parseFloat(editAdvanceTaken) : 0,
+        advanceTakenDate: editAdvanceTakenDate || undefined,
+        advanceReason: editAdvanceReason.trim() || undefined,
+        advanceReturnDate: editAdvanceReturnDate || undefined,
         advanceBalance: editAdvanceBalance ? parseFloat(editAdvanceBalance) : 0,
-        otAllowance: editOtAllowance ? parseFloat(editOtAllowance) : 0,
         otHourlyRate: editOtRate ? parseFloat(editOtRate) : parseFloat(editWage) / 8,
         divisionId: editWorkerDivisionId,
         pfNumber: editPfNumber.trim() || undefined,
@@ -1036,7 +1046,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number (Mandatory) *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
                   <input
                     type="text"
                     required
@@ -1156,8 +1166,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT ACCOUNT MODAL */}
           {editingAccount && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col my-auto max-h-[92vh]">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-5 font-bold flex justify-between items-center rounded-t-2xl">
                   <span className="text-lg">Edit System Account</span>
                   <button onClick={() => setEditingAccount(null)} className="hover:text-white/80 p-1 text-white">
@@ -1371,8 +1381,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT DIVISION MODAL */}
           {editingDivision && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col my-auto max-h-[92vh]">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-5 font-bold flex justify-between items-center rounded-t-2xl">
                   <span className="text-lg">Edit Division</span>
                   <button onClick={() => setEditingDivision(null)} className="hover:text-white/80 p-1 text-white">
@@ -1398,8 +1408,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       onChange={(e: any) => setEditDivisionType(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white"
                     >
-                      <option value="ATTENDANCE">Attendance Division (Workers / Shifts)</option>
-                      <option value="PO_CLIENT">PO Division / Client (Contracts / Invoicing)</option>
+                      <option value="ATTENDANCE">Attendance Division</option>
+                      <option value="PO_CLIENT">PO Division / Client</option>
                     </select>
                   </div>
                   <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
@@ -1487,7 +1497,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number (Indian Format) *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
                   <input
                     type="text"
                     required
@@ -1542,6 +1552,34 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
                 <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Advance Taken Date</label>
+                  <input
+                    type="date"
+                    value={advanceTakenDate}
+                    onChange={(e) => setAdvanceTakenDate(e.target.value)}
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Advance Purpose / Reason</label>
+                  <input
+                    type="text"
+                    value={advanceReason}
+                    onChange={(e) => setAdvanceReason(e.target.value)}
+                    placeholder="e.g. Festival Advance, Medical, Festival Bonus"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Expected Return Date</label>
+                  <input
+                    type="date"
+                    value={advanceReturnDate}
+                    onChange={(e) => setAdvanceReturnDate(e.target.value)}
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                  />
+                </div>
+                <div>
                   <label className="block font-semibold text-slate-700 mb-1">Advance Balance (Rs)</label>
                   <input
                     type="number"
@@ -1549,17 +1587,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={advanceBalance}
                     onChange={(e) => setAdvanceBalance(e.target.value)}
                     placeholder="e.g. 60000 (or 0)"
-                    className="w-full p-2 border border-amber-300 bg-amber-50/40 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">OT Allowance (Rs)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={otAllowance}
-                    onChange={(e) => setOtAllowance(e.target.value)}
-                    placeholder="e.g. 1000 (or 0)"
                     className="w-full p-2 border border-amber-300 bg-amber-50/40 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none font-mono font-bold"
                   />
                 </div>
@@ -1673,15 +1700,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT WORKER REGISTRY MODAL */}
           {editingWorker && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col max-h-[90vh] overflow-y-auto">
-                <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-5 font-bold flex justify-between items-center rounded-t-2xl">
-                  <span className="text-lg">Edit Worker: {editingWorker.workerId}</span>
-                  <button onClick={() => setEditingWorker(null)} className="hover:text-white/80 p-1 text-white">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col max-h-[92vh] my-auto overflow-hidden animate-fadeIn">
+                <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-4 sm:p-5 font-bold flex justify-between items-center shrink-0">
+                  <span className="text-base sm:text-lg">Edit Worker: {editingWorker.workerId}</span>
+                  <button onClick={() => setEditingWorker(null)} className="hover:text-white/80 p-1 text-white text-lg font-bold">
                     ✕
                   </button>
                 </div>
-                <form onSubmit={handleUpdateWorker} className="p-6 space-y-4 text-xs">
+                <form onSubmit={handleUpdateWorker} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto pr-2">
                   {currentUserRole === 'SUPERVISOR' ? (
                     <div className="space-y-4">
                       <div className="p-3 bg-blue-50 text-[#1e3a8a] border border-blue-200 rounded-lg text-xs font-semibold">
@@ -1743,7 +1770,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         </div>
                       </div>
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Mobile Number (Indian Format) *</label>
+                        <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
                         <input
                           type="text"
                           required
@@ -1753,7 +1780,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                         />
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-6 gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Daily Wage *</label>
                           <input
@@ -1774,87 +1801,93 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           />
                         </div>
                         <div>
-                          <label className="block font-semibold text-slate-700 mb-1 text-amber-800">Adv Taken</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editAdvanceTaken}
-                            onChange={(e) => setEditAdvanceTaken(e.target.value)}
-                            className="w-full p-2 border border-amber-300 bg-amber-50/40 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none font-mono font-bold text-amber-900"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1 text-amber-800">Adv Bal</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editAdvanceBalance}
-                            onChange={(e) => setEditAdvanceBalance(e.target.value)}
-                            className="w-full p-2 border border-amber-300 bg-amber-50/40 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none font-mono font-bold text-amber-900"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1 text-amber-800">OT Allow</label>
-                          <input
-                            type="number"
-                            min="0"
-                            value={editOtAllowance}
-                            onChange={(e) => setEditOtAllowance(e.target.value)}
-                            className="w-full p-2 border border-amber-300 bg-amber-50/40 rounded focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none font-mono font-bold text-amber-900"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1">OT Rate *</label>
+                          <label className="block font-semibold text-slate-700 mb-1">OT Rate/Hr *</label>
                           <input
                             type="number"
                             required
                             value={editOtRate}
                             onChange={(e) => setEditOtRate(e.target.value)}
-                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
                           />
                         </div>
                       </div>
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Assigned Division *</label>
-                        <select
-                          required
-                          value={editWorkerDivisionId}
-                          onChange={(e) => setEditWorkerDivisionId(e.target.value)}
-                          className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
-                        >
-                          {divisions.map((d) => (
-                            <option key={d.id} value={d.id}>{d.name}</option>
-                          ))}
-                        </select>
+                          <label className="block font-semibold text-slate-700 mb-1">Division *</label>
+                          <select
+                            required
+                            value={editWorkerDivisionId}
+                            onChange={(e) => setEditWorkerDivisionId(e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold"
+                          >
+                            {divisions.map((d) => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1">Place of Work</label>
-                          <input
-                            type="text"
-                            value={editPlaceOfWork}
-                            onChange={(e) => setEditPlaceOfWork(e.target.value)}
-                            placeholder="e.g. UNIT5 TO 8 COMPRESSOR TURBINE"
-                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
-                          />
+
+                      {/* Advance Fields */}
+                      <div className="p-3 bg-amber-50/50 rounded-xl border border-amber-200 space-y-2">
+                        <div className="font-bold text-amber-900 text-xs">Worker Advance Management</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">Advance Taken (₹)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editAdvanceTaken}
+                              onChange={(e) => setEditAdvanceTaken(e.target.value)}
+                              className="w-full p-2 border border-amber-300 rounded font-mono font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">Advance Balance (₹)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={editAdvanceBalance}
+                              onChange={(e) => setEditAdvanceBalance(e.target.value)}
+                              className="w-full p-2 border border-amber-300 rounded font-mono font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">Advance Taken Date</label>
+                            <input
+                              type="date"
+                              value={editAdvanceTakenDate}
+                              onChange={(e) => setEditAdvanceTakenDate(e.target.value)}
+                              className="w-full p-2 border border-slate-300 rounded font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">Expected Return Date</label>
+                            <input
+                              type="date"
+                              value={editAdvanceReturnDate}
+                              onChange={(e) => setEditAdvanceReturnDate(e.target.value)}
+                              className="w-full p-2 border border-slate-300 rounded font-mono"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block font-semibold text-slate-700 mb-1">Advance Purpose / Reason</label>
+                            <input
+                              type="text"
+                              value={editAdvanceReason}
+                              onChange={(e) => setEditAdvanceReason(e.target.value)}
+                              placeholder="e.g. Festival Advance, Medical, Home Repair"
+                              className="w-full p-2 border border-slate-300 rounded"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block font-semibold text-slate-700 mb-1">Nature of Work</label>
-                          <input
-                            type="text"
-                            value={editNatureOfWork}
-                            onChange={(e) => setEditNatureOfWork(e.target.value)}
-                            placeholder="e.g. MAINTENANCE, PIPELINE"
-                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
-                          />
-                        </div>
+                      </div>
+
+                      {/* Statutory & Banking Details */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">PF Account No</label>
                           <input
                             type="text"
                             value={editPfNumber}
                             onChange={(e) => setEditPfNumber(e.target.value)}
-                            placeholder="e.g. GBRCH1955403000"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                           />
                         </div>
@@ -1864,7 +1897,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             type="text"
                             value={editEsiNumber}
                             onChange={(e) => setEditEsiNumber(e.target.value)}
-                            placeholder="e.g. 71000088340001099"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                           />
                         </div>
@@ -1874,7 +1906,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             type="text"
                             value={editUanNumber}
                             onChange={(e) => setEditUanNumber(e.target.value)}
-                            placeholder="e.g. 100493430949"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                           />
                         </div>
@@ -1884,7 +1915,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             type="text"
                             value={editBankAcc}
                             onChange={(e) => setEditBankAcc(e.target.value)}
-                            placeholder="e.g. 06222200019793"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                           />
                         </div>
@@ -1894,14 +1924,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             type="text"
                             value={editIfsc}
                             onChange={(e) => setEditIfsc(e.target.value)}
-                            placeholder="e.g. CNRB0010622"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono uppercase"
                           />
                         </div>
                       </div>
                     </>
                   )}
-                  <div className="flex justify-end gap-2 pt-4 border-t">
+                  <div className="flex justify-end gap-2 pt-3 border-t shrink-0 sticky bottom-0 bg-white">
                     <button
                       type="button"
                       onClick={() => setEditingWorker(null)}
@@ -2042,7 +2071,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       <th>Daily Allowance</th>
                       <th className="bg-amber-50 text-amber-900">Advance Taken</th>
                       <th className="bg-amber-100 text-amber-950 font-bold">Advance Balance</th>
-                      <th className="bg-amber-50 text-amber-900">OT Allowance</th>
                       <th>OT Hourly Rate</th>
                     </>
                   )}
@@ -2066,7 +2094,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   if (sortedWorkers.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 14 : 8} className="p-8 text-center text-slate-400">
+                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 13 : 8} className="p-8 text-center text-slate-400">
                           No workers registered yet.
                         </td>
                       </tr>
@@ -2102,9 +2130,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             <span className="text-slate-400">₹0</span>
                           )}
                         </td>
-                        <td className="font-mono font-bold text-amber-800 bg-amber-50/30">
-                          {formatIndianCurrency(w.otAllowance || 0)}
-                        </td>
                         <td className="font-mono text-slate-700">{formatIndianCurrency(w.otHourlyRate)}/hr</td>
                       </>
                     )}
@@ -2122,8 +2147,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                               setEditWage(w.dailyWage.toString());
                               setEditDailyAllowance((w.dailyAllowance || 0).toString());
                               setEditAdvanceTaken((w.advanceTaken || w.advanceBalance || 0).toString());
+                              setEditAdvanceTakenDate(w.advanceTakenDate ? w.advanceTakenDate.split('T')[0] : '');
+                              setEditAdvanceReason(w.advanceReason || '');
+                              setEditAdvanceReturnDate(w.advanceReturnDate ? w.advanceReturnDate.split('T')[0] : '');
                               setEditAdvanceBalance((w.advanceBalance || 0).toString());
-                              setEditOtAllowance((w.otAllowance || 0).toString());
                               setEditOtRate((w.otHourlyRate || 0).toString());
                               setEditWorkerDivisionId(w.divisionId);
                               setEditPfNumber(w.pfNumber || '');
@@ -2171,12 +2198,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT PO MODAL */}
           {editingPO && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn">
-                <h3 className="text-base font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">
-                  Edit Purchase Order: <span className="font-mono text-[#667eea]">{editingPO.poNumber}</span>
-                </h3>
-                <form onSubmit={handleUpdatePO} className="space-y-4 text-xs">
+            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-800">
+                    Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPO.poNumber}</span>
+                  </h3>
+                  <button onClick={() => setEditingPO(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold">✕</button>
+                </div>
+                <form onSubmit={handleUpdatePO} className="space-y-3.5 text-xs overflow-y-auto pr-1">
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">PO Number *</label>
                     <input
@@ -2184,7 +2214,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       required
                       value={editPONumber}
                       onChange={(e) => setEditPONumber(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono font-bold"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
                     />
                   </div>
                   <div>
@@ -2193,7 +2223,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       required
                       value={editPODivisionId}
                       onChange={(e) => setEditPODivisionId(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
                     >
                       <option value="">-- Choose Division --</option>
                       {divisions.map((d) => (
@@ -2208,7 +2238,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       required
                       value={editPODate}
                       onChange={(e) => setEditPODate(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
                     />
                   </div>
                   <div>
@@ -2219,10 +2249,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       required
                       value={editPOAmount}
                       onChange={(e) => setEditPOAmount(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono font-bold"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
                     />
                   </div>
-                  <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
                     <button
                       type="button"
                       onClick={() => setEditingPO(null)}
@@ -2233,7 +2263,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-4 py-2 bg-[#667eea] hover:bg-indigo-600 text-white font-bold rounded-lg shadow disabled:opacity-50"
+                      className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg shadow disabled:opacity-50"
                     >
                       {loading ? 'Saving...' : 'Update Purchase Order'}
                     </button>
@@ -2409,9 +2439,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     onChange={(e) => setHolidayType(e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-semibold"
                   >
-                    <option value="GOVT_HOLIDAY">Govt Holiday (Paid)</option>
-                    <option value="FESTIVAL_HOLIDAY">Festival Holiday (Paid)</option>
-                    <option value="COMPANY_HOLIDAY">Company Holiday (Paid)</option>
+                    <option value="GOVT_HOLIDAY">Govt Holiday</option>
+                    <option value="FESTIVAL_HOLIDAY">Festival Holiday</option>
+                    <option value="COMPANY_HOLIDAY">Company Holiday</option>
                   </select>
                 </div>
               </div>
@@ -2492,7 +2522,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
           <div className="flex flex-wrap justify-between items-center gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <Package className="w-4 h-4 text-[#1e3a8a]" /> Individual Stocks (Non-PO Items)
+                <Package className="w-4 h-4 text-[#1e3a8a]" /> Individual Stocks
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Register and manage stock purchased directly without a PO. Record inward purchases, sales with owner approval, and track balances.
@@ -2514,7 +2544,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             <form onSubmit={handleCreateIndStock} className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4 animate-fadeIn shadow-sm">
               <div className="flex justify-between items-center border-b border-slate-200 pb-2.5">
                 <h4 className="font-bold text-xs text-[#1e3a8a] uppercase flex items-center gap-2">
-                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Add Standalone Item (Item Master)
+                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Add Standalone Item
                 </h4>
                 <button
                   type="button"
@@ -2611,12 +2641,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     onChange={(e) => setIndStockUnit(e.target.value)}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#1e3a8a] outline-none font-semibold"
                   >
-                    <option value="NOS">NOS (Numbers)</option>
+                    <option value="NOS">NOS</option>
                     <option value="SET">SET</option>
-                    <option value="MTR">MTR (Meters)</option>
-                    <option value="KGS">KGS (Kilograms)</option>
-                    <option value="LTR">LTR (Liters)</option>
-                    <option value="PKT">PKT (Packets)</option>
+                    <option value="MTR">MTR</option>
+                    <option value="KGS">KGS</option>
+                    <option value="LTR">LTR</option>
+                    <option value="PKT">PKT</option>
                     <option value="BOX">BOX</option>
                     <option value="PAIR">PAIR</option>
                     <option value="ROLL">ROLL</option>
@@ -2975,12 +3005,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: INWARD PURCHASE (FULL GST FIELDS) */}
           {purchaseModalItem && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
                 <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
-                      <ArrowDownToLine className="w-5 h-5 text-emerald-300" /> Record Inward Purchase (Standalone Item)
+                      <ArrowDownToLine className="w-5 h-5 text-emerald-300" /> Record Inward Purchase
                     </h3>
                     <p className="text-xs text-emerald-200 mt-0.5">
                       Item: <strong>{purchaseModalItem.itemName}</strong> ({purchaseModalItem.partNumber || 'No Part Number'})
@@ -3185,12 +3215,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: OUTWARD SALE (REQUIRES OWNER APPROVAL) */}
           {saleModalItem && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
-                      <ArrowUpFromLine className="w-5 h-5 text-blue-300" /> Record Outward Sale (Standalone Item)
+                      <ArrowUpFromLine className="w-5 h-5 text-blue-300" /> Record Outward Sale
                     </h3>
                     <p className="text-xs text-blue-200 mt-0.5">
                       Item: <strong>{saleModalItem.itemName}</strong> | Available Balance: <span className="font-bold font-mono text-emerald-300">{saleModalItem.balanceStock} {saleModalItem.unit || 'NOS'}</span>
@@ -3419,7 +3449,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: VIEW / INSPECT ITEM MASTER DETAILS */}
           {inspectIndStock && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-2.5">
@@ -3502,9 +3532,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: TRANSACTION HISTORY */}
           {txHistoryItem && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-6">
-                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
+                <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
                       <History className="w-5 h-5 text-sky-200" /> Transaction Ledger: {txHistoryItem.itemName}
@@ -3516,7 +3546,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   <button onClick={() => setTxHistoryItem(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
                 </div>
 
-                <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <div className="p-4 sm:p-6 space-y-4 flex-1 overflow-y-auto">
                   <table className="w-full text-left text-xs excel-table">
                     <thead>
                       <tr>
@@ -3548,7 +3578,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                 tx.type === 'INWARD' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
                               }`}>
-                                {tx.type === 'INWARD' ? 'INWARD (Purchase)' : 'OUTWARD (Sale)'}
+                                {tx.type === 'INWARD' ? 'INWARD' : 'OUTWARD'}
                               </span>
                             </td>
                             <td className="font-mono font-bold">
@@ -3602,15 +3632,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: EDIT INDIVIDUAL STOCK DETAILS (FULL ITEM MASTER) */}
           {editingIndStock && (
-            <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <h3 className="font-bold text-sm flex items-center gap-2">
                     <Edit className="w-4 h-4 text-sky-300" /> Edit Item Master Details
                   </h3>
-                  <button onClick={() => setEditingIndStock(null)} className="text-white/80 hover:text-white">✕</button>
+                  <button onClick={() => setEditingIndStock(null)} className="text-white/80 hover:text-white text-xl font-bold">✕</button>
                 </div>
-                <form onSubmit={handleUpdateIndStock} className="p-6 space-y-4 text-xs overflow-y-auto">
+                <form onSubmit={handleUpdateIndStock} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto pr-2">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">KPCL Code</label>
@@ -3759,7 +3789,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     </div>
                   </div>
 
-                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 shrink-0 sticky bottom-0 bg-white">
                     <button
                       type="button"
                       onClick={() => setEditingIndStock(null)}

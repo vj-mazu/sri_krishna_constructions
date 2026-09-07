@@ -90,9 +90,10 @@ export const initializeDatabaseTables = async () => {
         WHEN duplicate_object THEN null;
       END $$;
 
-      -- Add SALE_ENTRY and INDIVIDUAL_SALE to ApprovalType enum if not already present
+      -- Add SALE_ENTRY, INDIVIDUAL_SALE and WORK_ORDER_SALE to ApprovalType enum if not already present
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY';
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'INDIVIDUAL_SALE';
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_SALE';
 
       DO $$ BEGIN
         CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
@@ -406,12 +407,15 @@ export const initializeDatabaseTables = async () => {
       -- Individual Stock Transaction eWayBillNumber
       ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "eWayBillNumber" TEXT;
 
-      -- Worker master enhancements (Father Name, Designation, Daily Allowance, Advance Balance, Statutory & Bank Details)
+      -- Worker master enhancements (Father Name, Designation, Daily Allowance, Advance Balance, Advance Dates/Reason, Statutory & Bank Details)
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "designation" TEXT;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "dailyAllowance" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceTaken" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceBalance" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceTakenDate" TIMESTAMP(3);
+      ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceReason" TEXT;
+      ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceReturnDate" TIMESTAMP(3);
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "otAllowance" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "pfNumber" TEXT;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "esiNumber" TEXT;
@@ -421,6 +425,11 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "placeOfWork" TEXT;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "natureOfWork" TEXT;
       UPDATE "Worker" SET "advanceBalance" = "advanceTaken" WHERE ("advanceBalance" IS NULL OR "advanceBalance" = 0) AND "advanceTaken" > 0;
+
+      -- Work Order approval columns
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
 
       -- Attendance division tracking, notes, overtimeHours & dailyWageOverride
       ALTER TABLE "Attendance" ADD COLUMN IF NOT EXISTS "divisionId" TEXT REFERENCES "Division"("id");
@@ -474,7 +483,25 @@ export const initializeDatabaseTables = async () => {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 11c. Create AdvanceTransaction Table (Worker Advance Disbursement & Monthly Payroll Deduction Ledger)
+      CREATE TABLE IF NOT EXISTS "AdvanceTransaction" (
+        "id" TEXT PRIMARY KEY,
+        "workerId" TEXT NOT NULL REFERENCES "Worker"("id") ON DELETE CASCADE,
+        "type" TEXT NOT NULL, -- 'DISBURSEMENT' (Advance Given) or 'DEDUCTION' (Recovered via salary / cash)
+        "date" TIMESTAMP(3) NOT NULL,
+        "amount" DOUBLE PRECISION NOT NULL,
+        "balanceAfter" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "source" TEXT NOT NULL DEFAULT 'MANUAL_ADVANCE', -- 'MANUAL_ADVANCE', 'MONTHLY_PAYROLL_DEDUCTION', 'DIRECT_REPAYMENT'
+        "referenceId" TEXT, -- optional MonthlyPayment id or voucher no
+        "reason" TEXT,
+        "expectedReturnDate" TIMESTAMP(3),
+        "recordedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
       -- 12. Create Performance Indexes
+      CREATE INDEX IF NOT EXISTS "idx_advtx_worker_date" ON "AdvanceTransaction"("workerId", "date");
+      CREATE INDEX IF NOT EXISTS "idx_advtx_type" ON "AdvanceTransaction"("type");
       CREATE INDEX IF NOT EXISTS "idx_po_number" ON "PurchaseOrder"("poNumber");
       CREATE INDEX IF NOT EXISTS "idx_po_date" ON "PurchaseOrder"("date");
       CREATE INDEX IF NOT EXISTS "idx_poi_kpcl" ON "PurchaseOrderItem"("kpclCode");

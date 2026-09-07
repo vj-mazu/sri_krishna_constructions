@@ -278,8 +278,7 @@ export const ApprovalsPanel: React.FC = () => {
                 ) : (
                   <div className="text-xs space-y-1">
                     <div className="text-slate-600 flex justify-between">
-                      <span className="text-slate-400 text-[11px]">Requested By:</span>
-                      <span className="font-semibold text-slate-800">{a.requestedBy?.fullName} ({a.requestedBy?.role})</span>
+                      <span className="font-semibold text-slate-800">{a.requestedBy?.fullName}</span>
                     </div>
                     {a.reason && (
                       <div className="text-slate-600 bg-slate-50 p-2 rounded border border-slate-100 text-[11px]">
@@ -435,7 +434,6 @@ export const ApprovalsPanel: React.FC = () => {
                     </td>
                     <td className="px-2 py-2 whitespace-nowrap">
                       <div className="font-semibold text-slate-800">{a.requestedBy?.fullName}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">({a.requestedBy?.role})</div>
                     </td>
                     <td className="px-2 py-2 text-slate-500 font-mono whitespace-nowrap">
                       {new Date(a.createdAt).toLocaleString('en-GB')}
@@ -475,7 +473,7 @@ export const ApprovalsPanel: React.FC = () => {
 
       {/* 🔍 FULL DETAIL INSPECT MODAL FOR OWNER */}
       {inspectModal && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">
@@ -487,7 +485,7 @@ export const ApprovalsPanel: React.FC = () => {
                     {inspectModal.type === 'SALE_ENTRY' ? 'Sale Invoice Approval Details' : 'Attendance Edit Request'}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Requested by <strong className="text-slate-800">{inspectModal.requestedBy?.fullName} ({inspectModal.requestedBy?.role})</strong> on {new Date(inspectModal.createdAt).toLocaleString('en-GB')}
+                    Requested by <strong className="text-slate-800">{inspectModal.requestedBy?.fullName}</strong> on {new Date(inspectModal.createdAt).toLocaleString('en-GB')}
                   </p>
                 </div>
               </div>

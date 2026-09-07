@@ -2162,6 +2162,30 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
           [rejectionReason || 'Rejected by Owner', req.user.id, saleId]
         );
       }
+    } else if (approval.type === 'WORK_ORDER_SALE') {
+      // Work order sales approved by OWNER
+      if (req.user.role !== 'OWNER') {
+        return res.status(403).json({ error: 'Work order sale approvals must be reviewed and approved by the OWNER only.' });
+      }
+
+      const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+      const workOrderId = payload.workOrderId;
+
+      if (status === 'APPROVED') {
+        await pool.query(
+          `UPDATE "WorkOrder" 
+           SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() 
+           WHERE id = $2`,
+          [req.user.id, workOrderId]
+        );
+      } else if (status === 'REJECTED') {
+        await pool.query(
+          `UPDATE "WorkOrder" 
+           SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() 
+           WHERE id = $3`,
+          [rejectionReason || 'Rejected by Owner', req.user.id, workOrderId]
+        );
+      }
     } else if (status === 'APPROVED' && approval.type === 'EDIT_ATTENDANCE') {
       const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
       const { date, attendanceData } = payload;
@@ -2294,19 +2318,22 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
     const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
 
+    const isAutoApproved = req.user.role === 'OWNER';
+    const initialStatus = isAutoApproved ? 'APPROVED' : 'PENDING';
+
     const { rows } = await pool.query(
       `INSERT INTO "WorkOrder" (
         "id", "workOrderNumber", "workOrderDate", "invoiceNumber", "invoiceDate",
         "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
         "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "addedById", "createdAt", "updatedAt"
+        "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
       ) VALUES (
         gen_random_uuid()::text, $1, $2, $3, $4,
         $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22,
-        $23, $24, $25, $26, 'APPROVED', $27, NOW(), NOW()
+        $23, $24, $25, $26, $27, $28, $29, $30, NOW(), NOW()
       ) RETURNING *`,
       [
         d.workOrderNumber.trim().toUpperCase(),
@@ -2335,11 +2362,43 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
+        initialStatus,
+        isAutoApproved ? req.user.id : null,
+        isAutoApproved ? new Date() : null,
         req.user.id
       ]
     );
 
-    res.status(201).json({ message: 'Work Order direct sale recorded successfully!', workOrder: rows[0] });
+    const createdWO = rows[0];
+
+    // If added by Manager / Supervisor, create an ApprovalRequest for Owner review
+    if (!isAutoApproved) {
+      await pool.query(
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'WORK_ORDER_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify({
+            workOrderId: createdWO.id,
+            workOrderNumber: createdWO.workOrderNumber,
+            invoiceNumber: createdWO.invoiceNumber,
+            partyName: createdWO.partyName,
+            itemName: createdWO.itemName,
+            qty: createdWO.qty,
+            rate: createdWO.rate,
+            totalAmount: createdWO.totalAmount
+          }),
+          `Work Order Direct Sale created by ${req.user.fullName || req.user.username} (${createdWO.invoiceNumber} / ₹${totalAmount})`
+        ]
+      );
+    }
+
+    res.status(201).json({ 
+      message: isAutoApproved 
+        ? 'Work Order direct sale recorded and approved!' 
+        : 'Work Order direct sale submitted for Owner approval.',
+      workOrder: createdWO 
+    });
   } catch (err) {
     console.error('Error creating work order:', err);
     res.status(500).json({ error: 'Failed to create work order entry' });
@@ -2492,6 +2551,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
         FROM "Sale" s
         JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
         LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+        WHERE s."status" = 'APPROVED'
 
         UNION ALL
 
@@ -2530,7 +2590,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           '29DWKPP3582H1ZV' as "companyGstNumber"
         FROM "IndividualStockTransaction" tx
         JOIN "IndividualStock" ind ON tx."stockId" = ind.id
-        WHERE tx.type = 'OUTWARD'
+        WHERE tx.type = 'OUTWARD' AND tx."status" = 'APPROVED'
 
         UNION ALL
 
@@ -2568,6 +2628,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           wo."companyName" as "companyName",
           wo."companyGstNumber" as "companyGstNumber"
         FROM "WorkOrder" wo
+        WHERE wo."status" = 'APPROVED'
       )
       SELECT 
         ROW_NUMBER() OVER (ORDER BY "date" ASC, "createdAt" ASC)::int as "slNo",
@@ -2913,7 +2974,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Worker registration is restricted to Owners or Managers only!' });
     }
 
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, otAllowance, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
     if (!workerId || !fullName || !mobileNumber || !dailyWage || !divisionId) {
       return res.status(400).json({ error: 'Worker ID, Full Name, Mobile Number, Daily Wage, and Division are mandatory!' });
     }
@@ -2942,12 +3003,16 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
     const numAllowance = dailyAllowance !== undefined && dailyAllowance !== '' ? parseFloat(dailyAllowance) : 0;
     const numAdvTaken = advanceTaken !== undefined && advanceTaken !== '' ? parseFloat(advanceTaken) : (advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : 0);
     const numAdvBal = advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : numAdvTaken;
-    const numOtAllowance = otAllowance !== undefined && otAllowance !== '' ? parseFloat(otAllowance) : 0;
+    const numOtAllowance = 0; // Removed otAllowance entirely to prevent confusing duplicate calculations
     const numOtRate = otHourlyRate ? parseFloat(otHourlyRate) : numDailyWage / 8;
 
+    const advGivenDate = advanceTakenDate ? new Date(advanceTakenDate) : (numAdvTaken > 0 ? new Date() : null);
+    const advExpReturnDate = advanceReturnDate ? new Date(advanceReturnDate) : null;
+    const advProofReason = advanceReason ? advanceReason.trim() : null;
+
     const { rows } = await pool.query(
-      `INSERT INTO "Worker" ("id", "workerId", "fullName", "fatherName", "designation", "mobileNumber", "dailyWage", "dailyAllowance", "advanceTaken", "advanceBalance", "otAllowance", "otHourlyRate", "divisionId", "pfNumber", "esiNumber", "uanNumber", "bankAccountNo", "ifscCode", "placeOfWork", "natureOfWork", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), NOW())
+      `INSERT INTO "Worker" ("id", "workerId", "fullName", "fatherName", "designation", "mobileNumber", "dailyWage", "dailyAllowance", "advanceTaken", "advanceBalance", "advanceTakenDate", "advanceReason", "advanceReturnDate", "otAllowance", "otHourlyRate", "divisionId", "pfNumber", "esiNumber", "uanNumber", "bankAccountNo", "ifscCode", "placeOfWork", "natureOfWork", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
        RETURNING *`,
       [
         workerId.trim(),
@@ -2959,6 +3024,9 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
         numAllowance,
         numAdvTaken,
         numAdvBal,
+        advGivenDate,
+        advProofReason,
+        advExpReturnDate,
         numOtAllowance,
         numOtRate,
         divisionId,
@@ -2972,8 +3040,27 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       ]
     );
 
+    const createdWorker = rows[0];
+
+    // Auto-create initial AdvanceTransaction entry if advance is recorded
+    if (numAdvTaken > 0) {
+      await pool.query(
+        `INSERT INTO "AdvanceTransaction" ("id", "workerId", "type", "date", "amount", "balanceAfter", "source", "reason", "expectedReturnDate", "recordedById", "createdAt")
+         VALUES (gen_random_uuid()::text, $1, 'DISBURSEMENT', $2, $3, $4, 'MANUAL_ADVANCE', $5, $6, $7, NOW())`,
+        [
+          createdWorker.id,
+          advGivenDate || new Date(),
+          numAdvTaken,
+          numAdvBal,
+          advProofReason || 'Opening Advance at Registration',
+          advExpReturnDate,
+          req.user.id
+        ]
+      );
+    }
+
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [divisionId]);
-    const worker = { ...rows[0], division: divRows[0] || null };
+    const worker = { ...createdWorker, division: divRows[0] || null };
 
     res.status(201).json({ worker });
   } catch (err) {
@@ -2985,7 +3072,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
 app.put('/api/workers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, otAllowance, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
 
     const { rows: existing } = await pool.query(`SELECT * FROM "Worker" WHERE "id" = $1`, [id]);
     if (existing.length === 0) return res.status(404).json({ error: 'Worker not found' });
@@ -3007,7 +3094,7 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
       return res.json({ worker });
     }
 
-    if (dailyWage !== undefined || dailyAllowance !== undefined || advanceTaken !== undefined || advanceBalance !== undefined || otAllowance !== undefined || otHourlyRate !== undefined) {
+    if (dailyWage !== undefined || dailyAllowance !== undefined || advanceTaken !== undefined || advanceBalance !== undefined || otHourlyRate !== undefined) {
       if (req.user.role !== 'OWNER' && req.user.role !== 'MANAGER') {
         return res.status(403).json({ error: 'Wage rates and advance modifications are restricted to Owners or Managers only!' });
       }
@@ -3031,7 +3118,10 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const newAllowance = dailyAllowance !== undefined ? (parseFloat(dailyAllowance) || 0) : (existing[0].dailyAllowance || 0);
     const newAdvanceTaken = advanceTaken !== undefined ? (parseFloat(advanceTaken) || 0) : (existing[0].advanceTaken || 0);
     const newAdvance = advanceBalance !== undefined ? (parseFloat(advanceBalance) || 0) : (existing[0].advanceBalance || 0);
-    const newOtAllowance = otAllowance !== undefined ? (parseFloat(otAllowance) || 0) : (existing[0].otAllowance || 0);
+    const newAdvDate = advanceTakenDate !== undefined ? (advanceTakenDate ? new Date(advanceTakenDate) : null) : existing[0].advanceTakenDate;
+    const newAdvReason = advanceReason !== undefined ? (advanceReason ? advanceReason.trim() : null) : existing[0].advanceReason;
+    const newAdvReturnDate = advanceReturnDate !== undefined ? (advanceReturnDate ? new Date(advanceReturnDate) : null) : existing[0].advanceReturnDate;
+    const newOtAllowance = 0; // Removed otAllowance entirely
     const newOtRate = otHourlyRate !== undefined ? parseFloat(otHourlyRate) : existing[0].otHourlyRate;
     const newPfNumber = pfNumber !== undefined ? (pfNumber ? pfNumber.trim() : null) : existing[0].pfNumber;
     const newEsiNumber = esiNumber !== undefined ? (esiNumber ? esiNumber.trim() : null) : existing[0].esiNumber;
@@ -3044,12 +3134,14 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE "Worker"
        SET "fullName" = $1, "fatherName" = $2, "designation" = $3, "mobileNumber" = $4,
-           "dailyWage" = $5, "dailyAllowance" = $6, "advanceTaken" = $7, "advanceBalance" = $8, "otAllowance" = $9, "otHourlyRate" = $10, "divisionId" = $11,
-           "pfNumber" = $12, "esiNumber" = $13, "uanNumber" = $14, "bankAccountNo" = $15, "ifscCode" = $16, "placeOfWork" = $17, "natureOfWork" = $18,
+           "dailyWage" = $5, "dailyAllowance" = $6, "advanceTaken" = $7, "advanceBalance" = $8,
+           "advanceTakenDate" = $9, "advanceReason" = $10, "advanceReturnDate" = $11,
+           "otAllowance" = $12, "otHourlyRate" = $13, "divisionId" = $14,
+           "pfNumber" = $15, "esiNumber" = $16, "uanNumber" = $17, "bankAccountNo" = $18, "ifscCode" = $19, "placeOfWork" = $20, "natureOfWork" = $21,
            "updatedAt" = NOW()
-       WHERE "id" = $19
+       WHERE "id" = $22
        RETURNING *`,
-      [newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newOtAllowance, newOtRate, newDivisionId, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
+      [newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
     );
 
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [newDivisionId]);
@@ -3085,7 +3177,8 @@ app.delete('/api/workers/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    // Cleanly cascade delete any attendance or payments associated with this worker
+    // Cleanly cascade delete any transactions, attendance or payments associated with this worker
+    await pool.query(`DELETE FROM "AdvanceTransaction" WHERE "workerId" = $1`, [id]);
     await pool.query(`DELETE FROM "Attendance" WHERE "workerId" = $1`, [id]);
     await pool.query(`DELETE FROM "MonthlyPayment" WHERE "workerId" = $1`, [id]);
     await pool.query(`DELETE FROM "Worker" WHERE "id" = $1`, [id]);
@@ -3097,7 +3190,320 @@ app.delete('/api/workers/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// --- DAILY WORKER ATTENDANCE API (DIRECT SQL) ---
+// --- ADVANCE LEDGER MODULE (DOUBLE-ENTRY DISBURSEMENT & DEDUCTION TRACKING) ---
+// GET /api/advance-ledger - Master summary of all workers' advance status
+app.get('/api/advance-ledger', authenticateToken, async (req, res) => {
+  try {
+    const { search, divisionId } = req.query;
+
+    let query = `
+      SELECT 
+        w.id,
+        w."workerId",
+        w."fullName",
+        w."fatherName",
+        w."designation",
+        w."mobileNumber",
+        w."dailyWage",
+        COALESCE(w."advanceTaken", 0) as "advanceTaken",
+        COALESCE(w."advanceBalance", 0) as "advanceBalance",
+        w."advanceTakenDate",
+        w."advanceReason",
+        w."advanceReturnDate",
+        d.id as "divisionId",
+        d.name as "divisionName",
+        COALESCE((
+          SELECT SUM(amount) 
+          FROM "AdvanceTransaction" tx 
+          WHERE tx."workerId" = w.id AND tx.type = 'DISBURSEMENT'
+        ), 0) as "totalDisbursed",
+        COALESCE((
+          SELECT SUM(amount) 
+          FROM "AdvanceTransaction" tx 
+          WHERE tx."workerId" = w.id AND tx.type = 'DEDUCTION'
+        ), 0) as "totalDeducted",
+        (
+          SELECT COUNT(*) 
+          FROM "AdvanceTransaction" tx 
+          WHERE tx."workerId" = w.id
+        ) as "transactionCount"
+      FROM "Worker" w
+      LEFT JOIN "Division" d ON w."divisionId" = d.id
+    `;
+
+    const whereClauses = [];
+    const params = [];
+
+    if (divisionId) {
+      params.push(divisionId);
+      whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      whereClauses.push(`(
+        LOWER(w."fullName") LIKE $${params.length} OR
+        LOWER(w."workerId") LIKE $${params.length} OR
+        LOWER(COALESCE(w."designation", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(w."mobileNumber", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(d.name, '')) LIKE $${params.length}
+      )`);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    query += ` ORDER BY w."advanceBalance" DESC, w."fullName" ASC`;
+
+    const { rows } = await pool.query(query, params);
+
+    // Compute overall totals for summary cards
+    let grandTotalDisbursed = 0;
+    let grandTotalDeducted = 0;
+    let grandTotalBalance = 0;
+    let workersWithAdvance = 0;
+
+    const formattedRows = rows.map(r => {
+      const advTaken = parseFloat(r.advanceTaken) || 0;
+      const advBal = parseFloat(r.advanceBalance) || 0;
+      let totDisb = parseFloat(r.totalDisbursed) || 0;
+      let totDed = parseFloat(r.totalDeducted) || 0;
+
+      // If no explicit transactions yet but master has advanceTaken recorded
+      if (totDisb === 0 && advTaken > 0) {
+        totDisb = advTaken;
+        totDed = Math.max(0, advTaken - advBal);
+      }
+
+      grandTotalDisbursed += totDisb;
+      grandTotalDeducted += totDed;
+      grandTotalBalance += advBal;
+      if (advBal > 0) workersWithAdvance++;
+
+      return {
+        ...r,
+        advanceTaken: advTaken,
+        advanceBalance: advBal,
+        totalDisbursed: totDisb,
+        totalDeducted: totDed,
+        status: advBal > 0 ? 'ACTIVE_BALANCE' : (totDisb > 0 ? 'SETTLED' : 'NO_ADVANCE')
+      };
+    });
+
+    res.json({
+      workers: formattedRows,
+      summary: {
+        totalWorkers: formattedRows.length,
+        workersWithAdvance,
+        grandTotalDisbursed,
+        grandTotalDeducted,
+        grandTotalBalance
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching advance ledger:', err);
+    res.status(500).json({ error: 'Failed to fetch advance ledger summary' });
+  }
+});
+
+// GET /api/advance-ledger/:workerId - Full drill-down ledger for individual worker
+app.get('/api/advance-ledger/:workerId', authenticateToken, async (req, res) => {
+  try {
+    const { workerId } = req.params;
+
+    const { rows: workerRows } = await pool.query(
+      `SELECT w.*, d.name as "divisionName"
+       FROM "Worker" w
+       LEFT JOIN "Division" d ON w."divisionId" = d.id
+       WHERE w.id = $1`,
+      [workerId]
+    );
+
+    if (workerRows.length === 0) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    const worker = workerRows[0];
+
+    const { rows: txRows } = await pool.query(
+      `SELECT 
+         tx.*,
+         u."fullName" as "recordedByName"
+       FROM "AdvanceTransaction" tx
+       LEFT JOIN "User" u ON tx."recordedById" = u.id
+       WHERE tx."workerId" = $1
+       ORDER BY tx."date" ASC, tx."createdAt" ASC`,
+      [workerId]
+    );
+
+    // Also fetch monthly payroll deduction history
+    const { rows: payRows } = await pool.query(
+      `SELECT 
+         p.id, p.month, p.year, p."advanceDeducted", p."finalNetAmount", p.status, p."createdAt"
+       FROM "MonthlyPayment" p
+       WHERE p."workerId" = $1 AND p."advanceDeducted" > 0
+       ORDER BY p.year ASC, p.month ASC`,
+      [workerId]
+    );
+
+    res.json({
+      worker: {
+        id: worker.id,
+        workerId: worker.workerId,
+        fullName: worker.fullName,
+        fatherName: worker.fatherName || '-',
+        designation: worker.designation || 'Worker',
+        mobileNumber: worker.mobileNumber,
+        dailyWage: parseFloat(worker.dailyWage) || 0,
+        advanceTaken: parseFloat(worker.advanceTaken) || 0,
+        advanceBalance: parseFloat(worker.advanceBalance) || 0,
+        advanceTakenDate: worker.advanceTakenDate,
+        advanceReason: worker.advanceReason,
+        advanceReturnDate: worker.advanceReturnDate,
+        divisionName: worker.divisionName || 'General'
+      },
+      transactions: txRows,
+      payrollDeductions: payRows
+    });
+  } catch (err) {
+    console.error('Error fetching worker advance ledger drilldown:', err);
+    res.status(500).json({ error: 'Failed to fetch worker advance ledger details' });
+  }
+});
+
+// POST /api/advance-ledger/disburse - Give new advance to worker
+app.post('/api/advance-ledger/disburse', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { workerId, amount, date, reason, expectedReturnDate } = req.body;
+    const numAmount = parseFloat(amount);
+
+    if (!workerId || isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Worker ID and valid advance amount (> 0) are required' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: workerRows } = await client.query(
+      `SELECT "id", "fullName", "advanceTaken", "advanceBalance" FROM "Worker" WHERE "id" = $1 FOR UPDATE`,
+      [workerId]
+    );
+
+    if (workerRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    const worker = workerRows[0];
+    const prevTaken = parseFloat(worker.advanceTaken) || 0;
+    const prevBal = parseFloat(worker.advanceBalance) || 0;
+    const newBal = prevBal + numAmount;
+    const newTaken = prevTaken + numAmount;
+    const txDate = date ? new Date(date) : new Date();
+    const expDate = expectedReturnDate ? new Date(expectedReturnDate) : null;
+
+    const { rows: txRows } = await client.query(
+      `INSERT INTO "AdvanceTransaction" (
+         "id", "workerId", "type", "date", "amount", "balanceAfter", "source", "reason", "expectedReturnDate", "recordedById", "createdAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, 'DISBURSEMENT', $2, $3, $4, 'MANUAL_ADVANCE', $5, $6, $7, NOW()
+       )
+       RETURNING *`,
+      [workerId, txDate, numAmount, newBal, reason ? reason.trim() : 'Additional Cash Advance Given', expDate, req.user.id]
+    );
+
+    await client.query(
+      `UPDATE "Worker"
+       SET "advanceTaken" = $1, "advanceBalance" = $2, "advanceTakenDate" = $3, "advanceReason" = $4, "advanceReturnDate" = $5, "updatedAt" = NOW()
+       WHERE "id" = $6`,
+      [newTaken, newBal, txDate, reason ? reason.trim() : null, expDate, workerId]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      message: `Advance of ₹${numAmount} successfully disbursed to ${worker.fullName}`,
+      transaction: txRows[0],
+      newBalance: newBal
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error disbursing advance:', err);
+    res.status(500).json({ error: 'Failed to disburse advance' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/advance-ledger/repay - Direct cash repayment / advance recovery outside monthly payroll
+app.post('/api/advance-ledger/repay', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { workerId, amount, date, reason } = req.body;
+    const numAmount = parseFloat(amount);
+
+    if (!workerId || isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ error: 'Worker ID and valid repayment amount (> 0) are required' });
+    }
+
+    await client.query('BEGIN');
+
+    const { rows: workerRows } = await client.query(
+      `SELECT "id", "fullName", "advanceBalance" FROM "Worker" WHERE "id" = $1 FOR UPDATE`,
+      [workerId]
+    );
+
+    if (workerRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    const worker = workerRows[0];
+    const prevBal = parseFloat(worker.advanceBalance) || 0;
+
+    if (prevBal <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `${worker.fullName} has no outstanding advance balance to repay.` });
+    }
+
+    const newBal = Math.max(0, prevBal - numAmount);
+    const txDate = date ? new Date(date) : new Date();
+
+    const { rows: txRows } = await client.query(
+      `INSERT INTO "AdvanceTransaction" (
+         "id", "workerId", "type", "date", "amount", "balanceAfter", "source", "reason", "recordedById", "createdAt"
+       )
+       VALUES (
+         gen_random_uuid()::text, $1, 'DEDUCTION', $2, $3, $4, 'DIRECT_REPAYMENT', $5, $6, NOW()
+       )
+       RETURNING *`,
+      [workerId, txDate, numAmount, newBal, reason ? reason.trim() : 'Direct Cash Repayment', req.user.id]
+    );
+
+    await client.query(
+      `UPDATE "Worker"
+       SET "advanceBalance" = $1, "updatedAt" = NOW()
+       WHERE "id" = $2`,
+      [newBal, workerId]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(201).json({
+      message: `Repayment of ₹${numAmount} successfully recorded for ${worker.fullName}`,
+      transaction: txRows[0],
+      newBalance: newBal
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error recording advance repayment:', err);
+    res.status(500).json({ error: 'Failed to record advance repayment' });
+  } finally {
+    client.release();
+  }
+});
 // --- DAILY WORKER ATTENDANCE API (DIRECT SQL) ---
 app.get('/api/attendance', authenticateToken, async (req, res) => {
   try {
@@ -3869,12 +4275,34 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
       );
 
       if (adv > 0 || prevAdvanceDeducted > 0) {
-        await client.query(
+        const { rows: updatedWorker } = await client.query(
           `UPDATE "Worker"
            SET "advanceBalance" = GREATEST(0, COALESCE(NULLIF("advanceBalance", 0), "advanceTaken", 0) + $1 - $2), "updatedAt" = NOW()
-           WHERE "id" = $3`,
+           WHERE "id" = $3
+           RETURNING "advanceBalance"`,
           [prevAdvanceDeducted, adv, workerId]
         );
+
+        const newBalAfter = updatedWorker.length > 0 ? parseFloat(updatedWorker[0].advanceBalance) : 0;
+
+        if (adv > 0) {
+          await client.query(
+            `INSERT INTO "AdvanceTransaction" (
+               "id", "workerId", "type", "date", "amount", "balanceAfter", "source", "referenceId", "reason", "recordedById", "createdAt"
+             )
+             VALUES (
+               gen_random_uuid()::text, $1, 'DEDUCTION', NOW(), $2, $3, 'MONTHLY_PAYROLL_DEDUCTION', $4, $5, $6, NOW()
+             )`,
+            [
+              workerId,
+              adv,
+              newBalAfter,
+              rows[0].id,
+              `Monthly Wage Payroll Deduction (${m}/${y})`,
+              req.user.id
+            ]
+          );
+        }
       }
 
       await client.query('COMMIT');

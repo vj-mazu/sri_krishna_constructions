@@ -366,9 +366,9 @@ export const StockGrid: React.FC = () => {
             onChange={(e) => setStockStatusFilter(e.target.value)}
           >
             <option value="">All Stock Levels</option>
-            <option value="IN_STOCK">In Stock (Balance &gt; 0)</option>
-            <option value="OUT_OF_STOCK">Out of Stock (Zero)</option>
-            <option value="LOW_STOCK">Low Stock (≤ 10 Units)</option>
+            <option value="IN_STOCK">In Stock</option>
+            <option value="OUT_OF_STOCK">Out of Stock</option>
+            <option value="LOW_STOCK">Low Stock</option>
             <option value="PENDING_INWARD">Pending Inward</option>
           </select>
         </div>
