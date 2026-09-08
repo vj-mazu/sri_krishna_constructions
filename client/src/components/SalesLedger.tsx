@@ -105,8 +105,8 @@ export const SalesLedger: React.FC = () => {
   const handleExportCSV = () => {
     if (filteredSales.length === 0) return;
     const headers = ['Sl.No', 'Date', 'Invoice', 'Department / Client', 'GST NO', 'Name of work', 'Item Name', 'Part No', 'Qty', 'Rate', 'Total Amount', 'Vehicle No', 'E-Way Bill No', 'Status'];
-    const rows = filteredSales.map(s => [
-      s.slNo,
+    const rows = filteredSales.map((s, idx) => [
+      idx + 1,
       formatDate(s.date),
       `"${s.invoiceNumber || '-'}"`,
       `"${(s.clientDepartment || '-').replace(/"/g, '""')}"`,
@@ -323,14 +323,14 @@ export const SalesLedger: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredSales.map((sale) => (
+                filteredSales.map((sale, idx) => (
                   <tr 
                     key={`${sale.sourceType}_${sale.id}`} 
                     onClick={() => setInspectModalItem(sale)}
                     className="hover:bg-blue-50/50 cursor-pointer border-b border-slate-200 transition-colors"
                   >
                     <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
-                      {sale.slNo}
+                      {idx + 1}
                     </td>
                     <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
                       {formatDate(sale.date)}
