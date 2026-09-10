@@ -20,7 +20,9 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
-  ArrowUpDown
+  ArrowUpDown,
+  Landmark,
+  CreditCard
 } from 'lucide-react';
 import { showToast } from '../toast';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
@@ -54,7 +56,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [customAdvance, setCustomAdvance] = useState<Record<string, number | string>>({});
   const [customExtra, setCustomExtra] = useState<Record<string, number | string>>({});
 
-  // Register book modal drilldown state
+  // Register book drilldown state
   const [drilldownWorkerId, setDrilldownWorkerId] = useState<string | null>(null);
   const [drilldownData, setDrilldownData] = useState<any | null>(null);
   const [drilldownLoading, setDrilldownLoading] = useState(false);
@@ -63,8 +65,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [slipModalWorker, setSlipModalWorker] = useState<any | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(SKC_LOGO_BASE64 || null);
 
-  // Tab mode: 'register' (Main Register) | 'esipf' (ESI PF Salary Statement)
-  const [activeWageTab, setActiveWageTab] = useState<'register' | 'esipf'>('register');
+  // Tab mode: 'register' | 'esipf' | 'canara' | 'non_canara'
+  const [activeWageTab, setActiveWageTab] = useState<'register' | 'esipf' | 'canara' | 'non_canara'>('register');
+
+  // Bank Advice Details State (Canara & Non-Canara)
+  const [canaraChequeNo, setCanaraChequeNo] = useState('355341');
+  const [nonCanaraChequeNo, setNonCanaraChequeNo] = useState('355342');
+  const [companyAccountNo, setCompanyAccountNo] = useState('18133070005349');
+  const [bankBranchDate, setBankBranchDate] = useState(() => {
+    const today = new Date();
+    return `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
+  });
 
   // Table Responsive View Mode: 'fit' (fits desktop/tablet without scroll) | 'scroll' (wide ledger)
   const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('scroll');
@@ -1093,6 +1104,193 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     showToast('ESI PF Salary Statement exported to PDF (Portrait) successfully!', 'success');
   };
 
+  // --- BANK ADVICE HELPERS & EXPORT (CANARA & NON-CANARA) ---
+  const isCanaraWorker = (w: any) => {
+    const ifsc = (w.ifscCode || '').toUpperCase().trim();
+    const bank = (w.pfNumber || '').toUpperCase().trim(); // pfNumber stores bank name in our system
+    return ifsc.startsWith('CNRB') || bank.includes('CANARA');
+  };
+
+  const getBankAdviceList = (type: 'canara' | 'non_canara') => {
+    return wagesReport
+      .filter((w) => {
+        const isCanara = isCanaraWorker(w);
+        const matchType = type === 'canara' ? isCanara : !isCanara;
+        if (!matchType) return false;
+
+        const term = workerSearch.toLowerCase().trim();
+        if (!term) return true;
+        return (
+          String(w.empId || '').toLowerCase().includes(term) ||
+          String(w.fullName || '').toLowerCase().includes(term) ||
+          String(w.bankAccountNo || '').toLowerCase().includes(term) ||
+          String(w.ifscCode || '').toLowerCase().includes(term)
+        );
+      })
+      .map((w) => {
+        const calc = getRowCalculations(w);
+        return {
+          ...w,
+          amount: calc.finalNetAmount,
+        };
+      });
+  };
+
+  const handleExportBankAdviceExcel = (type: 'canara' | 'non_canara') => {
+    const list = getBankAdviceList(type);
+    const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const chequeNo = type === 'canara' ? canaraChequeNo : nonCanaraChequeNo;
+    const totalAmount = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
+
+    const rows = [
+      ['SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170'],
+      ['To'],
+      ['The Branch Manager,'],
+      ['Canara Bank,'],
+      ['Deosugur -584 170'],
+      ['SUB:SALARY DISTRUBUTION'],
+      [`ACCOUNT No. ${companyAccountNo}`],
+      [`We are enclosed herewith a cheque for Rs${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear} ,Please credit the amount to following accounts.`],
+      [],
+      [`Cheque No :${chequeNo}`, '', '', `Date:- ${bankBranchDate}`],
+      ['SI NO', 'NAME', 'ACOUNT NUMBER', 'IFSC CODE', 'AMOUNT'],
+      ...list.map((w, idx) => [
+        idx + 1,
+        (w.fullName || '').toUpperCase(),
+        w.bankAccountNo || '-',
+        (w.ifscCode || '').toUpperCase(),
+        Number(w.amount) || 0
+      ]),
+      ['', 'Total Amount', '', '', totalAmount],
+      [],
+      ['sunilgouda1280@gmail.com']
+    ];
+
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, type === 'canara' ? 'CANARA BANK' : 'NON CANARA');
+    XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_SALARY_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
+    showToast(`${bankTitle} Salary Advice exported to Excel successfully!`, 'success');
+  };
+
+  const handleExportBankAdvicePdf = (type: 'canara' | 'non_canara') => {
+    const list = getBankAdviceList(type);
+    const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const chequeNo = type === 'canara' ? canaraChequeNo : nonCanaraChequeNo;
+    const totalAmount = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    // Header Logo if available
+    if (logoBase64 || SKC_LOGO_BASE64) {
+      try {
+        const logoData = logoBase64 || SKC_LOGO_BASE64;
+        doc.addImage(logoData, 'PNG', 14, 8, 14, 14);
+      } catch (err) {
+        console.error('Bank advice logo error:', err);
+      }
+    }
+
+    // Company Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170', 105, 14, { align: 'center' });
+
+    // Addressing Branch
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('To', 14, 25);
+    doc.text('The Branch Manager,', 14, 30);
+    doc.text('Canara Bank,', 14, 35);
+    doc.text('Deosugur -584 170', 14, 40);
+
+    // Subject
+    doc.text('SUB:SALARY DISTRUBUTION', 14, 47);
+
+    // Account Number Center
+    doc.setFontSize(10.5);
+    doc.text(`ACCOUNT No. ${companyAccountNo}`, 105, 53, { align: 'center' });
+
+    // Covering Letter Paragraph
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9.5);
+    const coveringText = `We are enclosed herewith a cheque for Rs${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear} ,Please credit the amount to following accounts.`;
+    doc.text(coveringText, 14, 59, { maxWidth: 182 });
+
+    // Cheque No and Date
+    doc.text(`Cheque No :${chequeNo}`, 14, 71);
+    doc.text(`Date:- ${bankBranchDate}`, 196, 71, { align: 'right' });
+
+    // Table Data
+    const tableRows = list.map((w, idx) => [
+      idx + 1,
+      (w.fullName || '').toUpperCase(),
+      w.bankAccountNo || '-',
+      (w.ifscCode || '').toUpperCase(),
+      (Number(w.amount) || 0).toLocaleString('en-IN')
+    ]);
+
+    autoTable(doc, {
+      startY: 74,
+      head: [['SI NO', 'NAME', 'ACOUNT NUMBER', 'IFSC CODE', 'AMOUNT']],
+      body: tableRows,
+      foot: [['', 'Total Amount', '', '', totalAmount.toLocaleString('en-IN')]],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        fontSize: 9,
+        halign: 'center',
+        lineColor: [0, 0, 0],
+        lineWidth: 0.3
+      },
+      footStyles: {
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        fontSize: 9.5,
+        halign: 'right',
+        lineColor: [0, 0, 0],
+        lineWidth: 0.3
+      },
+      bodyStyles: {
+        textColor: [0, 0, 0],
+        fontSize: 8.5,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.2
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 15 },
+        1: { halign: 'left', cellWidth: 65, fontStyle: 'bold' },
+        2: { halign: 'center', cellWidth: 45 },
+        3: { halign: 'center', cellWidth: 32 },
+        4: { halign: 'right', cellWidth: 25, fontStyle: 'bold' }
+      },
+      margin: { left: 14, right: 14, bottom: 25 }
+    });
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 200;
+
+    // Email footer and Authorized Signatory
+    if (finalY < 265) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('sunilgouda1280@gmail.com', 14, finalY + 12);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('For SRI KRISHNA CONSTRUCTIONS', 196, finalY + 12, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('Authorized Signatory', 196, finalY + 24, { align: 'right' });
+    }
+
+    doc.save(`SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_SALARY_ADVICE_${monthName.toUpperCase()}_${selectedYear}.pdf`);
+    showToast(`${bankTitle} Salary Advice exported to PDF successfully!`, 'success');
+  };
+
   useEffect(() => {
     setCurrentPage(1);
   }, [workerSearch, selectedDivisionId, selectedMonth, selectedYear, pageSize, sortOrder]);
@@ -1175,21 +1373,21 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         </div>
       </div>
 
-      {/* SUB-TABS: WORKERS PAYMENT REGISTER vs ESI PF SALARY STATEMENT */}
-      <div className="flex border-b border-slate-200 bg-slate-100/70 p-1 rounded-xl gap-1">
+      {/* SUB-TABS: WORKERS PAYMENT REGISTER vs ESI PF vs CANARA BANK vs NON-CANARA BANK */}
+      <div className="flex flex-wrap border-b border-slate-200 bg-slate-100/70 p-1 rounded-xl gap-1">
         <button
           onClick={() => setActiveWageTab('register')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[130px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             activeWageTab === 'register'
               ? 'bg-[#1e3a8a] text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
           }`}
         >
-          <IndianRupee className="w-4 h-4" /> Workers Payment Register (22-Col)
+          <IndianRupee className="w-4 h-4" /> Workers Register (22-Col)
         </button>
         <button
           onClick={() => setActiveWageTab('esipf')}
-          className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 min-w-[120px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
             activeWageTab === 'esipf'
               ? 'bg-[#1e3a8a] text-white shadow-sm'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
@@ -1197,9 +1395,29 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         >
           <Receipt className="w-4 h-4 text-amber-300" /> ESI PF Sheet
         </button>
+        <button
+          onClick={() => setActiveWageTab('canara')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeWageTab === 'canara'
+              ? 'bg-blue-700 text-white shadow-sm ring-2 ring-blue-400/40'
+              : 'text-blue-800 hover:text-blue-950 hover:bg-blue-50/80 font-bold'
+          }`}
+        >
+          <Landmark className="w-4 h-4 text-amber-300" /> 🏛️ Canara Bank ({getBankAdviceList('canara').length})
+        </button>
+        <button
+          onClick={() => setActiveWageTab('non_canara')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeWageTab === 'non_canara'
+              ? 'bg-indigo-700 text-white shadow-sm ring-2 ring-indigo-400/40'
+              : 'text-indigo-800 hover:text-indigo-950 hover:bg-indigo-50/80 font-bold'
+          }`}
+        >
+          <CreditCard className="w-4 h-4 text-emerald-300" /> 🏦 Non-Canara Banks ({getBankAdviceList('non_canara').length})
+        </button>
       </div>
 
-      {/* FILTERS BAR */}
+      {/* FILTERS & TOOLBAR */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 bg-slate-50 p-2 sm:p-4 rounded-lg sm:rounded-xl border border-slate-200 text-xs">
         <div>
           <label className="block font-semibold text-slate-700 mb-0.5 text-[10px] sm:text-xs">Month *</label>
@@ -1244,7 +1462,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             type="text"
             value={workerSearch}
             onChange={(e) => setWorkerSearch(e.target.value)}
-            placeholder="Name / ID..."
+            placeholder="Name / Acc / IFSC..."
             className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold text-xs"
           />
         </div>
@@ -1299,7 +1517,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 </button>
               )}
             </>
-          ) : (
+          ) : activeWageTab === 'esipf' ? (
             <>
               <button
                 onClick={handleExportEsiPfExcel}
@@ -1314,6 +1532,23 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 title="Download ESI PF Salary Statement PDF (Portrait A4)"
               >
                 <FileText className="w-3.5 h-3.5" /> Download PDF
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => handleExportBankAdviceExcel(activeWageTab === 'canara' ? 'canara' : 'non_canara')}
+                className="flex-1 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                title="Download Bank Salary Advice Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Excel (.xlsx)
+              </button>
+              <button
+                onClick={() => handleExportBankAdvicePdf(activeWageTab === 'canara' ? 'canara' : 'non_canara')}
+                className="flex-1 py-1.5 sm:py-2 bg-blue-700 hover:bg-blue-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                title="Download Bank Salary Advice PDF Letter (Portrait A4)"
+              >
+                <FileText className="w-3.5 h-3.5" /> Download PDF Letter
               </button>
             </>
           )}
@@ -1451,6 +1686,166 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             </tbody>
           </table>
         </div>
+      ) : activeWageTab === 'canara' || activeWageTab === 'non_canara' ? (
+        /* --- DEDICATED BANK SALARY ADVICE LETTER & SCHEDULE (CANARA / NON-CANARA) --- */
+        (() => {
+          const bankType = activeWageTab;
+          const adviceList = getBankAdviceList(bankType);
+          const currentChequeNo = bankType === 'canara' ? canaraChequeNo : nonCanaraChequeNo;
+          const setChequeNo = bankType === 'canara' ? setCanaraChequeNo : setNonCanaraChequeNo;
+          const totalBankAmount = adviceList.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+          const bankTitle = bankType === 'canara' ? 'CANARA BANK (INTERNAL TRANSFER)' : 'NON-CANARA (OTHER BANKS NEFT / RTGS)';
+          const isCanara = bankType === 'canara';
+
+          return (
+            <div className="space-y-4">
+              {/* TOP CUSTOMIZATION CARD FOR CHEQUE DETAILS */}
+              <div className="bg-gradient-to-r from-slate-900 to-blue-950 text-white p-4 rounded-xl shadow-md border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-xl ${isCanara ? 'bg-amber-400 text-blue-950' : 'bg-emerald-400 text-slate-950'}`}>
+                    {isCanara ? <Landmark className="w-6 h-6" /> : <CreditCard className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black tracking-wide text-white flex items-center gap-2">
+                      {bankTitle}
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
+                        {adviceList.length} Workers
+                      </span>
+                    </h3>
+                    <p className="text-xs text-blue-200">
+                      Total Salary Cheque Amount: <strong className="text-amber-300 font-mono text-sm">₹{totalBankAmount.toLocaleString('en-IN')}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                {/* EDITABLE CHEQUE NO, DATE & COMPANY ACC */}
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <div>
+                    <label className="block text-[10px] text-blue-200 font-semibold mb-0.5">Cheque Number *</label>
+                    <input
+                      type="text"
+                      value={currentChequeNo}
+                      onChange={(e) => setChequeNo(e.target.value)}
+                      placeholder="e.g. 355341"
+                      className="px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white font-mono font-bold text-xs focus:bg-white focus:text-slate-900 outline-none w-28"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-blue-200 font-semibold mb-0.5">Cheque Date *</label>
+                    <input
+                      type="text"
+                      value={bankBranchDate}
+                      onChange={(e) => setBankBranchDate(e.target.value)}
+                      placeholder="DD/MM/YYYY"
+                      className="px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white font-mono font-bold text-xs focus:bg-white focus:text-slate-900 outline-none w-28"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-blue-200 font-semibold mb-0.5">Company A/C No *</label>
+                    <input
+                      type="text"
+                      value={companyAccountNo}
+                      onChange={(e) => setCompanyAccountNo(e.target.value)}
+                      className="px-2.5 py-1.5 rounded-lg bg-white/10 border border-white/20 text-white font-mono font-bold text-xs focus:bg-white focus:text-slate-900 outline-none w-36"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* OFFICIAL PRINT-READY BANK COVERING LETTER & TABLE PREVIEW */}
+              <div className="bg-white border-2 border-slate-300 rounded-xl p-4 sm:p-8 shadow-sm space-y-5 font-sans">
+                {/* Header */}
+                <div className="text-center pb-2 border-b border-slate-200">
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-wider">
+                    SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170
+                  </h2>
+                </div>
+
+                {/* Addressing */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-bold text-slate-800">
+                  <div className="space-y-0.5">
+                    <p>To</p>
+                    <p>The Branch Manager,</p>
+                    <p>Canara Bank,</p>
+                    <p>Deosugur -584 170</p>
+                  </div>
+                  <div className="sm:text-right space-y-1">
+                    <p className="text-slate-900 font-mono">Date:- <span className="underline">{bankBranchDate}</span></p>
+                    <p className="text-slate-900 font-mono">Cheque No : <span className="underline font-black text-blue-900">{currentChequeNo}</span></p>
+                  </div>
+                </div>
+
+                {/* Subject & Company Account */}
+                <div className="text-xs space-y-1">
+                  <p className="font-black text-slate-900">SUB:SALARY DISTRUBUTION</p>
+                  <p className="text-center font-black text-sm text-slate-900 py-1 bg-slate-100 rounded border border-slate-200">
+                    ACCOUNT No. <span className="font-mono text-blue-900">{companyAccountNo}</span>
+                  </p>
+                </div>
+
+                {/* Covering Letter Paragraph */}
+                <p className="text-xs font-bold text-slate-800 leading-relaxed">
+                  We are enclosed herewith a cheque for <span className="underline font-black text-slate-950">Rs{totalBankAmount.toLocaleString('en-IN')}/-</span> towards workers payment for the month of <span className="underline font-black text-blue-900">{monthName.toUpperCase()} {selectedYear}</span> ,Please credit the amount to following accounts.
+                </p>
+
+                {/* Table Schedule */}
+                <div className="overflow-x-auto border border-black rounded shadow-xs">
+                  <table className="w-full text-left border-collapse text-xs font-sans">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-950 font-black border-b border-black text-center text-[11px]">
+                        <th className="border border-black px-2 py-2 w-14">SI NO</th>
+                        <th className="border border-black px-3 py-2 text-left">NAME</th>
+                        <th className="border border-black px-3 py-2">ACOUNT NUMBER</th>
+                        <th className="border border-black px-3 py-2">IFSC CODE</th>
+                        <th className="border border-black px-3 py-2 text-right">AMOUNT</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black">
+                      {adviceList.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-6 text-center text-slate-400 font-semibold">
+                            No {isCanara ? 'Canara Bank' : 'Other Bank'} workers found for this month or search filter.
+                          </td>
+                        </tr>
+                      ) : (
+                        adviceList.map((w, idx) => (
+                          <tr key={w.workerId || idx} className="hover:bg-blue-50/50 text-slate-900 transition-colors">
+                            <td className="border border-black px-2 py-1.5 text-center font-bold">{idx + 1}</td>
+                            <td className="border border-black px-3 py-1.5 font-bold uppercase">{w.fullName}</td>
+                            <td className="border border-black px-3 py-1.5 font-mono text-center">{w.bankAccountNo || '-'}</td>
+                            <td className="border border-black px-3 py-1.5 font-mono text-center font-semibold">{w.ifscCode || '-'}</td>
+                            <td className="border border-black px-3 py-1.5 font-mono text-right font-bold">
+                              {(Number(w.amount) || 0).toLocaleString('en-IN')}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-50 font-black text-xs border-t-2 border-black">
+                        <td colSpan={4} className="border border-black px-3 py-2 text-right">Total Amount</td>
+                        <td className="border border-black px-3 py-2 text-right font-mono text-sm bg-amber-50">
+                          {totalBankAmount.toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* Footer and Authorized Signatory */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between pt-4 gap-4 text-xs">
+                  <div className="text-slate-600 font-mono">
+                    sunilgouda1280@gmail.com
+                  </div>
+                  <div className="text-right space-y-8 font-bold text-slate-900">
+                    <p>For SRI KRISHNA CONSTRUCTIONS</p>
+                    <p className="text-[11px] text-slate-500 font-normal">Authorized Signatory</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()
       ) : (
         /* --- 22-COLUMN MAIN WAGES REGISTER & MOBILE APP VIEW --- */
         <div className="space-y-3">
