@@ -303,6 +303,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [purchasesNextCursor, setPurchasesNextCursor] = useState<string | null>(null);
   const [purchasesHistory, setPurchasesHistory] = useState<string[]>([]);
   const [purchasesTotalCount, setPurchasesTotalCount] = useState(0);
+  const [purchasesSearch, setPurchasesSearch] = useState('');
   const [purchasesPartNumber, setPurchasesPartNumber] = useState('');
   const [purchasesDateFrom, setPurchasesDateFrom] = useState('');
   const [purchasesDateTo, setPurchasesDateTo] = useState('');
@@ -315,6 +316,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [salesNextCursor, setSalesNextCursor] = useState<string | null>(null);
   const [salesHistory, setSalesHistory] = useState<string[]>([]);
   const [salesTotalCount, setSalesTotalCount] = useState(0);
+  const [salesSearch, setSalesSearch] = useState('');
   const [salesInvoiceNumber, setSalesInvoiceNumber] = useState('');
   const [salesPartNumber, setSalesPartNumber] = useState('');
   const [salesDateFrom, setSalesDateFrom] = useState('');
@@ -487,6 +489,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       const queryParams = new URLSearchParams();
       if (currentCursor) queryParams.append('cursor', currentCursor);
       queryParams.append('limit', '20');
+      if (purchasesSearch) queryParams.append('search', purchasesSearch);
       if (purchasesPartNumber) queryParams.append('partNumber', purchasesPartNumber);
       if (purchasesDateFrom) queryParams.append('dateFrom', purchasesDateFrom);
       if (purchasesDateTo) queryParams.append('dateTo', purchasesDateTo);
@@ -500,7 +503,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     } finally {
       setPurchasesLoading(false);
     }
-  }, [purchasesPartNumber, purchasesDateFrom, purchasesDateTo]);
+  }, [purchasesSearch, purchasesPartNumber, purchasesDateFrom, purchasesDateTo]);
 
   // --- API CALL: FETCH SALES (PAGINATED) ---
   const fetchPoSales = useCallback(async (poId: string, currentCursor: string | null = null) => {
@@ -509,6 +512,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       const queryParams = new URLSearchParams();
       if (currentCursor) queryParams.append('cursor', currentCursor);
       queryParams.append('limit', '20');
+      if (salesSearch) queryParams.append('search', salesSearch);
       if (salesInvoiceNumber) queryParams.append('invoiceNumber', salesInvoiceNumber);
       if (salesPartNumber) queryParams.append('partNumber', salesPartNumber);
       if (salesDateFrom) queryParams.append('dateFrom', salesDateFrom);
@@ -523,7 +527,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     } finally {
       setSalesLoading(false);
     }
-  }, [salesInvoiceNumber, salesPartNumber, salesDateFrom, salesDateTo]);
+  }, [salesSearch, salesInvoiceNumber, salesPartNumber, salesDateFrom, salesDateTo]);
 
   // Initial Open PO Details
   const handleOpenPoDetails = (poId: string) => {
@@ -2510,12 +2514,22 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 {/* TOOLBAR */}
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <div className="flex flex-wrap items-center gap-2 flex-1">
+                    <div className="relative min-w-[200px] flex-1">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search Invoice #, Party Name, GSTIN, Vehicle, Part No..."
+                        value={purchasesSearch}
+                        onChange={(e) => setPurchasesSearch(e.target.value.toUpperCase())}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase font-mono"
+                      />
+                    </div>
                     <input
                       type="text"
-                      placeholder="Filter Part No..."
+                      placeholder="Part No..."
                       value={purchasesPartNumber}
                       onChange={(e) => setPurchasesPartNumber(e.target.value.toUpperCase())}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
+                      className="w-28 px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
                     />
                     <input
                       type="date"
@@ -2529,9 +2543,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       onChange={(e) => setPurchasesDateTo(e.target.value)}
                       className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea]"
                     />
-                    {(purchasesPartNumber || purchasesDateFrom || purchasesDateTo) && (
+                    {(purchasesSearch || purchasesPartNumber || purchasesDateFrom || purchasesDateTo) && (
                       <button
-                        onClick={() => { setPurchasesPartNumber(''); setPurchasesDateFrom(''); setPurchasesDateTo(''); }}
+                        onClick={() => { setPurchasesSearch(''); setPurchasesPartNumber(''); setPurchasesDateFrom(''); setPurchasesDateTo(''); }}
                         className="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg font-medium"
                       >
                         Reset
@@ -3043,19 +3057,22 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 {/* TOOLBAR */}
                 <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                   <div className="flex flex-wrap items-center gap-2 flex-1">
-                    <input
-                      type="text"
-                      placeholder="Invoice No..."
-                      value={salesInvoiceNumber}
-                      onChange={(e) => setSalesInvoiceNumber(e.target.value.toUpperCase())}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
-                    />
+                    <div className="relative min-w-[200px] flex-1">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search Invoice #, Party Name, GSTIN, Vehicle, E-Way Bill, Part No..."
+                        value={salesSearch}
+                        onChange={(e) => setSalesSearch(e.target.value.toUpperCase())}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase font-mono"
+                      />
+                    </div>
                     <input
                       type="text"
                       placeholder="Part No..."
                       value={salesPartNumber}
                       onChange={(e) => setSalesPartNumber(e.target.value.toUpperCase())}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
+                      className="w-28 px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
                     />
                     <input
                       type="date"
@@ -3069,9 +3086,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       onChange={(e) => setSalesDateTo(e.target.value)}
                       className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea]"
                     />
-                    {(salesInvoiceNumber || salesPartNumber || salesDateFrom || salesDateTo) && (
+                    {(salesSearch || salesInvoiceNumber || salesPartNumber || salesDateFrom || salesDateTo) && (
                       <button
-                        onClick={() => { setSalesInvoiceNumber(''); setSalesPartNumber(''); setSalesDateFrom(''); setSalesDateTo(''); }}
+                        onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesPartNumber(''); setSalesDateFrom(''); setSalesDateTo(''); }}
                         className="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg font-medium"
                       >
                         Reset

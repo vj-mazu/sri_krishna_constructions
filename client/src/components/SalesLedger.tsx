@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../api';
 import { 
   FileSpreadsheet, 
@@ -9,7 +9,12 @@ import {
   Building2, 
   Package, 
   ArrowDownToLine, 
-  X
+  X,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUpDown
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 import { showToast } from '../toast';
@@ -58,31 +63,107 @@ export const SalesLedger: React.FC = () => {
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState<any | null>(null);
   const [inspectModalItem, setInspectModalItem] = useState<SaleLedgerItem | null>(null);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  // Sort order state: 'DESC' (latest date / newest slNo first) or 'ASC' (oldest first, Sl.No 1 at top)
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
+
   const fetchSalesLedger = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = {};
-      if (searchTerm.trim()) params.search = searchTerm.trim();
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-
-      const res = await api.get('/sales-ledger', { params });
+      // Fetch master sales list
+      const res = await api.get('/sales-ledger');
       setSales(res.data.sales || []);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to load sales ledger', 'error');
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, dateFrom, dateTo]);
+  }, []);
 
   useEffect(() => {
     fetchSalesLedger();
   }, [fetchSalesLedger]);
 
-  const filteredSales = sales.filter(s => {
-    if (sourceFilter === 'ALL') return true;
-    return s.sourceType === sourceFilter;
-  });
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateFrom, dateTo, sourceFilter, pageSize, sortOrder]);
+
+  // Comprehensive client-side filtering for fast real-time search
+  const filteredSales = useMemo(() => {
+    let result = [...sales];
+
+    // Source Filter
+    if (sourceFilter !== 'ALL') {
+      result = result.filter(s => s.sourceType === sourceFilter);
+    }
+
+    // Search Filter (checks invoiceNumber, client, gstin, vehicle, eWayBill, itemName, partNumber, poNumber, workOrderNumber)
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      result = result.filter(s => {
+        const inv = (s.invoiceNumber || '').toLowerCase();
+        const client = (s.clientDepartment || '').toLowerCase();
+        const gst = (s.clientGst || '').toLowerCase();
+        const veh = (s.vehicleNumber || '').toLowerCase();
+        const eway = (s.eWayBillNumber || '').toLowerCase();
+        const item = (s.itemName || '').toLowerCase();
+        const part = (s.partNumber || '').toLowerCase();
+        const po = (s.poNumber || '').toLowerCase();
+        const wo = (s.workOrderNumber || '').toLowerCase();
+        const sl = String(s.slNo || '');
+        const dateStr = formatDate(s.date).toLowerCase();
+
+        return inv.includes(q) || client.includes(q) || gst.includes(q) ||
+               veh.includes(q) || eway.includes(q) || item.includes(q) ||
+               part.includes(q) || po.includes(q) || wo.includes(q) ||
+               sl.includes(q) || dateStr.includes(q);
+      });
+    }
+
+    // Date From Filter
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      result = result.filter(s => {
+        if (!s.date) return false;
+        const d = new Date(s.date);
+        d.setHours(0, 0, 0, 0);
+        return d >= fromDate;
+      });
+    }
+
+    // Date To Filter
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      result = result.filter(s => {
+        if (!s.date) return false;
+        const d = new Date(s.date);
+        return d <= toDate;
+      });
+    }
+
+    // Sorting
+    result.sort((a, b) => {
+      if (sortOrder === 'ASC') {
+        return (a.slNo || 0) - (b.slNo || 0);
+      } else {
+        return (b.slNo || 0) - (a.slNo || 0);
+      }
+    });
+
+    return result;
+  }, [sales, sourceFilter, searchTerm, dateFrom, dateTo, sortOrder]);
+
+  // Paginated slice
+  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+  const paginatedSales = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredSales.slice(start, start + pageSize);
+  }, [filteredSales, currentPage, pageSize]);
 
   const formatCurrency = (amount: number | string | undefined | null) => {
     if (amount === undefined || amount === null || amount === '') return '₹0';
@@ -92,21 +173,22 @@ export const SalesLedger: React.FC = () => {
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 })}`;
   };
 
-  const formatDate = (dateStr: string) => {
+  function formatDate(dateStr: string) {
     if (!dateStr) return '-';
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
     return `${day}-${month}-${year}`;
-  };
+  }
 
   // Export to CSV / Excel matching user's physical sheet layout
   const handleExportCSV = () => {
     if (filteredSales.length === 0) return;
     const headers = ['Sl.No', 'Date', 'Invoice', 'Department / Client', 'GST NO', 'Name of work', 'Item Name', 'Part No', 'Qty', 'Rate', 'Total Amount', 'Vehicle No', 'E-Way Bill No', 'Status'];
-    const rows = filteredSales.map((s, idx) => [
-      idx + 1,
+    const rows = filteredSales.map((s) => [
+      s.slNo,
       formatDate(s.date),
       `"${s.invoiceNumber || '-'}"`,
       `"${(s.clientDepartment || '-').replace(/"/g, '""')}"`,
@@ -292,10 +374,18 @@ export const SalesLedger: React.FC = () => {
           <table className="w-full text-left text-xs excel-table">
             <thead className="sticky top-0 z-10">
               <tr className="bg-sky-950 text-sky-200 font-bold">
-                <th className="w-12 text-center border-r border-sky-800 p-2.5">Sl.No</th>
+                <th className="w-16 text-center border-r border-sky-800 p-2.5">
+                  <button 
+                    onClick={() => setSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
+                    className="flex items-center justify-center gap-1 mx-auto hover:text-white font-bold"
+                    title={`Sorted ${sortOrder === 'DESC' ? 'Newest # to Oldest #' : 'Oldest # to Newest #'}. Click to switch.`}
+                  >
+                    Sl.No <ArrowUpDown className="w-3 h-3 text-sky-300" />
+                  </button>
+                </th>
                 <th className="p-2.5 whitespace-nowrap">Date</th>
                 <th className="p-2.5 whitespace-nowrap">Invoice</th>
-                <th className="p-2.5 min-w-[220px]">Department</th>
+                <th className="p-2.5 min-w-[220px]">Department / Client</th>
                 <th className="p-2.5 whitespace-nowrap">GST NO</th>
                 <th className="p-2.5 text-center">Name of work</th>
                 <th className="p-2.5 min-w-[150px]">Item Description</th>
@@ -316,21 +406,21 @@ export const SalesLedger: React.FC = () => {
                     Loading official sales ledger...
                   </td>
                 </tr>
-              ) : filteredSales.length === 0 ? (
+              ) : paginatedSales.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="text-center py-12 text-slate-400">
                     No outward sales match the selected filters.
                   </td>
                 </tr>
               ) : (
-                filteredSales.map((sale, idx) => (
+                paginatedSales.map((sale) => (
                   <tr 
                     key={`${sale.sourceType}_${sale.id}`} 
                     onClick={() => setInspectModalItem(sale)}
                     className="hover:bg-blue-50/50 cursor-pointer border-b border-slate-200 transition-colors"
                   >
                     <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
-                      {idx + 1}
+                      {sale.slNo}
                     </td>
                     <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
                       {formatDate(sale.date)}
@@ -429,6 +519,71 @@ export const SalesLedger: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* 4.1 PAGINATION BAR */}
+        <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3 text-slate-600">
+            <span>
+              Showing <strong className="text-slate-900">{filteredSales.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredSales.length)}</strong> of <strong className="text-[#1e3a8a]">{filteredSales.length}</strong> records
+            </span>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="text-slate-500">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-slate-300 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1 || filteredSales.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="First Page"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1 || filteredSales.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Previous Page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-3 py-1 font-bold text-slate-800 bg-white border border-slate-300 rounded-lg shadow-2xs font-mono">
+              Page {filteredSales.length === 0 ? 0 : currentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || filteredSales.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Next Page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages || filteredSales.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Last Page"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

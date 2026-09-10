@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api';
 import { 
   IndianRupee, 
@@ -15,7 +15,12 @@ import {
   Send,
   Share2,
   Receipt,
-  Clock
+  Clock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUpDown
 } from 'lucide-react';
 import { showToast } from '../toast';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
@@ -37,6 +42,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Pagination & Sorting state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
   // Editable row overrides per worker: workerId -> amount
   const [customPf, setCustomPf] = useState<Record<string, number | string>>({});
@@ -587,9 +597,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const rightX = margin + empColWidth + padX;
 
     doc.setFont('helvetica', 'bold');
-    doc.text('PF ACCOUNT NO : ', rightX, statY);
+    doc.text('BANK NAME : ', rightX, statY);
     doc.setFont('helvetica', 'normal');
-    doc.text(worker.pfNumber || 'GBRCH1955403000', rightX + 32, statY);
+    doc.text(worker.pfNumber || 'Canara Bank', rightX + 26, statY);
 
     statY += lineGap;
     doc.setFont('helvetica', 'bold');
@@ -1083,16 +1093,36 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     showToast('ESI PF Salary Statement exported to PDF (Portrait) successfully!', 'success');
   };
 
-  const filteredWages = wagesReport.filter((w) => {
-    const term = workerSearch.toLowerCase().trim();
-    if (!term) return true;
-    return (
-      String(w.empId || '').toLowerCase().includes(term) ||
-      String(w.fullName || '').toLowerCase().includes(term) ||
-      String(w.fatherName || '').toLowerCase().includes(term) ||
-      String(w.designation || '').toLowerCase().includes(term)
-    );
-  });
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [workerSearch, selectedDivisionId, selectedMonth, selectedYear, pageSize, sortOrder]);
+
+  const filteredWages = useMemo(() => {
+    let list = wagesReport.filter((w) => {
+      const term = workerSearch.toLowerCase().trim();
+      if (!term) return true;
+      return (
+        String(w.empId || '').toLowerCase().includes(term) ||
+        String(w.fullName || '').toLowerCase().includes(term) ||
+        String(w.fatherName || '').toLowerCase().includes(term) ||
+        String(w.designation || '').toLowerCase().includes(term)
+      );
+    });
+
+    list.sort((a, b) => {
+      const idA = String(a.empId || a.fullName || '');
+      const idB = String(b.empId || b.fullName || '');
+      return sortOrder === 'ASC' ? idA.localeCompare(idB) : idB.localeCompare(idA);
+    });
+
+    return list;
+  }, [wagesReport, workerSearch, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredWages.length / pageSize));
+  const paginatedWages = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredWages.slice(start, start + pageSize);
+  }, [filteredWages, currentPage, pageSize]);
 
   const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
 
@@ -1353,7 +1383,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-300">
-              {filteredWages.map((w, index) => {
+              {paginatedWages.map((w, index) => {
                 const calc = getRowCalculations(w);
                 const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
                 const wDays = Math.round(calc.workingDays);
@@ -1368,15 +1398,24 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
                 const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
                 const conEarned = 0;
-                const grossEarned = calc.grossPayment + calc.otPayment;
+                const grossEarned = basicAndVdaEarned + conEarned;
                 const epfBase = Math.min(15000, basicAndVdaEarned);
                 const grossEarn = grossEarned;
-                const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
+
+                const netSalary = calc.finalNetAmount;
+                const globalIndex = (currentPage - 1) * pageSize + index + 1;
 
                 return (
-                  <tr key={w.workerId} className="hover:bg-slate-50 border-b border-slate-300 font-mono text-[11px]">
-                    <td className="border border-slate-300 text-center font-bold px-2 py-1 bg-slate-50">{index + 1}</td>
-                    <td className="border border-slate-300 font-sans font-bold text-slate-900 px-3 py-1 uppercase">{w.fullName}</td>
+                  <tr key={w.workerId} className="hover:bg-blue-50/40 text-center font-mono text-[11px] transition-colors">
+                    {/* SL NO */}
+                    <td className="border border-slate-300 px-2 py-1 font-bold text-slate-700 bg-slate-50">{globalIndex}</td>
+                    {/* NAME */}
+                    <td className="border border-slate-300 text-left font-sans font-bold text-slate-900 px-3 py-1 truncate max-w-[200px]">
+                      <div className="flex flex-col">
+                        <span>{w.fullName}</span>
+                        {w.fatherName && <span className="text-[9px] text-slate-400 font-normal">S/o {w.fatherName}</span>}
+                      </div>
+                    </td>
                     {/* WAGE STRUCTURE */}
                     <td className="border border-slate-300 text-right px-2 py-1">{basicMonthly.toLocaleString('en-IN')}</td>
                     <td className="border border-slate-300 text-right px-2 py-1">{vdaMonthly.toLocaleString('en-IN')}</td>
@@ -1551,13 +1590,14 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {filteredWages.map((w, index) => {
+              {paginatedWages.map((w, index) => {
                 const calc = getRowCalculations(w);
+                const globalIndex = (currentPage - 1) * pageSize + index + 1;
 
                 return (
                   <tr key={w.workerId} className="hover:bg-slate-50 transition-colors">
                     {/* 1. Sl No */}
-                    <td className="font-mono text-center text-slate-500 font-bold py-1 px-1">{index + 1}</td>
+                    <td className="font-mono text-center text-slate-500 font-bold py-1 px-1">{globalIndex}</td>
 
                     {/* 2. Worker Name & Drilldown Trigger */}
                     <td className="py-1 px-1.5 min-w-[140px]">
@@ -1777,6 +1817,71 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               </tfoot>
             )}
           </table>
+          </div>
+
+          {/* PAGINATION TOOLBAR */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3 text-slate-600">
+              <span>
+                Showing <strong className="text-slate-900">{filteredWages.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredWages.length)}</strong> of <strong className="text-[#1e3a8a]">{filteredWages.length}</strong> workers
+              </span>
+              <div className="flex items-center gap-1.5 ml-2">
+                <span className="text-slate-500">Rows per page:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border border-slate-300 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1 || filteredWages.length === 0}
+                className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                title="First Page"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || filteredWages.length === 0}
+                className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <span className="px-3 py-1 font-bold text-slate-800 bg-white border border-slate-300 rounded-lg shadow-2xs font-mono">
+                Page {filteredWages.length === 0 ? 0 : currentPage} of {totalPages}
+              </span>
+
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages || filteredWages.length === 0}
+                className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                title="Next Page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage >= totalPages || filteredWages.length === 0}
+                className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                title="Last Page"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2200,7 +2305,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
                       {/* Right details */}
                       <div className="p-2 space-y-1">
-                        <div><span className="font-bold">PF ACCOUNT NO :</span> <span className="font-mono">{w.pfNumber || 'GBRCH1955403000'}</span></div>
+                        <div><span className="font-bold">BANK NAME :</span> <span className="font-mono">{w.pfNumber || 'Canara Bank'}</span></div>
                         <div><span className="font-bold">ESI EMPLOYES'S Code:</span> <span className="font-mono">{w.esiNumber || '71000088340001099'}</span></div>
                         <div className="flex justify-between">
                           <div><span className="font-bold">UAN NO:</span> <span className="font-mono">{w.uanNumber || '100493430949'}</span></div>

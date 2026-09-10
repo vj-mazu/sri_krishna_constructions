@@ -62,6 +62,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  // Pagination & Sorting state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
+
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
   const [editItem, setEditItem] = useState<WorkOrderItem | null>(null);
@@ -99,23 +104,81 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const fetchWorkOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const params: any = {};
-      if (searchTerm.trim()) params.search = searchTerm.trim();
-      if (dateFrom) params.dateFrom = dateFrom;
-      if (dateTo) params.dateTo = dateTo;
-
-      const res = await api.get('/work-orders', { params });
+      const res = await api.get('/work-orders');
       setWorkOrders(res.data.workOrders || []);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to load work orders', 'error');
     } finally {
       setLoading(false);
     }
-  }, [searchTerm, dateFrom, dateTo]);
+  }, []);
 
   useEffect(() => {
     fetchWorkOrders();
   }, [fetchWorkOrders]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, dateFrom, dateTo, pageSize, sortOrder]);
+
+  const filteredWorkOrders = React.useMemo(() => {
+    let result = [...workOrders];
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      result = result.filter(w => {
+        const wo = (w.workOrderNumber || '').toLowerCase();
+        const inv = (w.invoiceNumber || '').toLowerCase();
+        const party = (w.partyName || '').toLowerCase();
+        const gst = (w.partyGstNumber || '').toLowerCase();
+        const item = (w.itemName || '').toLowerCase();
+        const part = (w.partNumber || '').toLowerCase();
+        const desc = (w.description || '').toLowerCase();
+        const veh = (w.vehicleNumber || '').toLowerCase();
+        const eway = (w.eWayBillNumber || '').toLowerCase();
+        const dateStr = formatDate(w.invoiceDate).toLowerCase();
+
+        return wo.includes(q) || inv.includes(q) || party.includes(q) || gst.includes(q) ||
+               item.includes(q) || part.includes(q) || desc.includes(q) || veh.includes(q) ||
+               eway.includes(q) || dateStr.includes(q);
+      });
+    }
+
+    if (dateFrom) {
+      const fromD = new Date(dateFrom);
+      fromD.setHours(0, 0, 0, 0);
+      result = result.filter(w => {
+        if (!w.invoiceDate) return false;
+        const d = new Date(w.invoiceDate);
+        d.setHours(0, 0, 0, 0);
+        return d >= fromD;
+      });
+    }
+
+    if (dateTo) {
+      const toD = new Date(dateTo);
+      toD.setHours(23, 59, 59, 999);
+      result = result.filter(w => {
+        if (!w.invoiceDate) return false;
+        const d = new Date(w.invoiceDate);
+        return d <= toD;
+      });
+    }
+
+    result.sort((a, b) => {
+      const timeA = new Date(a.invoiceDate || a.createdAt).getTime();
+      const timeB = new Date(b.invoiceDate || b.createdAt).getTime();
+      return sortOrder === 'ASC' ? timeA - timeB : timeB - timeA;
+    });
+
+    return result;
+  }, [workOrders, searchTerm, dateFrom, dateTo, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredWorkOrders.length / pageSize));
+  const paginatedWorkOrders = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredWorkOrders.slice(start, start + pageSize);
+  }, [filteredWorkOrders, currentPage, pageSize]);
 
   const formatCurrency = (amount: number | string | undefined | null) => {
     if (amount === undefined || amount === null || amount === '') return '₹0';
@@ -125,14 +188,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: hasDecimals ? 2 : 0, maximumFractionDigits: 2 })}`;
   };
 
-  const formatDate = (dateStr: string) => {
+  function formatDate(dateStr: string) {
     if (!dateStr) return '-';
     const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return String(dateStr);
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
     return `${day}-${month}-${year}`;
-  };
+  }
 
   // Calculations for Form
   const formQty = parseFloat(formData.qty) || 0;
@@ -400,7 +464,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           <table className="w-full text-left text-xs excel-table">
             <thead className="sticky top-0 z-10">
               <tr className="bg-sky-950 text-sky-200 font-bold">
-                <th className="w-10 text-center border-r border-sky-800 p-2.5">#</th>
+                <th className="w-16 text-center border-r border-sky-800 p-2.5">
+                  <button 
+                    onClick={() => setSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
+                    className="flex items-center justify-center gap-1 mx-auto hover:text-white font-bold"
+                    title={`Sorted ${sortOrder === 'DESC' ? 'Newest to Oldest' : 'Oldest to Newest'}. Click to switch.`}
+                  >
+                    # <ArrowUpDown className="w-3 h-3 text-sky-300" />
+                  </button>
+                </th>
                 <th className="p-2.5 whitespace-nowrap">WO No & Date</th>
                 <th className="p-2.5 whitespace-nowrap">Invoice No & Date</th>
                 <th className="p-2.5 min-w-[200px]">Client / Party Name</th>
@@ -422,21 +494,21 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     Loading work orders...
                   </td>
                 </tr>
-              ) : workOrders.length === 0 ? (
+              ) : paginatedWorkOrders.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="text-center py-12 text-slate-400">
-                    No work orders recorded.
+                    No work orders match the selected filters.
                   </td>
                 </tr>
               ) : (
-                workOrders.map((wo, idx) => (
+                paginatedWorkOrders.map((wo, idx) => (
                   <tr 
                     key={wo.id} 
                     onClick={() => setInspectItem(wo)}
                     className="hover:bg-blue-50/50 cursor-pointer border-b border-slate-200 transition-colors"
                   >
                     <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
-                      {idx + 1}
+                      {(currentPage - 1) * pageSize + idx + 1}
                     </td>
                     <td className="p-2.5">
                       <div className="font-bold text-[#1e3a8a] font-mono">{wo.workOrderNumber}</div>
@@ -526,6 +598,71 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* 4.1 PAGINATION BAR */}
+        <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3 text-slate-600">
+            <span>
+              Showing <strong className="text-slate-900">{filteredWorkOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredWorkOrders.length)}</strong> of <strong className="text-[#1e3a8a]">{filteredWorkOrders.length}</strong> work orders
+            </span>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="text-slate-500">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-slate-300 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1 || filteredWorkOrders.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="First Page"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1 || filteredWorkOrders.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Previous Page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-3 py-1 font-bold text-slate-800 bg-white border border-slate-300 rounded-lg shadow-2xs font-mono">
+              Page {filteredWorkOrders.length === 0 ? 0 : currentPage} of {totalPages}
+            </span>
+
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || filteredWorkOrders.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Next Page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages || filteredWorkOrders.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Last Page"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 

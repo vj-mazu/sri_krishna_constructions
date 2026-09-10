@@ -1636,13 +1636,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">PF Account No</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Bank Name</label>
                   <input
                     type="text"
                     value={workerPfNumber}
                     onChange={(e) => setWorkerPfNumber(e.target.value)}
-                    placeholder="e.g. GBRCH1955403000"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono"
+                    placeholder="e.g. Canara Bank, SBI, HDFC"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-medium"
                   />
                 </div>
                 <div>
@@ -1883,12 +1883,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       {/* Statutory & Banking Details */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                         <div>
-                          <label className="block font-semibold text-slate-700 mb-1">PF Account No</label>
+                          <label className="block font-semibold text-slate-700 mb-1">Bank Name</label>
                           <input
                             type="text"
                             value={editPfNumber}
                             onChange={(e) => setEditPfNumber(e.target.value)}
-                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
+                            placeholder="e.g. Canara Bank, SBI, HDFC"
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium"
                           />
                         </div>
                         <div>

@@ -317,7 +317,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role, fullName: user.fullName },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '12h' }
     );
 
     res.json({
@@ -640,15 +640,29 @@ app.get('/api/purchase-orders/:id/items', authenticateToken, async (req, res) =>
 app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { cursor, limit = 20, partNumber, dateFrom, dateTo } = req.query;
+    const { cursor, limit = 20, search, partNumber, dateFrom, dateTo } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
     let whereClauses = [`poi."purchaseOrderId" = $1`];
     let params = [id];
 
-    if (partNumber) {
-      params.push(`%${partNumber}%`);
-      whereClauses.push(`poi."partNumber" ILIKE $${params.length}`);
+    if (search && search.trim()) {
+      params.push(`%${search.trim()}%`);
+      whereClauses.push(`(
+        poi."partNumber" ILIKE $${params.length} OR 
+        poi."itemName" ILIKE $${params.length} OR 
+        poi."kpclCode" ILIKE $${params.length} OR 
+        pur."partyName" ILIKE $${params.length} OR 
+        pur."gstNumber" ILIKE $${params.length} OR 
+        pur."partyInvoiceNumber" ILIKE $${params.length} OR 
+        pur."vehicleNumber" ILIKE $${params.length} OR 
+        pur."receivedPartNumber" ILIKE $${params.length} OR 
+        pur."receivedItemName" ILIKE $${params.length}
+      )`);
+    }
+    if (partNumber && partNumber.trim()) {
+      params.push(`%${partNumber.trim()}%`);
+      whereClauses.push(`(poi."partNumber" ILIKE $${params.length} OR pur."receivedPartNumber" ILIKE $${params.length})`);
     }
     if (dateFrom) {
       params.push(new Date(dateFrom));
@@ -703,18 +717,31 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
 app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { cursor, limit = 20, invoiceNumber, partNumber, dateFrom, dateTo } = req.query;
+    const { cursor, limit = 20, search, invoiceNumber, partNumber, dateFrom, dateTo } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
     let whereClauses = [`poi."purchaseOrderId" = $1`];
     let params = [id];
 
-    if (invoiceNumber) {
-      params.push(`%${invoiceNumber}%`);
+    if (search && search.trim()) {
+      params.push(`%${search.trim()}%`);
+      whereClauses.push(`(
+        s."invoiceNumber" ILIKE $${params.length} OR 
+        s."partyName" ILIKE $${params.length} OR 
+        s."gstNumber" ILIKE $${params.length} OR 
+        s."vehicleNumber" ILIKE $${params.length} OR 
+        s."eWayBillNumber" ILIKE $${params.length} OR 
+        poi."partNumber" ILIKE $${params.length} OR 
+        poi."itemName" ILIKE $${params.length} OR 
+        poi."kpclCode" ILIKE $${params.length}
+      )`);
+    }
+    if (invoiceNumber && invoiceNumber.trim()) {
+      params.push(`%${invoiceNumber.trim()}%`);
       whereClauses.push(`s."invoiceNumber" ILIKE $${params.length}`);
     }
-    if (partNumber) {
-      params.push(`%${partNumber}%`);
+    if (partNumber && partNumber.trim()) {
+      params.push(`%${partNumber.trim()}%`);
       whereClauses.push(`poi."partNumber" ILIKE $${params.length}`);
     }
     if (dateFrom) {

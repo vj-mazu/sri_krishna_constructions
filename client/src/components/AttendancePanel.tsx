@@ -1,7 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
-import { Calendar, AlertCircle, CheckCircle, RefreshCw, Wifi, WifiOff, CloudUpload } from 'lucide-react';
+import { 
+  Calendar, 
+  AlertCircle, 
+  CheckCircle, 
+  RefreshCw, 
+  Wifi, 
+  WifiOff, 
+  CloudUpload,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ArrowUpDown
+} from 'lucide-react';
 
 interface AttendancePanelProps {
   currentUserRole?: string;
@@ -18,6 +31,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [holidayInfo, setHolidayInfo] = useState<{ date: string; name: string; type: string } | null>(null);
   const [offlineCount, setOfflineCount] = useState<number>(0);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
+  // Pagination & Sorting state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
+
   const [editModalWorker, setEditModalWorker] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<{
     newStatus: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE';
@@ -455,51 +474,67 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           No registered workers found under this division. Register workers in 'User Management' first.
         </div>
       ) : (() => {
-        const filteredWorkers = workers.filter((w) => {
-          const rec = attendanceRecords[w.id];
-          const query = searchQuery.toLowerCase().trim();
-          
-          // 1. Text Search Filter (Worker Name or ID)
-          if (query && !w.workerId.toLowerCase().includes(query) && !w.fullName.toLowerCase().includes(query)) {
-            return false;
-          }
-
-          // 2. Dynamic Roster & Split Half-Day Business Logic:
-          if (selectedDivisionId && selectedDivisionId !== 'ALL') {
-            const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
+        const filteredWorkers = useMemo(() => {
+          let list = workers.filter((w) => {
+            const rec = attendanceRecords[w.id];
+            const query = searchQuery.toLowerCase().trim();
             
-            // 1. If already marked at this division, show them
-            if (isMarkedInThisDiv) {
-              return true;
-            }
-
-            // 2. If marked Full Day (PRESENT, ABSENT, LEAVE) at another division, hide from this division
-            const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
-            if (isFullDayAtOtherDiv) {
+            // 1. Text Search Filter (Worker Name or ID)
+            if (query && !w.workerId.toLowerCase().includes(query) && !w.fullName.toLowerCase().includes(query)) {
               return false;
             }
 
-            // 3. If worker already completed TWO half days at two other divisions, hide from this 3rd division
-            const bothHalfDaysDoneElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.secondDivisionId && rec.divisionId !== selectedDivisionId && rec.secondDivisionId !== selectedDivisionId;
-            if (bothHalfDaysDoneElsewhere) {
-              return false;
+            // 2. Dynamic Roster & Split Half-Day Business Logic:
+            if (selectedDivisionId && selectedDivisionId !== 'ALL') {
+              const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
+              
+              // 1. If already marked at this division, show them
+              if (isMarkedInThisDiv) {
+                return true;
+              }
+
+              // 2. If marked Full Day (PRESENT, ABSENT, LEAVE) at another division, hide from this division
+              const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
+              if (isFullDayAtOtherDiv) {
+                return false;
+              }
+
+              // 3. If worker already completed TWO half days at two other divisions, hide from this 3rd division
+              const bothHalfDaysDoneElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.secondDivisionId && rec.divisionId !== selectedDivisionId && rec.secondDivisionId !== selectedDivisionId;
+              if (bothHalfDaysDoneElsewhere) {
+                return false;
+              }
+
+              // 4. If worker has ONLY ONE half day at another division, ALLOW them here so supervisor can mark the 2nd half day!
+              const hasOneHalfDayElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
+              if (hasOneHalfDayElsewhere) {
+                return true;
+              }
+
+              // 5. If unmarked anywhere today, ALLOW them here so any registered worker can be assigned to any division!
+              const isUnmarked = !rec || !rec.status;
+              if (isUnmarked) {
+                return true;
+              }
             }
 
-            // 4. If worker has ONLY ONE half day at another division, ALLOW them here so supervisor can mark the 2nd half day!
-            const hasOneHalfDayElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
-            if (hasOneHalfDayElsewhere) {
-              return true;
-            }
+            return true;
+          });
 
-            // 5. If unmarked anywhere today, ALLOW them here so any registered worker can be assigned to any division!
-            const isUnmarked = !rec || !rec.status;
-            if (isUnmarked) {
-              return true;
-            }
-          }
+          list.sort((a, b) => {
+            const idA = String(a.workerId || a.fullName || '');
+            const idB = String(b.workerId || b.fullName || '');
+            return sortOrder === 'ASC' ? idA.localeCompare(idB) : idB.localeCompare(idA);
+          });
 
-          return true;
-        });
+          return list;
+        }, [workers, attendanceRecords, searchQuery, selectedDivisionId, sortOrder]);
+
+        const totalPages = Math.max(1, Math.ceil(filteredWorkers.length / pageSize));
+        const paginatedWorkers = useMemo(() => {
+          const start = (currentPage - 1) * pageSize;
+          return filteredWorkers.slice(start, start + pageSize);
+        }, [filteredWorkers, currentPage, pageSize]);
 
         if (filteredWorkers.length === 0) {
           return (
@@ -560,7 +595,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
             {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized) */}
             <div className="block md:hidden space-y-3 pb-16">
-              {filteredWorkers.map((w) => {
+              {paginatedWorkers.map((w) => {
                 const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                 return (
                   <div key={w.id} className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-sm space-y-3 transition-all">
@@ -689,7 +724,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   </tr>
                 </thead>
                 <tbody>
-                    {filteredWorkers.map((w) => {
+                    {paginatedWorkers.map((w) => {
                       const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                       const isMarkedInThisSelectedDiv = selectedDivisionId === 'ALL' 
                         ? Boolean(state.status) 
@@ -825,6 +860,75 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* ATTENDANCE PAGINATION TOOLBAR */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-3 text-slate-600">
+                <span>
+                  Showing <strong className="text-slate-900">{filteredWorkers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredWorkers.length)}</strong> of <strong className="text-[#1e3a8a]">{filteredWorkers.length}</strong> workers
+                </span>
+                <div className="flex items-center gap-1.5 ml-2">
+                  <span className="text-slate-500">Rows per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="border border-slate-300 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1 || filteredWorkers.length === 0}
+                  className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="First Page"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1 || filteredWorkers.length === 0}
+                  className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <span className="px-3 py-1 font-bold text-slate-800 bg-white border border-slate-300 rounded-lg shadow-2xs font-mono">
+                  Page {filteredWorkers.length === 0 ? 0 : currentPage} of {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages || filteredWorkers.length === 0}
+                  className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage >= totalPages || filteredWorkers.length === 0}
+                  className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  title="Last Page"
+                >
+                  <ChevronsRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* DESKTOP SAVE BUTTON */}
