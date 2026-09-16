@@ -2021,7 +2021,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             setEditDailyAllowance((w.dailyAllowance || 0).toString());
                             setEditAdvanceTaken((w.advanceTaken || w.advanceBalance || 0).toString());
                             setEditAdvanceBalance((w.advanceBalance || 0).toString());
-                            setEditOtAllowance((w.otAllowance || 0).toString());
                             setEditOtRate((w.otHourlyRate || 0).toString());
                             setEditWorkerDivisionId(w.divisionId);
                             setEditPfNumber(w.pfNumber || '');

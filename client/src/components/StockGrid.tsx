@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { Package, Search, FileSpreadsheet, RefreshCw, TrendingUp, Receipt, Layers } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 // Debounce hook
 function useDebounce<T>(value: T, delay: number): T {

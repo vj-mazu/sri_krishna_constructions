@@ -1884,7 +1884,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         {isApproved ? 'PAID' : 'PENDING'}
                       </span>
                       <div className="text-sm font-black text-emerald-700 font-mono">
-                        {formatIndianCurrency(calc.finalNetPay)}
+                        {formatIndianCurrency(calc.finalNetAmount)}
                       </div>
                     </div>
                   </div>

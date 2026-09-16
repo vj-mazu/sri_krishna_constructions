@@ -26,7 +26,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [workers, setWorkers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId?: string }>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId?: string; divisionName?: string; secondDivisionId?: string; secondDivisionName?: string }>>({});
   const [loading, setLoading] = useState(false);
   const [holidayInfo, setHolidayInfo] = useState<{ date: string; name: string; type: string } | null>(null);
   const [offlineCount, setOfflineCount] = useState<number>(0);
@@ -149,7 +149,15 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       setWorkers(fetchedWorkers);
 
-      const recordsMap: Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId: string; divisionName?: string }> = {};
+      const recordsMap: Record<string, { 
+        status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; 
+        overtimeHours: string; 
+        dailyWageOverride: string; 
+        divisionId: string; 
+        divisionName?: string;
+        secondDivisionId?: string;
+        secondDivisionName?: string;
+      }> = {};
 
       // Initialize all workers as clean/unmarked
       fetchedWorkers.forEach((w: any) => {
@@ -354,6 +362,89 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     }
   };
 
+  const filteredWorkers = useMemo(() => {
+    let list = workers.filter((w) => {
+      const rec = attendanceRecords[w.id];
+      const query = searchQuery.toLowerCase().trim();
+      
+      // 1. Text Search Filter (Worker Name or ID)
+      if (query && !w.workerId.toLowerCase().includes(query) && !w.fullName.toLowerCase().includes(query)) {
+        return false;
+      }
+
+      // 2. Dynamic Roster & Split Half-Day Business Logic:
+      if (selectedDivisionId && selectedDivisionId !== 'ALL') {
+        const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
+        
+        // 1. If already marked at this division, show them
+        if (isMarkedInThisDiv) {
+          return true;
+        }
+
+        // 2. If marked Full Day (PRESENT, ABSENT, LEAVE) at another division, hide from this division
+        const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
+        if (isFullDayAtOtherDiv) {
+          return false;
+        }
+
+        // 3. If worker already completed TWO half days at two other divisions, hide from this 3rd division
+        const bothHalfDaysDoneElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.secondDivisionId && rec.divisionId !== selectedDivisionId && rec.secondDivisionId !== selectedDivisionId;
+        if (bothHalfDaysDoneElsewhere) {
+          return false;
+        }
+
+        // 4. If worker has ONLY ONE half day at another division, ALLOW them here so supervisor can mark the 2nd half day!
+        const hasOneHalfDayElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
+        if (hasOneHalfDayElsewhere) {
+          return true;
+        }
+
+        // 5. If unmarked anywhere today, ALLOW them here so any registered worker can be assigned to any division!
+        const isUnmarked = !rec || !rec.status;
+        if (isUnmarked) {
+          return true;
+        }
+      }
+
+      return true;
+    });
+
+    list.sort((a, b) => {
+      const idA = String(a.workerId || a.fullName || '');
+      const idB = String(b.workerId || b.fullName || '');
+      return sortOrder === 'ASC' ? idA.localeCompare(idB) : idB.localeCompare(idA);
+    });
+
+    return list;
+  }, [workers, attendanceRecords, searchQuery, selectedDivisionId, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredWorkers.length / pageSize));
+  const paginatedWorkers = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredWorkers.slice(start, start + pageSize);
+  }, [filteredWorkers, currentPage, pageSize]);
+
+  const presentCount = Object.values(attendanceRecords).filter(r => r.status === 'PRESENT').length;
+  const absentCount = Object.values(attendanceRecords).filter(r => r.status === 'ABSENT').length;
+  const halfCount = Object.values(attendanceRecords).filter(r => r.status === 'HALF_DAY').length;
+  const leaveCount = Object.values(attendanceRecords).filter(r => r.status === 'LEAVE').length;
+  const unmarkedCount = filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'PRESENT':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs">🟢 Present</span>;
+      case 'ABSENT':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-xs">🔴 Absent</span>;
+      case 'HALF_DAY':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-xs">🟡 Half Day</span>;
+      case 'LEAVE':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 shadow-xs">🟣 Leave</span>;
+      default:
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">⚪ Unmarked</span>;
+    }
+  };
+
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 p-2.5 sm:p-6 space-y-2.5 sm:space-y-6">
       <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-4">
@@ -473,105 +564,17 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl">
           No registered workers found under this division. Register workers in 'User Management' first.
         </div>
-      ) : (() => {
-        const filteredWorkers = useMemo(() => {
-          let list = workers.filter((w) => {
-            const rec = attendanceRecords[w.id];
-            const query = searchQuery.toLowerCase().trim();
-            
-            // 1. Text Search Filter (Worker Name or ID)
-            if (query && !w.workerId.toLowerCase().includes(query) && !w.fullName.toLowerCase().includes(query)) {
-              return false;
-            }
-
-            // 2. Dynamic Roster & Split Half-Day Business Logic:
-            if (selectedDivisionId && selectedDivisionId !== 'ALL') {
-              const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
-              
-              // 1. If already marked at this division, show them
-              if (isMarkedInThisDiv) {
-                return true;
-              }
-
-              // 2. If marked Full Day (PRESENT, ABSENT, LEAVE) at another division, hide from this division
-              const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
-              if (isFullDayAtOtherDiv) {
-                return false;
-              }
-
-              // 3. If worker already completed TWO half days at two other divisions, hide from this 3rd division
-              const bothHalfDaysDoneElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.secondDivisionId && rec.divisionId !== selectedDivisionId && rec.secondDivisionId !== selectedDivisionId;
-              if (bothHalfDaysDoneElsewhere) {
-                return false;
-              }
-
-              // 4. If worker has ONLY ONE half day at another division, ALLOW them here so supervisor can mark the 2nd half day!
-              const hasOneHalfDayElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
-              if (hasOneHalfDayElsewhere) {
-                return true;
-              }
-
-              // 5. If unmarked anywhere today, ALLOW them here so any registered worker can be assigned to any division!
-              const isUnmarked = !rec || !rec.status;
-              if (isUnmarked) {
-                return true;
-              }
-            }
-
-            return true;
-          });
-
-          list.sort((a, b) => {
-            const idA = String(a.workerId || a.fullName || '');
-            const idB = String(b.workerId || b.fullName || '');
-            return sortOrder === 'ASC' ? idA.localeCompare(idB) : idB.localeCompare(idA);
-          });
-
-          return list;
-        }, [workers, attendanceRecords, searchQuery, selectedDivisionId, sortOrder]);
-
-        const totalPages = Math.max(1, Math.ceil(filteredWorkers.length / pageSize));
-        const paginatedWorkers = useMemo(() => {
-          const start = (currentPage - 1) * pageSize;
-          return filteredWorkers.slice(start, start + pageSize);
-        }, [filteredWorkers, currentPage, pageSize]);
-
-        if (filteredWorkers.length === 0) {
-          return (
-            <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl bg-white p-6">
-              {selectedDivisionId !== 'ALL' 
-                ? 'All available workers have already been marked for full-day attendance at other divisions for this date.' 
-                : 'No matching workers found for search filter.'}
-            </div>
-          );
-        }
-
-        const presentCount = Object.values(attendanceRecords).filter(r => r.status === 'PRESENT').length;
-        const absentCount = Object.values(attendanceRecords).filter(r => r.status === 'ABSENT').length;
-        const halfCount = Object.values(attendanceRecords).filter(r => r.status === 'HALF_DAY').length;
-        const leaveCount = Object.values(attendanceRecords).filter(r => r.status === 'LEAVE').length;
-        const unmarkedCount = filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount);
-
-        const getStatusBadge = (status: string) => {
-          switch (status) {
-            case 'PRESENT':
-              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs">🟢 Present</span>;
-            case 'ABSENT':
-              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shadow-xs">🔴 Absent</span>;
-            case 'HALF_DAY':
-              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-xs">🟡 Half Day</span>;
-            case 'LEAVE':
-              return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 shadow-xs">🟣 Leave</span>;
-            default:
-              return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">⚪ Unmarked</span>;
-          }
-        };
-
-        return (
-          <form onSubmit={handleSaveAttendance} className="space-y-3">
-            {/* REAL-TIME SUMMARY STATS BAR */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-center text-xs">
-              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-1.5">
+      ) : filteredWorkers.length === 0 ? (
+        <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl bg-white p-6">
+          {selectedDivisionId !== 'ALL' 
+            ? 'All available workers have already been marked for full-day attendance at other divisions for this date.' 
+            : 'No matching workers found for search filter.'}
+        </div>
+      ) : (
+        <form onSubmit={handleSaveAttendance} className="space-y-3">
+          {/* REAL-TIME SUMMARY STATS BAR */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-center text-xs">
+            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-1.5">
                 <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Present</div>
                 <div className="text-sm font-black text-emerald-800 font-mono">{presentCount}</div>
               </div>
@@ -955,8 +958,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
               </button>
             </div>
           </form>
-        );
-      })()}
+        )}
 
       {/* 📝 ATTENDANCE CORRECTION REQUEST MODAL (SUPERVISOR -> MANAGER/ADMIN) */}
       {editModalWorker && (

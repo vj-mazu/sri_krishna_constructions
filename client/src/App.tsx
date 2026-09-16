@@ -73,7 +73,7 @@ export function App() {
   };
   
   // Toast state
-  const [toast, setToast] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info', message: string } | null>(null);
 
   useEffect(() => {
     const handleToast = (e: Event) => {
@@ -614,12 +614,18 @@ export function App() {
           className={`fixed top-5 right-5 z-[9999] p-4 rounded-xl shadow-2xl border flex items-center gap-3 transition-all duration-300 transform translate-y-0 max-w-md backdrop-blur-md animate-in slide-in-from-top-4 fade-in ${
             toast.type === 'success' 
               ? 'bg-emerald-900/90 text-white border-emerald-500 shadow-emerald-900/30' 
+              : toast.type === 'info'
+              ? 'bg-blue-900/90 text-white border-blue-500 shadow-blue-900/30'
               : 'bg-rose-900/90 text-white border-rose-500 shadow-rose-900/30'
           }`}
         >
           {toast.type === 'success' ? (
             <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0 border border-emerald-400">
               <CheckCircle2 className="w-5 h-5 text-emerald-300" />
+            </div>
+          ) : toast.type === 'info' ? (
+            <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 border border-blue-400">
+              <AlertCircle className="w-5 h-5 text-blue-300" />
             </div>
           ) : (
             <div className="w-8 h-8 rounded-full bg-rose-500/20 flex items-center justify-center shrink-0 border border-rose-400">

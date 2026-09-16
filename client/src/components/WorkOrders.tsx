@@ -14,7 +14,12 @@ import {
   Package, 
   Receipt,
   X,
-  CheckCircle2
+  CheckCircle2,
+  ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 
