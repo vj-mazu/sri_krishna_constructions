@@ -129,6 +129,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       setError('');
       setSuccess('');
 
+      // Immediately clear current in-memory attendance state so stale date records don't persist
+      setAttendanceRecords({});
+
       // Always fetch all workers so supervisors can dynamically assign any worker to any division
       const [workersRes, attendanceRes, holidaysRes] = await Promise.all([
         api.get('/workers?limit=1000'),
@@ -159,7 +162,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         secondDivisionName?: string;
       }> = {};
 
-      // Initialize all workers as clean/unmarked
+      // Initialize all workers as completely clean/unmarked by default
       fetchedWorkers.forEach((w: any) => {
         recordsMap[w.id] = {
           status: '',
@@ -169,18 +172,22 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         };
       });
 
-      // Overlay saved attendance records
-      fetchedAttendance.forEach((att: any) => {
-        recordsMap[att.workerId] = {
-          status: att.status,
-          overtimeHours: att.overtimeHours ? att.overtimeHours.toString() : '0',
-          dailyWageOverride: att.dailyWageOverride ? att.dailyWageOverride.toString() : '',
-          divisionId: att.divisionId || att.worker?.divisionId || '',
-          divisionName: att.divisionName || '',
-          secondDivisionId: att.secondDivisionId || '',
-          secondDivisionName: att.secondDivisionName || '',
-        };
-      });
+      // Overlay saved attendance records ONLY if records exist in database for this specific date
+      if (Array.isArray(fetchedAttendance) && fetchedAttendance.length > 0) {
+        fetchedAttendance.forEach((att: any) => {
+          if (recordsMap[att.workerId]) {
+            recordsMap[att.workerId] = {
+              status: att.status || '',
+              overtimeHours: att.overtimeHours ? att.overtimeHours.toString() : '0',
+              dailyWageOverride: att.dailyWageOverride ? att.dailyWageOverride.toString() : '',
+              divisionId: att.divisionId || att.worker?.divisionId || '',
+              divisionName: att.divisionName || '',
+              secondDivisionId: att.secondDivisionId || '',
+              secondDivisionName: att.secondDivisionName || '',
+            };
+          }
+        });
+      }
 
       setAttendanceRecords(recordsMap);
     } catch (err: any) {
@@ -195,6 +202,23 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   useEffect(() => {
     fetchWorkersAndAttendance();
   }, [selectedDate, selectedDivisionId]);
+
+  const handleClearAllAttendance = () => {
+    if (!window.confirm(`Are you sure you want to reset all workers to Unmarked for ${formatDateDMY(selectedDate)}?`)) {
+      return;
+    }
+    const cleanMap: typeof attendanceRecords = {};
+    workers.forEach((w: any) => {
+      cleanMap[w.id] = {
+        status: '',
+        overtimeHours: '0',
+        dailyWageOverride: '',
+        divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || ''),
+      };
+    });
+    setAttendanceRecords(cleanMap);
+    showToast('Attendance sheet reset to clean/unmarked state', 'info');
+  };
 
   const handleStatusChange = (workerId: string, status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | '') => {
     const currentRec = attendanceRecords[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
@@ -573,8 +597,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       ) : (
         <form onSubmit={handleSaveAttendance} className="space-y-3">
           {/* REAL-TIME SUMMARY STATS BAR */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-center text-xs">
-            <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-1.5">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-center text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 flex-1">
+              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-1.5">
                 <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Present</div>
                 <div className="text-sm font-black text-emerald-800 font-mono">{presentCount}</div>
               </div>
@@ -595,6 +620,17 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                 <div className="text-sm font-black text-slate-700 font-mono">{Math.max(0, unmarkedCount)}</div>
               </div>
             </div>
+            
+            <button
+              type="button"
+              onClick={handleClearAllAttendance}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] border border-slate-300 flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto shrink-0"
+              title="Reset all workers on this sheet to Unmarked"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
+              <span>Reset Sheet</span>
+            </button>
+          </div>
 
             {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized) */}
             <div className="block md:hidden space-y-3 pb-16">
