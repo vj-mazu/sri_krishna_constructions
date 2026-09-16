@@ -2034,15 +2034,21 @@ app.get('/api/holidays', authenticateToken, async (req, res) => {
     if (year && month) {
       const y = parseInt(year, 10);
       const m = parseInt(month, 10);
-      const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
-      const totalDays = new Date(y, m, 0).getDate();
-      const endDate = `${y}-${String(m).padStart(2, '0')}-${String(totalDays).padStart(2, '0')} 23:59:59.999`;
-      query += ` WHERE h."date" >= $1::timestamp AND h."date" <= $2::timestamp`;
-      params.push(startDate, endDate);
+      
+      // If year is invalid or less than 4 digits (e.g. typing "20" instead of "2026"), default or skip
+      if (!isNaN(y) && !isNaN(m) && y >= 1900 && y <= 2100 && m >= 1 && m <= 12) {
+        const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+        const totalDays = new Date(y, m, 0).getDate();
+        const endDate = `${y}-${String(m).padStart(2, '0')}-${String(totalDays).padStart(2, '0')} 23:59:59.999`;
+        query += ` WHERE h."date" >= $1::timestamp AND h."date" <= $2::timestamp`;
+        params.push(startDate, endDate);
+      }
     } else if (year) {
       const y = parseInt(year, 10);
-      query += ` WHERE EXTRACT(YEAR FROM h."date") = $1`;
-      params.push(y);
+      if (!isNaN(y) && y >= 1900 && y <= 2100) {
+        query += ` WHERE EXTRACT(YEAR FROM h."date") = $1`;
+        params.push(y);
+      }
     }
 
     query += ` ORDER BY h."date" ASC`;

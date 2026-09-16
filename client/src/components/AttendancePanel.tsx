@@ -132,11 +132,17 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       // Immediately clear current in-memory attendance state so stale date records don't persist
       setAttendanceRecords({});
 
+      // Ensure selectedDate is valid and year is a full 4-digit number before calling backend
+      const parsedDate = new Date(selectedDate);
+      const isCompleteDate = !isNaN(parsedDate.getTime()) && parsedDate.getFullYear() >= 1900 && parsedDate.getFullYear() <= 2100;
+      const year = isCompleteDate ? parsedDate.getFullYear() : new Date().getFullYear();
+      const month = isCompleteDate ? parsedDate.getMonth() + 1 : new Date().getMonth() + 1;
+
       // Always fetch all workers so supervisors can dynamically assign any worker to any division
       const [workersRes, attendanceRes, holidaysRes] = await Promise.all([
         api.get('/workers?limit=1000'),
         api.get(`/attendance?date=${selectedDate}`),
-        api.get(`/holidays?year=${new Date(selectedDate).getFullYear()}&month=${new Date(selectedDate).getMonth() + 1}`),
+        api.get(`/holidays?year=${year}&month=${month}`),
       ]);
 
       const fetchedWorkers = workersRes.data.workers || [];
