@@ -3836,7 +3836,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       workerQuery += ` WHERE w."divisionId" = $1`;
       workerParams.push(divisionId);
     }
-    workerQuery += ` ORDER BY w."fullName" ASC`;
+    workerQuery += ` ORDER BY w."workerId" ASC, w."fullName" ASC`;
 
     const { rows: workers } = await pool.query(workerQuery, workerParams);
 

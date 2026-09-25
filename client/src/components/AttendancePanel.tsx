@@ -440,9 +440,21 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       return true;
     });
 
+    const extractNum = (str: string) => {
+      if (!str) return 999999;
+      const match = str.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 999999;
+    };
+
     list.sort((a, b) => {
       const idA = String(a.workerId || a.fullName || '');
       const idB = String(b.workerId || b.fullName || '');
+      const numA = extractNum(idA);
+      const numB = extractNum(idB);
+
+      if (numA !== numB) {
+        return sortOrder === 'ASC' ? numA - numB : numB - numA;
+      }
       return sortOrder === 'ASC' 
         ? idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' }) 
         : idB.localeCompare(idA, undefined, { numeric: true, sensitivity: 'base' });

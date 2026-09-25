@@ -380,12 +380,26 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
   };
 
   // Filtered workers list
-  const filteredWorkers = workers.filter(w => {
-    if (statusFilter === 'ACTIVE' && w.advanceBalance <= 0) return false;
-    if (statusFilter === 'SETTLED' && (w.advanceBalance > 0 || w.totalDisbursed === 0)) return false;
-    if (statusFilter === 'NO_ADVANCE' && (w.advanceBalance > 0 || w.totalDisbursed > 0)) return false;
-    return true;
-  });
+  const filteredWorkers = workers
+    .filter(w => {
+      if (statusFilter === 'ACTIVE' && w.advanceBalance <= 0) return false;
+      if (statusFilter === 'SETTLED' && (w.advanceBalance > 0 || w.totalDisbursed === 0)) return false;
+      if (statusFilter === 'NO_ADVANCE' && (w.advanceBalance > 0 || w.totalDisbursed > 0)) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const extractNum = (str: string) => {
+        if (!str) return 999999;
+        const match = str.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 999999;
+      };
+      const idA = String(a.workerId || a.fullName || '');
+      const idB = String(b.workerId || b.fullName || '');
+      const numA = extractNum(idA);
+      const numB = extractNum(idB);
+      if (numA !== numB) return numA - numB;
+      return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
+    });
 
   return (
     <div className="space-y-4 font-sans text-slate-800">
