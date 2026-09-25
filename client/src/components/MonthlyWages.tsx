@@ -1310,7 +1310,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     list.sort((a, b) => {
       const idA = String(a.empId || a.fullName || '');
       const idB = String(b.empId || b.fullName || '');
-      return sortOrder === 'ASC' ? idA.localeCompare(idB) : idB.localeCompare(idA);
+      return sortOrder === 'ASC' 
+        ? idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' }) 
+        : idB.localeCompare(idA, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     return list;

@@ -443,7 +443,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     list.sort((a, b) => {
       const idA = String(a.workerId || a.fullName || '');
       const idB = String(b.workerId || b.fullName || '');
-      return sortOrder === 'ASC' ? idA.localeCompare(idB) : idB.localeCompare(idA);
+      return sortOrder === 'ASC' 
+        ? idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' }) 
+        : idB.localeCompare(idA, undefined, { numeric: true, sensitivity: 'base' });
     });
 
     return list;
