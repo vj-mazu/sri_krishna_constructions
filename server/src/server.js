@@ -3943,9 +3943,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const netBaseAmount = grossPayment - pfAmount - esiAmount;
 
       const otRate = parseFloat(worker.otHourlyRate) || (dailyWage / 8);
-      const otPayment = dbPayment && dbPayment.otPayment !== undefined && dbPayment.otPayment !== null 
-        ? parseFloat(dbPayment.otPayment) 
-        : Math.round(totalOt * otRate);
+      const otPayment = Math.round(totalOt * otRate);
 
       // OT Allowance should ONLY be given when OT is actually done (totalOt > 0) or manually set in payment
       const defaultOtAllowance = parseFloat(worker.otAllowance) || 0;
