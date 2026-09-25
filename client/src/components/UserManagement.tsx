@@ -73,6 +73,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
   // Edit worker wage helper
   const [editingWorker, setEditingWorker] = useState<any>(null);
+  const [editWorkerId, setEditWorkerId] = useState('');
   const [editWorkerName, setEditWorkerName] = useState('');
   const [editFatherName, setEditFatherName] = useState('');
   const [editDesignation, setEditDesignation] = useState('');
@@ -768,6 +769,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     try {
       setLoading(true);
       await api.put(`/workers/${editingWorker.id}`, {
+        workerId: editWorkerId.trim() || undefined,
         fullName: editWorkerName.trim(),
         fatherName: editFatherName.trim(),
         designation: editDesignation.trim(),
@@ -1737,15 +1739,28 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     </div>
                   ) : (
                     <>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Full Name *</label>
-                        <input
-                          type="text"
-                          required
-                          value={editWorkerName}
-                          onChange={(e) => setEditWorkerName(e.target.value)}
-                          className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Worker ID *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editWorkerId}
+                            onChange={(e) => setEditWorkerId(e.target.value.toUpperCase())}
+                            placeholder="e.g. SKC-001"
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold uppercase"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Full Name *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editWorkerName}
+                            onChange={(e) => setEditWorkerName(e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                          />
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -1766,6 +1781,28 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             onChange={(e) => setEditDesignation(e.target.value)}
                             placeholder="e.g. Mason, Welder"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Place of Work</label>
+                          <input
+                            type="text"
+                            value={editPlaceOfWork}
+                            onChange={(e) => setEditPlaceOfWork(e.target.value)}
+                            placeholder="e.g. UNIT5 TO 8 COMPRESSOR TURBINE"
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Nature of Work</label>
+                          <input
+                            type="text"
+                            value={editNatureOfWork}
+                            onChange={(e) => setEditNatureOfWork(e.target.value)}
+                            placeholder="e.g. MAINTENANCE, PIPELINE"
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium"
                           />
                         </div>
                       </div>
@@ -2013,6 +2050,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <button
                           onClick={() => {
                             setEditingWorker(w);
+                            setEditWorkerId(w.workerId || '');
                             setEditWorkerName(w.fullName);
                             setEditFatherName(w.fatherName || '');
                             setEditDesignation(w.designation || '');
@@ -2140,6 +2178,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           <button
                             onClick={() => {
                               setEditingWorker(w);
+                              setEditWorkerId(w.workerId || '');
                               setEditWorkerName(w.fullName);
                               setEditFatherName(w.fatherName || '');
                               setEditDesignation(w.designation || '');

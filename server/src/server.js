@@ -3105,7 +3105,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
 app.put('/api/workers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
 
     const { rows: existing } = await pool.query(`SELECT * FROM "Worker" WHERE "id" = $1`, [id]);
     if (existing.length === 0) return res.status(404).json({ error: 'Worker not found' });
@@ -3143,6 +3143,16 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
       cleanedPhone = phone;
     }
 
+    let newWorkerId = existing[0].workerId;
+    if (workerId && workerId.trim() !== existing[0].workerId) {
+      const trimmedWorkerId = workerId.trim().toUpperCase();
+      const { rows: dupCheck } = await pool.query(`SELECT id FROM "Worker" WHERE "workerId" = $1 AND "id" != $2`, [trimmedWorkerId, id]);
+      if (dupCheck.length > 0) {
+        return res.status(400).json({ error: `Worker ID '${trimmedWorkerId}' is already assigned to another worker!` });
+      }
+      newWorkerId = trimmedWorkerId;
+    }
+
     const newFullName = fullName !== undefined ? fullName.trim() : existing[0].fullName;
     const newFatherName = fatherName !== undefined ? (fatherName ? fatherName.trim() : null) : existing[0].fatherName;
     const newDesignation = designation !== undefined ? (designation ? designation.trim() : null) : existing[0].designation;
@@ -3166,15 +3176,15 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
 
     const { rows } = await pool.query(
       `UPDATE "Worker"
-       SET "fullName" = $1, "fatherName" = $2, "designation" = $3, "mobileNumber" = $4,
-           "dailyWage" = $5, "dailyAllowance" = $6, "advanceTaken" = $7, "advanceBalance" = $8,
-           "advanceTakenDate" = $9, "advanceReason" = $10, "advanceReturnDate" = $11,
-           "otAllowance" = $12, "otHourlyRate" = $13, "divisionId" = $14,
-           "pfNumber" = $15, "esiNumber" = $16, "uanNumber" = $17, "bankAccountNo" = $18, "ifscCode" = $19, "placeOfWork" = $20, "natureOfWork" = $21,
+       SET "workerId" = $1, "fullName" = $2, "fatherName" = $3, "designation" = $4, "mobileNumber" = $5,
+           "dailyWage" = $6, "dailyAllowance" = $7, "advanceTaken" = $8, "advanceBalance" = $9,
+           "advanceTakenDate" = $10, "advanceReason" = $11, "advanceReturnDate" = $12,
+           "otAllowance" = $13, "otHourlyRate" = $14, "divisionId" = $15,
+           "pfNumber" = $16, "esiNumber" = $17, "uanNumber" = $18, "bankAccountNo" = $19, "ifscCode" = $20, "placeOfWork" = $21, "natureOfWork" = $22,
            "updatedAt" = NOW()
-       WHERE "id" = $22
+       WHERE "id" = $23
        RETURNING *`,
-      [newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
+      [newWorkerId, newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
     );
 
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [newDivisionId]);

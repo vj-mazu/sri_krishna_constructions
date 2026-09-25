@@ -27,6 +27,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
+import { DatePickerDMY } from './DatePickerDMY';
 
 interface WorkerAdvanceSummary {
   id: string;
@@ -951,12 +952,10 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Disbursement Date *</label>
-                <input
-                  type="date"
+                <DatePickerDMY
                   required
                   value={disburseForm.date}
-                  onChange={(e) => setDisburseForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full p-2 border border-slate-300 rounded-lg focus:border-blue-700 outline-none font-mono"
+                  onChange={(val) => setDisburseForm(prev => ({ ...prev, date: val }))}
                 />
               </div>
 
@@ -973,11 +972,9 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Expected Repayment / Return Date</label>
-                <input
-                  type="date"
+                <DatePickerDMY
                   value={disburseForm.expectedReturnDate}
-                  onChange={(e) => setDisburseForm(prev => ({ ...prev, expectedReturnDate: e.target.value }))}
-                  className="w-full p-2 border border-slate-300 rounded-lg focus:border-blue-700 outline-none font-mono"
+                  onChange={(val) => setDisburseForm(prev => ({ ...prev, expectedReturnDate: val }))}
                 />
               </div>
 
@@ -1044,12 +1041,10 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Repayment Date *</label>
-                <input
-                  type="date"
+                <DatePickerDMY
                   required
                   value={repayForm.date}
-                  onChange={(e) => setRepayForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full p-2 border border-slate-300 rounded-lg focus:border-emerald-700 outline-none font-mono"
+                  onChange={(val) => setRepayForm(prev => ({ ...prev, date: val }))}
                 />
               </div>
 

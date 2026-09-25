@@ -15,6 +15,7 @@ import {
   ChevronsRight,
   ArrowUpDown
 } from 'lucide-react';
+import { DatePickerDMY } from './DatePickerDMY';
 
 interface AttendancePanelProps {
   currentUserRole?: string;
@@ -535,11 +536,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">
             Date * {selectedDate && <span className="text-[#1e3a8a] font-mono font-bold text-[10px]">[{formatDateDMY(selectedDate)}]</span>}
           </label>
-          <input
-            type="date"
+          <DatePickerDMY
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs font-mono"
+            onChange={(val) => setSelectedDate(val)}
           />
         </div>
         <div className="text-xs col-span-2 md:col-span-1">
