@@ -231,13 +231,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const allowanceAmount = Math.round(workingDays * dailyAllowance);
     const grossPayment = wagesAmount + allowanceAmount;
 
-    const pfVal = customPf[w.workerId] !== undefined ? customPf[w.workerId] : (parseFloat(w.pfAmount || 0) || 0);
+    const pfVal = customPf[w.workerId] !== undefined 
+      ? customPf[w.workerId] 
+      : (w.pfAmount !== undefined && w.pfAmount !== null ? parseFloat(w.pfAmount) : 0);
     const pf = pfVal === '' ? 0 : parseFloat(pfVal as string) || 0;
 
-    const esiVal = customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (parseFloat(w.esiAmount || 0) || 0);
+    const esiVal = customEsi[w.workerId] !== undefined 
+      ? customEsi[w.workerId] 
+      : (w.esiAmount !== undefined && w.esiAmount !== null ? parseFloat(w.esiAmount) : 0);
     const esi = esiVal === '' ? 0 : parseFloat(esiVal as string) || 0;
 
-    const netBaseAmount = grossPayment - pf - esi;
+    const netBaseAmount = Math.max(0, grossPayment - pf - esi);
 
     const otHours = parseFloat(w.totalOtHours) || 0;
     const otHourlyRate = parseFloat(w.otHourlyRate) || 0;
@@ -307,24 +311,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       setSuccess(successMsg);
       showToast(successMsg, 'success');
       
-      // Before re-fetch, save current overrides
-      const savedCustomPf = { ...customPf };
-      const savedCustomEsi = { ...customEsi };
-      const savedCustomAdvance = { ...customAdvance };
-      const savedCustomExtra = { ...customExtra };
-
       // Refresh entire report to pull fresh advanceBalance and MonthlyPayment records from database
       await handleCalculateWages();
-
-      // Restore overrides (remove the approved worker's entry)
-      delete savedCustomPf[worker.workerId];
-      delete savedCustomEsi[worker.workerId];
-      delete savedCustomAdvance[worker.workerId];
-      delete savedCustomExtra[worker.workerId];
-      setCustomPf(savedCustomPf);
-      setCustomEsi(savedCustomEsi);
-      setCustomAdvance(savedCustomAdvance);
-      setCustomExtra(savedCustomExtra);
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to approve wage payout.';
       setError(errMsg);
@@ -333,17 +321,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   };
 
   const handleApproveAll = async () => {
-    const pendingWages = wagesReport.filter(w => w.paymentStatus !== 'APPROVED');
-    if (pendingWages.length === 0) {
-      showToast('All salaries in this list are already approved.', 'success');
+    const targetWages = filteredWages.length > 0 ? filteredWages : wagesReport;
+    if (targetWages.length === 0) {
+      showToast('No workers in the current register to approve.', 'info');
       return;
     }
-    if (!window.confirm(`Are you sure you want to approve payments for all ${pendingWages.length} workers?`)) return;
+    if (!window.confirm(`Are you sure you want to approve & save all salary calculations, PF/ESI, and advance deductions for ${targetWages.length} workers?`)) return;
 
     setError('');
     setSuccess('');
     try {
-      const promises = pendingWages.map(worker => {
+      const promises = targetWages.map(worker => {
         const calc = getRowCalculations(worker);
         return api.post('/wages/approve', {
           workerId: worker.workerId,
@@ -370,16 +358,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         });
       });
       await Promise.all(promises);
-      const successMsg = `Successfully approved salary payouts for all ${pendingWages.length} workers!`;
+      const successMsg = `Successfully approved and saved salary records for all ${targetWages.length} workers!`;
       setSuccess(successMsg);
       showToast(successMsg, 'success');
-      handleCalculateWages();
+      await handleCalculateWages();
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to bulk-approve salaries.';
       setError(errMsg);
       showToast(errMsg, 'error');
     }
   };
+
 
   const handleDispatchSlip = async (worker: any) => {
     const calc = getRowCalculations(worker);
@@ -2039,6 +2028,15 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                             <span>•</span>
                             <span className="font-mono text-[8.5px] text-slate-400">{w.empId}</span>
                           </div>
+                          {w.divisionBreakdown && Object.keys(w.divisionBreakdown).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Object.entries(w.divisionBreakdown).map(([div, days]: any) => (
+                                <span key={div} className="text-[8px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-1 py-0.2 rounded leading-tight">
+                                  {div}: {days}d
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -2066,7 +2064,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
-                        value={customPf[w.workerId] !== undefined ? customPf[w.workerId] : (w.pfAmount || '')}
+                        value={customPf[w.workerId] !== undefined ? customPf[w.workerId] : (calc.pf || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
                           const val = raw === '' ? '' : (parseFloat(raw) || 0);
@@ -2083,7 +2081,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
-                        value={customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (w.esiAmount || '')}
+                        value={customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (calc.esi || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
                           const val = raw === '' ? '' : (parseFloat(raw) || 0);

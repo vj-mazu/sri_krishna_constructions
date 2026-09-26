@@ -2944,8 +2944,8 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
     let query = `
       SELECT w."id", w."workerId", w."fullName", w."fatherName", w."designation", w."mobileNumber",
              w."dailyWage", COALESCE(w."dailyAllowance", 0) as "dailyAllowance",
-             COALESCE(w."advanceTaken", w."advanceBalance", 0) as "advanceTaken",
-             COALESCE(NULLIF(w."advanceBalance", 0), w."advanceTaken", 0) as "advanceBalance",
+             COALESCE(w."advanceTaken", 0) as "advanceTaken",
+             COALESCE(w."advanceBalance", 0) as "advanceBalance",
              COALESCE(w."otAllowance", 0) as "otAllowance",
              w."otHourlyRate", w."divisionId",
              COALESCE(w."pfNumber", '') as "pfNumber",
@@ -3816,8 +3816,8 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
     let workerQuery = `
       SELECT w."id", w."workerId", w."fullName", w."fatherName", w."designation", w."mobileNumber",
              w."dailyWage", COALESCE(w."dailyAllowance", 0) as "dailyAllowance",
-             COALESCE(w."advanceTaken", w."advanceBalance", 0) as "advanceTaken",
-             COALESCE(NULLIF(w."advanceBalance", 0), w."advanceTaken", 0) as "advanceBalance",
+             COALESCE(w."advanceTaken", 0) as "advanceTaken",
+             COALESCE(w."advanceBalance", 0) as "advanceBalance",
              COALESCE(w."otAllowance", 0) as "otAllowance",
              w."otHourlyRate", w."divisionId",
              COALESCE(w."pfNumber", '') as "pfNumber",
@@ -3848,17 +3848,21 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
     // Fetch attendances for this month
     const { rows: attendances } = await pool.query(
-      `SELECT a."workerId", a."date", a."status", COALESCE(a."overtimeHours", 0)::float as "overtimeHours", a."dailyWageOverride", a."divisionId", a."secondDivisionId",
-              d."name" as "divisionName"
+      `SELECT a."workerId", a."date", a."status", 
+              to_char(a."date", 'YYYY-MM-DD') as "dateStr",
+              COALESCE(a."overtimeHours", a."otHours", 0)::float as "overtimeHours", 
+              a."dailyWageOverride", a."divisionId", a."secondDivisionId",
+              d."name" as "divisionName", d2."name" as "secondDivisionName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
+       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
        WHERE a."date" >= $1::timestamp AND a."date" <= $2::timestamp`,
       [startDate, endDate]
     );
 
     // Fetch declared holidays for this month
     const { rows: holidays } = await pool.query(
-      `SELECT "date", "name" FROM "Holiday" WHERE "date" >= $1::timestamp AND "date" <= $2::timestamp`,
+      `SELECT "date", "name", to_char("date", 'YYYY-MM-DD') as "dateStr" FROM "Holiday" WHERE "date" >= $1::timestamp AND "date" <= $2::timestamp`,
       [startDate, endDate]
     );
 
@@ -3887,7 +3891,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       return `${year}-${month}-${day}`;
     };
 
-    const holidayDatesSet = new Set(holidays.map(h => formatToLocalDateStr(h.date)));
+    const holidayDatesSet = new Set(holidays.map(h => h.dateStr || formatToLocalDateStr(h.date)));
 
     const rawWageReport = workers.map((worker) => {
       const workerAtts = attsByWorker[worker.id] || [];
@@ -3900,9 +3904,10 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const divisionCounts = {};
 
       workerAtts.forEach((att) => {
-        const dStr = formatToLocalDateStr(att.date);
+        const dStr = att.dateStr || formatToLocalDateStr(att.date);
         workerAttDateMap[dStr] = att;
-        const divName = att.divisionName || worker.divisionName || 'General';
+        const div1Name = att.divisionName || worker.divisionName || 'General';
+        const div2Name = att.secondDivisionName || null;
 
         if (isFiltered) {
           const isAttInThisDiv = (att.divisionId === divisionId) || (!att.divisionId && worker.divisionId === divisionId);
@@ -3911,16 +3916,20 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
           if (att.status === 'PRESENT') {
             if (isAttInThisDiv) {
               present += 1;
-              divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
+              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 1;
             }
           } else if (att.status === 'ABSENT') {
             if (isAttInThisDiv) {
               absent += 1;
             }
           } else if (att.status === 'HALF_DAY') {
-            if (isAttInThisDiv || isSecondDiv) {
-              half += 1;
-              divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+            if (isAttInThisDiv) {
+              half += 0.5;
+              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 0.5;
+            }
+            if (isSecondDiv && div2Name) {
+              half += 0.5;
+              divisionCounts[div2Name] = (divisionCounts[div2Name] || 0) + 0.5;
             }
           } else if (att.status === 'LEAVE') {
             if (isAttInThisDiv) {
@@ -3933,12 +3942,17 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         } else {
           if (att.status === 'PRESENT') {
             present += 1;
-            divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
+            divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 1;
           } else if (att.status === 'ABSENT') {
             absent += 1;
           } else if (att.status === 'HALF_DAY') {
             half += 1;
-            divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+            if (div2Name && div2Name !== div1Name) {
+              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 0.5;
+              divisionCounts[div2Name] = (divisionCounts[div2Name] || 0) + 0.5;
+            } else {
+              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 0.5;
+            }
           } else if (att.status === 'LEAVE') {
             leave += 1;
           }
@@ -3969,12 +3983,10 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const allowanceAmount = Math.round(workingDays * dailyAllowance);
       const grossPayment = wagesAmount + allowanceAmount;
 
-      const dbPayment = paysByWorker[worker.id];
-
       // Flexible / Manual deductions (pre-filled from DB if already entered/approved)
       const pfAmount = dbPayment ? (parseFloat(dbPayment.pfAmount) || 0) : 0;
       const esiAmount = dbPayment ? (parseFloat(dbPayment.esiAmount) || 0) : 0;
-      const netBaseAmount = grossPayment - pfAmount - esiAmount;
+      const netBaseAmount = Math.max(0, grossPayment - pfAmount - esiAmount);
 
       const otRate = parseFloat(worker.otHourlyRate) || (dailyWage / 8);
       const otPayment = Math.round(totalOt * otRate);
@@ -4080,7 +4092,12 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
     const endDate = `${y}-${String(m).padStart(2, '0')}-${String(totalDaysInMonth).padStart(2, '0')} 23:59:59.999`;
 
     const { rows: logs } = await pool.query(
-      `SELECT a.*, d."name" as "divisionName", d2."name" as "secondDivisionName", u."fullName" as "markedByName"
+      `SELECT a.*, 
+              to_char(a."date", 'YYYY-MM-DD') as "dateStr",
+              COALESCE(a."overtimeHours", a."otHours", 0)::float as "overtimeHours",
+              d."name" as "divisionName", 
+              d2."name" as "secondDivisionName", 
+              u."fullName" as "markedByName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
        LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
@@ -4100,19 +4117,19 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
 
     const logsByDateStr = {};
     logs.forEach(l => {
-      const dStr = formatToLocalDateStr(l.date);
+      const dStr = l.dateStr || formatToLocalDateStr(l.date);
       logsByDateStr[dStr] = l;
     });
 
     // Fetch declared holidays for this month
     const { rows: holidays } = await pool.query(
-      `SELECT "date", "name", "type" FROM "Holiday" WHERE "date" >= $1::timestamp AND "date" <= $2::timestamp`,
+      `SELECT "date", "name", "type", to_char("date", 'YYYY-MM-DD') as "dateStr" FROM "Holiday" WHERE "date" >= $1::timestamp AND "date" <= $2::timestamp`,
       [startDate, endDate]
     );
 
     const holidaysByDateStr = {};
     holidays.forEach(h => {
-      const dStr = formatToLocalDateStr(h.date);
+      const dStr = h.dateStr || formatToLocalDateStr(h.date);
       holidaysByDateStr[dStr] = h;
     });
 
@@ -4135,7 +4152,7 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
 
       const log = logsByDateStr[curDateStr];
       let status = log ? log.status : (declaredHoliday ? 'GOVT_HOLIDAY' : (isSunday ? 'HOLIDAY' : 'NOT_MARKED'));
-      const otHours = log ? (parseFloat(log.otHours) || 0) : 0;
+      const otHours = log ? (parseFloat(log.overtimeHours || log.otHours) || 0) : 0;
       
       const div1Name = log?.divisionName || worker.divisionName || 'General';
       const div2Name = log?.secondDivisionName || null;
@@ -4356,13 +4373,19 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
       if (adv > 0 || prevAdvanceDeducted > 0) {
         const { rows: updatedWorker } = await client.query(
           `UPDATE "Worker"
-           SET "advanceBalance" = GREATEST(0, COALESCE(NULLIF("advanceBalance", 0), "advanceTaken", 0) + $1 - $2), "updatedAt" = NOW()
+           SET "advanceBalance" = GREATEST(0, COALESCE("advanceBalance", 0) + $1 - $2), "updatedAt" = NOW()
            WHERE "id" = $3
            RETURNING "advanceBalance"`,
           [prevAdvanceDeducted, adv, workerId]
         );
 
         const newBalAfter = updatedWorker.length > 0 ? parseFloat(updatedWorker[0].advanceBalance) : 0;
+
+        // Clean up previous payroll deduction transaction for this payment if re-approving/editing
+        await client.query(
+          `DELETE FROM "AdvanceTransaction" WHERE "source" = 'MONTHLY_PAYROLL_DEDUCTION' AND "referenceId" = $1`,
+          [rows[0].id]
+        );
 
         if (adv > 0) {
           await client.query(
