@@ -3827,14 +3827,20 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
              COALESCE(w."ifscCode", '') as "ifscCode",
              COALESCE(w."placeOfWork", '') as "placeOfWork",
              COALESCE(w."natureOfWork", '') as "natureOfWork",
-             d."name" as "divisionName"
+             COALESCE(d."name", 'General') as "divisionName"
       FROM "Worker" w
-      JOIN "Division" d ON w."divisionId" = d."id"
+      LEFT JOIN "Division" d ON w."divisionId" = d."id"
     `;
     const workerParams = [];
-    if (divisionId) {
-      workerQuery += ` WHERE w."divisionId" = $1`;
-      workerParams.push(divisionId);
+    const isFiltered = divisionId && divisionId !== 'ALL' && divisionId !== 'all' && divisionId !== '';
+    if (isFiltered) {
+      workerQuery += ` WHERE (w."divisionId" = $1 OR EXISTS (
+        SELECT 1 FROM "Attendance" a 
+        WHERE a."workerId" = w."id" 
+          AND (a."divisionId" = $1 OR a."secondDivisionId" = $1) 
+          AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
+      ))`;
+      workerParams.push(divisionId, startDate, endDate);
     }
     workerQuery += ` ORDER BY w."workerId" ASC, w."fullName" ASC`;
 
@@ -3842,7 +3848,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
     // Fetch attendances for this month
     const { rows: attendances } = await pool.query(
-      `SELECT a."workerId", a."date", a."status", COALESCE(a."overtimeHours", 0)::float as "overtimeHours", a."dailyWageOverride", a."divisionId",
+      `SELECT a."workerId", a."date", a."status", COALESCE(a."overtimeHours", 0)::float as "overtimeHours", a."dailyWageOverride", a."divisionId", a."secondDivisionId",
               d."name" as "divisionName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
@@ -3883,7 +3889,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
 
     const holidayDatesSet = new Set(holidays.map(h => formatToLocalDateStr(h.date)));
 
-    const wageReport = workers.map((worker) => {
+    const rawWageReport = workers.map((worker) => {
       const workerAtts = attsByWorker[worker.id] || [];
       const workerAttDateMap = {};
       let present = 0;
@@ -3898,30 +3904,58 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         workerAttDateMap[dStr] = att;
         const divName = att.divisionName || worker.divisionName || 'General';
 
-        if (att.status === 'PRESENT') {
-          present += 1;
-          divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
-        } else if (att.status === 'ABSENT') {
-          absent += 1;
-        } else if (att.status === 'HALF_DAY') {
-          half += 1;
-          divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
-        } else if (att.status === 'LEAVE') {
-          leave += 1;
+        if (isFiltered) {
+          const isAttInThisDiv = (att.divisionId === divisionId) || (!att.divisionId && worker.divisionId === divisionId);
+          const isSecondDiv = (att.secondDivisionId === divisionId);
+
+          if (att.status === 'PRESENT') {
+            if (isAttInThisDiv) {
+              present += 1;
+              divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
+            }
+          } else if (att.status === 'ABSENT') {
+            if (isAttInThisDiv) {
+              absent += 1;
+            }
+          } else if (att.status === 'HALF_DAY') {
+            if (isAttInThisDiv || isSecondDiv) {
+              half += 1;
+              divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+            }
+          } else if (att.status === 'LEAVE') {
+            if (isAttInThisDiv) {
+              leave += 1;
+            }
+          }
+          if (isAttInThisDiv || isSecondDiv) {
+            totalOt += (parseFloat(att.overtimeHours) || 0.0);
+          }
+        } else {
+          if (att.status === 'PRESENT') {
+            present += 1;
+            divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
+          } else if (att.status === 'ABSENT') {
+            absent += 1;
+          } else if (att.status === 'HALF_DAY') {
+            half += 1;
+            divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+          } else if (att.status === 'LEAVE') {
+            leave += 1;
+          }
+          totalOt += (parseFloat(att.overtimeHours) || 0.0);
         }
-        totalOt += (parseFloat(att.overtimeHours) || 0.0);
       });
 
       // Credit paid Govt Holidays for workers
       let paidHolidaysCount = 0;
       holidayDatesSet.forEach(hDateStr => {
         const att = workerAttDateMap[hDateStr];
-        // If not marked at all, or if marked as LEAVE or NOT_MARKED, give 1.0 day paid holiday
-        // If marked PRESENT, they already received +1 in 'present' above, so don't double count!
         if (!att || att.status === 'LEAVE') {
-          paidHolidaysCount += 1;
-          const defaultDiv = worker.divisionName || 'General';
-          divisionCounts[defaultDiv] = (divisionCounts[defaultDiv] || 0) + 1;
+          if (!isFiltered || worker.divisionId === divisionId) {
+            paidHolidaysCount += 1;
+            const defaultDiv = worker.divisionName || 'General';
+            divisionCounts[defaultDiv] = (divisionCounts[defaultDiv] || 0) + 1;
+          }
         }
       });
 
@@ -4007,6 +4041,10 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         paymentId: dbPayment ? dbPayment.id : null,
       };
     });
+
+    const wageReport = isFiltered 
+      ? rawWageReport.filter(w => w.workingDays > 0 || w.totalOtHours > 0 || w.divisionId === divisionId)
+      : rawWageReport;
 
     res.json({ wages: wageReport });
   } catch (err) {

@@ -139,8 +139,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
   const fetchDivisions = async () => {
     try {
-      const res = await api.get('/divisions');
-      setDivisions(res.data.divisions || (Array.isArray(res.data) ? res.data : []));
+      const res = await api.get('/divisions', { params: { type: 'ATTENDANCE' } });
+      const raw = res.data.divisions || (Array.isArray(res.data) ? res.data : []);
+      const attendanceOnly = raw.filter((d: any) => !d.type || d.type === 'ATTENDANCE');
+      setDivisions(attendanceOnly);
     } catch (err) {
       console.error('Failed to load divisions:', err);
       showToast('Could not load divisions list', 'error');
@@ -173,7 +175,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         params: {
           month: selectedMonth,
           year: selectedYear,
-          divisionId: selectedDivisionId || undefined,
+          divisionId: (selectedDivisionId && selectedDivisionId !== 'ALL') ? selectedDivisionId : undefined,
         },
       });
       const data = res.data.wages || [];
