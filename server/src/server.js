@@ -3837,7 +3837,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       workerQuery += ` WHERE (w."divisionId" = $1 OR EXISTS (
         SELECT 1 FROM "Attendance" a 
         WHERE a."workerId" = w."id" 
-          AND (a."divisionId" = $1 OR a."secondDivisionId" = $1) 
+          AND a."divisionId" = $1 
           AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
       ))`;
       workerParams.push(divisionId, startDate, endDate);
@@ -3893,6 +3893,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
     const holidayDatesSet = new Set(holidays.map(h => h.dateStr || formatToLocalDateStr(h.date)));
 
     const rawWageReport = workers.map((worker) => {
+      const dbPayment = paysByWorker[worker.id];
       const workerAtts = attsByWorker[worker.id] || [];
       const workerAttDateMap = {};
       let present = 0;
