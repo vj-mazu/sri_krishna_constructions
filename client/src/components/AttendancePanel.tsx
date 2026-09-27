@@ -403,38 +403,29 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return false;
       }
 
-      // 2. Dynamic Roster & Split Half-Day Business Logic:
+      // 2. Division Roster Filter:
       if (selectedDivisionId && selectedDivisionId !== 'ALL') {
-        const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
+        const isRegisteredToThisDiv = w.divisionId === selectedDivisionId;
+        const isMarkedInThisDiv = rec && rec.divisionId === selectedDivisionId && Boolean(rec.status);
         
-        // 1. If already marked at this division, show them
+        // Always show workers registered under this division
+        if (isRegisteredToThisDiv) {
+          return true;
+        }
+
+        // Show guest workers who are marked as working at this division today
         if (isMarkedInThisDiv) {
           return true;
         }
 
-        // 2. If marked Full Day (PRESENT, ABSENT, LEAVE) at another division, hide from this division
-        const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
-        if (isFullDayAtOtherDiv) {
-          return false;
-        }
-
-        // 3. If worker already completed TWO half days at two other divisions, hide from this 3rd division
-        const bothHalfDaysDoneElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.secondDivisionId && rec.divisionId !== selectedDivisionId && rec.secondDivisionId !== selectedDivisionId;
-        if (bothHalfDaysDoneElsewhere) {
-          return false;
-        }
-
-        // 4. If worker has ONLY ONE half day at another division, ALLOW them here so supervisor can mark the 2nd half day!
-        const hasOneHalfDayElsewhere = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
-        if (hasOneHalfDayElsewhere) {
-          return true;
-        }
-
-        // 5. If unmarked anywhere today, ALLOW them here so any registered worker can be assigned to any division!
+        // Show unmarked workers available to be assigned to this division
         const isUnmarked = !rec || !rec.status;
         if (isUnmarked) {
           return true;
         }
+
+        // Hide workers who belong to another division and are already marked at another division
+        return false;
       }
 
       return true;
@@ -469,11 +460,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     return filteredWorkers.slice(start, start + pageSize);
   }, [filteredWorkers, currentPage, pageSize]);
 
-  const presentCount = Object.values(attendanceRecords).filter(r => r.status === 'PRESENT').length;
-  const absentCount = Object.values(attendanceRecords).filter(r => r.status === 'ABSENT').length;
-  const halfCount = Object.values(attendanceRecords).filter(r => r.status === 'HALF_DAY').length;
-  const leaveCount = Object.values(attendanceRecords).filter(r => r.status === 'LEAVE').length;
-  const unmarkedCount = filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount);
+  const presentCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'PRESENT').length;
+  const absentCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'ABSENT').length;
+  const halfCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'HALF_DAY').length;
+  const leaveCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'LEAVE').length;
+  const unmarkedCount = Math.max(0, filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount));
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -786,8 +777,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                       const isMarkedInThisSelectedDiv = selectedDivisionId === 'ALL' 
                         ? Boolean(state.status) 
-                        : (Boolean(state.status) && (state.divisionId === selectedDivisionId || state.secondDivisionId === selectedDivisionId));
-                      const isMarkedAtOtherSiteOnly = Boolean(state.status) && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId;
+                        : (Boolean(state.status) && state.divisionId === selectedDivisionId);
+                      const isMarkedAtOtherSiteOnly = Boolean(state.status) && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId;
 
                       return (
                         <tr key={w.id} className="hover:bg-slate-50/50">
@@ -795,23 +786,21 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
                             <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
                             <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
-                            {isMarkedAtOtherSiteOnly && state.status === 'HALF_DAY' && (
-                              <div className="mt-1 inline-block px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded text-[9px] font-bold">
-                                ⚡ 0.5d done at {state.divisionName || 'Other Site'}
-                              </div>
-                            )}
-                            {state.secondDivisionId && (
-                              <div className="mt-1 inline-block px-1.5 py-0.5 bg-emerald-100 text-emerald-900 border border-emerald-300 rounded text-[9px] font-bold">
-                                🏢 Full 1.0d Split across 2 Sites
+                            {isMarkedAtOtherSiteOnly && (
+                              <div className="mt-1 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[9px] font-bold">
+                                📍 Worked at {state.divisionName || 'Other Division'}
                               </div>
                             )}
                           </td>
                           
                           <td className="px-3 py-2 text-center whitespace-nowrap">
-                            {isMarkedAtOtherSiteOnly && state.status === 'HALF_DAY' ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-300 shadow-xs">
-                                ⚡ 0.5d at {state.divisionName || 'Other Site'}
-                              </span>
+                            {isMarkedAtOtherSiteOnly ? (
+                              <div className="inline-flex flex-col items-center gap-0.5">
+                                {getStatusBadge(state.status)}
+                                <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                  at {state.divisionName || 'Other Div'}
+                                </span>
+                              </div>
                             ) : isMarkedInThisSelectedDiv ? (
                               getStatusBadge(state.status)
                             ) : (
