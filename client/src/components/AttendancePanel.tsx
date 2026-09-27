@@ -403,28 +403,27 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return false;
       }
 
-      // 2. Division Roster Filter:
+      // 2. Division Filter:
       if (selectedDivisionId && selectedDivisionId !== 'ALL') {
-        const isRegisteredToThisDiv = w.divisionId === selectedDivisionId;
         const isMarkedInThisDiv = rec && rec.divisionId === selectedDivisionId && Boolean(rec.status);
         
-        // Always show workers registered under this division
-        if (isRegisteredToThisDiv) {
-          return true;
-        }
-
-        // Show guest workers who are marked as working at this division today
+        // 1. If marked as working at this division on this date, show them!
         if (isMarkedInThisDiv) {
           return true;
         }
 
-        // Show unmarked workers available to be assigned to this division
+        // 2. If marked Full Day at another division, HIDE them
+        const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
+        if (isFullDayAtOtherDiv) {
+          return false;
+        }
+
+        // 3. If unmarked anywhere today, show them so supervisor can mark them for this division
         const isUnmarked = !rec || !rec.status;
         if (isUnmarked) {
           return true;
         }
 
-        // Hide workers who belong to another division and are already marked at another division
         return false;
       }
 
