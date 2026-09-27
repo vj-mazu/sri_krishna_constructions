@@ -4014,6 +4014,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         fatherName: worker.fatherName || '-',
         designation: worker.designation || 'Worker',
         mobileNumber: worker.mobileNumber,
+        divisionId: worker.divisionId,
         divisionName: worker.divisionName,
         divisionBreakdown: divisionCounts,
         
@@ -4061,7 +4062,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
     res.json({ wages: wageReport });
   } catch (err) {
     console.error('Wages report error:', err);
-    res.status(500).json({ error: 'Failed to calculate monthly wages' });
+    res.status(500).json({ error: 'Failed to calculate monthly wages', details: err.message });
   }
 });
 
@@ -4250,7 +4251,7 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     console.error('Worker month attendance drilldown error:', err);
-    res.status(500).json({ error: 'Failed to fetch register book drilldown' });
+    res.status(500).json({ error: 'Failed to fetch register book drilldown', details: err.message });
   }
 });
 
