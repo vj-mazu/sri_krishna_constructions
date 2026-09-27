@@ -3850,12 +3850,11 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
     const { rows: attendances } = await pool.query(
       `SELECT a."workerId", a."date", a."status", 
               to_char(a."date", 'YYYY-MM-DD') as "dateStr",
-              COALESCE(a."overtimeHours", a."otHours", 0)::float as "overtimeHours", 
-              a."dailyWageOverride", a."divisionId", a."secondDivisionId",
-              d."name" as "divisionName", d2."name" as "secondDivisionName"
+              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
+              a."dailyWageOverride", a."divisionId",
+              d."name" as "divisionName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
-       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
        WHERE a."date" >= $1::timestamp AND a."date" <= $2::timestamp`,
       [startDate, endDate]
     );
@@ -3906,17 +3905,15 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       workerAtts.forEach((att) => {
         const dStr = att.dateStr || formatToLocalDateStr(att.date);
         workerAttDateMap[dStr] = att;
-        const div1Name = att.divisionName || worker.divisionName || 'General';
-        const div2Name = att.secondDivisionName || null;
+        const divName = att.divisionName || worker.divisionName || 'General';
 
         if (isFiltered) {
           const isAttInThisDiv = (att.divisionId === divisionId) || (!att.divisionId && worker.divisionId === divisionId);
-          const isSecondDiv = (att.secondDivisionId === divisionId);
 
           if (att.status === 'PRESENT') {
             if (isAttInThisDiv) {
               present += 1;
-              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 1;
+              divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
             }
           } else if (att.status === 'ABSENT') {
             if (isAttInThisDiv) {
@@ -3924,35 +3921,26 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
             }
           } else if (att.status === 'HALF_DAY') {
             if (isAttInThisDiv) {
-              half += 0.5;
-              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 0.5;
-            }
-            if (isSecondDiv && div2Name) {
-              half += 0.5;
-              divisionCounts[div2Name] = (divisionCounts[div2Name] || 0) + 0.5;
+              half += 1;
+              divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
             }
           } else if (att.status === 'LEAVE') {
             if (isAttInThisDiv) {
               leave += 1;
             }
           }
-          if (isAttInThisDiv || isSecondDiv) {
+          if (isAttInThisDiv) {
             totalOt += (parseFloat(att.overtimeHours) || 0.0);
           }
         } else {
           if (att.status === 'PRESENT') {
             present += 1;
-            divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 1;
+            divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
           } else if (att.status === 'ABSENT') {
             absent += 1;
           } else if (att.status === 'HALF_DAY') {
             half += 1;
-            if (div2Name && div2Name !== div1Name) {
-              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 0.5;
-              divisionCounts[div2Name] = (divisionCounts[div2Name] || 0) + 0.5;
-            } else {
-              divisionCounts[div1Name] = (divisionCounts[div1Name] || 0) + 0.5;
-            }
+            divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
           } else if (att.status === 'LEAVE') {
             leave += 1;
           }
@@ -4095,13 +4083,11 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
     const { rows: logs } = await pool.query(
       `SELECT a.*, 
               to_char(a."date", 'YYYY-MM-DD') as "dateStr",
-              COALESCE(a."overtimeHours", a."otHours", 0)::float as "overtimeHours",
+              COALESCE(a."overtimeHours", 0)::float as "overtimeHours",
               d."name" as "divisionName", 
-              d2."name" as "secondDivisionName", 
               u."fullName" as "markedByName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
-       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
        LEFT JOIN "User" u ON a."markedById" = u."id"
        WHERE a."workerId" = $1 AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
        ORDER BY a."date" ASC`,
