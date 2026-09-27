@@ -195,12 +195,15 @@ model AuditLog {
 
 model Division {
   id        String   @id @default(uuid())
-  name      String   @unique
+  name      String
+  type      String   @default("PO_CLIENT")
   workers   Worker[]
   purchaseOrders PurchaseOrder[]
   attendances Attendance[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([name, type])
 }
 
 model Worker {

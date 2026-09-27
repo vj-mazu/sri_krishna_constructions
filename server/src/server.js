@@ -2873,9 +2873,14 @@ app.post('/api/divisions', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
     const cleanName = name.trim();
     const divType = (type && type.toUpperCase() === 'ATTENDANCE') ? 'ATTENDANCE' : 'PO_CLIENT';
 
-    const existing = await pool.query('SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1)', [cleanName]);
+    const existing = await pool.query(
+      'SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1) AND "type" = $2',
+      [cleanName, divType]
+    );
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Division name already exists' });
+      return res.status(400).json({ 
+        error: `Division '${cleanName}' already exists under ${divType === 'ATTENDANCE' ? 'Attendance Divisions' : 'PO Divisions / Clients'}` 
+      });
     }
     const { rows } = await pool.query(
       `INSERT INTO "Division" ("id", "name", "type", "createdAt", "updatedAt")
@@ -2898,9 +2903,17 @@ app.put('/api/divisions/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
       return res.status(400).json({ error: 'Division name is required' });
     }
     const cleanName = name.trim();
-    const existing = await pool.query('SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1) AND "id" != $2', [cleanName, id]);
+    const { rows: currentDiv } = await pool.query('SELECT "type" FROM "Division" WHERE "id" = $1', [id]);
+    const targetType = type ? type.toUpperCase() : (currentDiv[0]?.type || 'PO_CLIENT');
+
+    const existing = await pool.query(
+      'SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1) AND "type" = $2 AND "id" != $3',
+      [cleanName, targetType, id]
+    );
     if (existing.rows.length > 0) {
-      return res.status(400).json({ error: 'Division name already exists' });
+      return res.status(400).json({ 
+        error: `Division '${cleanName}' already exists under ${targetType === 'ATTENDANCE' ? 'Attendance Divisions' : 'PO Divisions / Clients'}` 
+      });
     }
     const { rows } = await pool.query(
       `UPDATE "Division"

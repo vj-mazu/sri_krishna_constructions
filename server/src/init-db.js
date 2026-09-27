@@ -578,6 +578,11 @@ export const initializeDatabaseTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_wo_partno ON "WorkOrder"("partNumber");
       CREATE INDEX IF NOT EXISTS idx_wo_itemname ON "WorkOrder"("itemName");
       CREATE INDEX IF NOT EXISTS idx_wo_created ON "WorkOrder"("createdAt" DESC);
+
+      -- Allow same division name across separate types (ATTENDANCE vs PO_CLIENT)
+      ALTER TABLE "Division" DROP CONSTRAINT IF EXISTS "Division_name_key";
+      DROP INDEX IF EXISTS "Division_name_key";
+      CREATE UNIQUE INDEX IF NOT EXISTS "Division_name_type_unique_idx" ON "Division" (LOWER("name"), "type");
     `);
 
     client.release();
