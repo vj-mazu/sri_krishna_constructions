@@ -304,7 +304,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         extraAmount: calc.extra,
         finalNetAmount: calc.finalNetAmount,
         calculatedAmount: calc.finalNetAmount,
-        divisionSummary: worker.divisionBreakdown || null,
+        divisionSummary: worker.divisionBreakdown || {},
       });
 
       const successMsg = `Salary payment approved for '${worker.fullName}' (Net: ₹${calc.finalNetAmount})!`;
@@ -354,7 +354,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           extraAmount: calc.extra,
           finalNetAmount: calc.finalNetAmount,
           calculatedAmount: calc.finalNetAmount,
-          divisionSummary: worker.divisionBreakdown || null,
+          divisionSummary: worker.divisionBreakdown || {},
         });
       });
       await Promise.all(promises);

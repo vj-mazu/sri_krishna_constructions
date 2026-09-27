@@ -4326,7 +4326,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
            gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8,
            $9, $10, $11, $12, $13, $14,
            $15, $16, $17, $18, $19, $20,
-           $21, $22, 'APPROVED', $23, NOW(), NOW()
+           $21, COALESCE($22::jsonb, '{}'::jsonb), 'APPROVED', $23, NOW(), NOW()
          )
          ON CONFLICT ("workerId", "month", "year")
          DO UPDATE SET
@@ -4357,7 +4357,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
           workerId, m, y, pDays, aDays, hDays, lDays, otH,
           wAmt, allAmt, gross, pf, esi, netBase,
           otPay, otAll, totPay, adv, extra, finalNet,
-          finalNet, divisionSummary ? JSON.stringify(divisionSummary) : null, req.user.id
+          finalNet, divisionSummary ? JSON.stringify(divisionSummary) : '{}', req.user.id
         ]
       );
 
@@ -4408,7 +4408,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
     }
   } catch (err) {
     console.error('Approve error:', err);
-    res.status(500).json({ error: 'Failed to approve wage payout' });
+    res.status(500).json({ error: 'Failed to approve wage payout', details: err.message });
   }
 });
 

@@ -450,8 +450,10 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "netBaseAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "otPayment" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "otAllowance" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "totalPayment" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "advanceDeducted" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "finalNetAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "divisionSummary" JSONB DEFAULT '{}'::jsonb;
 
       -- Individual Stock Rich Item Master Synchronization
       ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "kpclCode" TEXT;
