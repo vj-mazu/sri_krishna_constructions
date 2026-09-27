@@ -225,17 +225,22 @@ node src/test_all_features.js
 
 ## 📦 Production Build & Deployment
 
+### 1. Render Deployment (Current)
 ```powershell
-# 1. Build Client Bundle
+# Build client bundle
 cd client
 npm run build
 
-# 2. Push Changes to Trigger Render Auto-Deploy
+# Push changes to trigger Render auto-deploy
 cd ..
 git add .
 git commit -m "Production release"
 git push origin main
 ```
+
+### 2. Amazon Web Services (AWS) Deployment
+For detailed step-by-step instructions on deploying Sri Krishna Constructions ERP to **AWS (App Runner, EC2 + PM2 + NGINX, or ECS Fargate with RDS PostgreSQL)**, see:
+👉 **[AWS Deployment & Cloud Infrastructure Guide (AWS_DEPLOYMENT_GUIDE.md)](./AWS_DEPLOYMENT_GUIDE.md)**
 
 ---
 
