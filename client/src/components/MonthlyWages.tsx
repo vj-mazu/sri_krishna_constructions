@@ -660,7 +660,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       [
         'OT WAGES/ OT HOURS',
         otRateDaily ? otRateDaily.toString() : '-',
-        calc.otHours ? calc.otHours.toFixed(0) : '0',
+        calc.otHours ? (Number.isInteger(calc.otHours) ? calc.otHours.toString() : calc.otHours.toFixed(1)) : '0',
         calc.otPayment ? calc.otPayment.toFixed(1) : '0',
         'ESI',
         calc.esi ? calc.esi.toFixed(0) : '0'
@@ -2574,9 +2574,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                                 )}
                               </td>
                               <td className="p-2 text-center font-mono font-bold border-r border-[#e8e0d0]">
-                                {d.overtimeHours > 0 ? (
+                                {parseFloat(d.overtimeHours) > 0 ? (
                                   <span className="text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
-                                    {d.overtimeHours}h
+                                    {parseFloat(d.overtimeHours)}h
                                   </span>
                                 ) : (
                                   <span className="text-slate-300">-</span>
@@ -2764,7 +2764,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         <tr>
                           <td className="p-1.5 font-bold border-r border-black">OT WAGES/ OT HOURS</td>
                           <td className="p-1.5 text-center border-r border-black font-mono">{otRateDaily || '-'}</td>
-                          <td className="p-1.5 text-center border-r border-black font-mono">{calc.otHours ? calc.otHours.toFixed(0) : '0'}</td>
+                          <td className="p-1.5 text-center border-r border-black font-mono">{calc.otHours ? (Number.isInteger(calc.otHours) ? calc.otHours.toString() : calc.otHours.toFixed(1)) : '0'}</td>
                           <td className="p-1.5 text-right border-r border-black font-mono">{calc.otPayment ? calc.otPayment.toFixed(1) : '0'}</td>
                           <td className="p-1.5 font-bold border-r border-black">ESI</td>
                           <td className="p-1.5 text-right font-mono">{calc.esi ? calc.esi.toFixed(0) : '0'}</td>

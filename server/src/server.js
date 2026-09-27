@@ -4225,8 +4225,9 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         totalHalfDay,
         totalAbsent,
         totalLeave,
-        totalWorkingDays: totalPresent + (totalHalfDay * 0.5),
-        totalOtHours
+        totalWorkingDays: Math.round((totalPresent + (totalHalfDay * 0.5) + totalGovtHolidays) * 10) / 10,
+        totalOtHours: Math.round(totalOtHours * 100) / 100,
+        totalGovtHolidays
       },
       paymentHistory: paymentHistory.map(p => ({
         month: p.month,
