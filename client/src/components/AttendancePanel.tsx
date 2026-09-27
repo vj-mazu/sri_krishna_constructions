@@ -175,7 +175,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           status: '',
           overtimeHours: '0',
           dailyWageOverride: '',
-          divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || ''),
+          divisionId: w.divisionId || (selectedDivisionId !== 'ALL' ? selectedDivisionId : ''),
         };
       });
 
@@ -344,7 +344,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       // Prepare records with dynamic divisionId for the day
       const recordsToSave = markedEntries.map(([workerId, data]) => {
-        let divToAssign = selectedDivisionId !== 'ALL' ? selectedDivisionId : data.divisionId;
+        const workerObj = workers.find(w => w.id === workerId);
+        let divToAssign = data.divisionId || (selectedDivisionId !== 'ALL' ? selectedDivisionId : workerObj?.divisionId);
         return {
           workerId,
           status: data.status,

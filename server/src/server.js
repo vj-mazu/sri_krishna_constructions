@@ -3680,8 +3680,8 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const userIds = attendanceData.map(r => req.user.id);
 
       await pool.query(
-        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "secondDivisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
-         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, NULL, u.nt, u.uid, u.uid, NOW(), NOW()
+        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, u.nt, u.uid, u.uid, NOW(), NOW()
          FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[], $8::text[]) 
          AS u(workerId, dt, st, ot, dw, divId, nt, uid)
          ON CONFLICT ("workerId", "date")
@@ -3690,16 +3690,7 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
            "overtimeHours" = EXCLUDED."overtimeHours",
            "otHours" = EXCLUDED."otHours",
            "dailyWageOverride" = EXCLUDED."dailyWageOverride",
-           "divisionId" = CASE 
-             WHEN "Attendance"."status" = 'HALF_DAY' AND EXCLUDED."status" = 'HALF_DAY' AND "Attendance"."divisionId" IS NOT NULL AND "Attendance"."divisionId" <> EXCLUDED."divisionId"
-             THEN "Attendance"."divisionId"
-             ELSE COALESCE(EXCLUDED."divisionId", "Attendance"."divisionId")
-           END,
-           "secondDivisionId" = CASE 
-             WHEN "Attendance"."status" = 'HALF_DAY' AND EXCLUDED."status" = 'HALF_DAY' AND "Attendance"."divisionId" IS NOT NULL AND "Attendance"."divisionId" <> EXCLUDED."divisionId"
-             THEN EXCLUDED."divisionId"
-             ELSE "Attendance"."secondDivisionId"
-           END,
+           "divisionId" = COALESCE(EXCLUDED."divisionId", "Attendance"."divisionId"),
            "notes" = EXCLUDED."notes",
            "recordedById" = EXCLUDED."recordedById",
            "markedById" = EXCLUDED."markedById",
