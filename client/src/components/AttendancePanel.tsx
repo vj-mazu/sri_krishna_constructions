@@ -281,13 +281,18 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   };
 
   const handleOtChange = (workerId: string, overtimeHours: string) => {
-    setAttendanceRecords((prev) => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        overtimeHours,
-      },
-    }));
+    setAttendanceRecords((prev) => {
+      const currentRec = prev[workerId] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
+      const numOt = parseFloat(overtimeHours) || 0;
+      return {
+        ...prev,
+        [workerId]: {
+          ...currentRec,
+          overtimeHours,
+          status: (numOt > 0 && !currentRec.status) ? 'PRESENT' : currentRec.status,
+        },
+      };
+    });
   };
 
   const formatDateDMY = (dateStr: string) => {

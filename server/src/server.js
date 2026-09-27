@@ -3633,7 +3633,7 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
           const worker = workers.find(w => w.id === record.workerId);
           if (existing && worker) {
             const statusChanged = existing.status !== record.status;
-            const existingOt = parseFloat(existing.otHours) || 0.0;
+            const existingOt = parseFloat(existing.overtimeHours || existing.otHours) || 0.0;
             const incomingOt = parseFloat(record.overtimeHours) || 0.0;
             const otChanged = Math.abs(existingOt - incomingOt) > 0.01;
             
