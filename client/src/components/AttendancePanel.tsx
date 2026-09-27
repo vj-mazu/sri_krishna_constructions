@@ -35,7 +35,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   // Pagination & Sorting state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(30);
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
   const [editModalWorker, setEditModalWorker] = useState<any | null>(null);
@@ -937,7 +937,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     className="border border-slate-300 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value={10}>10</option>
-                    <option value={25}>25</option>
+                    <option value={30}>30</option>
                     <option value={50}>50</option>
                     <option value={100}>100</option>
                   </select>
