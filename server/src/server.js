@@ -4109,11 +4109,24 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       };
     });
 
+    let targetDivisionName = '';
+    if (isFiltered) {
+      const { rows: divRows } = await pool.query('SELECT "name" FROM "Division" WHERE "id" = $1', [divisionId]);
+      targetDivisionName = divRows[0]?.name || '';
+    }
+
     const wageReport = isFiltered 
-      ? rawWageReport.filter(w => w.workingDays > 0 || w.totalOtHours > 0 || w.divisionId === divisionId)
+      ? rawWageReport.filter(w => (Number(w.workingDays) > 0 || Number(w.totalOtHours) > 0 || (w.paymentStatus === 'APPROVED' && Number(w.calculatedAmount) > 0)))
       : rawWageReport;
 
-    res.json({ wages: wageReport });
+    // When division filter is selected, ensure divisionName and placeOfWork reflect the active filtered division
+    const finalReport = wageReport.map(w => ({
+      ...w,
+      divisionName: (isFiltered && targetDivisionName) ? targetDivisionName : (w.divisionName || 'General'),
+      placeOfWork: (isFiltered && targetDivisionName) ? targetDivisionName : (w.placeOfWork || w.divisionName || 'General'),
+    }));
+
+    res.json({ wages: finalReport });
   } catch (err) {
     console.error('Wages report error:', err);
     res.status(500).json({ error: 'Failed to calculate monthly wages', details: err.message });
