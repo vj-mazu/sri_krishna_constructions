@@ -40,11 +40,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
   // --- DIVISIONS STATE ---
   const [divisionCategoryTab, setDivisionCategoryTab] = useState<'ATTENDANCE' | 'PO_CLIENT'>('ATTENDANCE');
+  const [divisionStatusFilter, setDivisionStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [divisions, setDivisions] = useState<any[]>([]);
   const [divisionName, setDivisionName] = useState('');
   const [editingDivision, setEditingDivision] = useState<any>(null);
   const [editDivisionName, setEditDivisionName] = useState('');
   const [editDivisionType, setEditDivisionType] = useState<'ATTENDANCE' | 'PO_CLIENT'>('ATTENDANCE');
+  const [editDivisionActive, setEditDivisionActive] = useState<boolean>(true);
 
   // --- WORKERS STATE ---
   const [workers, setWorkers] = useState<any[]>([]);
@@ -99,6 +101,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
   // --- PURCHASE ORDERS (MASTER) STATE ---
   const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+  const [poStatusFilter, setPoStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [poNumber, setPoNumber] = useState('');
   const [poDivisionId, setPoDivisionId] = useState('');
   const [poDate, setPoDate] = useState(new Date().toISOString().split('T')[0]);
@@ -110,6 +113,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editPODivisionId, setEditPODivisionId] = useState('');
   const [editPODate, setEditPODate] = useState('');
   const [editPOAmount, setEditPOAmount] = useState('');
+  const [editPOActive, setEditPOActive] = useState<boolean>(true);
   // --- INDIVIDUAL STOCKS (STANDALONE NON-PO INVENTORY) STATE ---
   const [individualStocks, setIndividualStocks] = useState<any[]>([]);
   const [indStockSearch, setIndStockSearch] = useState('');
@@ -609,6 +613,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     }
   };
 
+  const handleToggleDivisionActive = async (id: string, name: string, currentActive: boolean) => {
+    try {
+      clearMessages();
+      await api.patch(`/divisions/${id}/toggle-active`);
+      setDivisions(prev => prev.map(d => d.id === id ? { ...d, isActive: !currentActive } : d));
+      const msg = `Division '${name}' marked as ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update division status';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
   const handleUpdateDivision = async (e: React.FormEvent) => {
     e.preventDefault();
     clearMessages();
@@ -618,7 +637,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       setLoading(true);
       await api.put(`/divisions/${editingDivision.id}`, { 
         name: editDivisionName.trim(),
-        type: editDivisionType 
+        type: editDivisionType,
+        isActive: editDivisionActive
       });
       const msg = `Division '${editDivisionName}' updated successfully!`;
       setSuccess(msg);
@@ -867,12 +887,28 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     }
   };
   
+  const handleTogglePoActive = async (id: string, poNumber: string, currentActive: boolean) => {
+    try {
+      clearMessages();
+      await api.patch(`/purchase-orders/${id}/toggle-active`);
+      setPurchaseOrders(prev => prev.map(p => p.id === id ? { ...p, isActive: !currentActive } : p));
+      const msg = `Purchase Order '${poNumber}' marked as ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update purchase order status';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
   const handleStartEditPO = (po: any) => {
     setEditingPO(po);
     setEditPONumber(po.poNumber);
     setEditPODivisionId(po.divisionId || (po.division ? po.division.id : ''));
     setEditPODate(po.date ? new Date(po.date).toISOString().split('T')[0] : '');
     setEditPOAmount(String(po.poAmount ?? po.amount ?? ''));
+    setEditPOActive(po.isActive !== false);
   };
 
   const handleUpdatePO = async (e: React.FormEvent) => {
@@ -885,7 +921,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         poNumber: editPONumber.trim(),
         divisionId: editPODivisionId,
         date: editPODate,
-        poAmount: parseFloat(editPOAmount)
+        poAmount: parseFloat(editPOAmount),
+        isActive: editPOActive
       });
       const msg = `Purchase Order '${editPONumber}' updated successfully!`;
       setSuccess(msg);
@@ -1332,56 +1369,103 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </button>
           </form>
 
-          {/* DIVISIONS GRID FILTERED BY ACTIVE SUB-CATEGORY */}
+          {/* ACTIVE / INACTIVE SUB-FILTER BAR */}
+          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-slate-700 mr-1 text-[11px] uppercase tracking-wider">Status:</span>
+              {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(status => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setDivisionStatusFilter(status)}
+                  className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all ${
+                    divisionStatusFilter === status 
+                      ? (status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-xs' : status === 'INACTIVE' ? 'bg-rose-600 text-white shadow-xs' : 'bg-[#1e3a8a] text-white shadow-xs')
+                      : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  {status === 'ACTIVE' ? '🟢 Active' : status === 'INACTIVE' ? '🔴 Inactive' : '📋 All'} (
+                    {divisions.filter(d => (d.type || 'PO_CLIENT') === divisionCategoryTab && (status === 'ALL' || (status === 'ACTIVE' ? d.isActive !== false : d.isActive === false))).length}
+                  )
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* DIVISIONS GRID FILTERED BY ACTIVE SUB-CATEGORY AND STATUS */}
           {(() => {
-            const filteredDivs = divisions.filter(d => (d.type || 'PO_CLIENT') === divisionCategoryTab);
+            const filteredDivs = divisions.filter(d => 
+              (d.type || 'PO_CLIENT') === divisionCategoryTab &&
+              (divisionStatusFilter === 'ALL' || (divisionStatusFilter === 'ACTIVE' ? d.isActive !== false : d.isActive === false))
+            );
             if (filteredDivs.length === 0) {
               return (
                 <div className="p-8 text-center text-slate-400 bg-white border border-dashed rounded-xl text-xs">
-                  No {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Divisions' : 'PO Divisions / Clients'} created yet. Add one above.
+                  No {divisionStatusFilter !== 'ALL' ? divisionStatusFilter.toLowerCase() + ' ' : ''}{divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Divisions' : 'PO Divisions / Clients'} found.
                 </div>
               );
             }
             return (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredDivs.map((d) => (
-                  <div key={d.id} className="p-4 bg-white border border-slate-200 rounded-xl flex items-center justify-between shadow-sm">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-slate-800">{d.name}</h4>
-                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                          d.type === 'ATTENDANCE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
-                        }`}>
-                          {d.type === 'ATTENDANCE' ? 'Attendance' : 'PO / Client'}
-                        </span>
+                {filteredDivs.map((d) => {
+                  const isActive = d.isActive !== false;
+                  return (
+                    <div key={d.id} className={`p-4 bg-white border rounded-xl flex items-center justify-between shadow-xs transition-all ${isActive ? 'border-slate-200' : 'border-rose-200 bg-rose-50/20 opacity-85'}`}>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className={`font-bold ${isActive ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{d.name}</h4>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                            d.type === 'ATTENDANCE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                          }`}>
+                            {d.type === 'ATTENDANCE' ? 'Attendance' : 'PO / Client'}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${
+                            isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-rose-50 text-rose-700 border-rose-300'
+                          }`}>
+                            {isActive ? 'ACTIVE' : 'INACTIVE'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-medium mt-1 block">Registered Workers: {d._count?.workers || 0}</span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-medium mt-1 block">Registered Workers: {d._count?.workers || 0}</span>
+                      {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleDivisionActive(d.id, d.name, isActive)}
+                            className={`px-2 py-1 rounded text-[10px] font-black border transition-all ${
+                              isActive 
+                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' 
+                                : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                            }`}
+                            title={isActive ? 'Mark as Inactive' : 'Activate Division'}
+                          >
+                            {isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingDivision(d);
+                              setEditDivisionName(d.name);
+                              setEditDivisionType(d.type || 'PO_CLIENT');
+                              setEditDivisionActive(d.isActive !== false);
+                              clearMessages();
+                            }}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                            title="Edit Division"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDivision(d.id, d.name)}
+                            className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                            title="Delete Division"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setEditingDivision(d);
-                            setEditDivisionName(d.name);
-                            setEditDivisionType(d.type || 'PO_CLIENT');
-                            clearMessages();
-                          }}
-                          className="p-1.5 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                          title="Edit Division"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDivision(d.id, d.name)}
-                          className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                          title="Delete Division"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}
@@ -1417,6 +1501,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     >
                       <option value="ATTENDANCE">Attendance Division</option>
                       <option value="PO_CLIENT">PO Division / Client</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Status *</label>
+                    <select
+                      value={editDivisionActive ? 'ACTIVE' : 'INACTIVE'}
+                      onChange={(e) => setEditDivisionActive(e.target.value === 'ACTIVE')}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white"
+                    >
+                      <option value="ACTIVE">🟢 ACTIVE (Shown in dropdowns)</option>
+                      <option value="INACTIVE">🔴 INACTIVE (Hidden from new entries)</option>
                     </select>
                   </div>
                   <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
@@ -1628,7 +1723,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
                   >
                     <option value="">-- Choose Division --</option>
-                    {divisions.map((d) => (
+                    {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && d.isActive !== false).map((d) => (
                       <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
                   </select>
@@ -2517,6 +2612,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
                     />
                   </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Status *</label>
+                    <select
+                      value={editPOActive ? 'ACTIVE' : 'INACTIVE'}
+                      onChange={(e) => setEditPOActive(e.target.value === 'ACTIVE')}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white"
+                    >
+                      <option value="ACTIVE">🟢 ACTIVE (Shown in dropdowns)</option>
+                      <option value="INACTIVE">🔴 INACTIVE (Hidden from new entries)</option>
+                    </select>
+                  </div>
                   <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
                     <button
                       type="button"
@@ -2603,52 +2709,102 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           </form>
 
+          {/* PO ACTIVE / INACTIVE FILTER BAR */}
+          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-slate-700 mr-1 text-[11px] uppercase tracking-wider">Status:</span>
+              {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(status => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => setPoStatusFilter(status)}
+                  className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all ${
+                    poStatusFilter === status 
+                      ? (status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-xs' : status === 'INACTIVE' ? 'bg-rose-600 text-white shadow-xs' : 'bg-[#1e3a8a] text-white shadow-xs')
+                      : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  {status === 'ACTIVE' ? '🟢 Active POs' : status === 'INACTIVE' ? '🔴 Inactive POs' : '📋 All POs'} (
+                    {purchaseOrders.filter(p => (poStatusFilter === 'ALL' || (status === 'ACTIVE' ? p.isActive !== false : p.isActive === false))).length}
+                  )
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="overflow-x-auto border border-slate-200 rounded-lg">
             <table className="w-full text-left text-xs excel-table">
               <thead>
                 <tr>
                   <th>PO Number</th>
-                  <th>Division</th>
+                  <th>Division / Client</th>
                   <th>Date</th>
                   <th>Amount</th>
+                  <th>Status</th>
                   <th>Added By</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {purchaseOrders.length === 0 ? (
-                  <tr><td colSpan={6} className="p-6 text-center text-slate-400">No purchase orders created yet.</td></tr>
-                ) : (
-                  purchaseOrders.map((po) => (
-                    <tr key={po.id}>
-                      <td className="font-bold text-[#667eea] font-mono">{po.poNumber}</td>
-                      <td>{po.division?.name || '-'}</td>
-                      <td>{new Date(po.date).toLocaleDateString('en-GB')}</td>
-                      <td className="font-mono font-bold text-slate-800">{formatIndianCurrency(po.poAmount ?? po.amount ?? 0)}</td>
-                      <td>{po.addedBy?.fullName || '-'}</td>
-                      <td>
-                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleStartEditPO(po)}
-                              className="p-1 text-[#667eea] hover:text-[#764ba2] bg-indigo-50 hover:bg-indigo-100 rounded"
-                              title="Edit Purchase Order"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDeletePO(po.id, po.poNumber)}
-                              className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded"
-                              title="Delete Purchase Order"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                {(() => {
+                  const filteredPOs = purchaseOrders.filter(p => 
+                    poStatusFilter === 'ALL' || (poStatusFilter === 'ACTIVE' ? p.isActive !== false : p.isActive === false)
+                  );
+                  if (filteredPOs.length === 0) {
+                    return <tr><td colSpan={7} className="p-6 text-center text-slate-400">No {poStatusFilter !== 'ALL' ? poStatusFilter.toLowerCase() + ' ' : ''}purchase orders found.</td></tr>;
+                  }
+                  return filteredPOs.map((po) => {
+                    const isPoActive = po.isActive !== false;
+                    return (
+                      <tr key={po.id} className={!isPoActive ? 'bg-rose-50/30' : ''}>
+                        <td className={`font-bold font-mono ${isPoActive ? 'text-[#667eea]' : 'text-slate-400 line-through'}`}>{po.poNumber}</td>
+                        <td className="font-semibold text-slate-700">{po.division?.name || '-'}</td>
+                        <td>{new Date(po.date).toLocaleDateString('en-GB')}</td>
+                        <td className="font-mono font-bold text-slate-800">{formatIndianCurrency(po.poAmount ?? po.amount ?? 0)}</td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${
+                            isPoActive ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-rose-50 text-rose-700 border-rose-300'
+                          }`}>
+                            {isPoActive ? 'ACTIVE' : 'INACTIVE'}
+                          </span>
+                        </td>
+                        <td>{po.addedBy?.fullName || '-'}</td>
+                        <td>
+                          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleTogglePoActive(po.id, po.poNumber, isPoActive)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                                  isPoActive 
+                                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' 
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                }`}
+                                title={isPoActive ? 'Deactivate PO' : 'Activate PO'}
+                              >
+                                {isPoActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => handleStartEditPO(po)}
+                                className="p-1 text-[#667eea] hover:text-[#764ba2] bg-indigo-50 hover:bg-indigo-100 rounded"
+                                title="Edit Purchase Order"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePO(po.id, po.poNumber)}
+                                className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded"
+                                title="Delete Purchase Order"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

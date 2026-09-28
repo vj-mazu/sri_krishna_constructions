@@ -455,8 +455,11 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "otAllowance" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "totalPayment" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "advanceDeducted" DOUBLE PRECISION NOT NULL DEFAULT 0;
-      ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "finalNetAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "divisionSummary" JSONB DEFAULT '{}'::jsonb;
+      
+      -- Division and Purchase Order active/inactive status
+      ALTER TABLE "Division" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 
       -- Individual Stock Rich Item Master Synchronization
       ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "kpclCode" TEXT;

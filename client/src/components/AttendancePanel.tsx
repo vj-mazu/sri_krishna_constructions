@@ -109,7 +109,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const fetchDivisions = async () => {
     try {
-      const res = await api.get('/divisions', { params: { type: 'ATTENDANCE' } });
+      const res = await api.get('/divisions', { params: { type: 'ATTENDANCE', activeOnly: 'true' } });
       const divList = res.data.divisions || [];
       setDivisions(divList);
       // Default to ALL divisions

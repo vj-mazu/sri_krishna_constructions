@@ -452,12 +452,15 @@ app.post('/api/purchase-orders', authenticateToken, requireRoles(['OWNER', 'MANA
 // GET /api/purchase-orders - List all POs with cursor pagination
 app.get('/api/purchase-orders', authenticateToken, async (req, res) => {
   try {
-    const { cursor, limit = 20, search, dateFrom, dateTo } = req.query;
+    const { cursor, limit = 20, search, dateFrom, dateTo, activeOnly } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
     let whereClauses = [];
     let params = [];
 
+    if (activeOnly === 'true') {
+      whereClauses.push(`COALESCE(po."isActive", true) = true`);
+    }
     if (search) {
       params.push(`%${search}%`);
       whereClauses.push(`po."poNumber" ILIKE $${params.length}`);
@@ -796,7 +799,7 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
 // PUT /api/purchase-orders/:id - Update PO header & Remarks
 app.put('/api/purchase-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { poNumber, date, divisionId, poAmount, remarks } = req.body;
+    const { poNumber, date, divisionId, poAmount, remarks, isActive } = req.body;
     const { rows } = await pool.query(
       `UPDATE "PurchaseOrder"
        SET "poNumber" = COALESCE($1, "poNumber"),
@@ -804,8 +807,9 @@ app.put('/api/purchase-orders/:id', authenticateToken, requireRoles(['OWNER', 'M
            "divisionId" = COALESCE($3, "divisionId"),
            "poAmount" = COALESCE($4, "poAmount"),
            "remarks" = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE "remarks" END,
+           "isActive" = CASE WHEN $6::boolean IS NOT NULL THEN $6 ELSE "isActive" END,
            "updatedAt" = NOW()
-       WHERE id = $6
+       WHERE id = $7
        RETURNING *`,
       [
         poNumber !== undefined ? poNumber?.trim() : null,
@@ -813,6 +817,7 @@ app.put('/api/purchase-orders/:id', authenticateToken, requireRoles(['OWNER', 'M
         divisionId || null,
         poAmount !== undefined ? parseFloat(poAmount) : null,
         remarks !== undefined ? remarks : null,
+        isActive !== undefined ? !!isActive : null,
         req.params.id
       ]
     );
@@ -821,6 +826,25 @@ app.put('/api/purchase-orders/:id', authenticateToken, requireRoles(['OWNER', 'M
   } catch (err) {
     console.error('Error updating PO:', err);
     res.status(500).json({ error: 'Failed to update PO' });
+  }
+});
+
+// PATCH /api/purchase-orders/:id/toggle-active - Toggle Active/Inactive status
+app.patch('/api/purchase-orders/:id/toggle-active', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `UPDATE "PurchaseOrder"
+       SET "isActive" = NOT COALESCE("isActive", true),
+           "updatedAt" = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'PO not found' });
+    res.json({ purchaseOrder: rows[0], message: `Purchase Order marked as ${rows[0].isActive ? 'ACTIVE' : 'INACTIVE'}` });
+  } catch (err) {
+    console.error('Error toggling PO active:', err);
+    res.status(500).json({ error: 'Failed to toggle PO status' });
   }
 });
 
@@ -2839,22 +2863,27 @@ app.delete('/api/users/:id', authenticateToken, requireRoles(['OWNER']), async (
 // --- WORKER DIVISIONS API (ATTENDANCE DIVISIONS & PO DIVISIONS/CLIENTS) ---
 app.get('/api/divisions', authenticateToken, async (req, res) => {
   try {
-    const { type } = req.query;
-    let whereClause = '';
+    const { type, activeOnly } = req.query;
+    let whereClauses = [];
     const params = [];
     if (type) {
       params.push(type.toUpperCase());
-      whereClause = `WHERE d."type" = $1`;
+      whereClauses.push(`d."type" = $${params.length}`);
     }
+    if (activeOnly === 'true') {
+      whereClauses.push(`COALESCE(d."isActive", true) = true`);
+    }
+    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     const { rows: divisions } = await pool.query(`
-      SELECT d."id", d."name", COALESCE(d."type", 'PO_CLIENT') as "type", d."createdAt", d."updatedAt",
+      SELECT d."id", d."name", COALESCE(d."type", 'PO_CLIENT') as "type", 
+             COALESCE(d."isActive", true) as "isActive", d."createdAt", d."updatedAt",
              COUNT(w."id")::int as "workerCount",
              json_build_object('workers', COUNT(w."id")::int) as "_count"
       FROM "Division" d
       LEFT JOIN "Worker" w ON d."id" = w."divisionId"
-      ${whereClause}
-      GROUP BY d."id", d."name", d."type", d."createdAt", d."updatedAt"
+      ${whereSql}
+      GROUP BY d."id", d."name", d."type", d."isActive", d."createdAt", d."updatedAt"
       ORDER BY d."name" ASC
     `, params);
     res.json({ divisions });
@@ -2866,12 +2895,13 @@ app.get('/api/divisions', authenticateToken, async (req, res) => {
 
 app.post('/api/divisions', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { name, type } = req.body;
+    const { name, type, isActive } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Division name is required' });
     }
     const cleanName = name.trim();
     const divType = (type && type.toUpperCase() === 'ATTENDANCE') ? 'ATTENDANCE' : 'PO_CLIENT';
+    const activeVal = isActive !== undefined ? !!isActive : true;
 
     const existing = await pool.query(
       'SELECT id FROM "Division" WHERE LOWER("name") = LOWER($1) AND "type" = $2',
@@ -2883,10 +2913,10 @@ app.post('/api/divisions', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
       });
     }
     const { rows } = await pool.query(
-      `INSERT INTO "Division" ("id", "name", "type", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, NOW(), NOW())
+      `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, NOW(), NOW())
        RETURNING *`,
-      [cleanName, divType]
+      [cleanName, divType, activeVal]
     );
     res.status(201).json({ division: rows[0] });
   } catch (err) {
@@ -2898,12 +2928,12 @@ app.post('/api/divisions', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
 app.put('/api/divisions/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, type } = req.body;
+    const { name, type, isActive } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Division name is required' });
     }
     const cleanName = name.trim();
-    const { rows: currentDiv } = await pool.query('SELECT "type" FROM "Division" WHERE "id" = $1', [id]);
+    const { rows: currentDiv } = await pool.query('SELECT "type", "isActive" FROM "Division" WHERE "id" = $1', [id]);
     const targetType = type ? type.toUpperCase() : (currentDiv[0]?.type || 'PO_CLIENT');
 
     const existing = await pool.query(
@@ -2919,16 +2949,36 @@ app.put('/api/divisions/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
       `UPDATE "Division"
        SET "name" = $1,
            "type" = CASE WHEN $2::text IS NOT NULL THEN $2 ELSE "type" END,
+           "isActive" = CASE WHEN $3::boolean IS NOT NULL THEN $3 ELSE "isActive" END,
            "updatedAt" = NOW()
-       WHERE "id" = $3
+       WHERE "id" = $4
        RETURNING *`,
-      [cleanName, type ? type.toUpperCase() : null, id]
+      [cleanName, type ? type.toUpperCase() : null, isActive !== undefined ? !!isActive : null, id]
     );
     if (rows.length === 0) return res.status(404).json({ error: 'Division not found' });
     res.json({ division: rows[0], message: 'Division updated successfully' });
   } catch (err) {
     console.error('Update division error:', err);
     res.status(500).json({ error: 'Failed to update division' });
+  }
+});
+
+app.patch('/api/divisions/:id/toggle-active', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `UPDATE "Division"
+       SET "isActive" = NOT COALESCE("isActive", true),
+           "updatedAt" = NOW()
+       WHERE "id" = $1
+       RETURNING *`,
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Division not found' });
+    res.json({ division: rows[0], message: `Division marked as ${rows[0].isActive ? 'ACTIVE' : 'INACTIVE'}` });
+  } catch (err) {
+    console.error('Toggle division active error:', err);
+    res.status(500).json({ error: 'Failed to update division status' });
   }
 });
 
