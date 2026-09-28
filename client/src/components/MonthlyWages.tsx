@@ -55,6 +55,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [customEsi, setCustomEsi] = useState<Record<string, number | string>>({});
   const [customAdvance, setCustomAdvance] = useState<Record<string, number | string>>({});
   const [customExtra, setCustomExtra] = useState<Record<string, number | string>>({});
+  // Manual overrides for all wage fields: workerId -> value
+  const [customWorkingDays, setCustomWorkingDays] = useState<Record<string, number | string>>({});
+  const [customDailyWage, setCustomDailyWage] = useState<Record<string, number | string>>({});
+  const [customDailyAllowance, setCustomDailyAllowance] = useState<Record<string, number | string>>({});
+  const [customOtHours, setCustomOtHours] = useState<Record<string, number | string>>({});
 
   // Register book drilldown state
   const [drilldownWorkerId, setDrilldownWorkerId] = useState<string | null>(null);
@@ -209,14 +214,28 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     handleCalculateWages();
   }, [selectedMonth, selectedYear, selectedDivisionId]);
 
-  // Compute live values for a worker row
+  // Compute live values for a worker row (supports manual overrides for all fields)
   const getRowCalculations = (w: any) => {
     const presentDays = parseFloat(w.presentDays) || 0;
     const halfDays = parseFloat(w.halfDays) || 0;
-    const workingDays = w.workingDays !== undefined ? parseFloat(w.workingDays) || 0 : (parseFloat(w.presentDays) || 0) + ((parseFloat(w.halfDays) || 0) * 0.5);
 
-    const dailyWage = parseFloat(w.dailyWage) || 0;
-    const dailyAllowance = parseFloat(w.dailyAllowance) || 0;
+    // Working Days — use manual override if entered, else server-computed value
+    const wdVal = customWorkingDays[w.workerId];
+    const workingDays = wdVal !== undefined && wdVal !== ''
+      ? (parseFloat(wdVal as string) || 0)
+      : (w.workingDays !== undefined ? parseFloat(w.workingDays) || 0 : presentDays + (halfDays * 0.5));
+
+    // Daily Wage — use manual override if entered, else server value
+    const dwVal = customDailyWage[w.workerId];
+    const dailyWage = dwVal !== undefined && dwVal !== ''
+      ? (parseFloat(dwVal as string) || 0)
+      : (parseFloat(w.dailyWage) || 0);
+
+    // Daily Allowance — use manual override if entered, else server value
+    const daVal = customDailyAllowance[w.workerId];
+    const dailyAllowance = daVal !== undefined && daVal !== ''
+      ? (parseFloat(daVal as string) || 0)
+      : (parseFloat(w.dailyAllowance) || 0);
 
     // Advance balance from worker master record
     const advanceBalance = parseFloat(w.advanceBalance) || 0;
@@ -243,7 +262,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
     const netBaseAmount = Math.max(0, grossPayment - pf - esi);
 
-    const otHours = parseFloat(w.totalOtHours) || 0;
+    // OT Hours — use manual override if entered, else server value
+    const otVal = customOtHours[w.workerId];
+    const otHours = otVal !== undefined && otVal !== ''
+      ? (parseFloat(otVal as string) || 0)
+      : (parseFloat(w.totalOtHours) || 0);
     const otHourlyRate = parseFloat(w.otHourlyRate) || 0;
     const otRate = otHourlyRate > 0 ? otHourlyRate : (dailyWage > 0 ? (dailyWage / 8) : 0);
     const otPayment = Math.round(otHours * otRate);
@@ -2041,22 +2064,67 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       </div>
                     </td>
 
-                    {/* 3. Basic Wage / Day */}
-                    <td className="text-right font-mono font-semibold text-slate-700 py-1 px-1">{formatIndianCurrency(calc.dailyWage)}</td>
+                    {/* 3. Basic Wage / Day (Editable) */}
+                    <td className="text-center py-1 px-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={customDailyWage[w.workerId] !== undefined ? customDailyWage[w.workerId] : (calc.dailyWage || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomDailyWage(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder={String(calc.dailyWage)}
+                        className="w-16 text-right font-mono font-semibold text-slate-700 bg-slate-50/40 border border-slate-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        title="Daily Wage (editable override)"
+                      />
+                    </td>
 
-                    {/* 4. Working Days */}
-                    <td className="text-center font-mono font-bold bg-emerald-50/60 text-emerald-800 py-1 px-1">{calc.workingDays.toFixed(1)}</td>
+                    {/* 4. Working Days (Editable) */}
+                    <td className="text-center py-1 px-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={customWorkingDays[w.workerId] !== undefined ? customWorkingDays[w.workerId] : (calc.workingDays || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomWorkingDays(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder={String(calc.workingDays)}
+                        className="w-14 text-center font-mono font-bold text-emerald-800 bg-emerald-50/60 border border-emerald-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-emerald-400"
+                        title="Working Days (editable override)"
+                      />
+                    </td>
 
-                    {/* 5. Allowance / Day */}
-                    <td className="text-right font-mono text-slate-600 py-1 px-1">{formatIndianCurrency(calc.dailyAllowance)}</td>
+                    {/* 5. Allowance / Day (Editable) */}
+                    <td className="text-center py-1 px-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={customDailyAllowance[w.workerId] !== undefined ? customDailyAllowance[w.workerId] : (calc.dailyAllowance || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomDailyAllowance(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder={String(calc.dailyAllowance)}
+                        className="w-14 text-right font-mono text-slate-600 bg-slate-50/40 border border-slate-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        title="Daily Allowance (editable override)"
+                      />
+                    </td>
 
-                    {/* 6. Wages Amount */}
+                    {/* 6. Wages Amount (auto-calculated) */}
                     <td className="text-right font-mono font-semibold text-slate-800 py-1 px-1">{formatIndianCurrency(calc.wagesAmount)}</td>
 
-                    {/* 7. Allowance Amount */}
+                    {/* 7. Allowance Amount (auto-calculated) */}
                     <td className="text-right font-mono font-semibold text-slate-800 py-1 px-1">{formatIndianCurrency(calc.allowanceAmount)}</td>
 
-                    {/* 8. Gross Payment */}
+                    {/* 8. Gross Payment (auto-calculated) */}
                     <td className="text-right font-mono font-bold bg-blue-50/50 text-blue-900 py-1 px-1">{formatIndianCurrency(calc.grossPayment)}</td>
 
                     {/* 9. P.F. (Manual Entry) */}
@@ -2096,10 +2164,25 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     {/* 11. Net Amount (Base) */}
                     <td className="text-right font-mono font-bold text-slate-800 bg-slate-100/70 py-1 px-1">{formatIndianCurrency(calc.netBaseAmount)}</td>
 
-                    {/* 12. OT Hours */}
-                    <td className="text-center font-mono font-bold bg-indigo-50/40 text-indigo-800 py-1 px-1">{calc.otHours}h</td>
+                    {/* 12. OT Hours (Editable) */}
+                    <td className="text-center py-1 px-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={customOtHours[w.workerId] !== undefined ? customOtHours[w.workerId] : (calc.otHours || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomOtHours(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder={String(calc.otHours)}
+                        className="w-14 text-center font-mono font-bold text-indigo-800 bg-indigo-50/40 border border-indigo-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        title="OT Hours (editable override)"
+                      />
+                    </td>
 
-                    {/* 13. OT Payment */}
+                    {/* 13. OT Payment (auto-calculated) */}
                     <td className="text-right font-mono font-semibold text-slate-700 py-1 px-1">{formatIndianCurrency(calc.otPayment)}</td>
 
                     {/* 14. Total Payment */}
