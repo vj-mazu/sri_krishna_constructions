@@ -757,8 +757,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     }
   };
 
-  const handleUpdateWorker = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleUpdateWorker = async (e?: React.FormEvent) => {
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
     clearMessages();
     if (!editingWorker) return;
 
@@ -1811,9 +1813,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </form>
           )}
 
-          {/* EDIT WORKER REGISTRY MODAL (DESKTOP) */}
+          {/* EDIT WORKER REGISTRY MODAL (DESKTOP ONLY) */}
           {editingWorker && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto min-h-screen py-4 sm:py-8">
+            <div className="hidden md:flex fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] items-center justify-center p-4 overflow-y-auto min-h-screen py-8">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col my-auto max-h-[90vh] overflow-hidden animate-fadeIn">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-4 sm:p-5 font-bold flex justify-between items-center shrink-0">
                   <span className="text-base sm:text-lg">Edit Worker: {editingWorker.workerId}</span>
