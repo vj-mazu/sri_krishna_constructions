@@ -1813,7 +1813,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT WORKER REGISTRY MODAL (DESKTOP) */}
           {editingWorker && (
-            <div className="hidden md:flex fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] items-start justify-center p-3 sm:p-4 overflow-y-auto min-h-screen py-6 sm:py-8">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto min-h-screen py-4 sm:py-8">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col my-auto max-h-[90vh] overflow-hidden animate-fadeIn">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-4 sm:p-5 font-bold flex justify-between items-center shrink-0">
                   <span className="text-base sm:text-lg">Edit Worker: {editingWorker.workerId}</span>
@@ -2215,186 +2215,320 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       </div>
                     </div>
 
-                    {/* INLINE EDIT FORM FOR MOBILE VIEW */}
+                    {/* INLINE COMPLETE EDIT FORM FOR MOBILE VIEW (ALL 22 FIELDS) */}
                     {editingWorker?.id === w.id && (
-                      <div className="mt-3 pt-3 border-t-2 border-[#1e3a8a]/20 bg-blue-50/50 p-3 rounded-xl space-y-3 md:hidden animate-fadeIn">
+                      <div className="mt-3 pt-3 border-t-2 border-[#1e3a8a]/20 bg-blue-50/40 p-3 rounded-xl space-y-3 md:hidden animate-fadeIn text-slate-800">
                         <div className="flex justify-between items-center pb-2 border-b border-blue-200">
-                          <span className="font-bold text-xs text-[#1e3a8a] flex items-center gap-1">
-                            <Edit className="w-3.5 h-3.5" /> Edit: {w.workerId}
+                          <span className="font-black text-xs text-[#1e3a8a] flex items-center gap-1.5">
+                            <Edit className="w-3.5 h-3.5" /> Full Worker Edit: <span className="font-mono bg-blue-100 px-1.5 py-0.5 rounded text-blue-900">{w.workerId}</span>
                           </span>
                           <button
                             type="button"
                             onClick={() => setEditingWorker(null)}
-                            className="text-slate-600 hover:text-slate-800 text-xs font-bold px-2 py-0.5 rounded bg-white border border-slate-300"
+                            className="text-slate-600 hover:text-slate-800 text-xs font-bold px-2.5 py-1 rounded bg-white border border-slate-300 shadow-2xs"
                           >
                             ✕ Close
                           </button>
                         </div>
                         {currentUserRole === 'SUPERVISOR' ? (
-                          <div className="space-y-2">
-                            <label className="block font-semibold text-slate-700 text-xs">Assigned Division *</label>
-                            <select
-                              value={editWorkerDivisionId}
-                              onChange={(e) => setEditWorkerDivisionId(e.target.value)}
-                              className="w-full p-2 border border-slate-300 rounded text-xs bg-white font-semibold"
-                            >
-                              {divisions.map((d) => (
-                                <option key={d.id} value={d.id}>{d.name}</option>
-                              ))}
-                            </select>
+                          <div className="space-y-2.5">
+                            <div className="p-2.5 bg-blue-100/70 border border-blue-200 rounded-lg text-[11px] font-semibold text-blue-950">
+                              Supervisor Access: Reassign worker division.
+                            </div>
+                            <div>
+                              <label className="block font-bold text-slate-700 text-xs mb-1">Assigned Division *</label>
+                              <select
+                                value={editWorkerDivisionId}
+                                onChange={(e) => setEditWorkerDivisionId(e.target.value)}
+                                className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white font-bold text-[#1e3a8a]"
+                              >
+                                {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editWorkerDivisionId)).map((d) => (
+                                  <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                              </select>
+                            </div>
                             <button
                               type="button"
                               onClick={handleUpdateWorker}
-                              className="w-full py-2 bg-[#1e3a8a] text-white rounded font-bold text-xs shadow hover:bg-[#172554]"
+                              className="w-full py-2.5 bg-[#1e3a8a] text-white rounded-lg font-bold text-xs shadow hover:bg-[#172554] active:scale-98 transition-all"
                             >
                               Save Division Changes
                             </button>
                           </div>
                         ) : (
-                          <div className="space-y-2.5 text-xs">
-                            <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-3 text-xs">
+                            {/* SECTION 1: PERSONAL & WORK DETAILS */}
+                            <div className="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="font-bold text-[11px] text-[#1e3a8a] border-b border-slate-100 pb-1">1. Personal & Role Info</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Worker ID *</label>
+                                  <input
+                                    type="text"
+                                    value={editWorkerId}
+                                    onChange={(e) => setEditWorkerId(e.target.value.toUpperCase())}
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold uppercase text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Full Name *</label>
+                                  <input
+                                    type="text"
+                                    value={editWorkerName}
+                                    onChange={(e) => setEditWorkerName(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Father's Name</label>
+                                  <input
+                                    type="text"
+                                    value={editFatherName}
+                                    onChange={(e) => setEditFatherName(e.target.value)}
+                                    placeholder="Father's name"
+                                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Designation / Trade</label>
+                                  <input
+                                    type="text"
+                                    value={editDesignation}
+                                    onChange={(e) => setEditDesignation(e.target.value)}
+                                    placeholder="e.g. Mason, Welder"
+                                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Place of Work</label>
+                                  <input
+                                    type="text"
+                                    value={editPlaceOfWork}
+                                    onChange={(e) => setEditPlaceOfWork(e.target.value)}
+                                    placeholder="e.g. Turbine Hall"
+                                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Nature of Work</label>
+                                  <input
+                                    type="text"
+                                    value={editNatureOfWork}
+                                    onChange={(e) => setEditNatureOfWork(e.target.value)}
+                                    placeholder="e.g. Maintenance"
+                                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Mobile Number *</label>
+                                  <input
+                                    type="text"
+                                    maxLength={10}
+                                    value={editWorkerMobile}
+                                    onChange={(e) => setEditWorkerMobile(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Assigned Division *</label>
+                                  <select
+                                    value={editWorkerDivisionId}
+                                    onChange={(e) => setEditWorkerDivisionId(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 rounded bg-white font-semibold text-xs text-[#1e3a8a]"
+                                  >
+                                    {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editWorkerDivisionId)).map((d) => (
+                                      <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* SECTION 2: WAGES & OVERTIME RATES */}
+                            <div className="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="font-bold text-[11px] text-emerald-800 border-b border-slate-100 pb-1">2. Wage, Allowance & OT Rates</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Wage (₹) *</label>
+                                  <input
+                                    type="number"
+                                    value={editWage}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setEditWage(val);
+                                      if (val && !editOtRate) {
+                                        const calc = Math.round(parseFloat(val) / 8);
+                                        setEditOtRate(isNaN(calc) ? '' : calc.toString());
+                                      }
+                                    }}
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Allowance (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={editDailyAllowance}
+                                    onChange={(e) => setEditDailyAllowance(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">OT Allowance (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={editOtAllowance}
+                                    onChange={(e) => setEditOtAllowance(e.target.value)}
+                                    placeholder="0"
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">OT Rate/Hr (₹) *</label>
+                                  <input
+                                    type="number"
+                                    value={editOtRate}
+                                    onChange={(e) => setEditOtRate(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* SECTION 3: ADVANCES & RECOVERY */}
+                            <div className="space-y-2 bg-amber-50/70 p-2.5 rounded-lg border border-amber-200">
+                              <div className="font-bold text-[11px] text-amber-900 border-b border-amber-200 pb-1">3. Worker Advance Management</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Taken (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={editAdvanceTaken}
+                                    onChange={(e) => setEditAdvanceTaken(e.target.value)}
+                                    className="w-full p-1.5 border border-amber-300 bg-white rounded font-mono text-xs font-bold"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Balance (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={editAdvanceBalance}
+                                    onChange={(e) => setEditAdvanceBalance(e.target.value)}
+                                    className="w-full p-1.5 border border-amber-300 bg-white rounded font-mono font-bold text-xs text-amber-900"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Taken Date</label>
+                                  <input
+                                    type="date"
+                                    value={editAdvanceTakenDate}
+                                    onChange={(e) => setEditAdvanceTakenDate(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 bg-white rounded font-mono text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Expected Return Date</label>
+                                  <input
+                                    type="date"
+                                    value={editAdvanceReturnDate}
+                                    onChange={(e) => setEditAdvanceReturnDate(e.target.value)}
+                                    className="w-full p-1.5 border border-slate-300 bg-white rounded font-mono text-xs"
+                                  />
+                                </div>
+                              </div>
                               <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Worker ID *</label>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Purpose / Reason</label>
                                 <input
                                   type="text"
-                                  value={editWorkerId}
-                                  onChange={(e) => setEditWorkerId(e.target.value.toUpperCase())}
-                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold uppercase text-xs"
+                                  value={editAdvanceReason}
+                                  onChange={(e) => setEditAdvanceReason(e.target.value)}
+                                  placeholder="e.g. Festival Advance, Medical"
+                                  className="w-full p-1.5 border border-slate-300 bg-white rounded text-xs"
                                 />
                               </div>
+                            </div>
+
+                            {/* SECTION 4: STATUTORY & BANKING */}
+                            <div className="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200">
+                              <div className="font-bold text-[11px] text-indigo-900 border-b border-slate-100 pb-1">4. Statutory & Banking Details</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Bank Name</label>
+                                  <input
+                                    type="text"
+                                    value={editPfNumber}
+                                    onChange={(e) => setEditPfNumber(e.target.value)}
+                                    placeholder="e.g. SBI, Canara"
+                                    className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">ESI Employee Code</label>
+                                  <input
+                                    type="text"
+                                    value={editEsiNumber}
+                                    onChange={(e) => setEditEsiNumber(e.target.value)}
+                                    placeholder="ESI Code"
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">UAN No</label>
+                                  <input
+                                    type="text"
+                                    value={editUanNumber}
+                                    onChange={(e) => setEditUanNumber(e.target.value)}
+                                    placeholder="UAN Number"
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Bank Account No</label>
+                                  <input
+                                    type="text"
+                                    value={editBankAcc}
+                                    onChange={(e) => setEditBankAcc(e.target.value)}
+                                    placeholder="Account Number"
+                                    className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                              </div>
                               <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Full Name *</label>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Bank IFSC Code</label>
                                 <input
                                   type="text"
-                                  value={editWorkerName}
-                                  onChange={(e) => setEditWorkerName(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                  value={editIfsc}
+                                  onChange={(e) => setEditIfsc(e.target.value)}
+                                  placeholder="IFSC Code"
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono uppercase text-xs"
                                 />
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Father's Name</label>
-                                <input
-                                  type="text"
-                                  value={editFatherName}
-                                  onChange={(e) => setEditFatherName(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Designation</label>
-                                <input
-                                  type="text"
-                                  value={editDesignation}
-                                  onChange={(e) => setEditDesignation(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded text-xs"
-                                />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Wage (₹) *</label>
-                                <input
-                                  type="number"
-                                  value={editWage}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setEditWage(val);
-                                    if (val && !editOtRate) {
-                                      const calc = Math.round(parseFloat(val) / 8);
-                                      setEditOtRate(isNaN(calc) ? '' : calc.toString());
-                                    }
-                                  }}
-                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Allowance (₹)</label>
-                                <input
-                                  type="number"
-                                  value={editDailyAllowance}
-                                  onChange={(e) => setEditDailyAllowance(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
-                                />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">OT Allowance (₹)</label>
-                                <input
-                                  type="number"
-                                  value={editOtAllowance}
-                                  onChange={(e) => setEditOtAllowance(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">OT Rate/Hr (₹) *</label>
-                                <input
-                                  type="number"
-                                  value={editOtRate}
-                                  onChange={(e) => setEditOtRate(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs"
-                                />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Taken (₹)</label>
-                                <input
-                                  type="number"
-                                  value={editAdvanceTaken}
-                                  onChange={(e) => setEditAdvanceTaken(e.target.value)}
-                                  className="w-full p-1.5 border border-amber-300 bg-amber-50/50 rounded font-mono text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Balance (₹)</label>
-                                <input
-                                  type="number"
-                                  value={editAdvanceBalance}
-                                  onChange={(e) => setEditAdvanceBalance(e.target.value)}
-                                  className="w-full p-1.5 border border-amber-300 bg-amber-50/50 rounded font-mono font-bold text-xs"
-                                />
-                              </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Mobile Number *</label>
-                                <input
-                                  type="text"
-                                  maxLength={10}
-                                  value={editWorkerMobile}
-                                  onChange={(e) => setEditWorkerMobile(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
-                                />
-                              </div>
-                              <div>
-                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Assigned Division *</label>
-                                <select
-                                  value={editWorkerDivisionId}
-                                  onChange={(e) => setEditWorkerDivisionId(e.target.value)}
-                                  className="w-full p-1.5 border border-slate-300 rounded bg-white font-semibold text-xs"
-                                >
-                                  {divisions.map((d) => (
-                                    <option key={d.id} value={d.id}>{d.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
+
                             <div className="flex gap-2 pt-2">
                               <button
                                 type="button"
                                 onClick={handleUpdateWorker}
-                                className="flex-1 py-2 bg-[#1e3a8a] text-white rounded-lg font-bold text-xs shadow hover:bg-[#172554] active:scale-98 transition-all"
+                                className="flex-1 py-2.5 bg-[#1e3a8a] text-white rounded-lg font-bold text-xs shadow hover:bg-[#172554] active:scale-98 transition-all"
                               >
-                                Save Changes
+                                Save All Changes
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setEditingWorker(null)}
-                                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs border border-slate-300 hover:bg-slate-200"
+                                className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs border border-slate-300 hover:bg-slate-200"
                               >
                                 Cancel
                               </button>
