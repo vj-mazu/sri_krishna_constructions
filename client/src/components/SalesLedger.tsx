@@ -590,7 +590,7 @@ export const SalesLedger: React.FC = () => {
       {/* 5. ROW-CLICK INSPECT SALE MODAL */}
       {inspectModalItem && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-6 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setInspectModalItem(null); }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">

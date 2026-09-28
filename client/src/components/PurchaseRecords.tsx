@@ -1134,7 +1134,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           <div className="p-6">
             {/* 1. EDIT PO MODAL */}
             {editingPoModal && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
@@ -1223,7 +1223,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 1.1 QUICK PO REMARKS MODAL */}
             {poRemarksModal && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
                     <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -1265,7 +1265,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 2. EDIT ITEM MODAL */}
             {editingItem && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
@@ -1564,7 +1564,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 3. EDIT INWARD PURCHASE MODAL */}
             {editingPurchase && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <div>
@@ -1781,7 +1781,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
             {/* 4. EDIT SALE MODAL */}
             {editingSale && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-2xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                   <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                     <div>
@@ -3854,7 +3854,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
       {/* QUICK PO REMARKS MODAL (AVAILABLE ON MAIN PO LIST VIEW) */}
       {poRemarksModal && (
-        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-auto">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
               <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
@@ -3896,7 +3896,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
       {/* EDIT PO MODAL (AVAILABLE ON MAIN PO LIST VIEW) */}
       {editingPoModal && (
-        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100 shrink-0">
               <h3 className="text-base font-bold text-slate-800">

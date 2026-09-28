@@ -674,7 +674,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 5. ADD / EDIT WORK ORDER MODAL */}
       {showAddModal && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-6 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[95vh] flex flex-col animate-fadeIn">
@@ -996,7 +996,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 6. VIEW DETAILS INSPECT MODAL */}
       {inspectItem && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-6 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setInspectItem(null); }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">

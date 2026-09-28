@@ -289,7 +289,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 sm:pt-6 overflow-y-auto"
+      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 sm:pt-6 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

@@ -1012,7 +1012,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       {/* 📝 ATTENDANCE CORRECTION REQUEST MODAL (SUPERVISOR -> MANAGER/ADMIN) */}
       {editModalWorker && (
         <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) setEditModalWorker(null); }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-300 overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">

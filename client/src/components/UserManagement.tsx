@@ -1173,7 +1173,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT ACCOUNT MODAL */}
           {editingAccount && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-4 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col my-auto max-h-[92vh]">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-5 font-bold flex justify-between items-center rounded-t-2xl">
                   <span className="text-lg">Edit System Account</span>
@@ -1388,7 +1388,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT DIVISION MODAL */}
           {editingDivision && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-4 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 flex flex-col my-auto max-h-[92vh]">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-5 font-bold flex justify-between items-center rounded-t-2xl">
                   <span className="text-lg">Edit Division</span>
@@ -1716,10 +1716,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </form>
           )}
 
-          {/* EDIT WORKER REGISTRY MODAL */}
+          {/* EDIT WORKER REGISTRY MODAL (DESKTOP) */}
           {editingWorker && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col max-h-[92vh] my-auto overflow-hidden animate-fadeIn">
+            <div className="hidden md:flex fixed inset-0 bg-black/60 backdrop-blur-sm z-[99999] items-start justify-center p-3 sm:p-4 overflow-y-auto min-h-screen py-6 sm:py-8">
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col my-auto max-h-[90vh] overflow-hidden animate-fadeIn">
                 <div className="bg-gradient-to-r from-[#1e3a8a] to-[#0f172a] text-white p-4 sm:p-5 font-bold flex justify-between items-center shrink-0">
                   <span className="text-base sm:text-lg">Edit Worker: {editingWorker.workerId}</span>
                   <button onClick={() => setEditingWorker(null)} className="hover:text-white/80 p-1 text-white text-lg font-bold">
@@ -2088,7 +2088,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             setEditWage(w.dailyWage.toString());
                             setEditDailyAllowance((w.dailyAllowance || 0).toString());
                             setEditAdvanceTaken((w.advanceTaken || w.advanceBalance || 0).toString());
+                            setEditAdvanceTakenDate(w.advanceTakenDate ? w.advanceTakenDate.split('T')[0] : '');
+                            setEditAdvanceReason(w.advanceReason || '');
+                            setEditAdvanceReturnDate(w.advanceReturnDate ? w.advanceReturnDate.split('T')[0] : '');
                             setEditAdvanceBalance((w.advanceBalance || 0).toString());
+                            setEditOtAllowance((w.otAllowance || 0).toString());
                             setEditOtRate((w.otHourlyRate || 0).toString());
                             setEditWorkerDivisionId(w.divisionId);
                             setEditPfNumber(w.pfNumber || '');
@@ -2115,6 +2119,195 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         )}
                       </div>
                     </div>
+
+                    {/* INLINE EDIT FORM FOR MOBILE VIEW */}
+                    {editingWorker?.id === w.id && (
+                      <div className="mt-3 pt-3 border-t-2 border-[#1e3a8a]/20 bg-blue-50/50 p-3 rounded-xl space-y-3 md:hidden animate-fadeIn">
+                        <div className="flex justify-between items-center pb-2 border-b border-blue-200">
+                          <span className="font-bold text-xs text-[#1e3a8a] flex items-center gap-1">
+                            <Edit className="w-3.5 h-3.5" /> Edit: {w.workerId}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingWorker(null)}
+                            className="text-slate-600 hover:text-slate-800 text-xs font-bold px-2 py-0.5 rounded bg-white border border-slate-300"
+                          >
+                            ✕ Close
+                          </button>
+                        </div>
+                        {currentUserRole === 'SUPERVISOR' ? (
+                          <div className="space-y-2">
+                            <label className="block font-semibold text-slate-700 text-xs">Assigned Division *</label>
+                            <select
+                              value={editWorkerDivisionId}
+                              onChange={(e) => setEditWorkerDivisionId(e.target.value)}
+                              className="w-full p-2 border border-slate-300 rounded text-xs bg-white font-semibold"
+                            >
+                              {divisions.map((d) => (
+                                <option key={d.id} value={d.id}>{d.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={handleUpdateWorker}
+                              className="w-full py-2 bg-[#1e3a8a] text-white rounded font-bold text-xs shadow hover:bg-[#172554]"
+                            >
+                              Save Division Changes
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2.5 text-xs">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Worker ID *</label>
+                                <input
+                                  type="text"
+                                  value={editWorkerId}
+                                  onChange={(e) => setEditWorkerId(e.target.value.toUpperCase())}
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold uppercase text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Full Name *</label>
+                                <input
+                                  type="text"
+                                  value={editWorkerName}
+                                  onChange={(e) => setEditWorkerName(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Father's Name</label>
+                                <input
+                                  type="text"
+                                  value={editFatherName}
+                                  onChange={(e) => setEditFatherName(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Designation</label>
+                                <input
+                                  type="text"
+                                  value={editDesignation}
+                                  onChange={(e) => setEditDesignation(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Wage (₹) *</label>
+                                <input
+                                  type="number"
+                                  value={editWage}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setEditWage(val);
+                                    if (val && !editOtRate) {
+                                      const calc = Math.round(parseFloat(val) / 8);
+                                      setEditOtRate(isNaN(calc) ? '' : calc.toString());
+                                    }
+                                  }}
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Allowance (₹)</label>
+                                <input
+                                  type="number"
+                                  value={editDailyAllowance}
+                                  onChange={(e) => setEditDailyAllowance(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">OT Allowance (₹)</label>
+                                <input
+                                  type="number"
+                                  value={editOtAllowance}
+                                  onChange={(e) => setEditOtAllowance(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">OT Rate/Hr (₹) *</label>
+                                <input
+                                  type="number"
+                                  value={editOtRate}
+                                  onChange={(e) => setEditOtRate(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Taken (₹)</label>
+                                <input
+                                  type="number"
+                                  value={editAdvanceTaken}
+                                  onChange={(e) => setEditAdvanceTaken(e.target.value)}
+                                  className="w-full p-1.5 border border-amber-300 bg-amber-50/50 rounded font-mono text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Balance (₹)</label>
+                                <input
+                                  type="number"
+                                  value={editAdvanceBalance}
+                                  onChange={(e) => setEditAdvanceBalance(e.target.value)}
+                                  className="w-full p-1.5 border border-amber-300 bg-amber-50/50 rounded font-mono font-bold text-xs"
+                                />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Mobile Number *</label>
+                                <input
+                                  type="text"
+                                  maxLength={10}
+                                  value={editWorkerMobile}
+                                  onChange={(e) => setEditWorkerMobile(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Assigned Division *</label>
+                                <select
+                                  value={editWorkerDivisionId}
+                                  onChange={(e) => setEditWorkerDivisionId(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded bg-white font-semibold text-xs"
+                                >
+                                  {divisions.map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={handleUpdateWorker}
+                                className="flex-1 py-2 bg-[#1e3a8a] text-white rounded-lg font-bold text-xs shadow hover:bg-[#172554] active:scale-98 transition-all"
+                              >
+                                Save Changes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingWorker(null)}
+                                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold text-xs border border-slate-300 hover:bg-slate-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ));
               })()
@@ -2270,7 +2463,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT PO MODAL */}
           {editingPO && (
-            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
+            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
               <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                   <h3 className="text-sm sm:text-base font-bold text-slate-800">
@@ -3077,7 +3270,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: INWARD PURCHASE (FULL GST FIELDS) */}
           {purchaseModalItem && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
                 <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
@@ -3287,7 +3480,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: OUTWARD SALE (REQUIRES OWNER APPROVAL) */}
           {saleModalItem && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
@@ -3521,7 +3714,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: VIEW / INSPECT ITEM MASTER DETAILS */}
           {inspectIndStock && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-2.5">
@@ -3604,7 +3797,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: TRANSACTION HISTORY */}
           {txHistoryItem && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
@@ -3704,7 +3897,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: EDIT INDIVIDUAL STOCK DETAILS (FULL ITEM MASTER) */}
           {editingIndStock && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
               <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <h3 className="font-bold text-sm flex items-center gap-2">

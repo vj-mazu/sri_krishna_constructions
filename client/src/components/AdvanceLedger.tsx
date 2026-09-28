@@ -701,7 +701,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* 4. EXPANSIVE FULL-SCREEN DRILL-DOWN WORKER ADVANCE STATEMENT MODAL (95VW) */}
       {/* ========================================================================= */}
       {selectedWorkerId && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-fadeIn">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto animate-fadeIn">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1400px] h-[92vh] max-h-[92vh] my-auto flex flex-col overflow-hidden text-slate-900">
             
             {/* Sticky Modal Header */}
@@ -929,7 +929,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* 5. DISBURSE NEW ADVANCE MODAL                                             */}
       {/* ========================================================================= */}
       {showDisburseModal && targetWorkerForAction && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-md overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-4 font-bold flex justify-between items-center shrink-0">
               <span className="text-sm font-black uppercase flex items-center gap-1.5">
@@ -1017,7 +1017,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* 6. RECORD DIRECT CASH REPAYMENT MODAL                                     */}
       {/* ========================================================================= */}
       {showRepayModal && targetWorkerForAction && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-md overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">
             <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-4 font-bold flex justify-between items-center shrink-0">
               <span className="text-sm font-black uppercase flex items-center gap-1.5">

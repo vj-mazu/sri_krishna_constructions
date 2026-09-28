@@ -473,7 +473,7 @@ export const ApprovalsPanel: React.FC = () => {
 
       {/* 🔍 FULL DETAIL INSPECT MODAL FOR OWNER */}
       {inspectModal && (
-        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
               <div className="flex items-center gap-2">

@@ -2428,7 +2428,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       {/* AUTHENTIC PHYSICAL "REGISTER BOOK" MODAL */}
       {drilldownWorkerId && (
         <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto"
           onClick={(e) => { if (e.target === e.currentTarget) handleCloseRegisterBook(); }}
         >
           <div className="bg-[#fcfaf2] rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col my-auto max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
@@ -2742,7 +2742,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
         return (
           <div 
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto"
             onClick={(e) => { if (e.target === e.currentTarget) setSlipModalWorker(null); }}
           >
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col my-auto max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
