@@ -60,6 +60,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [customDailyWage, setCustomDailyWage] = useState<Record<string, number | string>>({});
   const [customDailyAllowance, setCustomDailyAllowance] = useState<Record<string, number | string>>({});
   const [customOtHours, setCustomOtHours] = useState<Record<string, number | string>>({});
+  const [customOtAllowance, setCustomOtAllowance] = useState<Record<string, number | string>>({});
 
   // Register book drilldown state
   const [drilldownWorkerId, setDrilldownWorkerId] = useState<string | null>(null);
@@ -191,18 +192,21 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       const initialEsi: Record<string, number | string> = {};
       const initialAdv: Record<string, number | string> = {};
       const initialExt: Record<string, number | string> = {};
+      const initialOtAllow: Record<string, number | string> = {};
 
       data.forEach((w: any) => {
         if (w.pfAmount !== undefined && w.pfAmount !== null) initialPf[w.workerId] = parseFloat(w.pfAmount) || 0;
         if (w.esiAmount !== undefined && w.esiAmount !== null) initialEsi[w.workerId] = parseFloat(w.esiAmount) || 0;
         if (w.advanceDeducted !== undefined && w.advanceDeducted !== null) initialAdv[w.workerId] = parseFloat(w.advanceDeducted) || 0;
         if (w.extraAmount !== undefined && w.extraAmount !== null) initialExt[w.workerId] = parseFloat(w.extraAmount) || 0;
+        if (w.otAllowance !== undefined && w.otAllowance !== null) initialOtAllow[w.workerId] = parseFloat(w.otAllowance) || 0;
       });
 
       setCustomPf(initialPf);
       setCustomEsi(initialEsi);
       setCustomAdvance(initialAdv);
       setCustomExtra(initialExt);
+      setCustomOtAllowance(initialOtAllow);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to calculate monthly wages.');
     } finally {
@@ -271,7 +275,13 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const otRate = otHourlyRate > 0 ? otHourlyRate : (dailyWage > 0 ? (dailyWage / 8) : 0);
     const otPayment = Math.round(otHours * otRate);
 
-    const totalPayment = netBaseAmount + otPayment;
+    // OT Allowance — use manual override if entered, else worker/payment otAllowance (applied when OT > 0 or overridden)
+    const otAllowVal = customOtAllowance[w.workerId];
+    const otAllowance = otAllowVal !== undefined && otAllowVal !== ''
+      ? (parseFloat(otAllowVal as string) || 0)
+      : (w.otAllowance !== undefined && w.otAllowance !== null ? parseFloat(w.otAllowance) : (otHours > 0 ? (parseFloat(w.otAllowance) || 0) : 0));
+
+    const totalPayment = netBaseAmount + otPayment + otAllowance;
     
     const extraVal = customExtra[w.workerId] !== undefined ? customExtra[w.workerId] : parseFloat(w.extraAmount || 0);
     const extra = extraVal === '' ? 0 : parseFloat(extraVal as string) || 0;
@@ -292,6 +302,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       netBaseAmount,
       otHours,
       otPayment,
+      otAllowance,
       totalPayment,
       advance,
       remainingAdvance,
@@ -314,6 +325,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         absentDays: worker.absentDays,
         halfDays: worker.halfDays,
         leaveDays: worker.leaveDays,
+        dailyWage: calc.dailyWage,
+        dailyAllowance: calc.dailyAllowance,
         totalOtHours: calc.otHours,
         wagesAmount: calc.wagesAmount,
         allowanceAmount: calc.allowanceAmount,
@@ -322,6 +335,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         esiAmount: calc.esi,
         netBaseAmount: calc.netBaseAmount,
         otPayment: calc.otPayment,
+        otAllowance: calc.otAllowance,
         totalPayment: calc.totalPayment,
         advanceDeducted: calc.advance,
         extraAmount: calc.extra,
@@ -364,6 +378,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           absentDays: worker.absentDays,
           halfDays: worker.halfDays,
           leaveDays: worker.leaveDays,
+          dailyWage: calc.dailyWage,
+          dailyAllowance: calc.dailyAllowance,
           totalOtHours: calc.otHours,
           wagesAmount: calc.wagesAmount,
           allowanceAmount: calc.allowanceAmount,
@@ -372,6 +388,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           esiAmount: calc.esi,
           netBaseAmount: calc.netBaseAmount,
           otPayment: calc.otPayment,
+          otAllowance: calc.otAllowance,
           totalPayment: calc.totalPayment,
           advanceDeducted: calc.advance,
           extraAmount: calc.extra,
@@ -2014,6 +2031,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 <th className="text-center py-2.5 px-1 bg-slate-800">Net Base</th>
                 <th className="text-center py-2.5 px-1">OT.Hr</th>
                 <th className="text-right py-2.5 px-1">OT.Pay</th>
+                <th className="text-center py-2.5 px-1 bg-indigo-950 text-indigo-200">OT.Allow</th>
                 <th className="text-right py-2.5 px-1 bg-emerald-950 text-emerald-300">Total Pay</th>
                 <th className="text-right py-2.5 px-1 bg-amber-950/80 text-amber-200">Adv.Take</th>
                 <th className="text-center py-2.5 px-1 bg-amber-900 text-amber-100">Adv.Ded</th>
@@ -2184,6 +2202,23 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
                     {/* 13. OT Payment (auto-calculated) */}
                     <td className="text-right font-mono font-semibold text-slate-700 py-1 px-1">{formatIndianCurrency(calc.otPayment)}</td>
+
+                    {/* 13b. OT Allowance (Editable) */}
+                    <td className="text-center py-1 px-0.5">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customOtAllowance[w.workerId] !== undefined ? customOtAllowance[w.workerId] : (calc.otAllowance || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomOtAllowance(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-14 text-center font-mono font-bold text-indigo-700 bg-indigo-50/40 border border-indigo-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        title="OT Allowance (editable override)"
+                      />
+                    </td>
 
                     {/* 14. Total Payment */}
                     <td className="text-right font-mono font-bold bg-emerald-50/70 text-emerald-900 py-1 px-1">{formatIndianCurrency(calc.totalPayment)}</td>

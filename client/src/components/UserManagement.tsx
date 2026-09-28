@@ -61,6 +61,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [advanceReason, setAdvanceReason] = useState('');
   const [advanceReturnDate, setAdvanceReturnDate] = useState('');
   const [advanceBalance, setAdvanceBalance] = useState('');
+  const [otAllowance, setOtAllowance] = useState('');
   const [otHourlyRate, setOtHourlyRate] = useState('');
   const [workerDivisionId, setWorkerDivisionId] = useState('');
   const [workerPfNumber, setWorkerPfNumber] = useState('');
@@ -85,6 +86,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editAdvanceReason, setEditAdvanceReason] = useState('');
   const [editAdvanceReturnDate, setEditAdvanceReturnDate] = useState('');
   const [editAdvanceBalance, setEditAdvanceBalance] = useState('');
+  const [editOtAllowance, setEditOtAllowance] = useState('');
   const [editOtRate, setEditOtRate] = useState('');
   const [editWorkerDivisionId, setEditWorkerDivisionId] = useState('');
   const [editPfNumber, setEditPfNumber] = useState('');
@@ -687,6 +689,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         advanceReason: advanceReason.trim() || undefined,
         advanceReturnDate: advanceReturnDate || undefined,
         advanceBalance: advanceBalance ? parseFloat(advanceBalance) : (advanceTaken ? parseFloat(advanceTaken) : 0),
+        otAllowance: otAllowance ? parseFloat(otAllowance) : 0,
         otHourlyRate: otHourlyRate ? parseFloat(otHourlyRate) : parseFloat(dailyWage) / 8,
         divisionId: workerDivisionId,
         pfNumber: workerPfNumber.trim() || undefined,
@@ -713,6 +716,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       setAdvanceReason('');
       setAdvanceReturnDate('');
       setAdvanceBalance('');
+      setOtAllowance('');
       setOtHourlyRate('');
       setWorkerDivisionId('');
       setWorkerPfNumber('');
@@ -781,6 +785,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         advanceReason: editAdvanceReason.trim() || undefined,
         advanceReturnDate: editAdvanceReturnDate || undefined,
         advanceBalance: editAdvanceBalance ? parseFloat(editAdvanceBalance) : 0,
+        otAllowance: editOtAllowance ? parseFloat(editOtAllowance) : 0,
         otHourlyRate: editOtRate ? parseFloat(editOtRate) : parseFloat(editWage) / 8,
         divisionId: editWorkerDivisionId,
         pfNumber: editPfNumber.trim() || undefined,
@@ -1593,6 +1598,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
                 <div>
+                  <label className="block font-semibold text-slate-700 mb-1">OT Allowance (Rs)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={otAllowance}
+                    onChange={(e) => setOtAllowance(e.target.value)}
+                    placeholder="e.g. 200 (or 0)"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                  />
+                </div>
+                <div>
                   <label className="block font-semibold text-slate-700 mb-1">OT Hourly Rate (Rs) *</label>
                   <input
                     type="number"
@@ -1817,7 +1833,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                         />
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div>
                           <label className="block font-semibold text-slate-700 mb-1">Daily Wage *</label>
                           <input
@@ -1834,6 +1850,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             type="number"
                             value={editDailyAllowance}
                             onChange={(e) => setEditDailyAllowance(e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">OT Allowance</label>
+                          <input
+                            type="number"
+                            value={editOtAllowance}
+                            onChange={(e) => setEditOtAllowance(e.target.value)}
+                            placeholder="0"
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
                           />
                         </div>
@@ -2107,6 +2133,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     <>
                       <th>Daily Wage</th>
                       <th>Daily Allowance</th>
+                      <th>OT Allowance</th>
                       <th className="bg-amber-50 text-amber-900">Advance Taken</th>
                       <th className="bg-amber-100 text-amber-950 font-bold">Advance Balance</th>
                       <th>OT Hourly Rate</th>
@@ -2156,6 +2183,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       <>
                         <td className="font-mono font-bold text-slate-700">{formatIndianCurrency(w.dailyWage)}</td>
                         <td className="font-mono font-bold text-emerald-700">{formatIndianCurrency(w.dailyAllowance || 0)}</td>
+                        <td className="font-mono text-indigo-700">{formatIndianCurrency(w.otAllowance || 0)}</td>
                         <td className="font-mono font-semibold text-slate-800 bg-amber-50/30">
                           {formatIndianCurrency(w.advanceTaken || w.advanceBalance || 0)}
                         </td>
@@ -2190,6 +2218,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                               setEditAdvanceReason(w.advanceReason || '');
                               setEditAdvanceReturnDate(w.advanceReturnDate ? w.advanceReturnDate.split('T')[0] : '');
                               setEditAdvanceBalance((w.advanceBalance || 0).toString());
+                              setEditOtAllowance((w.otAllowance || 0).toString());
                               setEditOtRate((w.otHourlyRate || 0).toString());
                               setEditWorkerDivisionId(w.divisionId);
                               setEditPfNumber(w.pfNumber || '');

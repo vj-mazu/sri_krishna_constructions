@@ -3020,7 +3020,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Worker registration is restricted to Owners or Managers only!' });
     }
 
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
     if (!workerId || !fullName || !mobileNumber || !dailyWage || !divisionId) {
       return res.status(400).json({ error: 'Worker ID, Full Name, Mobile Number, Daily Wage, and Division are mandatory!' });
     }
@@ -3049,7 +3049,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
     const numAllowance = dailyAllowance !== undefined && dailyAllowance !== '' ? parseFloat(dailyAllowance) : 0;
     const numAdvTaken = advanceTaken !== undefined && advanceTaken !== '' ? parseFloat(advanceTaken) : (advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : 0);
     const numAdvBal = advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : numAdvTaken;
-    const numOtAllowance = 0; // Removed otAllowance entirely to prevent confusing duplicate calculations
+    const numOtAllowance = otAllowance !== undefined && otAllowance !== '' ? (parseFloat(otAllowance) || 0) : 0;
     const numOtRate = otHourlyRate ? parseFloat(otHourlyRate) : numDailyWage / 8;
 
     const advGivenDate = advanceTakenDate ? new Date(advanceTakenDate) : (numAdvTaken > 0 ? new Date() : null);
@@ -3118,7 +3118,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
 app.put('/api/workers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
 
     const { rows: existing } = await pool.query(`SELECT * FROM "Worker" WHERE "id" = $1`, [id]);
     if (existing.length === 0) return res.status(404).json({ error: 'Worker not found' });
@@ -3177,7 +3177,7 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const newAdvDate = advanceTakenDate !== undefined ? (advanceTakenDate ? new Date(advanceTakenDate) : null) : existing[0].advanceTakenDate;
     const newAdvReason = advanceReason !== undefined ? (advanceReason ? advanceReason.trim() : null) : existing[0].advanceReason;
     const newAdvReturnDate = advanceReturnDate !== undefined ? (advanceReturnDate ? new Date(advanceReturnDate) : null) : existing[0].advanceReturnDate;
-    const newOtAllowance = 0; // Removed otAllowance entirely
+    const newOtAllowance = otAllowance !== undefined ? (parseFloat(otAllowance) || 0) : (existing[0].otAllowance || 0);
     const newOtRate = otHourlyRate !== undefined ? parseFloat(otHourlyRate) : existing[0].otHourlyRate;
     const newPfNumber = pfNumber !== undefined ? (pfNumber ? pfNumber.trim() : null) : existing[0].pfNumber;
     const newEsiNumber = esiNumber !== undefined ? (esiNumber ? esiNumber.trim() : null) : existing[0].esiNumber;
@@ -3965,13 +3965,22 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       });
 
       const workingDays = present + (half * 0.5) + paidHolidaysCount;
-      const dailyWage = parseFloat(worker.dailyWage) || 0;
-      const dailyAllowance = parseFloat(worker.dailyAllowance) || 0;
+      // If approved in DB and rates are stored, preserve the historical rates for that month so master rate updates don't change past months!
+      const dailyWage = (dbPayment && dbPayment.dailyWage !== undefined && dbPayment.dailyWage !== null) 
+        ? parseFloat(dbPayment.dailyWage) 
+        : (parseFloat(worker.dailyWage) || 0);
+      const dailyAllowance = (dbPayment && dbPayment.dailyAllowance !== undefined && dbPayment.dailyAllowance !== null) 
+        ? parseFloat(dbPayment.dailyAllowance) 
+        : (parseFloat(worker.dailyAllowance) || 0);
       const advanceTaken = parseFloat(worker.advanceTaken) || 0;
       const advanceBalance = parseFloat(worker.advanceBalance) || 0;
 
-      const wagesAmount = Math.round(workingDays * dailyWage);
-      const allowanceAmount = Math.round(workingDays * dailyAllowance);
+      const wagesAmount = dbPayment && dbPayment.wagesAmount !== undefined && dbPayment.wagesAmount !== null
+        ? parseFloat(dbPayment.wagesAmount)
+        : Math.round(workingDays * dailyWage);
+      const allowanceAmount = dbPayment && dbPayment.allowanceAmount !== undefined && dbPayment.allowanceAmount !== null
+        ? parseFloat(dbPayment.allowanceAmount)
+        : Math.round(workingDays * dailyAllowance);
       const grossPayment = wagesAmount + allowanceAmount;
 
       // Flexible / Manual deductions (pre-filled from DB if already entered/approved)
@@ -3979,8 +3988,12 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const esiAmount = dbPayment ? (parseFloat(dbPayment.esiAmount) || 0) : 0;
       const netBaseAmount = Math.max(0, grossPayment - pfAmount - esiAmount);
 
-      const otRate = parseFloat(worker.otHourlyRate) || (dailyWage / 8);
-      const otPayment = Math.round(totalOt * otRate);
+      const otRate = (dbPayment && dbPayment.otHourlyRate !== undefined && dbPayment.otHourlyRate !== null)
+        ? parseFloat(dbPayment.otHourlyRate)
+        : (parseFloat(worker.otHourlyRate) || (dailyWage > 0 ? (dailyWage / 8) : 0));
+      const otPayment = dbPayment && dbPayment.otPayment !== undefined && dbPayment.otPayment !== null
+        ? parseFloat(dbPayment.otPayment)
+        : Math.round(totalOt * otRate);
 
       // OT Allowance should ONLY be given when OT is actually done (totalOt > 0) or manually set in payment
       const defaultOtAllowance = parseFloat(worker.otAllowance) || 0;
@@ -4255,6 +4268,8 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
       absentDays, 
       halfDays, 
       leaveDays, 
+      dailyWage,
+      dailyAllowance,
       totalOtHours, 
       wagesAmount,
       allowanceAmount,
@@ -4287,6 +4302,8 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
     const aDays = parseFloat(absentDays) || 0;
     const hDays = parseFloat(halfDays) || 0;
     const lDays = parseFloat(leaveDays) || 0;
+    const dWage = dailyWage !== undefined ? (parseFloat(dailyWage) || 0) : null;
+    const dAllow = dailyAllowance !== undefined ? (parseFloat(dailyAllowance) || 0) : null;
     const otH = parseFloat(totalOtHours) || 0;
     const wAmt = parseFloat(wagesAmount) || 0;
     const allAmt = parseFloat(allowanceAmount) || 0;
