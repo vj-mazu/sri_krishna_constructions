@@ -2051,7 +2051,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50/60 p-2 rounded-lg border border-slate-100 font-mono">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] bg-slate-50/60 p-2 rounded-lg border border-slate-100 font-mono">
                       <div>
                         <span className="text-slate-400 text-[9px] block uppercase">Daily Wage</span>
                         <span className="font-bold text-slate-800">{formatIndianCurrency(w.dailyWage)}/d</span>
@@ -2059,6 +2059,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       <div>
                         <span className="text-slate-400 text-[9px] block uppercase">Allowance</span>
                         <span className="font-bold text-emerald-700">+{formatIndianCurrency(w.dailyAllowance || 0)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[9px] block uppercase">OT Allowance</span>
+                        <span className="font-bold text-indigo-700">+{formatIndianCurrency(w.otAllowance || 0)}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 text-[9px] block uppercase">Advance Taken</span>
