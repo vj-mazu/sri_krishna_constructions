@@ -3913,12 +3913,12 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
     const workerParams = [];
     const isFiltered = divisionId && divisionId !== 'ALL' && divisionId !== 'all' && divisionId !== '';
     if (isFiltered) {
-      workerQuery += ` WHERE (w."divisionId" = $1 OR EXISTS (
+      workerQuery += ` WHERE EXISTS (
         SELECT 1 FROM "Attendance" a 
         WHERE a."workerId" = w."id" 
           AND a."divisionId" = $1 
           AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
-      ))`;
+      )`;
       workerParams.push(divisionId, startDate, endDate);
     }
     workerQuery += ` ORDER BY w."workerId" ASC, w."fullName" ASC`;
@@ -4033,9 +4033,9 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       holidayDatesSet.forEach(hDateStr => {
         const att = workerAttDateMap[hDateStr];
         if (!att || att.status === 'LEAVE') {
-          if (!isFiltered || worker.divisionId === divisionId) {
+          if (!isFiltered || workerAtts.some(a => a.divisionId === divisionId)) {
             paidHolidaysCount += 1;
-            const defaultDiv = worker.divisionName || 'General';
+            const defaultDiv = targetDivisionName || worker.divisionName || 'General';
             divisionCounts[defaultDiv] = (divisionCounts[defaultDiv] || 0) + 1;
           }
         }
