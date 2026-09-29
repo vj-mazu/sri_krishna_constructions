@@ -4132,6 +4132,10 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         // 18 Official Register Columns + Advance Balances
         dailyWage,
         workingDays,
+        presentDays: isApproved && dbPayment.presentDays != null ? parseFloat(dbPayment.presentDays) : present,
+        absentDays: isApproved && dbPayment.absentDays != null ? parseFloat(dbPayment.absentDays) : absent,
+        halfDays: isApproved && dbPayment.halfDays != null ? parseFloat(dbPayment.halfDays) : half,
+        leaveDays: isApproved && dbPayment.leaveDays != null ? parseFloat(dbPayment.leaveDays) : leave,
         dailyAllowance,
         advanceTaken,
         advanceBalance: initialAdvanceBalance,
@@ -4163,9 +4167,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       targetDivisionName = divRows[0]?.name || '';
     }
 
-    const wageReport = isFiltered 
-      ? rawWageReport.filter(w => (Number(w.workingDays) > 0 || Number(w.totalOtHours) > 0 || (w.paymentStatus === 'APPROVED' && Number(w.calculatedAmount) > 0)))
-      : rawWageReport;
+    const wageReport = rawWageReport;
 
     // When division filter is selected, ensure divisionName and placeOfWork reflect the active filtered division
     const finalReport = wageReport.map(w => ({
