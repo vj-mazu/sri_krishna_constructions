@@ -888,19 +888,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     </div>
                   </div>
 
-                  {/* Wage override & Overtime Row */}
+                  {/* Fixed Daily Wage & Overtime Row */}
                   <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/80 text-xs">
-                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-300">
-                      <span className="text-slate-600 text-xs font-bold">₹</span>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder={`Wage: ₹${w.dailyWage}`}
-                        disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
-                        value={state.dailyWageOverride}
-                        onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                        className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
-                      />
+                    <div className="flex items-center justify-between bg-slate-100 px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700">
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase">Daily Wage</span>
+                      <span className="font-extrabold font-mono text-slate-900 text-xs">₹{w.dailyWage}</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-300">
@@ -931,7 +923,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     <th className="sticky left-0 z-20 bg-slate-100 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2.5">Worker Details</th>
                     <th className="text-center min-w-[100px] px-3 py-2.5">Status</th>
                     <th className="text-center min-w-[260px] px-3 py-2.5">Attendance Mark</th>
-                    <th className="text-center min-w-[120px] px-3 py-2.5">Daily Wage Override (₹)</th>
+                    <th className="text-center min-w-[110px] px-3 py-2.5">Daily Wage (₹)</th>
                     <th className="text-center min-w-[110px] px-3 py-2.5">Overtime Hours (OT)</th>
                     <th className="text-center min-w-[80px] px-3 py-2.5">Action</th>
                   </tr>
@@ -1018,21 +1010,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                               </div>
                             </td>
                           
-                          <td className="px-3 py-2">
-                            <div className="flex items-center justify-center gap-1 font-mono">
-                              <span className="text-[10px] text-slate-400 font-semibold">₹</span>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder={w.dailyWage?.toString() || '0'}
-                                disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
-                                value={state.dailyWageOverride}
-                                onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                                className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs ${
-                                  currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'
-                                }`}
-                              />
-                            </div>
+                          <td className="px-3 py-2 text-center">
+                            <span className="inline-flex items-center px-2.5 py-1 rounded bg-slate-100 border border-slate-200 text-slate-800 font-bold font-mono text-xs shadow-2xs">
+                              ₹{w.dailyWage}
+                            </span>
                           </td>
                           
                           <td className="px-3 py-2">
