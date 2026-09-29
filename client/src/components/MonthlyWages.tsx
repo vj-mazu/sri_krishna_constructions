@@ -1508,7 +1508,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
           >
             <option value="">All Divisions</option>
-            {divisions.map((d) => (
+            {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
@@ -1590,6 +1590,15 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               >
                 <FileText className="w-3.5 h-3.5" /> Download PDF
               </button>
+              {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                <button
+                  onClick={handleApproveAll}
+                  className="flex-1 py-1.5 sm:py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                  title="Save & Approve All Manual ESI / PF Edits"
+                >
+                  <Check className="w-4 h-4" /> Save & Approve All
+                </button>
+              )}
             </>
           ) : (
             <>
@@ -1724,12 +1733,36 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     <td className="border border-slate-300 text-right px-2 py-1">{grossEarned.toLocaleString('en-IN')}</td>
                     <td className="border border-slate-300 text-right px-2 py-1">{epfBase.toLocaleString('en-IN')}</td>
                     <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-emerald-50/40">{grossEarn.toLocaleString('en-IN')}</td>
-                    {/* DEDUCTIONS (MANUAL FROM WAGES TAB) */}
-                    <td className="border border-slate-300 text-right font-bold text-rose-800 px-2 py-1 bg-rose-50/30">
-                      {calc.pf > 0 ? calc.pf.toLocaleString('en-IN') : '-'}
+                    {/* DEDUCTIONS (MANUAL EDITABLE IN ESI/PF SHEET) */}
+                    <td className="border border-slate-300 text-center py-1 px-0.5 bg-rose-50/30">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customPf[w.workerId] !== undefined ? customPf[w.workerId] : (calc.pf || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomPf(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
+                        title="Edit PF deduction for this worker"
+                      />
                     </td>
-                    <td className="border border-slate-300 text-right font-bold text-rose-800 px-2 py-1 bg-rose-50/30">
-                      {calc.esi > 0 ? calc.esi.toLocaleString('en-IN') : '-'}
+                    <td className="border border-slate-300 text-center py-1 px-0.5 bg-rose-50/30">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (calc.esi || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomEsi(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
+                        title="Edit ESI deduction for this worker"
+                      />
                     </td>
                     {/* NET SALARY */}
                     <td className="border border-slate-300 text-right font-black text-emerald-900 bg-emerald-100/60 px-3 py-1 text-xs">

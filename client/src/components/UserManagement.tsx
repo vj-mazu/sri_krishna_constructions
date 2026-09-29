@@ -1844,7 +1844,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           onChange={(e) => setEditWorkerDivisionId(e.target.value)}
                           className="w-full p-2.5 border-2 border-[#1e3a8a] rounded-lg focus:ring-2 focus:ring-[#1e3a8a]/20 outline-none font-bold text-sm bg-white text-[#1e3a8a]"
                         >
-                          {divisions.map((d) => (
+                          {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editWorkerDivisionId)).map((d) => (
                             <option key={d.id} value={d.id}>{d.name}</option>
                           ))}
                         </select>
@@ -1979,7 +1979,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             onChange={(e) => setEditWorkerDivisionId(e.target.value)}
                             className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold"
                           >
-                            {divisions.map((d) => (
+                            {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editWorkerDivisionId)).map((d) => (
                               <option key={d.id} value={d.id}>{d.name}</option>
                             ))}
                           </select>
@@ -2722,7 +2722,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
                     >
                       <option value="">-- Choose Division --</option>
-                      {divisions.map((d) => (
+                      {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT' && (d.isActive !== false || d.id === editPODivisionId)).map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
@@ -2802,7 +2802,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
                 >
                   <option value="">-- Choose Division --</option>
-                  {divisions.map((d) => (
+                  {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT' && d.isActive !== false).map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>

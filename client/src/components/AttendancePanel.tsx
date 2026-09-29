@@ -537,7 +537,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
           >
             <option value="ALL">🏢 All Divisions</option>
-            {divisions.map((d) => (
+            {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>
@@ -1080,7 +1080,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   required
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:border-[#1e3a8a] outline-none"
                 >
-                  {divisions.map((d: any) => (
+                  {divisions.filter((d: any) => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editForm.newDivisionId)).map((d: any) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
                 </select>

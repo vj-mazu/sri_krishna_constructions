@@ -488,7 +488,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
             className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 outline-none focus:border-blue-600 cursor-pointer"
           >
             <option value="">All Divisions</option>
-            {divisions.map((d) => (
+            {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
           </select>

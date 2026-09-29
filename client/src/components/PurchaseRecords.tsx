@@ -1163,7 +1163,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold"
                       >
                         <option value="">Select Division *</option>
-                        {divisions.map((div) => (
+                        {divisions.filter(div => (div.type || 'PO_CLIENT') === 'PO_CLIENT' && (div.isActive !== false || div.id === editPoForm.divisionId)).map((div) => (
                           <option key={div.id} value={div.id}>
                             {div.name}
                           </option>
@@ -3924,7 +3924,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none bg-white font-semibold"
                 >
                   <option value="">Select Division *</option>
-                  {divisions.map((div) => (
+                  {divisions.filter(div => (div.type || 'PO_CLIENT') === 'PO_CLIENT' && (div.isActive !== false || div.id === editPoForm.divisionId)).map((div) => (
                     <option key={div.id} value={div.id}>
                       {div.name}
                     </option>

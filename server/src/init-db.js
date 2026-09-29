@@ -377,6 +377,7 @@ export const initializeDatabaseTables = async () => {
 
       -- Division category type: 'ATTENDANCE' (Workers/Rosters) vs 'PO_CLIENT' (Client Orders/Billing)
       ALTER TABLE "Division" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'PO_CLIENT';
+      ALTER TABLE "Division" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 
       -- Purchase inward supplier details & physical box item name/part number (when different from PO)
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
