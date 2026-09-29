@@ -681,10 +681,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 5. ADD / EDIT WORK ORDER MODAL */}
       {showAddModal && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[95vh] flex flex-col animate-fadeIn">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-fadeIn">
             {/* Modal Header */}
             <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-5 py-4 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
@@ -1003,10 +1003,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 6. VIEW DETAILS INSPECT MODAL */}
       {inspectItem && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) setInspectItem(null); }}
         >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col animate-fadeIn">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-5 py-4 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2.5">
                 <span className="w-8 h-8 rounded-full bg-white/20 text-white font-mono font-bold text-xs flex items-center justify-center shadow-inner">

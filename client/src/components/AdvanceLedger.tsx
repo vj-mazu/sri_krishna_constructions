@@ -701,8 +701,8 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* 4. EXPANSIVE FULL-SCREEN DRILL-DOWN WORKER ADVANCE STATEMENT MODAL (95VW) */}
       {/* ========================================================================= */}
       {selectedWorkerId && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1400px] h-[92vh] max-h-[92vh] my-auto flex flex-col overflow-hidden text-slate-900">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1400px] h-[94vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden text-slate-900">
             
             {/* Sticky Modal Header */}
             <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-5 py-3.5 flex items-center justify-between shadow-md shrink-0 sticky top-0 z-50">
@@ -929,8 +929,8 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* 5. DISBURSE NEW ADVANCE MODAL                                             */}
       {/* ========================================================================= */}
       {showDisburseModal && targetWorkerForAction && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-md overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-300 w-full max-w-md max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-fadeIn">
             <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-4 font-bold flex justify-between items-center shrink-0">
               <span className="text-sm font-black uppercase flex items-center gap-1.5">
                 <Plus className="w-4 h-4" /> Disburse Advance to Worker
@@ -1017,8 +1017,8 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* 6. RECORD DIRECT CASH REPAYMENT MODAL                                     */}
       {/* ========================================================================= */}
       {showRepayModal && targetWorkerForAction && (
-        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-md overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+        <div className="fixed inset-0 z-[99999] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-300 w-full max-w-md max-h-[90vh] sm:max-h-[92vh] flex flex-col overflow-hidden animate-fadeIn">
             <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-4 font-bold flex justify-between items-center shrink-0">
               <span className="text-sm font-black uppercase flex items-center gap-1.5">
                 <ArrowDownLeft className="w-4 h-4" /> Record Cash Advance Repayment

@@ -2883,36 +2883,36 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       {/* AUTHENTIC PHYSICAL "REGISTER BOOK" MODAL */}
       {drilldownWorkerId && (
         <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) handleCloseRegisterBook(); }}
         >
-          <div className="bg-[#fcfaf2] rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col my-auto max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+          <div className="bg-[#fcfaf2] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col h-[94vh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
             {/* REGISTER BOOK TOP BINDING HEADER */}
-            <div className="bg-gradient-to-r from-[#2b1810] via-[#4a2612] to-[#2b1810] text-[#f5eed7] p-3.5 sm:p-5 flex justify-between items-center border-b-4 border-[#b8860b] shadow-lg shrink-0">
-              <div className="flex items-center gap-2.5 sm:gap-3.5">
-                <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-[#b8860b]/25 border border-[#b8860b] flex items-center justify-center shadow-inner flex-shrink-0">
-                  <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-[#d4af37]" />
+            <div className="bg-gradient-to-r from-[#2b1810] via-[#4a2612] to-[#2b1810] text-[#f5eed7] p-3 sm:p-4 flex justify-between items-center border-b-4 border-[#b8860b] shadow-lg shrink-0">
+              <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-[#b8860b]/25 border border-[#b8860b] flex items-center justify-center shadow-inner flex-shrink-0">
+                  <BookOpen className="w-4 h-4 sm:w-5 sm:h-5 text-[#d4af37]" />
                 </div>
-                <div>
-                  <h3 className="font-serif text-sm sm:text-lg md:text-xl font-black tracking-wide text-[#fdf6e2] uppercase leading-tight">
-                    Sri Krishna Constructions - Daily Attendance Register
+                <div className="min-w-0">
+                  <h3 className="font-serif text-xs sm:text-base md:text-lg font-black tracking-wide text-[#fdf6e2] uppercase leading-tight truncate">
+                    Daily Attendance Register
                   </h3>
-                  <p className="text-[10px] sm:text-xs text-[#dfcfb0] font-medium tracking-wide mt-0.5">
-                    MUSTER ROLL & ATTENDANCE RECORD • {monthName.toUpperCase()} {selectedYear}
+                  <p className="text-[9px] sm:text-xs text-[#dfcfb0] font-medium tracking-wide mt-0.5 truncate">
+                    MUSTER ROLL • {monthName.toUpperCase()} {selectedYear}
                   </p>
                 </div>
               </div>
               <button
                 onClick={handleCloseRegisterBook}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/15 hover:bg-rose-600 hover:text-white active:scale-95 text-[#f5eed7] flex items-center justify-center transition-all flex-shrink-0 ml-2 font-bold"
+                className="w-8 h-8 rounded-full bg-white/15 hover:bg-rose-600 hover:text-white active:scale-95 text-[#f5eed7] flex items-center justify-center transition-all flex-shrink-0 ml-2 font-bold cursor-pointer"
                 title="Close"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* REGISTER BOOK PAGE CONTENT WITH SMOOTH SCROLL */}
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-2.5 sm:p-5 space-y-3 sm:space-y-4 bg-[#fbf9f4] font-sans overscroll-contain">
+            <div className="flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-5 space-y-3 sm:space-y-4 bg-[#fbf9f4] font-sans">
               {drilldownLoading || !drilldownData ? (
                 <div className="py-16 text-center text-[#5c3a21] font-semibold flex items-center justify-center gap-2">
                   <RefreshCw className="w-6 h-6 animate-spin text-[#b8860b]" /> Opening attendance register page...
@@ -3197,34 +3197,34 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
         return (
           <div 
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
             onClick={(e) => { if (e.target === e.currentTarget) setSlipModalWorker(null); }}
           >
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col my-auto max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[94vh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
               {/* SLIP MODAL HEADER BAR */}
               <div className="bg-[#1e3a8a] text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
-                <div className="flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-amber-400" />
-                  <div>
-                    <h3 className="font-bold text-sm sm:text-base">
-                      Official Salary Slip Preview • {w.fullName}
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-xs sm:text-base truncate">
+                      Salary Slip • {w.fullName}
                     </h3>
-                    <p className="text-[10px] sm:text-xs text-blue-200">
-                      {mName} {selectedYear} • Portrait Mode Format
+                    <p className="text-[9px] sm:text-xs text-blue-200 truncate">
+                      {mName} {selectedYear} • Slip Preview
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => generateSalarySlipPdf(w, true)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow"
+                    className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg flex items-center gap-1 shadow cursor-pointer"
                     title="Download Portrait PDF"
                   >
-                    <Download className="w-4 h-4" /> Download PDF
+                    <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span> PDF
                   </button>
                   <button
                     onClick={() => setSlipModalWorker(null)}
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -3232,8 +3232,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               </div>
 
               {/* SLIP BODY (EXACT VISUAL MATCH TO SCREENSHOT) */}
-              <div className="p-4 sm:p-6 overflow-y-auto bg-slate-100 flex justify-center">
-                <div className="bg-white p-5 sm:p-6 rounded shadow-md border border-slate-300 w-full max-w-2xl text-black font-sans text-xs">
+              <div className="flex-1 overflow-y-auto overscroll-contain p-2 sm:p-6 bg-slate-100 flex justify-center">
+                <div className="bg-white p-3 sm:p-6 rounded-xl shadow-md border border-slate-300 w-full max-w-2xl text-black font-sans text-xs overflow-x-auto">
                   
                   {/* UNIFIED OUTER BOX WITH CLEAN INTERNAL BORDERS */}
                   <div className="border border-black">

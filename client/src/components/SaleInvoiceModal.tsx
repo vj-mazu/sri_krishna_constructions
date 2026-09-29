@@ -289,13 +289,13 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 sm:pt-6 overflow-y-auto"
+      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       {/* CLEAN FULL-SCREEN MODAL CONTAINER (matches salary slip style) */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 my-auto animate-fadeIn">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl h-[94vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 animate-fadeIn">
         
         {/* MODAL TOP CONTROL BAR (ALWAYS STICKY AT TOP) */}
         <div className="shrink-0 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md border-b border-blue-900">

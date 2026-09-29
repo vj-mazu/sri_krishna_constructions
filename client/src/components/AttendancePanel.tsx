@@ -23,6 +23,7 @@ interface AttendancePanelProps {
 }
 
 export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRole }) => {
+  const isPrivileged = currentUserRole === 'OWNER' || currentUserRole === 'MANAGER';
   const [divisions, setDivisions] = useState<any[]>([]);
   const [selectedDivisionId, setSelectedDivisionId] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
@@ -297,6 +298,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           ...currentRec,
           overtimeHours,
           status: (numOt > 0 && !currentRec.status) ? 'PRESENT' : currentRec.status,
+          divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (currentRec.divisionId || ''),
         },
       };
     });
@@ -320,28 +322,48 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const handleInlineEditSubmit = async (e: React.FormEvent, worker: any) => {
     e.preventDefault();
-    if (!editForm.reason.trim()) {
+    if (!isPrivileged && !editForm.reason.trim()) {
       showToast('Please provide a reason for the correction request', 'error');
       return;
     }
     setEditSubmitting(true);
     try {
       const state = attendanceRecords[worker.id] || { status: '', divisionName: '' };
-      await api.post('/attendance/correction-requests', {
-        workerId: worker.id,
-        date: selectedDate,
-        oldStatus: state.status || 'UNMARKED',
-        oldDivisionName: state.divisionName || 'Unassigned',
-        newStatus: editForm.newStatus,
-        newDivisionId: editForm.newDivisionId,
-        newOvertimeHours: editForm.newOvertimeHours,
-        reason: editForm.reason
-      });
-      showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
-      setInlineEditWorkerId(null);
-      window.dispatchEvent(new Event('skc-approvals-updated'));
+
+      if (isPrivileged) {
+        // Direct update for Owner and Manager (no approval request required)
+        await api.post('/attendance', {
+          date: selectedDate,
+          attendanceData: [{
+            workerId: worker.id,
+            status: editForm.newStatus,
+            overtimeHours: editForm.newOvertimeHours || '0',
+            divisionId: editForm.newDivisionId,
+            notes: editForm.reason.trim() || undefined
+          }]
+        });
+        showToast(`Attendance updated directly for ${worker.fullName || 'worker'}!`, 'success');
+        setInlineEditWorkerId(null);
+        await fetchWorkersAndAttendance();
+        window.dispatchEvent(new Event('skc-approvals-updated'));
+      } else {
+        // Supervisor workflow: submit correction request for approval
+        await api.post('/attendance/correction-requests', {
+          workerId: worker.id,
+          date: selectedDate,
+          oldStatus: state.status || 'UNMARKED',
+          oldDivisionName: state.divisionName || 'Unassigned',
+          newStatus: editForm.newStatus,
+          newDivisionId: editForm.newDivisionId,
+          newOvertimeHours: editForm.newOvertimeHours,
+          reason: editForm.reason
+        });
+        showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
+        setInlineEditWorkerId(null);
+        window.dispatchEvent(new Event('skc-approvals-updated'));
+      }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to submit correction request', 'error');
+      showToast(err.response?.data?.error || (isPrivileged ? 'Failed to update attendance' : 'Failed to submit correction request'), 'error');
     } finally {
       setEditSubmitting(false);
     }
@@ -755,7 +777,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     <div className="mt-1.5 pt-2 border-t-2 border-amber-300 bg-amber-50/60 rounded-xl p-3 space-y-2.5 animate-fadeIn">
                       <div className="flex items-center justify-between pb-1 border-b border-amber-200">
                         <span className="font-bold text-slate-800 text-xs flex items-center gap-1">
-                          <span>✏️</span> Request Correction
+                          <span>✏️</span> {isPrivileged ? 'Edit Attendance (Direct Update)' : 'Request Correction'}
                         </span>
                         <button
                           type="button"
@@ -767,7 +789,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       </div>
 
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Correct Division / Site *</label>
+                        <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Site / Division *</label>
                         <select
                           value={editForm.newDivisionId}
                           onChange={(e) => setEditForm(prev => ({ ...prev, newDivisionId: e.target.value }))}
@@ -780,7 +802,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       </div>
 
                       <div>
-                        <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Correct Attendance Status *</label>
+                        <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Attendance Status *</label>
                         <div className="grid grid-cols-4 gap-1">
                           {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((st) => (
                             <button
@@ -813,16 +835,24 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           />
                         </div>
                         <div>
-                          <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Reason *</label>
+                          <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">
+                            {isPrivileged ? 'Remarks / Notes (Optional)' : 'Reason *'}
+                          </label>
                           <input
                             type="text"
                             value={editForm.reason}
                             onChange={(e) => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
-                            placeholder="Reason for change..."
+                            placeholder={isPrivileged ? "Notes/remarks..." : "Reason for change..."}
                             className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-xs outline-none focus:border-[#1e3a8a]"
                           />
                         </div>
                       </div>
+
+                      <p className="text-[10px] text-amber-900 font-medium pt-0.5">
+                        {isPrivileged 
+                          ? '⚡ Direct update mode: Changes apply immediately without approval.' 
+                          : 'ℹ️ Submitting sends a request to Manager/Owner in Approvals.'}
+                      </p>
 
                       <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-200">
                         <button
@@ -838,7 +868,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           onClick={(e) => handleInlineEditSubmit(e, w)}
                           className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1"
                         >
-                          {editSubmitting ? 'Sending...' : 'Send to Manager'}
+                          {editSubmitting ? 'Saving...' : isPrivileged ? 'Save Changes Directly' : 'Send to Manager'}
                         </button>
                       </div>
                     </div>
@@ -1067,7 +1097,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                 <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm">✏️</span>
-                                    <span className="font-bold text-slate-800 text-xs">Request Attendance Correction for <strong className="text-[#1e3a8a]">{w.fullName}</strong></span>
+                                    <span className="font-bold text-slate-800 text-xs">
+                                      {isPrivileged ? 'Edit Attendance Directly for' : 'Request Attendance Correction for'} <strong className="text-[#1e3a8a]">{w.fullName}</strong>
+                                    </span>
                                     <span className="text-[11px] text-slate-500 font-mono">({w.workerId} • {formatDateDMY(selectedDate)})</span>
                                   </div>
                                   <button
@@ -1083,7 +1115,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                   {/* Division */}
                                   <div>
                                     <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
-                                      Correct Site / Division *
+                                      Site / Division *
                                     </label>
                                     <select
                                       value={editForm.newDivisionId}
@@ -1099,7 +1131,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                   {/* Status */}
                                   <div>
                                     <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
-                                      Correct Status *
+                                      Attendance Status *
                                     </label>
                                     <div className="grid grid-cols-4 gap-1">
                                       {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((st) => (
@@ -1138,13 +1170,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                   {/* Reason */}
                                   <div>
                                     <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
-                                      Reason for Correction *
+                                      {isPrivileged ? 'Remarks / Notes (Optional)' : 'Reason for Correction *'}
                                     </label>
                                     <input
                                       type="text"
                                       value={editForm.reason}
                                       onChange={(e) => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
-                                      placeholder="e.g. Marked wrong site or accidental half-day"
+                                      placeholder={isPrivileged ? "e.g. Regular manual adjustment" : "e.g. Marked wrong site or accidental half-day"}
                                       className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 text-xs focus:bg-white focus:border-[#1e3a8a] outline-none"
                                     />
                                   </div>
@@ -1152,7 +1184,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
                                 <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                                   <p className="text-[10px] text-amber-900 font-medium">
-                                    ℹ️ Submitting sends a request to Manager/Owner in <strong>Approvals</strong>. Once approved, the record is updated.
+                                    {isPrivileged
+                                      ? '⚡ Direct update mode: Changes are saved directly to database without requiring approval.'
+                                      : 'ℹ️ Submitting sends a request to Manager/Owner in Approvals. Once approved, the record is updated.'}
                                   </p>
                                   <div className="flex items-center gap-2">
                                     <button
@@ -1168,7 +1202,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                       onClick={(e) => handleInlineEditSubmit(e, w)}
                                       className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1"
                                     >
-                                      {editSubmitting ? 'Submitting...' : 'Send Request to Manager'}
+                                      {editSubmitting ? 'Saving...' : isPrivileged ? 'Save Changes Directly' : 'Send Request to Manager'}
                                     </button>
                                   </div>
                                 </div>

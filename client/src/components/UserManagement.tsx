@@ -2725,8 +2725,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* EDIT PO MODAL */}
           {editingPO && (
-            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto backdrop-blur-sm">
-              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden backdrop-blur-sm animate-fadeIn">
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
                   <h3 className="text-sm sm:text-base font-bold text-slate-800">
                     Edit Purchase Order: <span className="font-mono text-[#1e3a8a]">{editingPO.poNumber}</span>
@@ -3593,8 +3593,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: INWARD PURCHASE (FULL GST FIELDS) */}
           {purchaseModalItem && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
                 <div className="bg-gradient-to-r from-emerald-800 to-teal-900 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
@@ -3803,8 +3803,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: OUTWARD SALE (REQUIRES OWNER APPROVAL) */}
           {saleModalItem && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
@@ -4037,8 +4037,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: VIEW / INSPECT ITEM MASTER DETAILS */}
           {inspectIndStock && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-2.5">
                     <Package className="w-5 h-5 text-sky-300" />
@@ -4120,8 +4120,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: TRANSACTION HISTORY */}
           {txHistoryItem && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <div>
                     <h3 className="font-bold text-base flex items-center gap-2">
@@ -4220,8 +4220,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
           {/* MODAL: EDIT INDIVIDUAL STOCK DETAILS (FULL ITEM MASTER) */}
           {editingIndStock && (
-            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto">
-              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
+            <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
+              <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-fadeIn">
                 <div className="bg-[#1e3a8a] text-white px-6 py-4 flex justify-between items-center shrink-0">
                   <h3 className="font-bold text-sm flex items-center gap-2">
                     <Edit className="w-4 h-4 text-sky-300" /> Edit Item Master Details
