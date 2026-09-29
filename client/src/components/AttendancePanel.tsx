@@ -332,6 +332,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       });
       showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
       setInlineEditWorkerId(null);
+      window.dispatchEvent(new Event('skc-approvals-updated'));
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to submit correction request', 'error');
     } finally {
@@ -398,6 +399,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         if (res.data?.requiresApproval) {
           setSuccess(res.data.message || '⚠️ Changes detected! Modification request submitted to Owner/Manager for approval.');
           showToast(res.data.message || 'Modification request submitted to Owner/Manager for approval!', 'info');
+          window.dispatchEvent(new Event('skc-approvals-updated'));
         } else {
           setSuccess('Attendance marked successfully!');
           showToast('Daily attendance saved successfully!', 'success');

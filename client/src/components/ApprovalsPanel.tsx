@@ -40,6 +40,7 @@ export const ApprovalsPanel: React.FC = () => {
       showToast(`Request ${status.toLowerCase()} successfully!`, 'success');
       setInspectModal(null);
       fetchApprovals();
+      window.dispatchEvent(new Event('skc-approvals-updated'));
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to process approval action', 'error');
     }
@@ -50,6 +51,7 @@ export const ApprovalsPanel: React.FC = () => {
       await api.put(`/attendance/correction-requests/${id}/review`, { action });
       showToast(`Attendance correction ${action.toLowerCase()} successfully!`, 'success');
       fetchApprovals();
+      window.dispatchEvent(new Event('skc-approvals-updated'));
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to review attendance request', 'error');
     }

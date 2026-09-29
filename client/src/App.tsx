@@ -126,13 +126,22 @@ export function App() {
     }
   }, []);
 
-  // Poll for new pending approvals count every 15 seconds if logged in as OWNER/MANAGER
+  // Poll for new pending approvals count every 15 seconds if logged in as OWNER/MANAGER + instant event listener
   useEffect(() => {
     if (!user || (user.role !== 'OWNER' && user.role !== 'MANAGER')) return;
     
     fetchPendingCount();
     const interval = setInterval(fetchPendingCount, 15000);
-    return () => clearInterval(interval);
+
+    const handleInstantUpdate = () => {
+      fetchPendingCount();
+    };
+    window.addEventListener('skc-approvals-updated', handleInstantUpdate);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('skc-approvals-updated', handleInstantUpdate);
+    };
   }, [user, activeTab]);
 
   const handleLogout = () => {

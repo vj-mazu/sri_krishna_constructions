@@ -4041,52 +4041,73 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         }
       });
 
-      const workingDays = present + (half * 0.5) + paidHolidaysCount;
-      // If approved in DB and rates are stored, preserve the historical rates for that month so master rate updates don't change past months!
-      const dailyWage = (dbPayment && dbPayment.dailyWage !== undefined && dbPayment.dailyWage !== null) 
-        ? parseFloat(dbPayment.dailyWage) 
+      const isApproved = dbPayment && dbPayment.status === 'APPROVED';
+      const approvedWorkingDays = isApproved 
+        ? (parseFloat(dbPayment.presentDays || 0) + (parseFloat(dbPayment.halfDays || 0) * 0.5) + (parseFloat(dbPayment.leaveDays || 0)))
+        : 0;
+      const workingDays = isApproved && approvedWorkingDays > 0 ? approvedWorkingDays : (present + (half * 0.5) + paidHolidaysCount);
+
+      // If approved in DB, strictly freeze historical rates & calculations so master rate updates NEVER modify approved months!
+      const dailyWage = isApproved
+        ? (dbPayment.dailyWage != null 
+            ? parseFloat(dbPayment.dailyWage) 
+            : (workingDays > 0 && dbPayment.wagesAmount != null ? Math.round(parseFloat(dbPayment.wagesAmount) / workingDays) : parseFloat(worker.dailyWage) || 0))
         : (parseFloat(worker.dailyWage) || 0);
-      const dailyAllowance = (dbPayment && dbPayment.dailyAllowance !== undefined && dbPayment.dailyAllowance !== null) 
-        ? parseFloat(dbPayment.dailyAllowance) 
+
+      const dailyAllowance = isApproved
+        ? (dbPayment.dailyAllowance != null 
+            ? parseFloat(dbPayment.dailyAllowance) 
+            : (workingDays > 0 && dbPayment.allowanceAmount != null ? Math.round(parseFloat(dbPayment.allowanceAmount) / workingDays) : parseFloat(worker.dailyAllowance) || 0))
         : (parseFloat(worker.dailyAllowance) || 0);
+
       const advanceTaken = parseFloat(worker.advanceTaken) || 0;
       const advanceBalance = parseFloat(worker.advanceBalance) || 0;
 
-      const wagesAmount = dbPayment && dbPayment.wagesAmount !== undefined && dbPayment.wagesAmount !== null
+      const wagesAmount = isApproved && dbPayment.wagesAmount != null
         ? parseFloat(dbPayment.wagesAmount)
         : Math.round(workingDays * dailyWage);
-      const allowanceAmount = dbPayment && dbPayment.allowanceAmount !== undefined && dbPayment.allowanceAmount !== null
+      const allowanceAmount = isApproved && dbPayment.allowanceAmount != null
         ? parseFloat(dbPayment.allowanceAmount)
         : Math.round(workingDays * dailyAllowance);
-      const grossPayment = wagesAmount + allowanceAmount;
+      const grossPayment = isApproved && dbPayment.grossPayment != null
+        ? parseFloat(dbPayment.grossPayment)
+        : (wagesAmount + allowanceAmount);
 
       // Flexible / Manual deductions (pre-filled from DB if already entered/approved)
       const pfAmount = dbPayment ? (parseFloat(dbPayment.pfAmount) || 0) : 0;
       const esiAmount = dbPayment ? (parseFloat(dbPayment.esiAmount) || 0) : 0;
-      const netBaseAmount = Math.max(0, grossPayment - pfAmount - esiAmount);
+      const netBaseAmount = isApproved && dbPayment.netBaseAmount != null
+        ? parseFloat(dbPayment.netBaseAmount)
+        : Math.max(0, grossPayment - pfAmount - esiAmount);
 
-      const otRate = (dbPayment && dbPayment.otHourlyRate !== undefined && dbPayment.otHourlyRate !== null)
-        ? parseFloat(dbPayment.otHourlyRate)
-        : (parseFloat(worker.otHourlyRate) || (dailyWage > 0 ? (dailyWage / 8) : 0));
-      const otPayment = dbPayment && dbPayment.otPayment !== undefined && dbPayment.otPayment !== null
+      const otRate = isApproved
+        ? (dbPayment.otHourlyRate != null ? parseFloat(dbPayment.otHourlyRate) : (parseFloat(worker.otHourlyRate) || (dailyWage > 0 ? dailyWage / 8 : 0)))
+        : (parseFloat(worker.otHourlyRate) || (dailyWage > 0 ? dailyWage / 8 : 0));
+
+      const totalOtHours = isApproved && dbPayment.totalOtHours != null
+        ? parseFloat(dbPayment.totalOtHours)
+        : totalOt;
+
+      const otPayment = isApproved && dbPayment.otPayment != null
         ? parseFloat(dbPayment.otPayment)
-        : Math.round(totalOt * otRate);
+        : Math.round(totalOtHours * otRate);
 
-      // OT Allowance should ONLY be given when OT is actually done (totalOt > 0) or manually set in payment
       const defaultOtAllowance = parseFloat(worker.otAllowance) || 0;
-      const otAllowance = dbPayment && dbPayment.otAllowance !== undefined && dbPayment.otAllowance !== null 
+      const otAllowance = isApproved && dbPayment.otAllowance != null 
         ? parseFloat(dbPayment.otAllowance) 
-        : (totalOt > 0 ? defaultOtAllowance : 0);
+        : (totalOtHours > 0 ? defaultOtAllowance : 0);
 
-      const totalPayment = netBaseAmount + otPayment + otAllowance;
+      const totalPayment = isApproved && dbPayment.totalPayment != null
+        ? parseFloat(dbPayment.totalPayment)
+        : (netBaseAmount + otPayment + otAllowance);
+
       const advanceDeducted = dbPayment ? (parseFloat(dbPayment.advanceDeducted) || 0) : 0;
-      // If dbPayment exists (already approved), worker.advanceBalance in database has ALREADY been updated.
-      // So remaining is worker.advanceBalance, and original balance before deduction was worker.advanceBalance + advanceDeducted.
-      // If NOT yet approved, remaining is worker.advanceBalance - advanceDeducted.
-      const initialAdvanceBalance = dbPayment ? (advanceBalance + advanceDeducted) : advanceBalance;
-      const remainingAdvanceBalance = dbPayment ? advanceBalance : Math.max(0, advanceBalance - advanceDeducted);
+      const initialAdvanceBalance = isApproved ? (advanceBalance + advanceDeducted) : advanceBalance;
+      const remainingAdvanceBalance = isApproved ? advanceBalance : Math.max(0, advanceBalance - advanceDeducted);
       const extraAmount = dbPayment ? (parseFloat(dbPayment.extraAmount) || 0) : 0;
-      const finalNetAmount = totalPayment - advanceDeducted + extraAmount;
+      const finalNetAmount = isApproved && (dbPayment.finalNetAmount != null || dbPayment.calculatedAmount != null)
+        ? parseFloat(dbPayment.finalNetAmount != null ? dbPayment.finalNetAmount : dbPayment.calculatedAmount)
+        : (totalPayment - advanceDeducted + extraAmount);
 
       return {
         workerId: worker.id,

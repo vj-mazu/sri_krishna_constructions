@@ -243,6 +243,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       ? (parseFloat(wdVal as string) || 0)
       : (w.workingDays !== undefined ? parseFloat(w.workingDays) || 0 : presentDays + (halfDays * 0.5));
 
+    const isApproved = w.paymentStatus === 'APPROVED';
+
     // Daily Wage — use manual override if entered, else server value
     const dwVal = customDailyWage[w.workerId];
     const dailyWage = dwVal !== undefined && dwVal !== ''
@@ -255,6 +257,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       ? (parseFloat(daVal as string) || 0)
       : (parseFloat(w.dailyAllowance) || 0);
 
+    const hasWageOverride = dwVal !== undefined && dwVal !== '';
+    const hasWdOverride = wdVal !== undefined && wdVal !== '';
+    const hasDaOverride = daVal !== undefined && daVal !== '';
+
     // Advance balance from worker master record
     const advanceBalance = parseFloat(w.advanceBalance) || 0;
     // Advance deducted this month (from override or saved payment)
@@ -264,9 +270,15 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const remainingAdvance = Math.max(0, advanceBalance - advance);
     const advanceTaken = parseFloat(w.advanceTaken) || 0;
 
-    const wagesAmount = Math.round(workingDays * dailyWage);
-    const allowanceAmount = Math.round(workingDays * dailyAllowance);
-    const grossPayment = wagesAmount + allowanceAmount;
+    const wagesAmount = (!hasWageOverride && !hasWdOverride && isApproved && w.wagesAmount !== undefined)
+      ? parseFloat(w.wagesAmount)
+      : Math.round(workingDays * dailyWage);
+    const allowanceAmount = (!hasDaOverride && !hasWdOverride && isApproved && w.allowanceAmount !== undefined)
+      ? parseFloat(w.allowanceAmount)
+      : Math.round(workingDays * dailyAllowance);
+    const grossPayment = (isApproved && !hasWageOverride && !hasWdOverride && !hasDaOverride && w.grossPayment !== undefined)
+      ? parseFloat(w.grossPayment)
+      : (wagesAmount + allowanceAmount);
 
     const pfVal = customPf[w.workerId] !== undefined 
       ? customPf[w.workerId] 
@@ -278,7 +290,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       : (w.esiAmount !== undefined && w.esiAmount !== null ? parseFloat(w.esiAmount) : 0);
     const esi = esiVal === '' ? 0 : parseFloat(esiVal as string) || 0;
 
-    const netBaseAmount = Math.max(0, grossPayment - pf - esi);
+    const netBaseAmount = isApproved && !hasWageOverride && !hasWdOverride && !hasDaOverride && customPf[w.workerId] === undefined && customEsi[w.workerId] === undefined && w.netBaseAmount !== undefined
+      ? parseFloat(w.netBaseAmount)
+      : Math.max(0, grossPayment - pf - esi);
 
     // OT Hours — use manual override if entered, else server value
     const otVal = customOtHours[w.workerId];
@@ -287,7 +301,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       : (parseFloat(w.totalOtHours) || 0);
     const otHourlyRate = parseFloat(w.otHourlyRate) || 0;
     const otRate = otHourlyRate > 0 ? otHourlyRate : (dailyWage > 0 ? (dailyWage / 8) : 0);
-    const otPayment = Math.round(otHours * otRate);
+    const otPayment = isApproved && otVal === undefined && w.otPayment !== undefined
+      ? parseFloat(w.otPayment)
+      : Math.round(otHours * otRate);
 
     // OT Allowance — use manual override if entered, else worker/payment otAllowance (applied when OT > 0 or overridden)
     const otAllowVal = customOtAllowance[w.workerId];
@@ -295,12 +311,16 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       ? (parseFloat(otAllowVal as string) || 0)
       : (w.otAllowance !== undefined && w.otAllowance !== null ? parseFloat(w.otAllowance) : (otHours > 0 ? (parseFloat(w.otAllowance) || 0) : 0));
 
-    const totalPayment = netBaseAmount + otPayment + otAllowance;
+    const totalPayment = isApproved && !hasWageOverride && !hasWdOverride && !hasDaOverride && customPf[w.workerId] === undefined && customEsi[w.workerId] === undefined && otVal === undefined && otAllowVal === undefined && w.totalPayment !== undefined
+      ? parseFloat(w.totalPayment)
+      : (netBaseAmount + otPayment + otAllowance);
     
     const extraVal = customExtra[w.workerId] !== undefined ? customExtra[w.workerId] : parseFloat(w.extraAmount || 0);
     const extra = extraVal === '' ? 0 : parseFloat(extraVal as string) || 0;
     
-    const finalNetAmount = Math.max(0, totalPayment - advance + extra);
+    const finalNetAmount = isApproved && !hasWageOverride && !hasWdOverride && !hasDaOverride && customPf[w.workerId] === undefined && customEsi[w.workerId] === undefined && otVal === undefined && otAllowVal === undefined && customAdvance[w.workerId] === undefined && customExtra[w.workerId] === undefined && w.finalNetAmount !== undefined
+      ? parseFloat(w.finalNetAmount)
+      : Math.max(0, totalPayment - advance + extra);
 
     return {
       workingDays,
