@@ -3673,11 +3673,18 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       // User is editing existing daily attendance
       if (req.user.role !== 'OWNER' && req.user.role !== 'MANAGER') {
         const { rows: workers } = await pool.query(
-          `SELECT "id", "fullName", "dailyWage" FROM "Worker" WHERE "id" = ANY($1::text[])`,
+          `SELECT w."id", w."fullName", w."dailyWage", w."divisionId", d."name" as "divisionName" 
+           FROM "Worker" w 
+           LEFT JOIN "Division" d ON w."divisionId" = d."id" 
+           WHERE w."id" = ANY($1::text[])`,
           [workerIds]
         );
 
-        const diffs = [];
+        const { rows: allDivs } = await pool.query(`SELECT "id", "name" FROM "Division"`);
+        const divNameMap = {};
+        allDivs.forEach(d => { divNameMap[d.id] = d.name; });
+
+        const modifiedRequests = [];
         attendanceData.forEach((record) => {
           const existing = existingLogs.find(el => el.workerId === record.workerId);
           const worker = workers.find(w => w.id === record.workerId);
@@ -3691,31 +3698,51 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
             const existingOverride = existing.dailyWageOverride ? parseFloat(existing.dailyWageOverride) : null;
             const wageChanged = existingOverride !== incomingOverride;
 
-            if (statusChanged || otChanged || wageChanged) {
+            const existingDivId = existing.divisionId || worker.divisionId;
+            const incomingDivId = record.divisionId || worker.divisionId;
+            const divChanged = existingDivId !== incomingDivId;
+
+            if (statusChanged || otChanged || wageChanged || divChanged) {
+              const oldDivName = divNameMap[existingDivId] || worker.divisionName || 'General';
+              const targetDivId = incomingDivId || existingDivId || allDivs[0]?.id;
+              
               const statusDesc = statusChanged ? `${existing.status} ➔ ${record.status}` : null;
               const otDesc = otChanged ? `OT: ${existingOt}h ➔ ${incomingOt}h` : null;
               const wageDesc = wageChanged ? `Wage: ₹${existingOverride || worker.dailyWage} ➔ ₹${incomingOverride || worker.dailyWage}` : null;
-              const parts = [statusDesc, otDesc, wageDesc].filter(Boolean);
-              diffs.push(`${worker.fullName} (${parts.join(', ')})`);
+              const divDesc = divChanged ? `Site: ${oldDivName} ➔ ${divNameMap[incomingDivId] || 'Site'}` : null;
+              const changeSummary = [statusDesc, otDesc, wageDesc, divDesc].filter(Boolean).join(', ');
+
+              modifiedRequests.push({
+                workerId: record.workerId,
+                date: date,
+                oldStatus: existing.status || 'UNMARKED',
+                oldDivisionName: oldDivName,
+                newStatus: record.status,
+                newDivisionId: targetDivId,
+                newOvertimeHours: incomingOt,
+                reason: `Supervisor update on sheet: ${changeSummary}`
+              });
             }
           }
         });
 
-        const detailedReason = `Supervisor '${req.user.fullName}' requested to modify attendance for ${date}. Changes: ${diffs.join('; ') || 'No changes.'}`;
+        if (modifiedRequests.length > 0) {
+          // Insert into AttendanceCorrectionRequest so it appears in Approvals -> Attendance Corrections tab!
+          for (const reqItem of modifiedRequests) {
+            await pool.query(
+              `INSERT INTO "AttendanceCorrectionRequest" 
+               ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "reason", "status", "requestedById", "createdAt", "updatedAt")
+               VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5::"AttendanceStatus", $6, $7, $8, 'PENDING', $9, NOW(), NOW())`,
+              [reqItem.workerId, reqItem.date, reqItem.oldStatus, reqItem.oldDivisionName, reqItem.newStatus, reqItem.newDivisionId, reqItem.newOvertimeHours, reqItem.reason, req.user.id]
+            );
+          }
 
-        // Supervisors must go through Owner/Manager approval for edits
-        const { rows: appRows } = await pool.query(
-          `INSERT INTO "ApprovalRequest" ("id", "type", "status", "payload", "reason", "requestedById", "createdAt", "updatedAt")
-           VALUES (gen_random_uuid()::text, 'EDIT_ATTENDANCE', 'PENDING', $1, $2, $3, NOW(), NOW())
-           RETURNING *`,
-          [JSON.stringify({ date, attendanceData }), detailedReason, req.user.id]
-        );
-        const approval = appRows[0];
-        return res.status(202).json({
-          message: '⚠️ Changes detected! Editing previously logged attendance requires approval. Modification request has been submitted to Owner/Manager.',
-          requiresApproval: true,
-          approval
-        });
+          return res.status(202).json({
+            message: `⚠️ Changes detected for ${modifiedRequests.length} worker(s)! Modification request submitted to Owner/Manager for approval.`,
+            requiresApproval: true,
+            requestsCount: modifiedRequests.length
+          });
+        }
       }
     }
 

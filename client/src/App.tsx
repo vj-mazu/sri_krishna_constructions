@@ -97,8 +97,13 @@ export function App() {
 
   const fetchPendingCount = async () => {
     try {
-      const res = await api.get('/approvals');
-      setPendingCount(res.data.approvals?.length || 0);
+      const [appRes, attRes] = await Promise.all([
+        api.get('/approvals'),
+        api.get('/attendance/correction-requests')
+      ]);
+      const pendingInvoices = (appRes.data.approvals || []).filter((a: any) => a.status === 'PENDING').length;
+      const pendingAttendance = (attRes.data.requests || []).filter((r: any) => r.status === 'PENDING').length;
+      setPendingCount(pendingInvoices + pendingAttendance);
     } catch (err) {
       console.error('Failed to load pending approvals count:', err);
     }

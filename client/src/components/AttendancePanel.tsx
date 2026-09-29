@@ -38,7 +38,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [pageSize, setPageSize] = useState(30);
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
-  const [editModalWorker, setEditModalWorker] = useState<any | null>(null);
+  const [inlineEditWorkerId, setInlineEditWorkerId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     newStatus: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE';
     newDivisionId: string;
@@ -311,6 +311,34 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     }));
   };
 
+  const handleInlineEditSubmit = async (e: React.FormEvent, worker: any) => {
+    e.preventDefault();
+    if (!editForm.reason.trim()) {
+      showToast('Please provide a reason for the correction request', 'error');
+      return;
+    }
+    setEditSubmitting(true);
+    try {
+      const state = attendanceRecords[worker.id] || { status: '', divisionName: '' };
+      await api.post('/attendance/correction-requests', {
+        workerId: worker.id,
+        date: selectedDate,
+        oldStatus: state.status || 'UNMARKED',
+        oldDivisionName: state.divisionName || 'Unassigned',
+        newStatus: editForm.newStatus,
+        newDivisionId: editForm.newDivisionId,
+        newOvertimeHours: editForm.newOvertimeHours,
+        reason: editForm.reason
+      });
+      showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
+      setInlineEditWorkerId(null);
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to submit correction request', 'error');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const handleSaveAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -361,14 +389,19 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       });
 
       try {
-        await api.post('/attendance', {
+        const res = await api.post('/attendance', {
           date: selectedDate,
           attendanceData: recordsToSave,
           clearedWorkerIds: clearedWorkerIds,
         });
 
-        setSuccess('Attendance marked successfully!');
-        showToast('Daily attendance saved successfully!', 'success');
+        if (res.data?.requiresApproval) {
+          setSuccess(res.data.message || '⚠️ Changes detected! Modification request submitted to Owner/Manager for approval.');
+          showToast(res.data.message || 'Modification request submitted to Owner/Manager for approval!', 'info');
+        } else {
+          setSuccess('Attendance marked successfully!');
+          showToast('Daily attendance saved successfully!', 'success');
+        }
         fetchWorkersAndAttendance();
       } catch (networkErr: any) {
         // If device is offline or network failed, cache in Offline Queue!
@@ -684,21 +717,123 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       <button
                         type="button"
                         onClick={() => {
-                          setEditModalWorker(w);
-                          setEditForm({
-                            newStatus: (state.status as any) || 'PRESENT',
-                            newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
-                            newOvertimeHours: state.overtimeHours || '0',
-                            reason: ''
-                          });
+                          if (inlineEditWorkerId === w.id) {
+                            setInlineEditWorkerId(null);
+                          } else {
+                            setInlineEditWorkerId(w.id);
+                            setEditForm({
+                              newStatus: (state.status as any) || 'PRESENT',
+                              newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
+                              newOvertimeHours: state.overtimeHours || '0',
+                              reason: ''
+                            });
+                          }
                         }}
-                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-all active:scale-95"
-                        title="Request Attendance Edit / Correction"
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-all active:scale-95 ${
+                          inlineEditWorkerId === w.id
+                            ? 'bg-amber-600 text-white border border-amber-700'
+                            : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}
+                        title={inlineEditWorkerId === w.id ? "Close inline correction" : "Request Attendance Edit / Correction"}
                       >
-                        <span>✏️ Edit</span>
+                        <span>{inlineEditWorkerId === w.id ? '✖ Close' : '✏️ Edit'}</span>
                       </button>
                     </div>
                   </div>
+
+                  {/* INLINE EDIT EXPANDABLE SECTION ON MOBILE */}
+                  {inlineEditWorkerId === w.id && (
+                    <div className="mt-1.5 pt-2 border-t-2 border-amber-300 bg-amber-50/60 rounded-xl p-3 space-y-2.5 animate-fadeIn">
+                      <div className="flex items-center justify-between pb-1 border-b border-amber-200">
+                        <span className="font-bold text-slate-800 text-xs flex items-center gap-1">
+                          <span>✏️</span> Request Correction
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setInlineEditWorkerId(null)}
+                          className="text-[11px] text-slate-500 font-bold hover:text-slate-800 px-1.5 py-0.5 rounded bg-white border border-slate-200"
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Correct Division / Site *</label>
+                        <select
+                          value={editForm.newDivisionId}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, newDivisionId: e.target.value }))}
+                          className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 text-xs outline-none focus:border-[#1e3a8a]"
+                        >
+                          {divisions.filter((d: any) => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editForm.newDivisionId)).map((d: any) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Correct Attendance Status *</label>
+                        <div className="grid grid-cols-4 gap-1">
+                          {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((st) => (
+                            <button
+                              type="button"
+                              key={st}
+                              onClick={() => setEditForm(prev => ({ ...prev, newStatus: st }))}
+                              className={`py-1.5 px-1 rounded-lg font-bold text-[10px] border text-center transition-all ${
+                                editForm.newStatus === st 
+                                  ? 'bg-[#1e3a8a] text-white border-[#1e3a8a] shadow-xs' 
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                              }`}
+                            >
+                              {st === 'PRESENT' ? '🟢 Present' : st === 'ABSENT' ? '🔴 Absent' : st === 'HALF_DAY' ? '🟡 Half' : '🟣 Leave'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Overtime Hours</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="24"
+                            step="0.5"
+                            value={editForm.newOvertimeHours}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, newOvertimeHours: e.target.value }))}
+                            className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 text-xs outline-none focus:border-[#1e3a8a]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Reason *</label>
+                          <input
+                            type="text"
+                            value={editForm.reason}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
+                            placeholder="Reason for change..."
+                            className="w-full p-2 bg-white border border-slate-300 rounded-lg text-slate-800 text-xs outline-none focus:border-[#1e3a8a]"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-amber-200">
+                        <button
+                          type="button"
+                          onClick={() => setInlineEditWorkerId(null)}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          disabled={editSubmitting}
+                          onClick={(e) => handleInlineEditSubmit(e, w)}
+                          className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1"
+                        >
+                          {editSubmitting ? 'Sending...' : 'Send to Manager'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Split Half-Day Context Notice */}
                   {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId && (
@@ -799,130 +934,259 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         ? Boolean(state.status) 
                         : (Boolean(state.status) && state.divisionId === selectedDivisionId);
                       const isMarkedAtOtherSiteOnly = Boolean(state.status) && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId;
+                      const isEditing = inlineEditWorkerId === w.id;
 
                       return (
-                        <tr key={w.id} className="hover:bg-slate-50/50">
-                          <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
-                            <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
-                            <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
-                            <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
-                            {isMarkedAtOtherSiteOnly && (
-                              <div className="mt-1 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[9px] font-bold">
-                                📍 Worked at {state.divisionName || 'Other Division'}
-                              </div>
-                            )}
-                          </td>
-                          
-                          <td className="px-3 py-2 text-center whitespace-nowrap">
-                            {isMarkedAtOtherSiteOnly ? (
-                              <div className="inline-flex flex-col items-center gap-0.5">
-                                {getStatusBadge(state.status)}
-                                <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                                  at {state.divisionName || 'Other Div'}
-                                </span>
-                              </div>
-                            ) : isMarkedInThisSelectedDiv ? (
-                              getStatusBadge(state.status)
-                            ) : (
-                              getStatusBadge('')
-                            )}
-                          </td>
+                        <React.Fragment key={w.id}>
+                          <tr className={`hover:bg-slate-50/50 transition-colors ${isEditing ? 'bg-amber-50/40 border-t-2 border-amber-300' : ''}`}>
+                            <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
+                              <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
+                              <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
+                              <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
+                              {isMarkedAtOtherSiteOnly && (
+                                <div className="mt-1 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[9px] font-bold">
+                                  📍 Worked at {state.divisionName || 'Other Division'}
+                                </div>
+                              )}
+                            </td>
+                            
+                            <td className="px-3 py-2 text-center whitespace-nowrap">
+                              {isMarkedAtOtherSiteOnly ? (
+                                <div className="inline-flex flex-col items-center gap-0.5">
+                                  {getStatusBadge(state.status)}
+                                  <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                    at {state.divisionName || 'Other Div'}
+                                  </span>
+                                </div>
+                              ) : isMarkedInThisSelectedDiv ? (
+                                getStatusBadge(state.status)
+                              ) : (
+                                getStatusBadge('')
+                              )}
+                            </td>
 
-                          <td className="px-3 py-2">
-                            <div className="flex items-center justify-center gap-1.5">
-                              {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                                const active = isMarkedInThisSelectedDiv && state.status === status;
-                                let colorClasses = '';
-                                if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                                if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                                if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                                if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                            <td className="px-3 py-2">
+                              <div className="flex items-center justify-center gap-1.5">
+                                {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
+                                  const active = isMarkedInThisSelectedDiv && state.status === status;
+                                  let colorClasses = '';
+                                  if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                  if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                  if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                  if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
 
-                                let dotColor = '';
-                                if (status === 'PRESENT') dotColor = 'bg-emerald-500';
-                                if (status === 'ABSENT') dotColor = 'bg-red-500';
-                                if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
-                                if (status === 'LEAVE') dotColor = 'bg-slate-500';
+                                  let dotColor = '';
+                                  if (status === 'PRESENT') dotColor = 'bg-emerald-500';
+                                  if (status === 'ABSENT') dotColor = 'bg-red-500';
+                                  if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
+                                  if (status === 'LEAVE') dotColor = 'bg-slate-500';
 
-                                return (
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={status}
+                                      onClick={() => handleStatusChange(w.id, status)}
+                                      className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
+                                      title={active ? 'Click to unselect / clear' : `Mark as ${status}`}
+                                    >
+                                      <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
+                                        {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
+                                      </span>
+                                      <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
+                                    </button>
+                                  );
+                                })}
+                                {state.status && (
                                   <button
                                     type="button"
-                                    key={status}
-                                    onClick={() => handleStatusChange(w.id, status)}
-                                    className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
-                                    title={active ? 'Click to unselect / clear' : `Mark as ${status}`}
+                                    onClick={() => handleStatusChange(w.id, '')}
+                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 text-[10px] transition-colors"
+                                    title="Clear / Unselect attendance"
                                   >
-                                    <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
-                                      {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
-                                    </span>
-                                    <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
+                                    ✖
                                   </button>
-                                );
-                              })}
-                              {state.status && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleStatusChange(w.id, '')}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 text-[10px] transition-colors"
-                                  title="Clear / Unselect attendance"
-                                >
-                                  ✖
-                                </button>
-                              )}
+                                )}
+                              </div>
+                            </td>
+                          
+                          <td className="px-3 py-2">
+                            <div className="flex items-center justify-center gap-1 font-mono">
+                              <span className="text-[10px] text-slate-400 font-semibold">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                placeholder={w.dailyWage?.toString() || '0'}
+                                disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
+                                value={state.dailyWageOverride}
+                                onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
+                                className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs ${
+                                  currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'
+                                }`}
+                              />
                             </div>
                           </td>
-                        
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-center gap-1 font-mono">
-                            <span className="text-[10px] text-slate-400 font-semibold">₹</span>
-                            <input
-                              type="number"
-                              min="0"
-                              placeholder={w.dailyWage?.toString() || '0'}
-                              disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
-                              value={state.dailyWageOverride}
-                              onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                              className={`w-20 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs ${
-                                currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'
-                              }`}
-                            />
-                          </div>
-                        </td>
-                        
-                        <td className="px-3 py-2">
-                          <div className="flex items-center justify-center gap-1 font-mono">
-                            <input
-                              type="number"
-                              min="0"
-                              max="24"
-                              step="0.5"
-                              value={state.overtimeHours}
-                              onChange={(e) => handleOtChange(w.id, e.target.value)}
-                              className="w-14 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs"
-                            />
-                            <span className="text-[9px] text-slate-400 font-semibold">h</span>
-                          </div>
-                        </td>
+                          
+                          <td className="px-3 py-2">
+                            <div className="flex items-center justify-center gap-1 font-mono">
+                              <input
+                                type="number"
+                                min="0"
+                                max="24"
+                                step="0.5"
+                                value={state.overtimeHours}
+                                onChange={(e) => handleOtChange(w.id, e.target.value)}
+                                className="w-14 p-1 border border-slate-300 rounded text-center font-bold focus:border-[#1e3a8a] outline-none text-xs"
+                              />
+                              <span className="text-[9px] text-slate-400 font-semibold">h</span>
+                            </div>
+                          </td>
 
-                        <td className="px-3 py-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditModalWorker(w);
-                              setEditForm({
-                                newStatus: (state.status as any) || 'PRESENT',
-                                newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
-                                newOvertimeHours: state.overtimeHours || '0',
-                                reason: ''
-                              });
-                            }}
-                            className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded text-[10px] font-bold shadow-xs flex items-center justify-center gap-1 mx-auto transition-all"
-                            title="Request Attendance Edit / Correction"
-                          >
-                            <span>✏️ Edit</span>
-                          </button>
-                        </td>
-                      </tr>
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isEditing) {
+                                  setInlineEditWorkerId(null);
+                                } else {
+                                  setInlineEditWorkerId(w.id);
+                                  setEditForm({
+                                    newStatus: (state.status as any) || 'PRESENT',
+                                    newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
+                                    newOvertimeHours: state.overtimeHours || '0',
+                                    reason: ''
+                                  });
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-2xs flex items-center justify-center gap-1 mx-auto transition-all ${
+                                isEditing
+                                  ? 'bg-amber-600 text-white border border-amber-700'
+                                  : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300'
+                              }`}
+                              title={isEditing ? 'Close inline editor' : 'Request Attendance Edit / Correction'}
+                            >
+                              <span>{isEditing ? '✖ Close' : '✏️ Edit'}</span>
+                            </button>
+                          </td>
+                        </tr>
+
+                        {/* DESKTOP INLINE EXPANDED EDIT ROW */}
+                        {isEditing && (
+                          <tr className="bg-amber-50/40 border-b-2 border-amber-300 animate-fadeIn">
+                            <td colSpan={6} className="p-3">
+                              <div className="bg-white border border-amber-300 rounded-xl p-3.5 shadow-sm space-y-3">
+                                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm">✏️</span>
+                                    <span className="font-bold text-slate-800 text-xs">Request Attendance Correction for <strong className="text-[#1e3a8a]">{w.fullName}</strong></span>
+                                    <span className="text-[11px] text-slate-500 font-mono">({w.workerId} • {formatDateDMY(selectedDate)})</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setInlineEditWorkerId(null)}
+                                    className="text-slate-400 hover:text-slate-700 text-xs px-2 py-0.5 rounded-md hover:bg-slate-100"
+                                  >
+                                    ✕ Close
+                                  </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                  {/* Division */}
+                                  <div>
+                                    <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                                      Correct Site / Division *
+                                    </label>
+                                    <select
+                                      value={editForm.newDivisionId}
+                                      onChange={(e) => setEditForm(prev => ({ ...prev, newDivisionId: e.target.value }))}
+                                      className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-800 text-xs focus:bg-white focus:border-[#1e3a8a] outline-none"
+                                    >
+                                      {divisions.filter((d: any) => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editForm.newDivisionId)).map((d: any) => (
+                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+
+                                  {/* Status */}
+                                  <div>
+                                    <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                                      Correct Status *
+                                    </label>
+                                    <div className="grid grid-cols-4 gap-1">
+                                      {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((st) => (
+                                        <button
+                                          type="button"
+                                          key={st}
+                                          onClick={() => setEditForm(prev => ({ ...prev, newStatus: st }))}
+                                          className={`py-1.5 px-1 rounded-lg font-bold text-[10px] border transition-all text-center ${
+                                            editForm.newStatus === st 
+                                              ? 'bg-[#1e3a8a] text-white border-[#1e3a8a] shadow-xs' 
+                                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                                          }`}
+                                        >
+                                          {st === 'PRESENT' ? '🟢 Present' : st === 'ABSENT' ? '🔴 Absent' : st === 'HALF_DAY' ? '🟡 Half' : '🟣 Leave'}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* OT Hours */}
+                                  <div>
+                                    <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                                      Overtime Hours
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      max="24"
+                                      step="0.5"
+                                      value={editForm.newOvertimeHours}
+                                      onChange={(e) => setEditForm(prev => ({ ...prev, newOvertimeHours: e.target.value }))}
+                                      className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-800 text-xs focus:bg-white focus:border-[#1e3a8a] outline-none"
+                                    />
+                                  </div>
+
+                                  {/* Reason */}
+                                  <div>
+                                    <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
+                                      Reason for Correction *
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={editForm.reason}
+                                      onChange={(e) => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
+                                      placeholder="e.g. Marked wrong site or accidental half-day"
+                                      className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 text-xs focus:bg-white focus:border-[#1e3a8a] outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                                  <p className="text-[10px] text-amber-900 font-medium">
+                                    ℹ️ Submitting sends a request to Manager/Owner in <strong>Approvals</strong>. Once approved, the record is updated.
+                                  </p>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => setInlineEditWorkerId(null)}
+                                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={editSubmitting}
+                                      onClick={(e) => handleInlineEditSubmit(e, w)}
+                                      className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1"
+                                    >
+                                      {editSubmitting ? 'Submitting...' : 'Send Request to Manager'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
@@ -1023,143 +1287,6 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             </div>
           </form>
         )}
-
-      {/* 📝 ATTENDANCE CORRECTION REQUEST MODAL (SUPERVISOR -> MANAGER/ADMIN) */}
-      {editModalWorker && (
-        <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-3 sm:p-4 overflow-y-auto"
-          onClick={(e) => { if (e.target === e.currentTarget) setEditModalWorker(null); }}
-        >
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-300 overflow-hidden animate-fadeIn my-auto max-h-[92vh] flex flex-col">
-            {/* Header */}
-            <div className="bg-[#1e3a8a] text-white p-4 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-sm sm:text-base flex items-center gap-1.5">
-                  <span>✏️</span> Request Attendance Correction
-                </h3>
-                <p className="text-[11px] text-blue-200">
-                  {editModalWorker.fullName} • {formatDateDMY(selectedDate)}
-                </p>
-              </div>
-              <button
-                onClick={() => setEditModalWorker(null)}
-                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-xs"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Body Form */}
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                if (!editForm.reason.trim()) {
-                  showToast('Please provide a reason for the correction request', 'error');
-                  return;
-                }
-                setEditSubmitting(true);
-                try {
-                  const state = attendanceRecords[editModalWorker.id] || { status: '', divisionName: '' };
-                  await api.post('/attendance/correction-requests', {
-                    workerId: editModalWorker.id,
-                    date: selectedDate,
-                    oldStatus: state.status || 'UNMARKED',
-                    oldDivisionName: state.divisionName || 'Unassigned',
-                    newStatus: editForm.newStatus,
-                    newDivisionId: editForm.newDivisionId,
-                    newOvertimeHours: editForm.newOvertimeHours,
-                    reason: editForm.reason
-                  });
-                  showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
-                  setEditModalWorker(null);
-                } catch (err: any) {
-                  showToast(err.response?.data?.error || 'Failed to submit correction request', 'error');
-                } finally {
-                  setEditSubmitting(false);
-                }
-              }}
-              className="p-5 space-y-4 text-xs"
-            >
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 leading-relaxed text-[11px]">
-                ℹ️ <strong>Approval Workflow:</strong> Submitting this change will send an official request to the <strong>Approvals</strong> panel. Once a Manager or Owner approves it, the database and registers will be updated automatically.
-              </div>
-
-              {/* Corrected Division */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
-                  Correct Division / Site *
-                </label>
-                <select
-                  value={editForm.newDivisionId}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, newDivisionId: e.target.value }))}
-                  required
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-slate-800 focus:bg-white focus:border-[#1e3a8a] outline-none"
-                >
-                  {divisions.filter((d: any) => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editForm.newDivisionId)).map((d: any) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Corrected Status */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
-                  Correct Attendance Status *
-                </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((st) => (
-                    <button
-                      type="button"
-                      key={st}
-                      onClick={() => setEditForm(prev => ({ ...prev, newStatus: st }))}
-                      className={`p-2 rounded-xl font-bold text-[11px] border transition-all ${
-                        editForm.newStatus === st 
-                          ? 'bg-[#1e3a8a] text-white border-[#1e3a8a] shadow-sm' 
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      {st === 'PRESENT' ? '🟢 Present' : st === 'ABSENT' ? '🔴 Absent' : st === 'HALF_DAY' ? '🟡 Half' : '🟣 Leave'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Reason */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1 uppercase tracking-wider text-[10px]">
-                  Reason for Correction *
-                </label>
-                <textarea
-                  rows={3}
-                  value={editForm.reason}
-                  onChange={(e) => setEditForm(prev => ({ ...prev, reason: e.target.value }))}
-                  placeholder="e.g. Worker was accidentally marked half day at wrong site, actually worked full day at Site 1..."
-                  required
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 focus:bg-white focus:border-[#1e3a8a] outline-none"
-                />
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-                <button
-                  type="button"
-                  onClick={() => setEditModalWorker(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editSubmitting}
-                  className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-xl shadow-md flex items-center gap-1.5"
-                >
-                  {editSubmitting ? 'Submitting Request...' : 'Send Request to Manager'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

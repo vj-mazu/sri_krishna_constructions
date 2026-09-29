@@ -70,6 +70,8 @@ export const ApprovalsPanel: React.FC = () => {
   };
 
   const pendingAttendanceCount = attendanceRequests.filter(r => r.status === 'PENDING').length;
+  const invoiceApprovals = approvals.filter(a => a.type !== 'EDIT_ATTENDANCE');
+  const pendingInvoiceCount = invoiceApprovals.filter(a => a.status === 'PENDING').length;
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 p-3 sm:p-6 space-y-4">
@@ -92,8 +94,10 @@ export const ApprovalsPanel: React.FC = () => {
             }`}
           >
             <span>Invoice Approvals</span>
-            <span className="px-1.5 py-0.2 bg-white/20 text-white rounded-full text-[10px] font-mono">
-              {approvals.length}
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+              pendingInvoiceCount > 0 ? 'bg-amber-500 text-white font-black' : 'bg-slate-200 text-slate-700'
+            }`}>
+              {pendingInvoiceCount}
             </span>
           </button>
 
@@ -200,10 +204,10 @@ export const ApprovalsPanel: React.FC = () => {
           <div className="block md:hidden space-y-3">
         {loading ? (
           <div className="text-center py-8 text-slate-500 text-xs">Loading approval queue...</div>
-        ) : approvals.length === 0 ? (
+        ) : invoiceApprovals.length === 0 ? (
           <div className="text-center py-8 text-slate-400 text-xs border border-dashed rounded-xl">No pending approval requests.</div>
         ) : (
-          approvals.map((a, i) => {
+          invoiceApprovals.map((a, i) => {
             const p = typeof a.payload === 'string' ? safeParsePayload(a.payload) : a.payload;
             const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE';
             const isIndSale = a.type === 'INDIVIDUAL_SALE';
@@ -345,14 +349,14 @@ export const ApprovalsPanel: React.FC = () => {
                   Loading approval queue...
                 </td>
               </tr>
-            ) : approvals.length === 0 ? (
+            ) : invoiceApprovals.length === 0 ? (
               <tr>
                 <td colSpan={12} className="text-center py-8 text-slate-400">
                   No pending approval requests.
                 </td>
               </tr>
             ) : (
-              approvals.map((a, i) => {
+              invoiceApprovals.map((a, i) => {
                 const p = typeof a.payload === 'string' ? safeParsePayload(a.payload) : a.payload;
                 const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE';
                 const isIndSale = a.type === 'INDIVIDUAL_SALE';
