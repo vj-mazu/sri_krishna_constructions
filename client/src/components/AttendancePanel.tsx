@@ -691,7 +691,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           </div>
 
           {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized for Non-Technical Users) */}
-          <div className="block md:hidden space-y-2.5 pb-16">
+          <div className="block md:hidden space-y-2.5 pb-1">
             {paginatedWorkers.map((w) => {
               const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
               
@@ -1202,8 +1202,20 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
               </table>
             </div>
 
+            {/* SAVE & SUBMIT ATTENDANCE ACTION BUTTON (PLACED ABOVE PAGINATION) */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="w-full md:w-auto md:ml-auto md:flex px-6 py-3 md:py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-[0.99] text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-md border border-blue-400/30 flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                {saving ? 'Saving Attendance Sheet...' : 'Save & Submit Attendance'}
+              </button>
+            </div>
+
             {/* ATTENDANCE PAGINATION TOOLBAR */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-3 text-slate-600">
                 <span>
                   Showing <strong className="text-slate-900">{filteredWorkers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredWorkers.length)}</strong> of <strong className="text-[#1e3a8a]">{filteredWorkers.length}</strong> workers
@@ -1269,30 +1281,6 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   <ChevronsRight className="w-4 h-4" />
                 </button>
               </div>
-            </div>
-
-            {/* DESKTOP SAVE BUTTON */}
-            <div className="hidden md:flex justify-end pt-2">
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-md transition-all flex items-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4" />
-                {saving ? 'Saving Sheet...' : 'Save & Submit Attendance'}
-              </button>
-            </div>
-
-            {/* FLOATING MOBILE SAVE BUTTON (STAY FIXED ABOVE BOTTOM NAV) */}
-            <div className="md:hidden fixed bottom-16 left-3 right-3 z-40">
-              <button
-                type="submit"
-                disabled={saving}
-                className="w-full py-3 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-[0.98] text-white font-extrabold text-xs rounded-xl shadow-xl border border-blue-400/30 flex items-center justify-center gap-2 transition-all"
-              >
-                <CheckCircle className="w-4 h-4 text-emerald-400" />
-                {saving ? 'Saving Attendance Sheet...' : 'Save & Submit Attendance'}
-              </button>
             </div>
           </form>
         )}
