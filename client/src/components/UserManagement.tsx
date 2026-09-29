@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
+import { showConfirm } from '../confirmDialog';
 import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2 } from 'lucide-react';
 
 interface UserManagementProps {
@@ -265,7 +266,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   const handleDeleteIndStock = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete '${name}'?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Item',
+      message: `Are you sure you want to delete '${name}'?`,
+      confirmText: 'Delete',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/individual-stocks/${id}`);
       showToast('Item deleted successfully', 'success');
@@ -423,7 +430,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   const handleDeleteHoliday = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to remove the holiday '${name}'?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Remove Holiday',
+      message: `Are you sure you want to remove the holiday '${name}'?`,
+      confirmText: 'Remove',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     clearMessages();
 
     try {
@@ -573,7 +586,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   const handleDeleteUser = async (user: any) => {
-    if (!window.confirm(`Are you sure you want to delete user '${user.username}'?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Delete User Account',
+      message: `Are you sure you want to delete user '${user.username}'?`,
+      confirmText: 'Delete User',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     clearMessages();
 
     try {
@@ -664,7 +683,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to delete division '${name}'?\n\nNote: Division cannot be deleted if workers are still assigned to it. Reassign workers first.`)) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Division',
+      message: `Are you sure you want to delete division '${name}'?\n\nNote: Division cannot be deleted if workers are still assigned to it. Reassign workers first.`,
+      confirmText: 'Delete Division',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     clearMessages();
 
     try {
@@ -833,15 +858,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   const handleDeleteWorker = async (id: string, name: string) => {
-    const confirmFirst = window.confirm(
-      `⚠️ WARNING: ARE YOU ABSOLUTELY SURE?\n\nYou are about to permanently delete worker '${name}'.\nAll past attendance and wage payment history linked to this worker will be erased.`
-    );
-    if (!confirmFirst) return;
-
-    const confirmSecond = window.confirm(
-      `🚨 FINAL CONFIRMATION:\n\nDo you really want to delete '${name}'? This action CANNOT be undone.`
-    );
-    if (!confirmSecond) return;
+    const confirmed = await showConfirm({
+      title: 'Permanent Delete Worker',
+      message: `You are about to permanently delete worker '${name}'.\n\nAll past attendance and wage payment history linked to this worker will be erased. This action CANNOT be undone.`,
+      confirmText: 'Delete Worker Permanently',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     clearMessages();
 
@@ -941,7 +965,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   };
 
   const handleDeletePO = async (id: string, poNumber: string) => {
-    if (!window.confirm(`Are you sure you want to delete purchase order '${poNumber}'?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Purchase Order',
+      message: `Are you sure you want to delete purchase order '${poNumber}'?`,
+      confirmText: 'Delete PO',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     clearMessages();
 
     try {

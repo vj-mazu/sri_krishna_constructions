@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import api from '../api';
 import { showToast } from '../toast';
+import { showConfirm } from '../confirmDialog';
 import * as XLSX from 'xlsx';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 
@@ -610,7 +611,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // --- ACTIONS: DELETE ITEM ---
   const handleDeleteItem = async (itemId: string) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Item',
+      message: 'Are you sure you want to delete this item?',
+      confirmText: 'Delete Item',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/purchase-order-items/${itemId}`);
       showToast('Item deleted successfully', 'success');
@@ -624,7 +631,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // --- ACTIONS: DELETE PO ---
   const handleDeletePO = async (poId: string, poNum: string) => {
-    if (!window.confirm(`Are you sure you want to delete PO '${poNum}' and all associated records?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Purchase Order',
+      message: `Are you sure you want to delete PO '${poNum}' and all associated records?`,
+      confirmText: 'Delete PO',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/purchase-orders/${poId}`);
       showToast(`PO '${poNum}' deleted successfully`, 'success');
@@ -733,7 +746,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // --- ACTIONS: DELETE INWARD PURCHASE ---
   const handleDeletePurchase = async (purchaseId: string) => {
-    if (!window.confirm('Are you sure you want to delete this inward purchase log?')) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Inward Purchase Log',
+      message: 'Are you sure you want to delete this inward purchase log?',
+      confirmText: 'Delete Log',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/purchases/${purchaseId}`);
       showToast('Purchase log deleted successfully', 'success');
@@ -768,7 +787,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // --- ACTIONS: DELETE SALE ---
   const handleDeleteSale = async (saleId: string) => {
-    if (!window.confirm('Are you sure you want to delete this sale record?')) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Sale Record',
+      message: 'Are you sure you want to delete this sale record?',
+      confirmText: 'Delete Record',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/sales/${saleId}`);
       showToast('Sale record deleted successfully', 'success');

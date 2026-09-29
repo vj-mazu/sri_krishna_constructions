@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
+import { showConfirm } from '../confirmDialog';
 import { 
   FileSpreadsheet, 
   Search, 
@@ -250,7 +251,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   };
 
   const handleDelete = async (id: string, woNumber: string) => {
-    if (!window.confirm(`Are you sure you want to delete Work Order '${woNumber}'?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Delete Work Order',
+      message: `Are you sure you want to delete Work Order '${woNumber}'?`,
+      confirmText: 'Delete',
+      type: 'danger'
+    });
+    if (!confirmed) return;
     try {
       await api.delete(`/work-orders/${id}`);
       showToast(`Work Order '${woNumber}' deleted successfully!`, 'success');

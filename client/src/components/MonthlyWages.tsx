@@ -25,6 +25,7 @@ import {
   CreditCard
 } from 'lucide-react';
 import { showToast } from '../toast';
+import { showConfirm } from '../confirmDialog';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -544,7 +545,14 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       showToast('No workers in the current register to approve.', 'info');
       return;
     }
-    if (!window.confirm(`Are you sure you want to approve & save all salary calculations, PF/ESI, and advance deductions for ${targetWages.length} workers?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Approve & Save All Wages',
+      message: `Are you sure you want to approve & save all salary calculations, PF/ESI, and advance deductions for ${targetWages.length} workers?`,
+      confirmText: 'Yes, Approve All',
+      cancelText: 'Cancel',
+      type: 'primary'
+    });
+    if (!confirmed) return;
 
     setError('');
     setSuccess('');

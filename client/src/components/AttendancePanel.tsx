@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
+import { showConfirm } from '../confirmDialog';
 import { 
   Calendar, 
   AlertCircle, 
@@ -210,10 +211,16 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     fetchWorkersAndAttendance();
   }, [selectedDate, selectedDivisionId]);
 
-  const handleClearAllAttendance = () => {
-    if (!window.confirm(`Are you sure you want to reset all workers to Unmarked for ${formatDateDMY(selectedDate)}?`)) {
-      return;
-    }
+  const handleClearAllAttendance = async () => {
+    const confirmed = await showConfirm({
+      title: 'Reset Attendance Sheet',
+      message: `Are you sure you want to reset all workers to Unmarked for ${formatDateDMY(selectedDate)}?`,
+      confirmText: 'Yes, Reset Sheet',
+      cancelText: 'Cancel',
+      type: 'warning'
+    });
+    if (!confirmed) return;
+
     const cleanMap: typeof attendanceRecords = {};
     workers.forEach((w: any) => {
       cleanMap[w.id] = {

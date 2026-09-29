@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from './api';
+import { showToast } from './toast';
 import { LoginModal } from './components/LoginModal';
 import { PurchaseRecords } from './components/PurchaseRecords';
 import { StockGrid } from './components/StockGrid';
@@ -11,6 +12,7 @@ import { MonthlyWages } from './components/MonthlyWages';
 import { SalesLedger } from './components/SalesLedger';
 import { WorkOrders } from './components/WorkOrders';
 import { AdvanceLedger } from './components/AdvanceLedger';
+import { ConfirmModal } from './components/ConfirmModal';
 import { SKC_LOGO_BASE64 } from './logoBase64';
 
 import { 
@@ -237,7 +239,7 @@ export function App() {
                   if (deferredPrompt) {
                     handleInstallClick();
                   } else {
-                    alert('To install the App:\n1. Tap the 3 dots (⋮) in Chrome menu at the top-right.\n2. Tap "Install App" or "Add to Home screen".');
+                    showToast('To install: Tap (⋮) in Chrome menu and select "Install App" or "Add to Home screen"', 'info');
                   }
                 }}
                 className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black rounded-lg text-xs flex items-center gap-1 shadow-md transition-all whitespace-nowrap"
@@ -658,6 +660,9 @@ export function App() {
           </button>
         </div>
       )}
+
+      {/* Global In-App Confirmation Modal */}
+      <ConfirmModal />
     </div>
   );
 }
