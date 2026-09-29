@@ -103,7 +103,7 @@ export function App() {
         api.get('/approvals'),
         api.get('/attendance/correction-requests')
       ]);
-      const pendingInvoices = (appRes.data.approvals || []).filter((a: any) => a.status === 'PENDING').length;
+      const pendingInvoices = (appRes.data.approvals || []).filter((a: any) => a.status === 'PENDING' && a.type !== 'EDIT_ATTENDANCE').length;
       const pendingAttendance = (attRes.data.requests || []).filter((r: any) => r.status === 'PENDING').length;
       setPendingCount(pendingInvoices + pendingAttendance);
     } catch (err) {

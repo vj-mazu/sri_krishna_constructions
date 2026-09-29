@@ -2033,7 +2033,7 @@ app.get('/api/approvals', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
         json_build_object('username', u.username, 'fullName', u."fullName", 'role', u.role) as "requestedBy"
       FROM "ApprovalRequest" a
       LEFT JOIN "User" u ON a."requestedById" = u.id
-      WHERE a.status = 'PENDING'
+      WHERE a.status = 'PENDING' AND a.type != 'EDIT_ATTENDANCE'
       ORDER BY a."createdAt" DESC
     `);
 

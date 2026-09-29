@@ -359,6 +359,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       showToast(res.data.message || 'Sale submitted successfully!', 'success');
       setSaleModalItem(null);
       fetchIndividualStocks();
+      window.dispatchEvent(new Event('skc-approvals-updated'));
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to record sale', 'error');
     } finally {

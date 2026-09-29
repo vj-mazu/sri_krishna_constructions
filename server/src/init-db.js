@@ -366,6 +366,8 @@ export const initializeDatabaseTables = async () => {
       -- Schema Column Synchronizations
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
+      -- Auto-resolve any legacy EDIT_ATTENDANCE rows in ApprovalRequest since attendance corrections are handled in AttendanceCorrectionRequest
+      UPDATE "ApprovalRequest" SET "status" = 'APPROVED' WHERE "type" = 'EDIT_ATTENDANCE' AND "status" = 'PENDING';
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "poAmount" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "divisionId" TEXT REFERENCES "Division"("id");
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "addedById" TEXT REFERENCES "User"("id");

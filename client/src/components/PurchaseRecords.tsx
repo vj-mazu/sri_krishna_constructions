@@ -698,6 +698,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       fetchPoSales(selectedPo.id, salesCursor);
       fetchPoItems(selectedPo.id, itemsCursor);
       fetchAllItemsForDropdown(selectedPo.id);
+      window.dispatchEvent(new Event('skc-approvals-updated'));
     } catch (err: any) {
       showToast(err.response?.data?.error || err.message || 'Failed to record sale', 'error');
     } finally {
