@@ -487,282 +487,289 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   };
 
   return (
-    <div className="bg-white rounded-xl shadow border border-slate-200 p-2.5 sm:p-6 space-y-2.5 sm:space-y-6">
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-4">
+    <div className="bg-white rounded-xl shadow border border-slate-200 p-2 sm:p-5 space-y-2 sm:space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-200 pb-2 sm:pb-3">
         <div>
-          <h2 className="text-sm sm:text-xl font-bold text-slate-800 flex items-center gap-1.5 sm:gap-2">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#1e3a8a]" /> Daily Workers Attendance
+          <h2 className="text-sm sm:text-lg font-bold text-slate-800 flex items-center gap-1.5 sm:gap-2">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#1e3a8a]" /> Daily Attendance
           </h2>
           <p className="hidden sm:block text-xs text-slate-500 mt-0.5">
             Choose a Division and Date to mark daily worker presence and calculate site overtime (OT).
           </p>
         </div>
 
-        {/* Live Network & Offline Queue Pill */}
-        <div className="flex items-center gap-2">
+        {/* Live Network, Offline Queue & Compact Reset */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {offlinePendingCount > 0 && (
             <button
               onClick={syncOfflineQueue}
-              className="flex items-center gap-1 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-[11px] font-black shadow-xs animate-pulse transition-all"
+              className="flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-[10px] sm:text-[11px] font-black shadow-xs animate-pulse transition-all"
             >
-              <CloudUpload className="w-3.5 h-3.5" />
-              <span>Sync {offlinePendingCount} Offline</span>
+              <CloudUpload className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+              <span>Sync {offlinePendingCount}</span>
             </button>
           )}
 
-          <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+          <div className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] font-bold border ${
             isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse'
           }`}>
             {isOnline ? (
               <>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <Wifi className="w-3 h-3" /> Online
+                <Wifi className="w-3 h-3" /> <span className="hidden sm:inline">Online</span>
               </>
             ) : (
               <>
-                <WifiOff className="w-3 h-3" /> Offline Mode
+                <WifiOff className="w-3 h-3" /> Offline
               </>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={handleClearAllAttendance}
+            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] sm:text-[11px] border border-slate-300 flex items-center gap-1 transition-all shadow-2xs"
+            title="Reset sheet to Unmarked"
+          >
+            <RefreshCw className="w-3 h-3 text-slate-500" />
+            <span className="hidden sm:inline">Reset Sheet</span>
+            <span className="sm:hidden">Reset</span>
+          </button>
         </div>
       </div>
 
-      {/* COMPACT FILTER CONTROLS */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-slate-50 p-2 sm:p-4 rounded-lg sm:rounded-xl border border-slate-200">
-        <div className="text-xs">
-          <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">Division *</label>
-          <select
-            value={selectedDivisionId}
-            onChange={(e) => setSelectedDivisionId(e.target.value)}
-            className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
-          >
-            <option value="ALL">🏢 All Divisions</option>
-            {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="text-xs">
-          <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">
-            Date * {selectedDate && <span className="text-[#1e3a8a] font-mono font-bold text-[10px]">[{formatDateDMY(selectedDate)}]</span>}
-          </label>
-          <DatePickerDMY
-            value={selectedDate}
-            onChange={(val) => setSelectedDate(val)}
-          />
-        </div>
-        <div className="text-xs col-span-2 md:col-span-1">
-          <label className="block font-bold text-slate-700 mb-0.5 text-[10px] sm:text-[11px]">Search Worker</label>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search Name or ID..."
-            className="w-full p-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white text-xs"
-          />
+      {/* ULTRA-COMPACT FILTER CONTROLS */}
+      <div className="bg-slate-50 p-2 sm:p-3 rounded-lg sm:rounded-xl border border-slate-200">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-2">
+          <div>
+            <label className="block font-bold text-slate-600 text-[10px] uppercase tracking-wider mb-0.5">Division</label>
+            <select
+              value={selectedDivisionId}
+              onChange={(e) => setSelectedDivisionId(e.target.value)}
+              className="w-full py-1 px-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white text-xs text-slate-800"
+            >
+              <option value="ALL">🏢 All Divisions</option>
+              {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block font-bold text-slate-600 text-[10px] uppercase tracking-wider mb-0.5">
+              Date {selectedDate && <span className="text-[#1e3a8a] font-mono font-bold">[{formatDateDMY(selectedDate)}]</span>}
+            </label>
+            <DatePickerDMY
+              value={selectedDate}
+              onChange={(val) => setSelectedDate(val)}
+            />
+          </div>
+          <div className="col-span-2 md:col-span-1">
+            <label className="block font-bold text-slate-600 text-[10px] uppercase tracking-wider mb-0.5">Search Worker</label>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by Name or ID..."
+              className="w-full py-1 px-2 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white text-xs"
+            />
+          </div>
         </div>
       </div>
 
       {holidayInfo && (
-        <div className="p-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl shadow-sm flex items-center justify-between gap-3 animate-fadeIn">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">🏛️</span>
+        <div className="p-2 sm:p-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg sm:rounded-xl shadow-xs flex items-center justify-between gap-2 animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <span className="text-base sm:text-xl">🏛️</span>
             <div>
-              <div className="font-bold text-xs sm:text-sm tracking-wide uppercase">
-                OFFICIAL COMPANY / GOVT HOLIDAY: {holidayInfo.name}
+              <div className="font-bold text-[11px] sm:text-xs tracking-wide uppercase">
+                HOLIDAY: {holidayInfo.name}
               </div>
-              <div className="text-[10px] sm:text-xs text-amber-100 font-sans">
-                Workers on this date are automatically credited with a paid working day. Site overtime (OT) can still be entered if emergency site work is done.
+              <div className="text-[9px] sm:text-[11px] text-amber-100">
+                Automatically credited as paid working day. OT can be added if emergency work is done.
               </div>
             </div>
           </div>
-          <span className="shrink-0 px-2.5 py-1 bg-white/20 text-white font-bold text-[10px] rounded-full uppercase">
-            Paid Holiday
+          <span className="shrink-0 px-2 py-0.5 bg-white/20 text-white font-bold text-[9px] rounded-full uppercase">
+            Paid
           </span>
         </div>
       )}
 
       {error && (
-        <div className="p-2.5 bg-red-50 text-red-700 rounded-lg text-xs border border-red-200 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+        <div className="p-2 bg-red-50 text-red-700 rounded-lg text-xs border border-red-200 flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
         </div>
       )}
 
       {success && (
-        <div className="p-2.5 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-200 flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 text-[#1e3a8a] shrink-0" /> {success}
+        <div className="p-2 bg-blue-50 text-blue-800 rounded-lg text-xs border border-blue-200 flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5 text-[#1e3a8a] shrink-0" /> {success}
         </div>
       )}
 
       {/* ATTENDANCE SHEET GRID */}
       {loading ? (
-        <div className="text-center py-12 text-slate-500 font-semibold flex items-center justify-center gap-2">
-          <RefreshCw className="w-5 h-5 animate-spin" /> Loading attendance sheet roster...
+        <div className="text-center py-10 text-slate-500 font-semibold flex items-center justify-center gap-2 text-xs">
+          <RefreshCw className="w-4 h-4 animate-spin" /> Loading attendance roster...
         </div>
       ) : workers.length === 0 ? (
-        <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl">
-          No registered workers found under this division. Register workers in 'User Management' first.
+        <div className="text-center py-10 text-slate-400 border border-dashed rounded-xl text-xs">
+          No registered workers found under this division.
         </div>
       ) : filteredWorkers.length === 0 ? (
-        <div className="text-center py-12 text-slate-400 border border-dashed rounded-xl bg-white p-6">
+        <div className="text-center py-8 text-slate-400 border border-dashed rounded-xl bg-white p-4 text-xs">
           {selectedDivisionId !== 'ALL' 
-            ? 'All available workers have already been marked for full-day attendance at other divisions for this date.' 
+            ? 'All workers marked at other divisions for this date.' 
             : 'No matching workers found for search filter.'}
         </div>
       ) : (
-        <form onSubmit={handleSaveAttendance} className="space-y-3">
-          {/* REAL-TIME SUMMARY STATS BAR */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 bg-white p-2.5 rounded-xl border border-slate-200 shadow-xs text-center text-xs">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 flex-1">
-              <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-1.5">
-                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Present</div>
-                <div className="text-sm font-black text-emerald-800 font-mono">{presentCount}</div>
-              </div>
-              <div className="bg-rose-50/70 border border-rose-200/80 rounded-lg p-1.5">
-                <div className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Absent</div>
-                <div className="text-sm font-black text-rose-800 font-mono">{absentCount}</div>
-              </div>
-              <div className="bg-amber-50/70 border border-amber-200/80 rounded-lg p-1.5">
-                <div className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">Half Day</div>
-                <div className="text-sm font-black text-amber-800 font-mono">{halfCount}</div>
-              </div>
-              <div className="bg-purple-50/70 border border-purple-200/80 rounded-lg p-1.5">
-                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider">Leave</div>
-                <div className="text-sm font-black text-purple-800 font-mono">{leaveCount}</div>
-              </div>
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-1.5 col-span-2 sm:col-span-1">
-                <div className="text-[10px] font-bold text-slate-600 uppercase tracking-wider">Unmarked</div>
-                <div className="text-sm font-black text-slate-700 font-mono">{Math.max(0, unmarkedCount)}</div>
-              </div>
+        <form onSubmit={handleSaveAttendance} className="space-y-2 sm:space-y-3">
+          {/* REAL-TIME ULTRA-COMPACT STATUS BAR (Clean 5-Badge Ribbon) */}
+          <div className="grid grid-cols-5 gap-1 bg-white p-1 sm:p-2 rounded-xl border border-slate-200 shadow-2xs text-center">
+            <div className="bg-emerald-50 border border-emerald-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-tight">🟢 Present</span>
+              <span className="text-xs sm:text-sm font-black text-emerald-900 font-mono leading-none mt-0.5">{presentCount}</span>
             </div>
-            
-            <button
-              type="button"
-              onClick={handleClearAllAttendance}
-              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] border border-slate-300 flex items-center justify-center gap-1.5 transition-all self-stretch sm:self-auto shrink-0"
-              title="Reset all workers on this sheet to Unmarked"
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Reset Sheet</span>
-            </button>
+            <div className="bg-rose-50 border border-rose-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-rose-700 uppercase tracking-tight">🔴 Absent</span>
+              <span className="text-xs sm:text-sm font-black text-rose-900 font-mono leading-none mt-0.5">{absentCount}</span>
+            </div>
+            <div className="bg-amber-50 border border-amber-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-tight">🟡 Half</span>
+              <span className="text-xs sm:text-sm font-black text-amber-900 font-mono leading-none mt-0.5">{halfCount}</span>
+            </div>
+            <div className="bg-purple-50 border border-purple-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-purple-700 uppercase tracking-tight">🟣 Leave</span>
+              <span className="text-xs sm:text-sm font-black text-purple-900 font-mono leading-none mt-0.5">{leaveCount}</span>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-tight">⚪ Unmarked</span>
+              <span className="text-xs sm:text-sm font-black text-slate-800 font-mono leading-none mt-0.5">{Math.max(0, unmarkedCount)}</span>
+            </div>
           </div>
 
-            {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized) */}
-            <div className="block md:hidden space-y-3 pb-16">
-              {paginatedWorkers.map((w) => {
-                const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
-                return (
-                  <div key={w.id} className="bg-white p-3.5 rounded-2xl border border-slate-200/90 shadow-sm space-y-3 transition-all">
-                    {/* Header info */}
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white font-black text-sm flex items-center justify-center shadow-xs">
-                          {(w.fullName || '?').charAt(0)}
-                        </div>
-                        <div>
-                          <div className="font-extrabold text-slate-900 text-sm leading-tight">{w.fullName}</div>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[11px] text-[#1e3a8a] font-mono font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-100">{w.workerId}</span>
-                            <span className="text-[11px] text-slate-500 font-medium">{w.designation || 'Worker'}</span>
-                          </div>
+          {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized) */}
+          <div className="block md:hidden space-y-2 pb-16">
+            {paginatedWorkers.map((w) => {
+              const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
+              return (
+                <div key={w.id} className="bg-white p-2.5 rounded-xl border border-slate-200/90 shadow-2xs space-y-2 transition-all">
+                  {/* Header info with Edit request button */}
+                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0">
+                        {(w.fullName || '?').charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-extrabold text-slate-900 text-xs leading-tight truncate">{w.fullName}</div>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <span className="text-[9px] text-[#1e3a8a] font-mono font-bold bg-blue-50 px-1 py-0.2 rounded border border-blue-100">{w.workerId}</span>
+                          <span className="text-[9px] text-slate-500 font-medium truncate max-w-[90px]">{w.designation || 'Worker'}</span>
                         </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1">
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className="flex flex-col items-end">
                         {getStatusBadge(state.status)}
-                        <div className="text-[11px] text-emerald-800 font-bold font-mono">₹{w.dailyWage}/d</div>
+                        <div className="text-[10px] text-emerald-800 font-bold font-mono mt-0.5">₹{w.dailyWage}/d</div>
                       </div>
-                    </div>
-
-                    {/* Split Half-Day Context Notice */}
-                    {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId && (
-                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-1.5 text-[11px] text-amber-900 font-medium">
-                        <span>⚡</span>
-                        <span>Worker is on <strong>Half-Day (0.5d)</strong> at another site. Mark <strong>Half Day (🟡)</strong> here to complete full 1.0 day!</span>
-                      </div>
-                    )}
-                    {state.secondDivisionId && (
-                      <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-1.5 text-[11px] text-emerald-900 font-medium">
-                        <span>🏢</span>
-                        <span>Full 1.0d Split across <strong>2 Sites Completed</strong></span>
-                      </div>
-                    )}
-
-                    {/* Attendance status selector: Large, high-contrast Mobile Touch Pills */}
-                    <div>
-                      <div className="flex justify-between items-center mb-1.5">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Select Attendance</span>
-                        {state.status && (
-                          <button
-                            type="button"
-                            onClick={() => handleStatusChange(w.id, '')}
-                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 transition-colors"
-                          >
-                            ✖ Clear / Unselect
-                          </button>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-4 gap-1.5">
-                        {([
-                          { key: 'PRESENT', label: 'Present', short: 'P', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-md' },
-                          { key: 'ABSENT', label: 'Absent', short: 'A', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-md' },
-                          { key: 'HALF_DAY', label: 'Half', short: 'HD', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-md' },
-                          { key: 'LEAVE', label: 'Leave', short: 'L', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-md' }
-                        ] as const).map((item) => {
-                          const active = state.status === item.key;
-
-                          return (
-                            <button
-                              type="button"
-                              key={item.key}
-                              onClick={() => handleStatusChange(w.id, item.key)}
-                              className={`py-2 px-1 rounded-xl text-xs font-bold transition-all active:scale-95 flex flex-col items-center justify-center border ${
-                                active
-                                  ? `${item.activeBg} font-black ring-2 ring-offset-1 ring-blue-500/20`
-                                  : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'
-                              }`}
-                            >
-                              <span className="text-xs leading-none mb-0.5">{item.icon}</span>
-                              <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Wage override & Overtime (Enhanced mobile row) */}
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 text-xs">
-                      <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-                        <span className="text-slate-500 text-xs font-bold">₹</span>
-                        <input
-                          type="number"
-                          min="0"
-                          placeholder={`Wage: ₹${w.dailyWage}`}
-                          disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
-                          value={state.dailyWageOverride}
-                          onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                          className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
-                        <span className="text-slate-500 text-[10px] font-bold uppercase">OT:</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="24"
-                          step="0.5"
-                          placeholder="0 hrs"
-                          value={state.overtimeHours === '0' ? '' : state.overtimeHours}
-                          onChange={(e) => handleOtChange(w.id, e.target.value)}
-                          className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
-                        />
-                        <span className="text-slate-400 text-[10px] font-semibold">hrs</span>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditModalWorker(w);
+                          setEditForm({
+                            newStatus: (state.status as any) || 'PRESENT',
+                            newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
+                            newOvertimeHours: state.overtimeHours || '0',
+                            reason: ''
+                          });
+                        }}
+                        className="p-1 px-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-0.5 transition-all"
+                        title="Request Attendance Edit / Correction"
+                      >
+                        <span>✏️ Edit</span>
+                      </button>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Split Half-Day Context Notice */}
+                  {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId && (
+                    <div className="p-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-1 text-[10px] text-amber-900 font-medium">
+                      <span>⚡</span>
+                      <span>Worker is on <strong>Half-Day</strong> at another site. Mark <strong>Half Day (🟡)</strong> to complete 1.0d!</span>
+                    </div>
+                  )}
+                  {state.secondDivisionId && (
+                    <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1 text-[10px] text-emerald-900 font-medium">
+                      <span>🏢</span>
+                      <span>Full 1.0d Split across <strong>2 Sites Completed</strong></span>
+                    </div>
+                  )}
+
+                  {/* Attendance status selector: High-contrast Mobile Touch Pills */}
+                  <div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {([
+                        { key: 'PRESENT', label: 'Present', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-xs' },
+                        { key: 'ABSENT', label: 'Absent', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-xs' },
+                        { key: 'HALF_DAY', label: 'Half', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-xs' },
+                        { key: 'LEAVE', label: 'Leave', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-xs' }
+                      ] as const).map((item) => {
+                        const active = state.status === item.key;
+
+                        return (
+                          <button
+                            type="button"
+                            key={item.key}
+                            onClick={() => handleStatusChange(w.id, item.key)}
+                            className={`py-1.5 px-1 rounded-lg text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center gap-1 border ${
+                              active
+                                ? `${item.activeBg} font-black ring-1 ring-blue-500/30`
+                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            <span className="text-[10px] leading-none">{item.icon}</span>
+                            <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Wage override & Overtime (Compact mobile row) */}
+                  <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-100 text-xs">
+                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                      <span className="text-slate-500 text-[10px] font-bold">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder={`Wage: ₹${w.dailyWage}`}
+                        disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
+                        value={state.dailyWageOverride}
+                        onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
+                        className="w-full bg-transparent text-[11px] font-bold text-slate-800 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
+                      <span className="text-slate-500 text-[10px] font-bold uppercase">OT:</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="24"
+                        step="0.5"
+                        placeholder="0 hrs"
+                        value={state.overtimeHours === '0' ? '' : state.overtimeHours}
+                        onChange={(e) => handleOtChange(w.id, e.target.value)}
+                        className="w-full bg-transparent text-[11px] font-bold text-slate-800 focus:outline-none"
+                      />
+                      <span className="text-slate-400 text-[9px] font-semibold">hrs</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
             {/* 2. DESKTOP / TABLET EXCEL TABLE (Hidden on mobile screens) */}
             <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-lg shadow-sm">

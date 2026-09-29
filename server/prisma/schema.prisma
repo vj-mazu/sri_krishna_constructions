@@ -270,6 +270,9 @@ model MonthlyPayment {
   halfDays         Float         @default(0.0)
   leaveDays        Float         @default(0.0)
   totalOtHours     Float         @default(0.0)
+  dailyWage        Float?
+  dailyAllowance   Float?
+  otHourlyRate     Float?
   wagesAmount      Float         @default(0.0)
   allowanceAmount  Float         @default(0.0)
   grossPayment     Float         @default(0.0)

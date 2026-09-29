@@ -62,6 +62,20 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [customOtHours, setCustomOtHours] = useState<Record<string, number | string>>({});
   const [customOtAllowance, setCustomOtAllowance] = useState<Record<string, number | string>>({});
 
+  // ESI PF Sheet Manual Overrides (All Columns)
+  const [customBasicRate, setCustomBasicRate] = useState<Record<string, number | string>>({});
+  const [customVdaRate, setCustomVdaRate] = useState<Record<string, number | string>>({});
+  const [customConRate, setCustomConRate] = useState<Record<string, number | string>>({});
+  const [customHolidayDays, setCustomHolidayDays] = useState<Record<string, number | string>>({});
+  const [customAbsentDays, setCustomAbsentDays] = useState<Record<string, number | string>>({});
+  const [customBasicVdaEarned, setCustomBasicVdaEarned] = useState<Record<string, number | string>>({});
+  const [customConEarned, setCustomConEarned] = useState<Record<string, number | string>>({});
+  const [customGrossEarned, setCustomGrossEarned] = useState<Record<string, number | string>>({});
+  const [customEpfBase, setCustomEpfBase] = useState<Record<string, number | string>>({});
+  const [customGrossEarn, setCustomGrossEarn] = useState<Record<string, number | string>>({});
+  const [customNetSalary, setCustomNetSalary] = useState<Record<string, number | string>>({});
+  const [customDesignation, setCustomDesignation] = useState<Record<string, string>>({});
+
   // Register book drilldown state
   const [drilldownWorkerId, setDrilldownWorkerId] = useState<string | null>(null);
   const [drilldownData, setDrilldownData] = useState<any | null>(null);
@@ -311,10 +325,157 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     };
   };
 
+  // Compute live values for ESI PF Sheet (supports complete manual overrides on every column)
+  const getEsiPfRowCalculations = (w: any) => {
+    const calc = getRowCalculations(w);
+    const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
+
+    // 1. Wage Structure
+    const defaultBasicMonthly = Math.round(calc.dailyWage * 26);
+    const basicMonthly = customBasicRate[w.workerId] !== undefined && customBasicRate[w.workerId] !== ''
+      ? (parseFloat(customBasicRate[w.workerId] as string) || 0)
+      : defaultBasicMonthly;
+
+    const defaultVdaMonthly = Math.round(calc.dailyAllowance * 26);
+    const vdaMonthly = customVdaRate[w.workerId] !== undefined && customVdaRate[w.workerId] !== ''
+      ? (parseFloat(customVdaRate[w.workerId] as string) || 0)
+      : defaultVdaMonthly;
+
+    const conMonthly = customConRate[w.workerId] !== undefined && customConRate[w.workerId] !== ''
+      ? (parseFloat(customConRate[w.workerId] as string) || 0)
+      : 0;
+
+    const totMonthly = basicMonthly + vdaMonthly + conMonthly;
+
+    // 2. Attendance
+    const wDays = customWorkingDays[w.workerId] !== undefined && customWorkingDays[w.workerId] !== ''
+      ? (parseFloat(customWorkingDays[w.workerId] as string) || 0)
+      : Math.round(calc.workingDays);
+
+    const defaultHDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
+    const hDays = customHolidayDays[w.workerId] !== undefined && customHolidayDays[w.workerId] !== ''
+      ? (parseFloat(customHolidayDays[w.workerId] as string) || 0)
+      : defaultHDays;
+
+    const defaultAbDays = Math.max(0, daysInMonth - (wDays + hDays));
+    const abDays = customAbsentDays[w.workerId] !== undefined && customAbsentDays[w.workerId] !== ''
+      ? (parseFloat(customAbsentDays[w.workerId] as string) || 0)
+      : defaultAbDays;
+
+    const totDays = wDays + hDays + abDays;
+
+    // 3. Earnings
+    const defaultBasicVdaEarned = (customBasicRate[w.workerId] !== undefined || customVdaRate[w.workerId] !== undefined)
+      ? Math.round(((basicMonthly + vdaMonthly) / 26) * wDays)
+      : (calc.wagesAmount + calc.allowanceAmount);
+
+    const basicAndVdaEarned = customBasicVdaEarned[w.workerId] !== undefined && customBasicVdaEarned[w.workerId] !== ''
+      ? (parseFloat(customBasicVdaEarned[w.workerId] as string) || 0)
+      : defaultBasicVdaEarned;
+
+    const defaultConEarned = conMonthly > 0 ? Math.round((conMonthly / 26) * wDays) : 0;
+    const conEarned = customConEarned[w.workerId] !== undefined && customConEarned[w.workerId] !== ''
+      ? (parseFloat(customConEarned[w.workerId] as string) || 0)
+      : defaultConEarned;
+
+    const defaultGrossEarned = basicAndVdaEarned + conEarned;
+    const grossEarned = customGrossEarned[w.workerId] !== undefined && customGrossEarned[w.workerId] !== ''
+      ? (parseFloat(customGrossEarned[w.workerId] as string) || 0)
+      : defaultGrossEarned;
+
+    const defaultEpfBase = Math.min(15000, basicAndVdaEarned);
+    const epfBase = customEpfBase[w.workerId] !== undefined && customEpfBase[w.workerId] !== ''
+      ? (parseFloat(customEpfBase[w.workerId] as string) || 0)
+      : defaultEpfBase;
+
+    const defaultGrossEarn = grossEarned;
+    const grossEarn = customGrossEarn[w.workerId] !== undefined && customGrossEarn[w.workerId] !== ''
+      ? (parseFloat(customGrossEarn[w.workerId] as string) || 0)
+      : defaultGrossEarn;
+
+    // 4. Deductions (PF & ESI)
+    const pf = calc.pf;
+    const esi = calc.esi;
+
+    // 5. Net Salary
+    const defaultNetSalary = Math.max(0, grossEarn - pf - esi);
+    const netSalary = customNetSalary[w.workerId] !== undefined && customNetSalary[w.workerId] !== ''
+      ? (parseFloat(customNetSalary[w.workerId] as string) || 0)
+      : defaultNetSalary;
+
+    // 6. Designation
+    const designation = customDesignation[w.workerId] !== undefined
+      ? customDesignation[w.workerId]
+      : (w.designation || 'HELPER');
+
+    return {
+      basicMonthly,
+      vdaMonthly,
+      conMonthly,
+      totMonthly,
+      wDays,
+      hDays,
+      abDays,
+      totDays,
+      basicAndVdaEarned,
+      conEarned,
+      grossEarned,
+      epfBase,
+      grossEarn,
+      pf,
+      esi,
+      netSalary,
+      designation,
+      dailyWage: Math.round(basicMonthly / 26),
+      dailyAllowance: Math.round(vdaMonthly / 26),
+      wagesAmount: basicAndVdaEarned,
+      allowanceAmount: conEarned,
+      grossPayment: grossEarned,
+      otHours: calc.otHours,
+      otPayment: calc.otPayment,
+      otAllowance: calc.otAllowance,
+      totalPayment: Math.max(0, grossEarned - pf - esi) + calc.otPayment + calc.otAllowance,
+      advance: calc.advance,
+      remainingAdvance: calc.remainingAdvance,
+      extra: calc.extra,
+      finalNetAmount: netSalary,
+    };
+  };
+
   const handleApprovePayment = async (worker: any) => {
     setError('');
     setSuccess('');
-    const calc = getRowCalculations(worker);
+    const isEsiPf = activeWageTab === 'esipf';
+    const dWage = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).dailyWage) 
+      : (getRowCalculations(worker).dailyWage);
+    const dAllow = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).dailyAllowance) 
+      : (getRowCalculations(worker).dailyAllowance);
+    const wAmt = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).basicAndVdaEarned) 
+      : (getRowCalculations(worker).wagesAmount);
+    const allAmt = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).conEarned) 
+      : (getRowCalculations(worker).allowanceAmount);
+    const gross = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).grossEarned) 
+      : (getRowCalculations(worker).grossPayment);
+    const pf = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).pf) 
+      : (getRowCalculations(worker).pf);
+    const esi = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).esi) 
+      : (getRowCalculations(worker).esi);
+    const net = isEsiPf 
+      ? (getEsiPfRowCalculations(worker).netSalary) 
+      : (getRowCalculations(worker).finalNetAmount);
+    const otH = getRowCalculations(worker).otHours;
+    const otPay = getRowCalculations(worker).otPayment;
+    const otAll = getRowCalculations(worker).otAllowance;
+    const adv = getRowCalculations(worker).advance;
+    const ext = getRowCalculations(worker).extra;
+    const totPay = Math.max(0, gross - pf - esi) + otPay + otAll;
 
     try {
       await api.post('/wages/approve', {
@@ -325,26 +486,26 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         absentDays: worker.absentDays,
         halfDays: worker.halfDays,
         leaveDays: worker.leaveDays,
-        dailyWage: calc.dailyWage,
-        dailyAllowance: calc.dailyAllowance,
-        totalOtHours: calc.otHours,
-        wagesAmount: calc.wagesAmount,
-        allowanceAmount: calc.allowanceAmount,
-        grossPayment: calc.grossPayment,
-        pfAmount: calc.pf,
-        esiAmount: calc.esi,
-        netBaseAmount: calc.netBaseAmount,
-        otPayment: calc.otPayment,
-        otAllowance: calc.otAllowance,
-        totalPayment: calc.totalPayment,
-        advanceDeducted: calc.advance,
-        extraAmount: calc.extra,
-        finalNetAmount: calc.finalNetAmount,
-        calculatedAmount: calc.finalNetAmount,
+        dailyWage: dWage,
+        dailyAllowance: dAllow,
+        totalOtHours: otH,
+        wagesAmount: wAmt,
+        allowanceAmount: allAmt,
+        grossPayment: gross,
+        pfAmount: pf,
+        esiAmount: esi,
+        netBaseAmount: Math.max(0, gross - pf - esi),
+        otPayment: otPay,
+        otAllowance: otAll,
+        totalPayment: totPay,
+        advanceDeducted: adv,
+        extraAmount: ext,
+        finalNetAmount: net,
+        calculatedAmount: net,
         divisionSummary: worker.divisionBreakdown || {},
       });
 
-      const successMsg = `Salary payment approved for '${worker.fullName}' (Net: ₹${calc.finalNetAmount})!`;
+      const successMsg = `Salary payment approved for '${worker.fullName}' (Net: ₹${net})!`;
       setSuccess(successMsg);
       showToast(successMsg, 'success');
       
@@ -367,9 +528,40 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
     setError('');
     setSuccess('');
+    const isEsiPf = activeWageTab === 'esipf';
     try {
       const promises = targetWages.map(worker => {
-        const calc = getRowCalculations(worker);
+        const dWage = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).dailyWage) 
+          : (getRowCalculations(worker).dailyWage);
+        const dAllow = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).dailyAllowance) 
+          : (getRowCalculations(worker).dailyAllowance);
+        const wAmt = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).basicAndVdaEarned) 
+          : (getRowCalculations(worker).wagesAmount);
+        const allAmt = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).conEarned) 
+          : (getRowCalculations(worker).allowanceAmount);
+        const gross = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).grossEarned) 
+          : (getRowCalculations(worker).grossPayment);
+        const pf = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).pf) 
+          : (getRowCalculations(worker).pf);
+        const esi = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).esi) 
+          : (getRowCalculations(worker).esi);
+        const net = isEsiPf 
+          ? (getEsiPfRowCalculations(worker).netSalary) 
+          : (getRowCalculations(worker).finalNetAmount);
+        const otH = getRowCalculations(worker).otHours;
+        const otPay = getRowCalculations(worker).otPayment;
+        const otAll = getRowCalculations(worker).otAllowance;
+        const adv = getRowCalculations(worker).advance;
+        const ext = getRowCalculations(worker).extra;
+        const totPay = Math.max(0, gross - pf - esi) + otPay + otAll;
+
         return api.post('/wages/approve', {
           workerId: worker.workerId,
           month: parseInt(selectedMonth, 10),
@@ -378,22 +570,22 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           absentDays: worker.absentDays,
           halfDays: worker.halfDays,
           leaveDays: worker.leaveDays,
-          dailyWage: calc.dailyWage,
-          dailyAllowance: calc.dailyAllowance,
-          totalOtHours: calc.otHours,
-          wagesAmount: calc.wagesAmount,
-          allowanceAmount: calc.allowanceAmount,
-          grossPayment: calc.grossPayment,
-          pfAmount: calc.pf,
-          esiAmount: calc.esi,
-          netBaseAmount: calc.netBaseAmount,
-          otPayment: calc.otPayment,
-          otAllowance: calc.otAllowance,
-          totalPayment: calc.totalPayment,
-          advanceDeducted: calc.advance,
-          extraAmount: calc.extra,
-          finalNetAmount: calc.finalNetAmount,
-          calculatedAmount: calc.finalNetAmount,
+          dailyWage: dWage,
+          dailyAllowance: dAllow,
+          totalOtHours: otH,
+          wagesAmount: wAmt,
+          allowanceAmount: allAmt,
+          grossPayment: gross,
+          pfAmount: pf,
+          esiAmount: esi,
+          netBaseAmount: Math.max(0, gross - pf - esi),
+          otPayment: otPay,
+          otAllowance: otAll,
+          totalPayment: totPay,
+          advanceDeducted: adv,
+          extraAmount: ext,
+          finalNetAmount: net,
+          calculatedAmount: net,
           divisionSummary: worker.divisionBreakdown || {},
         });
       });
@@ -893,48 +1085,30 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   // --- ESI PF SHEET EXCEL EXPORT (EXACT MULTI-LEVEL COLUMNS) ---
   const handleExportEsiPfExcel = () => {
     const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
-    const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
 
     const exportRows = filteredWages.map((w, index) => {
-      const calc = getRowCalculations(w);
-      const wDays = Math.round(calc.workingDays);
-      const hDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
-      const abDays = Math.max(0, daysInMonth - (wDays + hDays));
-      const totDays = daysInMonth;
-
-      const basicMonthly = Math.round(calc.dailyWage * 26);
-      const vdaMonthly = Math.round(calc.dailyAllowance * 26);
-      const conMonthly = 0;
-      const totMonthly = basicMonthly + vdaMonthly + conMonthly;
-
-      const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
-      const conEarned = 0;
-      const grossEarned = calc.grossPayment + calc.otPayment;
-      const epfBase = Math.min(15000, basicAndVdaEarned);
-      const grossEarn = grossEarned;
-
-      const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
+      const calc = getEsiPfRowCalculations(w);
 
       return {
         'SL NO': index + 1,
         'NAME OF THE EMPLOYEE': (w.fullName || '').toUpperCase(),
-        'BASIC': basicMonthly,
-        'VDA': vdaMonthly,
-        'CON': conMonthly > 0 ? conMonthly : '-',
-        'TOT': totMonthly,
-        'W': wDays,
-        'H': hDays,
-        'AB': abDays,
-        'ATT_TOT': totDays,
-        'BASIC & VDA': basicAndVdaEarned,
-        'EARN_CON': conEarned > 0 ? conEarned : '-',
-        'GROSS': grossEarned,
-        'EPF': epfBase,
-        'GROSS EARN': grossEarn,
+        'BASIC': calc.basicMonthly,
+        'VDA': calc.vdaMonthly,
+        'CON': calc.conMonthly > 0 ? calc.conMonthly : '-',
+        'TOT': calc.totMonthly,
+        'W': calc.wDays,
+        'H': calc.hDays,
+        'AB': calc.abDays,
+        'ATT_TOT': calc.totDays,
+        'BASIC & VDA': calc.basicAndVdaEarned,
+        'EARN_CON': calc.conEarned > 0 ? calc.conEarned : '-',
+        'GROSS': calc.grossEarned,
+        'EPF': calc.epfBase,
+        'GROSS EARN': calc.grossEarn,
         'PF': calc.pf,
         'ESI': calc.esi,
-        'NET SALARY': netSalary,
-        'DESIGNATION': (w.designation || 'HELPER').toUpperCase()
+        'NET SALARY': calc.netSalary,
+        'DESIGNATION': (calc.designation || 'HELPER').toUpperCase()
       };
     });
 
@@ -972,11 +1146,13 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     // Compute column totals for foot row
     let totBasicMonthly = 0;
     let totVdaMonthly = 0;
+    let totConMonthly = 0;
     let totMonthlySum = 0;
     let totWDays = 0;
     let totHDays = 0;
     let totAbDays = 0;
     let totBasicVdaEarned = 0;
+    let totConEarned = 0;
     let totGrossEarned = 0;
     let totEpfBase = 0;
     let totGrossEarn = 0;
@@ -985,56 +1161,44 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     let totNetSalary = 0;
 
     const tableBody = filteredWages.map((w, index) => {
-      const calc = getRowCalculations(w);
-      const wDays = Math.round(calc.workingDays);
-      const hDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
-      const abDays = Math.max(0, daysInMonth - (wDays + hDays));
-      const totDays = daysInMonth;
+      const calc = getEsiPfRowCalculations(w);
 
-      const basicMonthly = Math.round(calc.dailyWage * 26);
-      const vdaMonthly = Math.round(calc.dailyAllowance * 26);
-      const totMonthly = basicMonthly + vdaMonthly;
-
-      const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
-      const grossEarned = calc.grossPayment + calc.otPayment;
-      const epfBase = Math.min(15000, basicAndVdaEarned);
-      const grossEarn = grossEarned;
-      const netSalary = Math.max(0, grossEarn - calc.pf - calc.esi);
-
-      totBasicMonthly += basicMonthly;
-      totVdaMonthly += vdaMonthly;
-      totMonthlySum += totMonthly;
-      totWDays += wDays;
-      totHDays += hDays;
-      totAbDays += abDays;
-      totBasicVdaEarned += basicAndVdaEarned;
-      totGrossEarned += grossEarned;
-      totEpfBase += epfBase;
-      totGrossEarn += grossEarn;
+      totBasicMonthly += calc.basicMonthly;
+      totVdaMonthly += calc.vdaMonthly;
+      totConMonthly += calc.conMonthly;
+      totMonthlySum += calc.totMonthly;
+      totWDays += calc.wDays;
+      totHDays += calc.hDays;
+      totAbDays += calc.abDays;
+      totBasicVdaEarned += calc.basicAndVdaEarned;
+      totConEarned += calc.conEarned;
+      totGrossEarned += calc.grossEarned;
+      totEpfBase += calc.epfBase;
+      totGrossEarn += calc.grossEarn;
       totPf += calc.pf;
       totEsi += calc.esi;
-      totNetSalary += netSalary;
+      totNetSalary += calc.netSalary;
 
       return [
         index + 1,
         (w.fullName || '').toUpperCase(),
-        basicMonthly.toLocaleString('en-IN'),
-        vdaMonthly.toLocaleString('en-IN'),
-        '-',
-        totMonthly.toLocaleString('en-IN'),
-        wDays,
-        hDays,
-        abDays,
-        totDays,
-        basicAndVdaEarned.toLocaleString('en-IN'),
-        '-',
-        grossEarned.toLocaleString('en-IN'),
-        epfBase.toLocaleString('en-IN'),
-        grossEarn.toLocaleString('en-IN'),
+        calc.basicMonthly.toLocaleString('en-IN'),
+        calc.vdaMonthly.toLocaleString('en-IN'),
+        calc.conMonthly > 0 ? calc.conMonthly.toLocaleString('en-IN') : '-',
+        calc.totMonthly.toLocaleString('en-IN'),
+        calc.wDays,
+        calc.hDays,
+        calc.abDays,
+        calc.totDays,
+        calc.basicAndVdaEarned.toLocaleString('en-IN'),
+        calc.conEarned > 0 ? calc.conEarned.toLocaleString('en-IN') : '-',
+        calc.grossEarned.toLocaleString('en-IN'),
+        calc.epfBase.toLocaleString('en-IN'),
+        calc.grossEarn.toLocaleString('en-IN'),
         calc.pf > 0 ? calc.pf.toLocaleString('en-IN') : '-',
         calc.esi > 0 ? calc.esi.toLocaleString('en-IN') : '-',
-        netSalary.toLocaleString('en-IN'),
-        (w.designation || 'HELPER').toUpperCase()
+        calc.netSalary.toLocaleString('en-IN'),
+        (calc.designation || 'HELPER').toUpperCase()
       ];
     });
 
@@ -1043,14 +1207,14 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       'TOTAL',
       totBasicMonthly.toLocaleString('en-IN'),
       totVdaMonthly.toLocaleString('en-IN'),
-      '-',
+      totConMonthly > 0 ? totConMonthly.toLocaleString('en-IN') : '-',
       totMonthlySum.toLocaleString('en-IN'),
       totWDays,
       totHDays,
       totAbDays,
       '-',
       totBasicVdaEarned.toLocaleString('en-IN'),
-      '-',
+      totConEarned > 0 ? totConEarned.toLocaleString('en-IN') : '-',
       totGrossEarned.toLocaleString('en-IN'),
       totEpfBase.toLocaleString('en-IN'),
       totGrossEarn.toLocaleString('en-IN'),
@@ -1685,25 +1849,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             </thead>
             <tbody className="divide-y divide-slate-300">
               {paginatedWages.map((w, index) => {
-                const calc = getRowCalculations(w);
-                const daysInMonth = new Date(parseInt(selectedYear), parseInt(selectedMonth), 0).getDate();
-                const wDays = Math.round(calc.workingDays);
-                const hDays = parseFloat(w.holidayDays) || (parseFloat(w.leaveDays) || 0);
-                const abDays = Math.max(0, daysInMonth - (wDays + hDays));
-                const totDays = daysInMonth;
-
-                const basicMonthly = Math.round(calc.dailyWage * 26);
-                const vdaMonthly = Math.round(calc.dailyAllowance * 26);
-                const conMonthly = 0;
-                const totMonthly = basicMonthly + vdaMonthly + conMonthly;
-
-                const basicAndVdaEarned = calc.wagesAmount + calc.allowanceAmount;
-                const conEarned = 0;
-                const grossEarned = basicAndVdaEarned + conEarned;
-                const epfBase = Math.min(15000, basicAndVdaEarned);
-                const grossEarn = grossEarned;
-
-                const netSalary = calc.finalNetAmount;
+                const calc = getEsiPfRowCalculations(w);
                 const globalIndex = (currentPage - 1) * pageSize + index + 1;
 
                 return (
@@ -1718,23 +1864,180 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       </div>
                     </td>
                     {/* WAGE STRUCTURE */}
-                    <td className="border border-slate-300 text-right px-2 py-1">{basicMonthly.toLocaleString('en-IN')}</td>
-                    <td className="border border-slate-300 text-right px-2 py-1">{vdaMonthly.toLocaleString('en-IN')}</td>
-                    <td className="border border-slate-300 text-center text-slate-400 px-2 py-1">-</td>
-                    <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-amber-50/40">{totMonthly.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 py-1 px-1 bg-amber-50/30 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customBasicRate[w.workerId] !== undefined ? customBasicRate[w.workerId] : calc.basicMonthly}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomBasicRate(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-amber-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
+                        title="Edit monthly basic rate"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-amber-50/30 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customVdaRate[w.workerId] !== undefined ? customVdaRate[w.workerId] : calc.vdaMonthly}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomVdaRate(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-amber-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
+                        title="Edit monthly VDA rate"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-amber-50/30 text-center">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customConRate[w.workerId] !== undefined ? customConRate[w.workerId] : (calc.conMonthly || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomConRate(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-12 text-right font-mono font-bold text-slate-800 bg-white border border-amber-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
+                        title="Edit monthly conveyance rate"
+                      />
+                    </td>
+                    <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-amber-100/60 text-slate-900">{calc.totMonthly.toLocaleString('en-IN')}</td>
                     {/* ATTENDANCE */}
-                    <td className="border border-slate-300 text-center font-bold px-2 py-1 text-emerald-800">{wDays}</td>
-                    <td className="border border-slate-300 text-center text-slate-700 px-2 py-1">{hDays}</td>
-                    <td className="border border-slate-300 text-center text-rose-700 px-2 py-1">{abDays}</td>
-                    <td className="border border-slate-300 text-center font-bold px-2 py-1 bg-blue-50/40">{totDays}</td>
+                    <td className="border border-slate-300 py-1 px-1 bg-blue-50/30 text-center">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={customWorkingDays[w.workerId] !== undefined ? customWorkingDays[w.workerId] : calc.wDays}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomWorkingDays(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-12 text-center font-mono font-bold text-emerald-800 bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                        title="Edit worked days"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-blue-50/30 text-center">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={customHolidayDays[w.workerId] !== undefined ? customHolidayDays[w.workerId] : (calc.hDays || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomHolidayDays(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-12 text-center font-mono font-bold text-slate-700 bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                        title="Edit holiday/leave days"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-blue-50/30 text-center">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={customAbsentDays[w.workerId] !== undefined ? customAbsentDays[w.workerId] : (calc.abDays || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomAbsentDays(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-12 text-center font-mono font-bold text-rose-700 bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+                        title="Edit absent days"
+                      />
+                    </td>
+                    <td className="border border-slate-300 text-center font-bold px-2 py-1 bg-blue-100/60 text-slate-900">{calc.totDays}</td>
                     {/* EARNINGS */}
-                    <td className="border border-slate-300 text-right px-2 py-1">{basicAndVdaEarned.toLocaleString('en-IN')}</td>
-                    <td className="border border-slate-300 text-center text-slate-400 px-2 py-1">-</td>
-                    <td className="border border-slate-300 text-right px-2 py-1">{grossEarned.toLocaleString('en-IN')}</td>
-                    <td className="border border-slate-300 text-right px-2 py-1">{epfBase.toLocaleString('en-IN')}</td>
-                    <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-emerald-50/40">{grossEarn.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customBasicVdaEarned[w.workerId] !== undefined ? customBasicVdaEarned[w.workerId] : calc.basicAndVdaEarned}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomBasicVdaEarned(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                        title="Edit earned Basic & VDA"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-center">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customConEarned[w.workerId] !== undefined ? customConEarned[w.workerId] : (calc.conEarned || '')}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomConEarned(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-12 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                        title="Edit earned conveyance"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customGrossEarned[w.workerId] !== undefined ? customGrossEarned[w.workerId] : calc.grossEarned}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomGrossEarned(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                        title="Edit gross earnings"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customEpfBase[w.workerId] !== undefined ? customEpfBase[w.workerId] : calc.epfBase}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomEpfBase(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
+                        title="Edit EPF wage base"
+                      />
+                    </td>
+                    <td className="border border-slate-300 py-1 px-1 bg-emerald-100/50 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customGrossEarn[w.workerId] !== undefined ? customGrossEarn[w.workerId] : calc.grossEarn}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomGrossEarn(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-16 text-right font-mono font-black text-emerald-950 bg-white border border-emerald-400 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-600 shadow-2xs"
+                        title="Edit total gross earned"
+                      />
+                    </td>
                     {/* DEDUCTIONS (MANUAL EDITABLE IN ESI/PF SHEET) */}
-                    <td className="border border-slate-300 text-center py-1 px-0.5 bg-rose-50/30">
+                    <td className="border border-slate-300 text-center py-1 px-1 bg-rose-50/30">
                       <input
                         type="number"
                         min="0"
@@ -1745,11 +2048,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomPf(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
+                        className="w-14 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
                         title="Edit PF deduction for this worker"
                       />
                     </td>
-                    <td className="border border-slate-300 text-center py-1 px-0.5 bg-rose-50/30">
+                    <td className="border border-slate-300 text-center py-1 px-1 bg-rose-50/30">
                       <input
                         type="number"
                         min="0"
@@ -1760,20 +2063,111 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomEsi(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
+                        className="w-14 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
                         title="Edit ESI deduction for this worker"
                       />
                     </td>
                     {/* NET SALARY */}
-                    <td className="border border-slate-300 text-right font-black text-emerald-900 bg-emerald-100/60 px-3 py-1 text-xs">
-                      ₹{netSalary.toLocaleString('en-IN')}
+                    <td className="border border-slate-300 py-1 px-1 bg-emerald-100/60 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={customNetSalary[w.workerId] !== undefined ? customNetSalary[w.workerId] : calc.netSalary}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          setCustomNetSalary(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="0"
+                        className="w-20 text-right font-mono font-black text-emerald-950 bg-white border border-emerald-500 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-700 shadow-2xs"
+                        title="Edit final Net Salary"
+                      />
                     </td>
                     {/* DESIGNATION */}
-                    <td className="border border-slate-300 font-sans font-bold text-slate-700 px-3 py-1 uppercase">{w.designation || 'HELPER'}</td>
+                    <td className="border border-slate-300 py-1 px-1 text-left">
+                      <input
+                        type="text"
+                        value={customDesignation[w.workerId] !== undefined ? customDesignation[w.workerId] : (calc.designation || 'HELPER')}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomDesignation(prev => ({ ...prev, [w.workerId]: val }));
+                        }}
+                        placeholder="HELPER"
+                        className="w-24 text-left font-sans font-bold text-slate-800 bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase shadow-2xs"
+                        title="Edit Designation"
+                      />
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
+            {/* FOOTER TOTALS ROW */}
+            <tfoot className="sticky bottom-0 bg-slate-100 font-bold border-t-2 border-slate-400 text-[11px] font-mono shadow-md">
+              {(() => {
+                const totals = filteredWages.reduce(
+                  (acc, curr) => {
+                    const c = getEsiPfRowCalculations(curr);
+                    return {
+                      basicMonthly: acc.basicMonthly + c.basicMonthly,
+                      vdaMonthly: acc.vdaMonthly + c.vdaMonthly,
+                      conMonthly: acc.conMonthly + c.conMonthly,
+                      totMonthly: acc.totMonthly + c.totMonthly,
+                      wDays: acc.wDays + c.wDays,
+                      hDays: acc.hDays + c.hDays,
+                      abDays: acc.abDays + c.abDays,
+                      basicAndVdaEarned: acc.basicAndVdaEarned + c.basicAndVdaEarned,
+                      conEarned: acc.conEarned + c.conEarned,
+                      grossEarned: acc.grossEarned + c.grossEarned,
+                      epfBase: acc.epfBase + c.epfBase,
+                      grossEarn: acc.grossEarn + c.grossEarn,
+                      pf: acc.pf + c.pf,
+                      esi: acc.esi + c.esi,
+                      netSalary: acc.netSalary + c.netSalary,
+                    };
+                  },
+                  {
+                    basicMonthly: 0,
+                    vdaMonthly: 0,
+                    conMonthly: 0,
+                    totMonthly: 0,
+                    wDays: 0,
+                    hDays: 0,
+                    abDays: 0,
+                    basicAndVdaEarned: 0,
+                    conEarned: 0,
+                    grossEarned: 0,
+                    epfBase: 0,
+                    grossEarn: 0,
+                    pf: 0,
+                    esi: 0,
+                    netSalary: 0,
+                  }
+                );
+
+                return (
+                  <tr className="text-center bg-slate-200/90 text-slate-900 border-t border-slate-400 font-black">
+                    <td colSpan={2} className="border border-slate-400 px-3 py-1.5 text-left font-bold text-xs uppercase bg-slate-300/80">TOTAL ({filteredWages.length} WORKERS)</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-amber-100/80">{totals.basicMonthly.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-amber-100/80">{totals.vdaMonthly.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-amber-100/80">{totals.conMonthly > 0 ? totals.conMonthly.toLocaleString('en-IN') : '-'}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-amber-200/90">{totals.totMonthly.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-center px-2 py-1.5 bg-blue-100/80 text-emerald-900">{totals.wDays}</td>
+                    <td className="border border-slate-400 text-center px-2 py-1.5 bg-blue-100/80">{totals.hDays}</td>
+                    <td className="border border-slate-400 text-center px-2 py-1.5 bg-blue-100/80 text-rose-900">{totals.abDays}</td>
+                    <td className="border border-slate-400 text-center px-2 py-1.5 bg-blue-200/90">-</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-emerald-100/80">{totals.basicAndVdaEarned.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-emerald-100/80">{totals.conEarned > 0 ? totals.conEarned.toLocaleString('en-IN') : '-'}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-emerald-100/80">{totals.grossEarned.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-emerald-100/80">{totals.epfBase.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-emerald-200/90 font-black">{totals.grossEarn.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-rose-100/90 text-rose-950">{totals.pf > 0 ? totals.pf.toLocaleString('en-IN') : '-'}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-rose-100/90 text-rose-950">{totals.esi > 0 ? totals.esi.toLocaleString('en-IN') : '-'}</td>
+                    <td className="border border-slate-400 text-right px-2 py-1.5 bg-emerald-300 text-emerald-950 font-black text-xs">₹{totals.netSalary.toLocaleString('en-IN')}</td>
+                    <td className="border border-slate-400 px-2 py-1.5 bg-slate-300/80"></td>
+                  </tr>
+                );
+              })()}
+            </tfoot>
           </table>
         </div>
       ) : activeWageTab === 'canara' || activeWageTab === 'non_canara' ? (

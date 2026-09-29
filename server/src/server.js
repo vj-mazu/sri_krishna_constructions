@@ -4398,15 +4398,17 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
       const { rows } = await client.query(
         `INSERT INTO "MonthlyPayment" (
            "id", "workerId", "month", "year", "presentDays", "absentDays", "halfDays", "leaveDays", "totalOtHours",
+           "dailyWage", "dailyAllowance", "otHourlyRate",
            "wagesAmount", "allowanceAmount", "grossPayment", "pfAmount", "esiAmount", "netBaseAmount",
            "otPayment", "otAllowance", "totalPayment", "advanceDeducted", "extraAmount", "finalNetAmount",
            "calculatedAmount", "divisionSummary", "status", "approvedById", "createdAt", "updatedAt"
          )
          VALUES (
            gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8,
-           $9, $10, $11, $12, $13, $14,
-           $15, $16, $17, $18, $19, $20,
-           $21, COALESCE($22::jsonb, '{}'::jsonb), 'APPROVED', $23, NOW(), NOW()
+           $9, $10, $11,
+           $12, $13, $14, $15, $16, $17,
+           $18, $19, $20, $21, $22, $23,
+           $24, COALESCE($25::jsonb, '{}'::jsonb), 'APPROVED', $26, NOW(), NOW()
          )
          ON CONFLICT ("workerId", "month", "year")
          DO UPDATE SET
@@ -4415,6 +4417,9 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
            "halfDays" = EXCLUDED."halfDays",
            "leaveDays" = EXCLUDED."leaveDays",
            "totalOtHours" = EXCLUDED."totalOtHours",
+           "dailyWage" = EXCLUDED."dailyWage",
+           "dailyAllowance" = EXCLUDED."dailyAllowance",
+           "otHourlyRate" = EXCLUDED."otHourlyRate",
            "wagesAmount" = EXCLUDED."wagesAmount",
            "allowanceAmount" = EXCLUDED."allowanceAmount",
            "grossPayment" = EXCLUDED."grossPayment",
@@ -4435,6 +4440,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
          RETURNING *`,
         [
           workerId, m, y, pDays, aDays, hDays, lDays, otH,
+          dWage, dAllow, otH > 0 ? (dWage > 0 ? dWage / 8 : 0) : 0,
           wAmt, allAmt, gross, pf, esi, netBase,
           otPay, otAll, totPay, adv, extra, finalNet,
           finalNet, divisionSummary ? JSON.stringify(divisionSummary) : '{}', req.user.id
