@@ -539,14 +539,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       </div>
 
       {/* ULTRA-COMPACT FILTER CONTROLS */}
-      <div className="bg-slate-50 p-2 sm:p-3 rounded-lg sm:rounded-xl border border-slate-200">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-2">
+      <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-300 shadow-2xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           <div>
-            <label className="block font-bold text-slate-600 text-[10px] uppercase tracking-wider mb-0.5">Division</label>
+            <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider mb-1">🏢 Division / Site</label>
             <select
               value={selectedDivisionId}
               onChange={(e) => setSelectedDivisionId(e.target.value)}
-              className="w-full py-1 px-1.5 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white text-xs text-slate-800"
+              className="w-full py-1.5 px-2.5 border border-slate-300 rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white text-xs text-slate-900 shadow-2xs"
             >
               <option value="ALL">🏢 All Divisions</option>
               {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
@@ -555,29 +555,29 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             </select>
           </div>
           <div>
-            <label className="block font-bold text-slate-600 text-[10px] uppercase tracking-wider mb-0.5">
-              Date {selectedDate && <span className="text-[#1e3a8a] font-mono font-bold">[{formatDateDMY(selectedDate)}]</span>}
+            <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider mb-1">
+              📅 Attendance Date {selectedDate && <span className="text-[#1e3a8a] font-mono font-bold">[{formatDateDMY(selectedDate)}]</span>}
             </label>
             <DatePickerDMY
               value={selectedDate}
               onChange={(val) => setSelectedDate(val)}
             />
           </div>
-          <div className="col-span-2 md:col-span-1">
-            <label className="block font-bold text-slate-600 text-[10px] uppercase tracking-wider mb-0.5">Search Worker</label>
+          <div className="col-span-1 sm:col-span-2 md:col-span-1">
+            <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider mb-1">🔍 Search Worker</label>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by Name or ID..."
-              className="w-full py-1 px-2 sm:p-2 border border-slate-300 rounded-md sm:rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white text-xs"
+              className="w-full py-1.5 px-2.5 border border-slate-300 rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white text-xs shadow-2xs"
             />
           </div>
         </div>
       </div>
 
       {holidayInfo && (
-        <div className="p-2 sm:p-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg sm:rounded-xl shadow-xs flex items-center justify-between gap-2 animate-fadeIn">
+        <div className="p-2 sm:p-3 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-xl shadow-xs flex items-center justify-between gap-2 animate-fadeIn">
           <div className="flex items-center gap-2">
             <span className="text-base sm:text-xl">🏛️</span>
             <div>
@@ -625,53 +625,61 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       ) : (
         <form onSubmit={handleSaveAttendance} className="space-y-2 sm:space-y-3">
           {/* REAL-TIME ULTRA-COMPACT STATUS BAR (Clean 5-Badge Ribbon) */}
-          <div className="grid grid-cols-5 gap-1 bg-white p-1 sm:p-2 rounded-xl border border-slate-200 shadow-2xs text-center">
-            <div className="bg-emerald-50 border border-emerald-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
-              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-700 uppercase tracking-tight">🟢 Present</span>
-              <span className="text-xs sm:text-sm font-black text-emerald-900 font-mono leading-none mt-0.5">{presentCount}</span>
+          <div className="grid grid-cols-5 gap-1 bg-white p-1.5 rounded-xl border border-slate-300 shadow-2xs text-center">
+            <div className="bg-emerald-50 border border-emerald-300 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-emerald-800 uppercase tracking-tight">🟢 Present</span>
+              <span className="text-xs sm:text-sm font-black text-emerald-950 font-mono leading-none mt-0.5">{presentCount}</span>
             </div>
-            <div className="bg-rose-50 border border-rose-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
-              <span className="text-[9px] sm:text-[10px] font-bold text-rose-700 uppercase tracking-tight">🔴 Absent</span>
-              <span className="text-xs sm:text-sm font-black text-rose-900 font-mono leading-none mt-0.5">{absentCount}</span>
+            <div className="bg-rose-50 border border-rose-300 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-rose-800 uppercase tracking-tight">🔴 Absent</span>
+              <span className="text-xs sm:text-sm font-black text-rose-950 font-mono leading-none mt-0.5">{absentCount}</span>
             </div>
-            <div className="bg-amber-50 border border-amber-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
-              <span className="text-[9px] sm:text-[10px] font-bold text-amber-700 uppercase tracking-tight">🟡 Half</span>
-              <span className="text-xs sm:text-sm font-black text-amber-900 font-mono leading-none mt-0.5">{halfCount}</span>
+            <div className="bg-amber-50 border border-amber-300 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-amber-800 uppercase tracking-tight">🟡 Half</span>
+              <span className="text-xs sm:text-sm font-black text-amber-950 font-mono leading-none mt-0.5">{halfCount}</span>
             </div>
-            <div className="bg-purple-50 border border-purple-200/80 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
-              <span className="text-[9px] sm:text-[10px] font-bold text-purple-700 uppercase tracking-tight">🟣 Leave</span>
-              <span className="text-xs sm:text-sm font-black text-purple-900 font-mono leading-none mt-0.5">{leaveCount}</span>
+            <div className="bg-purple-50 border border-purple-300 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-purple-800 uppercase tracking-tight">🟣 Leave</span>
+              <span className="text-xs sm:text-sm font-black text-purple-950 font-mono leading-none mt-0.5">{leaveCount}</span>
             </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
-              <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 uppercase tracking-tight">⚪ Unmarked</span>
-              <span className="text-xs sm:text-sm font-black text-slate-800 font-mono leading-none mt-0.5">{Math.max(0, unmarkedCount)}</span>
+            <div className="bg-slate-100 border border-slate-300 rounded-lg py-1 px-0.5 flex flex-col items-center justify-center">
+              <span className="text-[9px] sm:text-[10px] font-bold text-slate-700 uppercase tracking-tight">⚪ Unmarked</span>
+              <span className="text-xs sm:text-sm font-black text-slate-900 font-mono leading-none mt-0.5">{Math.max(0, unmarkedCount)}</span>
             </div>
           </div>
 
-          {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized) */}
-          <div className="block md:hidden space-y-2 pb-16">
+          {/* 1. NATIVE MOBILE APP CARD LIST (100% Mobile Optimized for Non-Technical Users) */}
+          <div className="block md:hidden space-y-2.5 pb-16">
             {paginatedWorkers.map((w) => {
               const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
+              
+              // Dynamic clear card border based on selected status for instant visual clarity
+              let cardBorder = 'border-slate-300 bg-white';
+              if (state.status === 'PRESENT') cardBorder = 'border-2 border-emerald-500 bg-emerald-50/20 shadow-xs';
+              else if (state.status === 'ABSENT') cardBorder = 'border-2 border-rose-500 bg-rose-50/20 shadow-xs';
+              else if (state.status === 'HALF_DAY') cardBorder = 'border-2 border-amber-500 bg-amber-50/20 shadow-xs';
+              else if (state.status === 'LEAVE') cardBorder = 'border-2 border-purple-500 bg-purple-50/20 shadow-xs';
+
               return (
-                <div key={w.id} className="bg-white p-2.5 rounded-xl border border-slate-200/90 shadow-2xs space-y-2 transition-all">
-                  {/* Header info with Edit request button */}
-                  <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0">
+                <div key={w.id} className={`p-3 rounded-xl border shadow-2xs space-y-2.5 transition-all ${cardBorder}`}>
+                  {/* Header info with Worker Avatar, Designation, Rate, and Edit button */}
+                  <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#1e3a8a] to-[#1e40af] text-white font-black text-xs flex items-center justify-center shadow-2xs shrink-0">
                         {(w.fullName || '?').charAt(0)}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-extrabold text-slate-900 text-xs leading-tight truncate">{w.fullName}</div>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-[9px] text-[#1e3a8a] font-mono font-bold bg-blue-50 px-1 py-0.2 rounded border border-blue-100">{w.workerId}</span>
-                          <span className="text-[9px] text-slate-500 font-medium truncate max-w-[90px]">{w.designation || 'Worker'}</span>
+                        <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight truncate">{w.fullName}</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[10px] text-[#1e3a8a] font-mono font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">{w.workerId}</span>
+                          <span className="text-[10px] text-slate-600 font-bold uppercase truncate max-w-[100px]">{w.designation || 'Worker'}</span>
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <div className="flex flex-col items-end">
                         {getStatusBadge(state.status)}
-                        <div className="text-[10px] text-emerald-800 font-bold font-mono mt-0.5">₹{w.dailyWage}/d</div>
+                        <div className="text-[10px] text-emerald-800 font-extrabold font-mono mt-0.5">₹{w.dailyWage}/d</div>
                       </div>
                       <button
                         type="button"
@@ -684,7 +692,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             reason: ''
                           });
                         }}
-                        className="p-1 px-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-0.5 transition-all"
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-all active:scale-95"
                         title="Request Attendance Edit / Correction"
                       >
                         <span>✏️ Edit</span>
@@ -694,26 +702,26 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
                   {/* Split Half-Day Context Notice */}
                   {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId && (
-                    <div className="p-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-1 text-[10px] text-amber-900 font-medium">
+                    <div className="p-1.5 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-1.5 text-[10px] text-amber-950 font-medium">
                       <span>⚡</span>
-                      <span>Worker is on <strong>Half-Day</strong> at another site. Mark <strong>Half Day (🟡)</strong> to complete 1.0d!</span>
+                      <span>Worker worked <strong>Half-Day (0.5d)</strong> at another site. Mark <strong>Half Day (🟡)</strong> to complete 1.0 day!</span>
                     </div>
                   )}
                   {state.secondDivisionId && (
-                    <div className="p-1.5 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-1 text-[10px] text-emerald-900 font-medium">
+                    <div className="p-1.5 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-1.5 text-[10px] text-emerald-950 font-medium">
                       <span>🏢</span>
                       <span>Full 1.0d Split across <strong>2 Sites Completed</strong></span>
                     </div>
                   )}
 
-                  {/* Attendance status selector: High-contrast Mobile Touch Pills */}
+                  {/* Attendance status selector: 4 Big, Clear Touch Buttons */}
                   <div>
-                    <div className="grid grid-cols-4 gap-1">
+                    <div className="grid grid-cols-4 gap-1.5">
                       {([
-                        { key: 'PRESENT', label: 'Present', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-600 text-white shadow-xs' },
-                        { key: 'ABSENT', label: 'Absent', icon: '🔴', activeBg: 'bg-rose-600 border-rose-600 text-white shadow-xs' },
-                        { key: 'HALF_DAY', label: 'Half', icon: '🟡', activeBg: 'bg-amber-500 border-amber-500 text-white shadow-xs' },
-                        { key: 'LEAVE', label: 'Leave', icon: '🟣', activeBg: 'bg-purple-600 border-purple-600 text-white shadow-xs' }
+                        { key: 'PRESENT', label: 'Present', icon: '🟢', activeBg: 'bg-emerald-600 border-emerald-700 text-white shadow-xs' },
+                        { key: 'ABSENT', label: 'Absent', icon: '🔴', activeBg: 'bg-rose-600 border-rose-700 text-white shadow-xs' },
+                        { key: 'HALF_DAY', label: 'Half', icon: '🟡', activeBg: 'bg-amber-500 border-amber-600 text-white shadow-xs' },
+                        { key: 'LEAVE', label: 'Leave', icon: '🟣', activeBg: 'bg-purple-600 border-purple-700 text-white shadow-xs' }
                       ] as const).map((item) => {
                         const active = state.status === item.key;
 
@@ -722,13 +730,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             type="button"
                             key={item.key}
                             onClick={() => handleStatusChange(w.id, item.key)}
-                            className={`py-1.5 px-1 rounded-lg text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center gap-1 border ${
+                            className={`py-2 px-1 rounded-lg text-xs font-bold transition-all active:scale-95 flex items-center justify-center gap-1 border ${
                               active
-                                ? `${item.activeBg} font-black ring-1 ring-blue-500/30`
-                                : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                                ? `${item.activeBg} font-black ring-2 ring-blue-500/30 scale-[1.02]`
+                                : 'border-slate-300 bg-slate-50/90 text-slate-800 hover:bg-slate-100'
                             }`}
                           >
-                            <span className="text-[10px] leading-none">{item.icon}</span>
+                            <span className="text-xs leading-none">{item.icon}</span>
                             <span className="text-[10px] uppercase tracking-tight">{item.label}</span>
                           </button>
                         );
@@ -736,10 +744,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     </div>
                   </div>
 
-                  {/* Wage override & Overtime (Compact mobile row) */}
-                  <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-100 text-xs">
-                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
-                      <span className="text-slate-500 text-[10px] font-bold">₹</span>
+                  {/* Wage override & Overtime Row */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/80 text-xs">
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-300">
+                      <span className="text-slate-600 text-xs font-bold">₹</span>
                       <input
                         type="number"
                         min="0"
@@ -747,12 +755,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         disabled={currentUserRole !== 'OWNER' && currentUserRole !== 'MANAGER'}
                         value={state.dailyWageOverride}
                         onChange={(e) => handleWageOverrideChange(w.id, e.target.value)}
-                        className="w-full bg-transparent text-[11px] font-bold text-slate-800 focus:outline-none"
+                        className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
                       />
                     </div>
 
-                    <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg border border-slate-200">
-                      <span className="text-slate-500 text-[10px] font-bold uppercase">OT:</span>
+                    <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-lg border border-slate-300">
+                      <span className="text-slate-600 text-[10px] font-bold uppercase">OT:</span>
                       <input
                         type="number"
                         min="0"
@@ -761,9 +769,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         placeholder="0 hrs"
                         value={state.overtimeHours === '0' ? '' : state.overtimeHours}
                         onChange={(e) => handleOtChange(w.id, e.target.value)}
-                        className="w-full bg-transparent text-[11px] font-bold text-slate-800 focus:outline-none"
+                        className="w-full bg-transparent text-xs font-bold text-slate-800 focus:outline-none"
                       />
-                      <span className="text-slate-400 text-[9px] font-semibold">hrs</span>
+                      <span className="text-slate-500 text-[10px] font-semibold">hrs</span>
                     </div>
                   </div>
                 </div>

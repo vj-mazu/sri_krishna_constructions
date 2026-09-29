@@ -95,14 +95,14 @@ export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
   };
 
   return (
-    <div className={`inline-flex items-center gap-1.5 ${className}`}>
+    <div className={`flex items-center gap-1 sm:gap-1.5 w-full ${className}`}>
       {/* Day Select */}
       <select
         required={required}
         disabled={disabled}
         value={day}
         onChange={(e) => handleDayChange(e.target.value)}
-        className="w-16 p-1.5 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+        className="flex-1 min-w-[48px] py-1.5 px-1 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none text-center"
         title="Day (DD)"
       >
         <option value="">DD</option>
@@ -122,7 +122,7 @@ export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
         disabled={disabled}
         value={month}
         onChange={(e) => handleMonthChange(e.target.value)}
-        className="w-28 p-1.5 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+        className="flex-[1.4] min-w-[70px] py-1.5 px-1 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none truncate"
         title="Month (MM)"
       >
         <option value="">Month</option>
@@ -139,7 +139,7 @@ export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
         disabled={disabled}
         value={year}
         onChange={(e) => handleYearChange(e.target.value)}
-        className="w-20 p-1.5 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
+        className="flex-1 min-w-[58px] py-1.5 px-1 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono text-center"
         title="Year (YYYY)"
       >
         <option value="">YYYY</option>
@@ -156,7 +156,7 @@ export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
         disabled={disabled}
         value={value || ''}
         onChange={(e) => onChange(e.target.value)}
-        className="w-8 p-1 opacity-60 hover:opacity-100 cursor-pointer border border-slate-300 rounded-lg bg-slate-50 text-xs shrink-0"
+        className="w-7 h-7 sm:w-8 sm:h-8 p-0.5 opacity-70 hover:opacity-100 cursor-pointer border border-slate-300 rounded-lg bg-slate-50 text-xs shrink-0"
         title="Pick from calendar"
       />
     </div>
