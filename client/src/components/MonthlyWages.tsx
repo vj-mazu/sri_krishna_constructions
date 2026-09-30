@@ -3298,11 +3298,15 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   {/* MONTHLY SUMMARY METRICS STRIP */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
                     <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
-                      <span className="text-[10px] font-bold uppercase text-emerald-700 block">Present Days</span>
-                      <span className="text-base font-bold font-mono text-emerald-900">{drilldownData.summary.totalPresent}</span>
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 block">Full Present</span>
+                      <span className="text-base font-bold font-mono text-emerald-900">{drilldownData.summary.totalPresent}d</span>
+                    </div>
+                    <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
+                      <span className="text-[10px] font-bold uppercase text-indigo-700 block">Split Days (1.0d)</span>
+                      <span className="text-base font-bold font-mono text-indigo-900">{drilldownData.summary.totalSplitDays || 0}d</span>
                     </div>
                     <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
-                      <span className="text-[10px] font-bold uppercase text-amber-700 block">Half Days</span>
+                      <span className="text-[10px] font-bold uppercase text-amber-700 block">Half Days (0.5d)</span>
                       <span className="text-base font-bold font-mono text-amber-900">{drilldownData.summary.totalHalfDay}</span>
                     </div>
                     <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg">
@@ -3313,13 +3317,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <span className="text-[10px] font-bold uppercase text-blue-700 block">Leave Days</span>
                       <span className="text-base font-bold font-mono text-blue-900">{drilldownData.summary.totalLeave}</span>
                     </div>
-                    <div className="p-2.5 bg-indigo-50 border border-indigo-200 rounded-lg">
-                      <span className="text-[10px] font-bold uppercase text-indigo-700 block">Total Work Days</span>
-                      <span className="text-base font-bold font-mono text-indigo-900">{drilldownData.summary.totalWorkingDays}</span>
-                    </div>
-                    <div className="p-2.5 bg-purple-50 border border-purple-200 rounded-lg">
-                      <span className="text-[10px] font-bold uppercase text-purple-700 block">Total OT Hours</span>
-                      <span className="text-base font-bold font-mono text-purple-900">{drilldownData.summary.totalOtHours}h</span>
+                    <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-lg shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase text-emerald-900 block">Total Work Days</span>
+                      <span className="text-base font-black font-mono text-emerald-950">{drilldownData.summary.totalWorkingDays}</span>
                     </div>
                   </div>
 
@@ -3401,7 +3401,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                             <tr
                               key={d.dateStr}
                               className={`${
-                                d.status === 'PRESENT'
+                                d.isSplit || d.status === 'SPLIT_DAY'
+                                  ? 'hover:bg-indigo-50/60 bg-indigo-50/20'
+                                  : d.status === 'PRESENT'
                                   ? 'hover:bg-emerald-50/40 bg-emerald-50/10'
                                   : d.status === 'HALF_DAY'
                                   ? 'hover:bg-amber-50/40 bg-amber-50/10'
@@ -3424,7 +3426,14 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                                 {d.dayName}
                               </td>
                               <td className="p-2 font-semibold text-[#1e3a8a] border-r border-[#e8e0d0]">
-                                {d.status === 'PRESENT' || d.status === 'HALF_DAY' ? (
+                                {d.isSplit || d.status === 'SPLIT_DAY' ? (
+                                  <div className="flex flex-col gap-0.5">
+                                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-900 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
+                                      <Building2 className="w-3 h-3 text-indigo-600 shrink-0" />
+                                      <span>{d.primaryDivisionName || 'Div 1'} (0.5d) + {d.secondDivisionName || 'Div 2'} (0.5d)</span>
+                                    </span>
+                                  </div>
+                                ) : d.status === 'PRESENT' || d.status === 'HALF_DAY' ? (
                                   <span className="flex items-center gap-1">
                                     <Building2 className="w-3 h-3 text-slate-400" />
                                     {d.divisionName}
@@ -3434,37 +3443,35 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                                 )}
                               </td>
                               <td className="p-2 text-center border-r border-[#e8e0d0]">
-                                {d.status === 'PRESENT' && (
+                                {d.isSplit || d.status === 'SPLIT_DAY' ? (
+                                  <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-indigo-100 text-indigo-900 border border-indigo-400 shadow-2xs">
+                                    ⚡ [SPLIT] 1.0d (2 SITES)
+                                  </span>
+                                ) : d.status === 'PRESENT' ? (
                                   <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-400">
                                     [P] PRESENT
                                   </span>
-                                )}
-                                {d.status === 'HALF_DAY' && (
+                                ) : d.status === 'HALF_DAY' ? (
                                   <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-amber-100 text-amber-800 border border-amber-400">
                                     [HD] HALF DAY
                                   </span>
-                                )}
-                                {d.status === 'ABSENT' && (
+                                ) : d.status === 'ABSENT' ? (
                                   <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-red-100 text-red-800 border border-red-400">
                                     [A] ABSENT
                                   </span>
-                                )}
-                                {d.status === 'LEAVE' && (
+                                ) : d.status === 'LEAVE' ? (
                                   <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-blue-100 text-blue-800 border border-blue-400">
                                     [L] LEAVE
                                   </span>
-                                )}
-                                {d.status === 'HOLIDAY' && (
+                                ) : d.status === 'HOLIDAY' ? (
                                   <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-slate-100 text-slate-600 border border-slate-300">
                                     [H] SUNDAY
                                   </span>
-                                )}
-                                {d.status === 'GOVT_HOLIDAY' && (
+                                ) : d.status === 'GOVT_HOLIDAY' ? (
                                   <span className="px-2.5 py-0.5 rounded font-black text-[10px] bg-amber-100 text-amber-900 border border-amber-400 flex items-center justify-center gap-1">
                                     🏛️ [H] {d.holidayName || 'GOVT HOLIDAY'}
                                   </span>
-                                )}
-                                {d.status === 'NOT_MARKED' && (
+                                ) : (
                                   <span className="px-2 py-0.5 text-[10px] text-slate-400">
                                     -
                                   </span>

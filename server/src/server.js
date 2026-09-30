@@ -4594,9 +4594,11 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
               to_char(a."date", 'YYYY-MM-DD') as "dateStr",
               COALESCE(a."overtimeHours", 0)::float as "overtimeHours",
               d."name" as "divisionName", 
+              d2."name" as "secondDivisionName",
               u."fullName" as "markedByName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
+       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
        LEFT JOIN "User" u ON a."markedById" = u."id"
        WHERE a."workerId" = $1 AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
        ORDER BY a."date" ASC`,
@@ -4634,6 +4636,7 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
     const divisionSummary = {};
     let totalPresent = 0;
     let totalHalfDay = 0;
+    let totalSplitDays = 0;
     let totalAbsent = 0;
     let totalLeave = 0;
     let totalOtHours = 0;
@@ -4652,8 +4655,10 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
       
       const div1Name = log?.divisionName || worker.divisionName || 'General';
       const div2Name = log?.secondDivisionName || null;
+      const isSplit = log && log.status === 'HALF_DAY' && Boolean(log.secondDivisionId && div2Name);
+
       let displayDivName = div1Name;
-      if (div2Name && div2Name !== div1Name) {
+      if (isSplit) {
         displayDivName = `${div1Name} (0.5d) + ${div2Name} (0.5d)`;
       }
 
@@ -4662,12 +4667,13 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
           totalPresent += 1;
           divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 1;
         } else if (log.status === 'HALF_DAY') {
-          totalHalfDay += 1;
-          if (div2Name && div2Name !== div1Name) {
-            // Split across two separate divisions: 0.5 to Div 1 and 0.5 to Div 2!
+          if (isSplit) {
+            // Split across two divisions: 0.5d Div 1 + 0.5d Div 2 = 1.0 Full Day!
+            totalSplitDays += 1;
             divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 0.5;
             divisionSummary[div2Name] = (divisionSummary[div2Name] || 0) + 0.5;
           } else {
+            totalHalfDay += 1;
             divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 0.5;
           }
         } else if (log.status === 'ABSENT') {
@@ -4688,12 +4694,16 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         isSunday,
         isHoliday: !!declaredHoliday,
         holidayName: declaredHoliday ? declaredHoliday.name : null,
-        status,
+        status: isSplit ? 'SPLIT_DAY' : status,
+        rawStatus: status,
+        isSplit,
         divisionName: displayDivName,
         primaryDivisionName: div1Name,
         secondDivisionName: div2Name,
         overtimeHours: otHours,
-        notes: declaredHoliday ? `🏛️ ${declaredHoliday.name}` : (log?.notes || null),
+        notes: isSplit 
+          ? `Split 1.0d across 2 sites: 0.5d at ${div1Name} & 0.5d at ${div2Name}` 
+          : (declaredHoliday ? `🏛️ ${declaredHoliday.name}` : (log?.notes || null)),
         markedBy: log?.markedByName || (declaredHoliday ? 'Govt/Company Holiday' : null)
       });
     }
@@ -4729,9 +4739,10 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
       summary: {
         totalPresent,
         totalHalfDay,
+        totalSplitDays,
         totalAbsent,
         totalLeave,
-        totalWorkingDays: Math.round((totalPresent + (totalHalfDay * 0.5) + totalGovtHolidays) * 10) / 10,
+        totalWorkingDays: Math.round((totalPresent + totalSplitDays + (totalHalfDay * 0.5) + totalGovtHolidays) * 10) / 10,
         totalOtHours: Math.round(totalOtHours * 100) / 100,
         totalGovtHolidays
       },
