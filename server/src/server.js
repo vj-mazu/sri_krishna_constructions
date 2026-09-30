@@ -3722,21 +3722,23 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
     }
 
     let query = `
-      SELECT a."id", a."workerId", a."date", a."status", a."divisionId",
+      SELECT a."id", a."workerId", a."date", a."status", a."divisionId", a."secondDivisionId",
              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
              a."dailyWageOverride", a."notes",
              d."name" as "divisionName",
+             d2."name" as "secondDivisionName",
              json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
       FROM "Attendance" a
       JOIN "Worker" w ON a."workerId" = w."id"
       LEFT JOIN "Division" d ON a."divisionId" = d."id"
+      LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
       WHERE a."date"::date = $1::date
     `;
     const params = [date];
 
     if (divisionId && divisionId !== 'ALL' && divisionId !== 'all') {
       params.push(divisionId);
-      query += ` AND (a."divisionId" = $${params.length} OR (a."divisionId" IS NULL AND w."divisionId" = $${params.length}))`;
+      query += ` AND (a."divisionId" = $${params.length} OR a."secondDivisionId" = $${params.length} OR (a."divisionId" IS NULL AND w."divisionId" = $${params.length}))`;
     }
 
     const { rows: attendances } = await pool.query(query, params);
@@ -3856,14 +3858,15 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const otHours = attendanceData.map(r => parseFloat(r.overtimeHours) || 0.0);
       const dailyWageOverrides = attendanceData.map(r => r.dailyWageOverride ? parseFloat(r.dailyWageOverride) : null);
       const divisionIds = attendanceData.map(r => r.divisionId || null);
+      const secondDivisionIds = attendanceData.map(r => r.secondDivisionId || null);
       const notes = attendanceData.map(r => r.notes || null);
       const userIds = attendanceData.map(r => req.user.id);
 
       await pool.query(
-        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
-         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, u.nt, u.uid, u.uid, NOW(), NOW()
-         FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[], $8::text[]) 
-         AS u(workerId, dt, st, ot, dw, divId, nt, uid)
+        `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "dailyWageOverride", "divisionId", "secondDivisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
+         SELECT gen_random_uuid()::text, u.workerId, u.dt, u.st::"AttendanceStatus", u.ot, u.ot, u.dw, u.divId, u.sDivId, u.nt, u.uid, u.uid, NOW(), NOW()
+         FROM UNNEST($1::text[], $2::timestamp[], $3::text[], $4::numeric[], $5::numeric[], $6::text[], $7::text[], $8::text[], $9::text[]) 
+         AS u(workerId, dt, st, ot, dw, divId, sDivId, nt, uid)
          ON CONFLICT ("workerId", "date")
          DO UPDATE SET
            "status" = EXCLUDED."status",
@@ -3871,11 +3874,12 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
            "otHours" = EXCLUDED."otHours",
            "dailyWageOverride" = EXCLUDED."dailyWageOverride",
            "divisionId" = COALESCE(EXCLUDED."divisionId", "Attendance"."divisionId"),
+           "secondDivisionId" = EXCLUDED."secondDivisionId",
            "notes" = EXCLUDED."notes",
            "recordedById" = EXCLUDED."recordedById",
            "markedById" = EXCLUDED."markedById",
            "updatedAt" = NOW()`,
-        [workerIds, dates, statuses, otHours, dailyWageOverrides, divisionIds, notes, userIds]
+        [workerIds, dates, statuses, otHours, dailyWageOverrides, divisionIds, secondDivisionIds, notes, userIds]
       );
     }
 
@@ -4019,7 +4023,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       workerQuery += ` WHERE EXISTS (
         SELECT 1 FROM "Attendance" a 
         WHERE a."workerId" = w."id" 
-          AND a."divisionId" = $1 
+          AND (a."divisionId" = $1 OR a."secondDivisionId" = $1)
           AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
       )`;
       workerParams.push(divisionId, startDate, endDate);
@@ -4033,10 +4037,12 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       `SELECT a."workerId", a."date", a."status", 
               to_char(a."date", 'YYYY-MM-DD') as "dateStr",
               COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
-              a."dailyWageOverride", a."divisionId",
-              d."name" as "divisionName"
+              a."dailyWageOverride", a."divisionId", a."secondDivisionId",
+              d."name" as "divisionName",
+              d2."name" as "secondDivisionName"
        FROM "Attendance" a
        LEFT JOIN "Division" d ON a."divisionId" = d."id"
+       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
        WHERE a."date" >= $1::timestamp AND a."date" <= $2::timestamp`,
       [startDate, endDate]
     );
@@ -4089,30 +4095,36 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         const dStr = att.dateStr || formatToLocalDateStr(att.date);
         workerAttDateMap[dStr] = att;
         const divName = att.divisionName || worker.divisionName || 'General';
+        const secondDivName = att.secondDivisionName;
 
         if (isFiltered) {
-          const isAttInThisDiv = (att.divisionId === divisionId) || (!att.divisionId && worker.divisionId === divisionId);
+          const isAttInPrimaryDiv = (att.divisionId === divisionId) || (!att.divisionId && worker.divisionId === divisionId);
+          const isAttInSecondDiv = (att.secondDivisionId === divisionId);
 
           if (att.status === 'PRESENT') {
-            if (isAttInThisDiv) {
+            if (isAttInPrimaryDiv) {
               present += 1;
               divisionCounts[divName] = (divisionCounts[divName] || 0) + 1;
             }
           } else if (att.status === 'ABSENT') {
-            if (isAttInThisDiv) {
+            if (isAttInPrimaryDiv) {
               absent += 1;
             }
           } else if (att.status === 'HALF_DAY') {
-            if (isAttInThisDiv) {
+            if (isAttInPrimaryDiv) {
               half += 1;
               divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
             }
+            if (isAttInSecondDiv) {
+              half += 1;
+              divisionCounts[secondDivName || 'Split Site'] = (divisionCounts[secondDivName || 'Split Site'] || 0) + 0.5;
+            }
           } else if (att.status === 'LEAVE') {
-            if (isAttInThisDiv) {
+            if (isAttInPrimaryDiv) {
               leave += 1;
             }
           }
-          if (isAttInThisDiv) {
+          if (isAttInPrimaryDiv || isAttInSecondDiv) {
             totalOt += (parseFloat(att.overtimeHours) || 0.0);
           }
         } else {
@@ -4122,8 +4134,15 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
           } else if (att.status === 'ABSENT') {
             absent += 1;
           } else if (att.status === 'HALF_DAY') {
-            half += 1;
-            divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+            if (att.secondDivisionId) {
+              // 2 half days = 1 full day split across 2 sites
+              half += 2;
+              divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+              divisionCounts[secondDivName || 'Split Site'] = (divisionCounts[secondDivName || 'Split Site'] || 0) + 0.5;
+            } else {
+              half += 1;
+              divisionCounts[divName] = (divisionCounts[divName] || 0) + 0.5;
+            }
           } else if (att.status === 'LEAVE') {
             leave += 1;
           }

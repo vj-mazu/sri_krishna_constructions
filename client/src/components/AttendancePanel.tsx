@@ -266,14 +266,30 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     }
 
     // Split Half-Day Business Validation:
-    // If worker was already marked HALF_DAY at another division today:
-    const wasHalfDayInOtherDiv = currentRec.status === 'HALF_DAY' && currentRec.divisionId && selectedDivisionId !== 'ALL' && currentRec.divisionId !== selectedDivisionId;
+    // If worker was already marked HALF_DAY at another division:
+    const isAlreadyHalfDayAtOtherDiv = currentRec.status === 'HALF_DAY' && currentRec.divisionId && selectedDivisionId !== 'ALL' && currentRec.divisionId !== selectedDivisionId;
 
-    if (wasHalfDayInOtherDiv && status === 'PRESENT') {
-      const errAlert = `⚠️ Cannot mark full "Present" for ${workerName}. This worker already worked Half-Day at another site today. You can only mark "Half Day" (0.5 day) at this division!`;
-      setError(errAlert);
-      showToast(errAlert, 'error');
-      return;
+    if (isAlreadyHalfDayAtOtherDiv) {
+      if (status === 'PRESENT') {
+        const errAlert = `⚠️ Cannot mark full "Present" for ${workerName}. This worker already worked Half-Day at ${currentRec.divisionName || 'another site'} today. You can mark "Half Day" (0.5 day) here to complete 1.0 day!`;
+        setError(errAlert);
+        showToast(errAlert, 'error');
+        return;
+      }
+      if (status === 'HALF_DAY') {
+        // Splitting 2 half days across 2 divisions on the same day!
+        setAttendanceRecords((prev) => ({
+          ...prev,
+          [workerId]: {
+            ...currentRec,
+            status: 'HALF_DAY',
+            secondDivisionId: selectedDivisionId,
+            secondDivisionName: divisions.find(d => d.id === selectedDivisionId)?.name || '',
+          },
+        }));
+        showToast(`Marked 2nd Half-Day for ${workerName} at this division (Total 1.0 Day Split)!`, 'success');
+        return;
+      }
     }
 
     setAttendanceRecords((prev) => {
@@ -392,20 +408,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return;
       }
 
-      // Check for illegal double-full-day conflicts
-      for (const [workerId, data] of markedEntries) {
-        const workerObj = workers.find(w => w.id === workerId);
-        const wasHalfDayInOtherDiv = data.status === 'HALF_DAY' && data.divisionId && selectedDivisionId !== 'ALL' && data.divisionId !== selectedDivisionId;
-        if (wasHalfDayInOtherDiv && data.status === 'PRESENT') {
-          const err = `Error: Worker ${workerObj?.fullName || workerId} is already marked Half Day at another site. Cannot mark full Present!`;
-          setError(err);
-          showToast(err, 'error');
-          setSaving(false);
-          return;
-        }
-      }
-
-      // Prepare records with dynamic divisionId for the day
+      // Prepare records with dynamic divisionId and secondDivisionId for the day
       const recordsToSave = markedEntries.map(([workerId, data]) => {
         const workerObj = workers.find(w => w.id === workerId);
         let divToAssign = data.divisionId || (selectedDivisionId !== 'ALL' ? selectedDivisionId : workerObj?.divisionId);
@@ -415,6 +418,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           overtimeHours: parseFloat(data.overtimeHours) || 0,
           dailyWageOverride: data.dailyWageOverride ? parseFloat(data.dailyWageOverride) : null,
           divisionId: divToAssign || null,
+          secondDivisionId: data.secondDivisionId || null,
         };
       });
 
@@ -475,7 +479,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       // 2. Division Filter:
       if (selectedDivisionId && selectedDivisionId !== 'ALL') {
-        const isMarkedInThisDiv = rec && rec.divisionId === selectedDivisionId && Boolean(rec.status);
+        const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
         
         // 1. If marked as working at this division on this date, show them!
         if (isMarkedInThisDiv) {
@@ -488,7 +492,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           return false;
         }
 
-        // 3. If unmarked anywhere today, show them so supervisor can mark them for this division
+        // 3. If marked HALF_DAY at another division and no second division yet, SHOW them so supervisor can mark 2nd half-day!
+        const isHalfDayAtOtherDivAvailable = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
+        if (isHalfDayAtOtherDivAvailable) {
+          return true;
+        }
+
+        // 4. If unmarked anywhere today, show them so supervisor can mark them for this division
         const isUnmarked = !rec || !rec.status;
         if (isUnmarked) {
           return true;
@@ -982,7 +992,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             </td>
                             
                             <td className="px-3 py-2 text-center whitespace-nowrap">
-                              {isMarkedAtOtherSiteOnly ? (
+                              {state.secondDivisionId ? (
+                                <div className="inline-flex flex-col items-center gap-0.5">
+                                  {getStatusBadge('HALF_DAY')}
+                                  <span className="text-[9px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
+                                    Split across 2 Sites (1.0d)
+                                  </span>
+                                </div>
+                              ) : isMarkedAtOtherSiteOnly ? (
                                 <div className="inline-flex flex-col items-center gap-0.5">
                                   {getStatusBadge(state.status)}
                                   <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
