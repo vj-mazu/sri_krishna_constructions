@@ -328,7 +328,7 @@ export function App() {
                   <button
                     onClick={() => setActiveTab('purchase_orders')}
                     className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
-                      activeTab === 'purchase_orders' || activeTab === 'work_orders'
+                      activeTab === 'purchase_orders' || activeTab === 'work_orders' || activeTab === 'individual_stock'
                         ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                         : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                     }`}
@@ -338,7 +338,7 @@ export function App() {
                   </button>
 
                   {openDropdown === 'orders' && (
-                    <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800">
+                    <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800">
                       <button
                         onClick={() => { setActiveTab('purchase_orders'); setOpenDropdown(null); }}
                         className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
@@ -356,6 +356,15 @@ export function App() {
                       >
                         <Receipt className="w-4 h-4 text-emerald-700" />
                         <span>Work Orders</span>
+                      </button>
+                      <button
+                        onClick={() => { setActiveTab('individual_stock'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'individual_stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4 text-amber-600" />
+                        <span>Individual Stocks (Non-PO)</span>
                       </button>
                     </div>
                   )}
@@ -389,15 +398,6 @@ export function App() {
                       >
                         <Package className="w-4 h-4 text-indigo-700" />
                         <span>Stock Summary</span>
-                      </button>
-                      <button
-                        onClick={() => { setActiveTab('individual_stock'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
-                          activeTab === 'individual_stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
-                        }`}
-                      >
-                        <Layers className="w-4 h-4 text-amber-600" />
-                        <span>Individual Stocks (Non-PO)</span>
                       </button>
                       <button
                         onClick={() => { setActiveTab('sales_ledger'); setOpenDropdown(null); }}

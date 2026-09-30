@@ -289,67 +289,67 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* CLEAN FULL-SCREEN MODAL CONTAINER (matches salary slip style) */}
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl h-[94vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden border border-slate-300 animate-fadeIn">
+      {/* CLEAN MODAL CONTAINER (EXACT MATCH TO SALARY SLIP) */}
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92dvh] max-h-[92dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
         
-        {/* MODAL TOP CONTROL BAR (ALWAYS STICKY AT TOP) */}
-        <div className="shrink-0 bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-6 py-3 flex items-center justify-between shadow-md border-b border-blue-900">
-          <div className="flex items-center gap-2.5">
-            <span className="font-bold text-sm sm:text-base tracking-wide flex items-center gap-2">
-              📄 Tax Invoice Preview: <span className="font-mono text-sky-200">{invoiceNo}</span>
-            </span>
-            <span className="text-xs bg-sky-900/60 border border-sky-400/40 text-sky-100 px-2.5 py-0.5 rounded-full font-semibold hidden sm:inline-block">
-              {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''}
-            </span>
+        {/* Mobile Drag Indicator Bar */}
+        <div className="w-12 h-1.5 bg-blue-300/60 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
+
+        {/* MODAL TOP HEADER BAR */}
+        <div className="bg-[#1e3a8a] text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+            <div className="min-w-0">
+              <h3 className="font-bold text-xs sm:text-base truncate">
+                Tax Invoice • {invoiceNo}
+              </h3>
+              <p className="text-[9px] sm:text-xs text-blue-200 truncate">
+                {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} • Invoice Date: {invoiceDate}
+              </p>
+            </div>
           </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.print()}
-              className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" /> Print
-            </button>
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={downloadPdf}
-              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+              className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg flex items-center gap-1 shadow cursor-pointer transition-all active:scale-95"
+              title="Download Portrait PDF"
             >
-              <Download className="w-3.5 h-3.5" /> Download Official PDF
+              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span> PDF
             </button>
-            <button 
-              onClick={onClose} 
-              className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ml-1 cursor-pointer"
-              title="Close Preview"
+            <button
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer ml-1"
+              title="Close"
             >
-              <X className="w-4 h-4 stroke-[3]" /> Close
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 flex justify-center items-start">
-          <div className="bg-white p-5 sm:p-8 rounded shadow-md border border-slate-300 w-full max-w-3xl text-black font-sans text-xs">
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-2 sm:p-6 pb-8 bg-slate-100 flex justify-center">
+          <div className="bg-white p-3 sm:p-6 rounded-xl shadow-md border border-slate-300 w-full max-w-3xl text-black font-sans text-xs overflow-x-auto">
             
             {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
             <div className="flex items-start gap-4 pb-3 border-b-2 border-black">
               <img 
                 src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
                 alt="SKC Logo" 
-                className="w-20 h-20 object-contain shrink-0" 
+                className="w-16 sm:w-20 h-16 sm:h-20 object-contain shrink-0" 
               />
-              <div className="flex-1 text-center pr-6">
-                <h1 className="text-xl sm:text-2xl font-black text-red-600 tracking-wide uppercase leading-tight font-serif">
+              <div className="flex-1 text-center pr-2 sm:pr-6">
+                <h1 className="text-lg sm:text-2xl font-black text-red-600 tracking-wide uppercase leading-tight font-serif">
                   SRI KRISHNA CONSTRUCTIONS
                 </h1>
-                <p className="text-[11px] font-bold text-slate-900 mt-1">
+                <p className="text-[10px] sm:text-[11px] font-bold text-slate-900 mt-1">
                   All Types of Compressor Spares and Service , Pipe Line Work , Heavy Fabrication Works
                 </p>
-                <p className="text-[10px] text-slate-800 mt-0.5">
+                <p className="text-[9px] sm:text-[10px] text-slate-800 mt-0.5">
                   # 2436, Raghavendar Colony, SHAKTINAGAR - 584 170. Raichur Dist. (Karnataka)
                 </p>
                 <div className="text-[10px] font-bold text-slate-900 mt-1 flex justify-end">
@@ -359,7 +359,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
             </div>
 
             {/* 2. REGISTRATION BAR */}
-            <div className="flex justify-between items-center py-1.5 px-2 border-b-2 border-black font-bold text-[11px]">
+            <div className="flex justify-between items-center py-1.5 px-2 border-b-2 border-black font-bold text-[10px] sm:text-[11px]">
               <span>GSTIN : 29DWKPP3582H1ZV</span>
               <span>PAN No. DWKPP3582H</span>
               <span>PF No. GBRCH1955403000</span>
@@ -371,9 +371,9 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
             </div>
 
             {/* 4. TWO-COLUMN INVOICE & DISPATCH DETAILS */}
-            <div className="border border-black grid grid-cols-2 text-[11px]">
+            <div className="border border-black grid grid-cols-1 sm:grid-cols-2 text-[10px] sm:text-[11px]">
               {/* Left Column */}
-              <div className="border-r border-black divide-y divide-black">
+              <div className="sm:border-r border-b sm:border-b-0 border-black divide-y divide-black">
                 <div className="p-1.5 font-bold">
                   INVOICE NO: <span className="font-mono">{invoiceNo}</span>
                 </div>
@@ -499,23 +499,29 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
           </div>
         </div>
 
-        {/* BOTTOM MODAL FOOTER */}
-        <div className="bg-slate-100 px-6 py-3 border-t border-slate-200 flex justify-between items-center shrink-0">
-          <span className="text-xs text-slate-500 font-medium">
-            Standard Tax Invoice (A4 Formatted)
+        {/* BOTTOM MODAL FOOTER BAR (MATCHES EXACT SALARY SLIP ACTION BAR) */}
+        <div className="p-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
+          <span className="text-xs text-slate-500 font-medium hidden sm:inline">
+            Invoice No: <strong className="font-mono text-slate-800">{invoiceNo}</strong> • Amount: <strong className="font-mono text-slate-800">₹{fmt(totalInvoiceAmount)}</strong>
           </span>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
             <button
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-all"
+              onClick={() => window.print()}
+              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 border border-slate-300 transition-all cursor-pointer"
             >
-              Close
+              <Printer className="w-3.5 h-3.5" /> Print
             </button>
             <button
               onClick={downloadPdf}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm transition-all"
+              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5" /> Download PDF
+            </button>
+            <button
+              onClick={onClose}
+              className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition-all"
+            >
+              Close
             </button>
           </div>
         </div>

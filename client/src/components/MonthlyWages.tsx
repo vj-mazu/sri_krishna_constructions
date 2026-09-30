@@ -1665,37 +1665,41 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const totalContrib = list.reduce((sum, item) => sum + (Number(item.skcContribAmount) || 0), 0);
 
     const doc = new jsPDF({
-      orientation: 'landscape',
+      orientation: 'portrait',
       unit: 'mm',
       format: 'a4'
     });
 
-    // Add SKC Logo if available
-    if (logoBase64) {
+    // Add SKC Logo if available (with SKC_LOGO_BASE64 fallback)
+    const activeLogo = SKC_LOGO_BASE64 || logoBase64;
+    if (activeLogo) {
       try {
-        doc.addImage(logoBase64, 'PNG', 14, 8, 22, 22);
+        doc.addImage(activeLogo, 'PNG', 14, 8, 16, 16);
       } catch (e) {
         console.error('Logo render error in PDF:', e);
       }
     }
 
-    // Company Header
+    // Company Header (Centered on 210mm portrait width)
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
+    doc.setFontSize(13);
     doc.setTextColor(30, 58, 138); // #1e3a8a
-    doc.text('SRI KRISHNA CONSTRUCTIONS', 148.5, 14, { align: 'center' });
+    doc.text('SRI KRISHNA CONSTRUCTIONS', 105, 12, { align: 'center' });
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(51, 65, 85);
+    doc.text('H.NO 2436 RAGHAVENDRA COLONY, SHAKTINAGAR, RAICHUR - 584170', 105, 17, { align: 'center' });
 
     doc.setFontSize(10);
-    doc.setTextColor(51, 65, 85);
-    doc.text('H.NO 2436 RAGHAVENDRA COLONY, SHAKTINAGAR, RAICHUR - 584170', 148.5, 20, { align: 'center' });
-
-    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(15, 23, 42);
-    doc.text(`SKC CONTRIBUTION STATEMENT (PF + ESI) • ${mName.toUpperCase()} ${selectedYear}`, 148.5, 27, { align: 'center' });
+    doc.text(`SKC CONTRIBUTION STATEMENT (PF + ESI) • ${mName.toUpperCase()} ${selectedYear}`, 105, 23, { align: 'center' });
 
-    doc.setFontSize(9);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`Division: ${divLabel.toUpperCase()} | Generated on: ${new Date().toLocaleDateString('en-GB')}`, 148.5, 32, { align: 'center' });
+    doc.text(`Division: ${divLabel.toUpperCase()} | Generated on: ${new Date().toLocaleDateString('en-GB')}`, 105, 28, { align: 'center' });
 
     // Table Data
     const tableRows = list.map((w, idx) => [
@@ -1710,9 +1714,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       (Number(w.skcContribAmount) || 0).toLocaleString('en-IN')
     ]);
 
+    // Total content width for portrait = 210 - 28 = 182mm
+    // 8 + 18 + 36 + 28 + 24 + 24 + 14 + 14 + 16 = 182mm
     autoTable(doc, {
-      startY: 36,
-      head: [['SL', 'WORKER ID', 'EMPLOYEE NAME', 'FATHER NAME', 'DESIGNATION', 'DIVISION / SITE', 'PF (Rs)', 'ESI (Rs)', 'SKC CONTRIB (Rs)']],
+      startY: 32,
+      head: [['SL', 'WORKER ID', 'EMPLOYEE NAME', 'FATHER NAME', 'DESIGNATION', 'DIVISION / SITE', 'PF (₹)', 'ESI (₹)', 'SKC TOTAL (₹)']],
       body: tableRows,
       foot: [['', '', 'TOTALS', '', '', '', totalPf.toLocaleString('en-IN'), totalEsi.toLocaleString('en-IN'), totalContrib.toLocaleString('en-IN')]],
       theme: 'grid',
@@ -1720,55 +1726,57 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         fillColor: [30, 58, 138],
         textColor: [255, 255, 255],
         fontStyle: 'bold',
-        fontSize: 8.5,
+        fontSize: 7.5,
         halign: 'center',
-        cellPadding: 2
+        cellPadding: 1.8
       },
       footStyles: {
         fillColor: [243, 232, 255],
         textColor: [88, 28, 135],
         fontStyle: 'bold',
-        fontSize: 9,
+        fontSize: 8,
         halign: 'right',
-        cellPadding: 2
+        cellPadding: 1.8
       },
       bodyStyles: {
         textColor: [15, 23, 42],
-        fontSize: 8,
-        cellPadding: 1.8
+        fontSize: 7.2,
+        cellPadding: 1.4
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 10 },
-        1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
-        2: { halign: 'left', cellWidth: 45, fontStyle: 'bold' },
-        3: { halign: 'left', cellWidth: 38 },
-        4: { halign: 'left', cellWidth: 30 },
-        5: { halign: 'left', cellWidth: 38 },
-        6: { halign: 'right', cellWidth: 24, fontStyle: 'bold' },
-        7: { halign: 'right', cellWidth: 24, fontStyle: 'bold' },
-        8: { halign: 'right', cellWidth: 30, fontStyle: 'bold', textColor: [107, 33, 168] }
+        0: { halign: 'center', cellWidth: 8 },
+        1: { halign: 'center', cellWidth: 18, fontStyle: 'bold' },
+        2: { halign: 'left', cellWidth: 36, fontStyle: 'bold' },
+        3: { halign: 'left', cellWidth: 28 },
+        4: { halign: 'left', cellWidth: 24 },
+        5: { halign: 'left', cellWidth: 24 },
+        6: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
+        7: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
+        8: { halign: 'right', cellWidth: 16, fontStyle: 'bold', textColor: [107, 33, 168] }
       },
       margin: { left: 14, right: 14, bottom: 20 }
     });
 
     const finalY = (doc as any).lastAutoTable?.finalY || 160;
 
-    if (finalY < 185) {
+    if (finalY < 265) {
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(8);
       doc.setTextColor(100, 116, 139);
-      doc.text('sunilgouda1280@gmail.com', 14, finalY + 12);
+      doc.text('sunilgouda1280@gmail.com', 14, finalY + 10);
 
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
       doc.setTextColor(30, 58, 138);
-      doc.text('For SRI KRISHNA CONSTRUCTIONS', 283, finalY + 12, { align: 'right' });
+      doc.text('For SRI KRISHNA CONSTRUCTIONS', 196, finalY + 10, { align: 'right' });
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
-      doc.text('Authorized Signatory', 283, finalY + 17, { align: 'right' });
+      doc.setTextColor(100, 116, 139);
+      doc.text('Authorized Signatory', 196, finalY + 18, { align: 'right' });
     }
 
     doc.save(`SRI_KRISHNA_CONSTRUCTIONS_SKC_CONTRIBUTION_${mName.toUpperCase()}_${selectedYear}.pdf`);
-    showToast('SKC Contribution statement exported to PDF successfully!', 'success');
+    showToast('SKC Contribution statement exported to PDF (Portrait) successfully!', 'success');
   };
 
   return (
@@ -1977,7 +1985,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               <button
                 onClick={handleExportSkcContribPdf}
                 className="flex-1 py-1.5 sm:py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow cursor-pointer"
-                title="Download SKC Contribution Statement PDF (Landscape A4)"
+                title="Download SKC Contribution Statement PDF (Portrait A4)"
               >
                 <FileText className="w-3.5 h-3.5" /> Download PDF
               </button>
