@@ -12,6 +12,7 @@ import { MonthlyWages } from './components/MonthlyWages';
 import { SalesLedger } from './components/SalesLedger';
 import { WorkOrders } from './components/WorkOrders';
 import { AdvanceLedger } from './components/AdvanceLedger';
+import { IndividualStock } from './components/IndividualStock';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SKC_LOGO_BASE64 } from './logoBase64';
 
@@ -29,6 +30,7 @@ import {
   Receipt,
   ChevronDown,
   BookOpen,
+  Layers,
   X
 } from 'lucide-react';
 
@@ -389,6 +391,15 @@ export function App() {
                         <span>Stock Summary</span>
                       </button>
                       <button
+                        onClick={() => { setActiveTab('individual_stock'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                          activeTab === 'individual_stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4 text-amber-600" />
+                        <span>Individual Stocks (Non-PO)</span>
+                      </button>
+                      <button
                         onClick={() => { setActiveTab('sales_ledger'); setOpenDropdown(null); }}
                         className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
                           activeTab === 'sales_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
@@ -498,6 +509,7 @@ export function App() {
         {activeTab === 'purchase_orders' && user.role !== 'SUPERVISOR' && <PurchaseRecords currentUserRole={user.role} />}
         {activeTab === 'work_orders' && user.role !== 'SUPERVISOR' && <WorkOrders currentUserRole={user.role} />}
         {activeTab === 'stock' && user.role !== 'SUPERVISOR' && <StockGrid />}
+        {activeTab === 'individual_stock' && user.role !== 'SUPERVISOR' && <IndividualStock currentUserRole={user.role} />}
         {activeTab === 'sales_ledger' && user.role !== 'SUPERVISOR' && <SalesLedger />}
         {activeTab === 'advance_ledger' && user.role !== 'SUPERVISOR' && <AdvanceLedger currentUserRole={user.role} />}
         {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}

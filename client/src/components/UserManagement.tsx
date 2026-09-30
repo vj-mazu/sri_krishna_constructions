@@ -3489,60 +3489,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         </td>
                         <td>
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* Inward Purchase Button */}
-                            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                              <button
-                                onClick={() => {
-                                  setPurchaseModalItem(item);
-                                  setIndPurchaseForm({
-                                    date: new Date().toISOString().split('T')[0],
-                                    qty: '',
-                                    rate: item.rate ? item.rate.toString() : '',
-                                    partyName: '',
-                                    supplierAddress: '',
-                                    gstNumber: '',
-                                    partyInvoiceNumber: '',
-                                    supplierInvoiceDate: '',
-                                    vehicleNumber: '',
-                                    cgstPercent: item.cgstPercent ? item.cgstPercent.toString() : '9',
-                                    sgstPercent: item.sgstPercent ? item.sgstPercent.toString() : '9',
-                                    igstPercent: item.igstPercent ? item.igstPercent.toString() : '0',
-                                    remarks: ''
-                                  });
-                                }}
-                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 rounded font-semibold text-[11px] flex items-center gap-1"
-                                title="Record Inward Purchase"
-                              >
-                                <ArrowDownToLine className="w-3 h-3" /> Inward
-                              </button>
-                            )}
-
-                            {/* Outward Sale Button */}
-                            <button
-                              onClick={() => {
-                                setSaleModalItem(item);
-                                setIndSaleForm({
-                                  invoiceNumber: '',
-                                  invoiceDate: new Date().toISOString().split('T')[0],
-                                  qty: '',
-                                  rate: item.rate ? item.rate.toString() : '',
-                                  partyName: '',
-                                  supplierAddress: '',
-                                  gstNumber: '',
-                                  vehicleNumber: '',
-                                  eWayBillNumber: '',
-                                  cgstPercent: item.cgstPercent ? item.cgstPercent.toString() : '9',
-                                  sgstPercent: item.sgstPercent ? item.sgstPercent.toString() : '9',
-                                  igstPercent: item.igstPercent ? item.igstPercent.toString() : '0',
-                                  remarks: ''
-                                });
-                              }}
-                              className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300 rounded font-semibold text-[11px] flex items-center gap-1"
-                              title="Record Outward Sale"
-                            >
-                              <ArrowUpFromLine className="w-3 h-3" /> Sale
-                            </button>
-
                             {/* Inspect / View Button */}
                             <button
                               onClick={() => setInspectIndStock(item)}

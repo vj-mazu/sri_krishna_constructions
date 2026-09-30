@@ -86,8 +86,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [slipModalWorker, setSlipModalWorker] = useState<any | null>(null);
   const [logoBase64, setLogoBase64] = useState<string | null>(SKC_LOGO_BASE64 || null);
 
-  // Tab mode: 'register' | 'esipf' | 'canara' | 'non_canara'
-  const [activeWageTab, setActiveWageTab] = useState<'register' | 'esipf' | 'canara' | 'non_canara'>('register');
+  // Tab mode: 'register' | 'esipf' | 'canara' | 'non_canara' | 'skc_contrib'
+  const [activeWageTab, setActiveWageTab] = useState<'register' | 'esipf' | 'canara' | 'non_canara' | 'skc_contrib'>('register');
 
   // Bank Advice Details State (Canara & Non-Canara)
   const [canaraChequeNo, setCanaraChequeNo] = useState('355341');
@@ -1097,6 +1097,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         'Advance Deducted': calc.advance,
         'Advance Remaining Balance': calc.remainingAdvance,
         'EXTRA': calc.extra,
+        'SKC CONTRIBUTION (PF + ESI)': calc.pf + calc.esi,
         'FINAL NET AMOUNT': calc.finalNetAmount,
         'Approval Status': w.paymentStatus,
       };
@@ -1336,6 +1337,9 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const getBankAdviceList = (type: 'canara' | 'non_canara') => {
     return wagesReport
       .filter((w) => {
+        // Strictly require APPROVED wage payment status for bank advice distribution
+        if (w.paymentStatus !== 'APPROVED') return false;
+
         const isCanara = isCanaraWorker(w);
         const matchType = type === 'canara' ? isCanara : !isCanara;
         if (!matchType) return false;
@@ -1356,6 +1360,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           amount: calc.finalNetAmount,
         };
       })
+      .filter((w) => (Number(w.amount) || 0) > 0)
       .sort((a, b) => {
         const extractNum = (str: string) => {
           if (!str) return 999999;
@@ -1537,8 +1542,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       return (
         String(w.empId || '').toLowerCase().includes(term) ||
         String(w.fullName || '').toLowerCase().includes(term) ||
-        String(w.fatherName || '').toLowerCase().includes(term) ||
-        String(w.designation || '').toLowerCase().includes(term)
+        String(w.bankAccountNo || '').toLowerCase().includes(term)
       );
     });
 
@@ -1588,6 +1592,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     acc.advance += calc.advance;
     acc.remainingAdvance += calc.remainingAdvance;
     acc.extra += calc.extra;
+    acc.skcContrib += (calc.pf + calc.esi);
     acc.finalNetAmount += calc.finalNetAmount;
     return acc;
   }, {
@@ -1604,9 +1609,167 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     advance: 0,
     remainingAdvance: 0,
     extra: 0,
+    skcContrib: 0,
     finalNetAmount: 0,
   });
   const avgWorkingDays = filteredWages.length > 0 ? totals.workingDays / filteredWages.length : 0;
+
+  // --- SKC CONTRIBUTION TAB HELPERS & EXPORTS (PF + ESI STATEMENT) ---
+  const getSkcContribList = () => {
+    return filteredWages.map((w) => {
+      const calc = getRowCalculations(w);
+      const pfAmount = calc.pf;
+      const esiAmount = calc.esi;
+      const skcContribAmount = pfAmount + esiAmount;
+      return {
+        ...w,
+        pfAmount,
+        esiAmount,
+        skcContribAmount,
+      };
+    });
+  };
+
+  const handleExportSkcContribExcel = () => {
+    const list = getSkcContribList();
+    const mName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const selectedDivObj = divisions.find(d => d.id === selectedDivisionId);
+    const divLabel = selectedDivObj ? selectedDivObj.name : 'ALL DIVISIONS';
+
+    const exportRows = list.map((w, index) => ({
+      'SL NO': index + 1,
+      'WORKER ID': w.empId,
+      'WORKER NAME': (w.fullName || '').toUpperCase(),
+      'FATHER NAME': (w.fatherName || '-').toUpperCase(),
+      'DESIGNATION': (w.designation || 'WORKER').toUpperCase(),
+      'DIVISION / SITE': (w.divisionName || divLabel).toUpperCase(),
+      'P.F. AMOUNT (Rs)': w.pfAmount,
+      'ESI AMOUNT (Rs)': w.esiAmount,
+      'SKC CONTRIBUTION (PF + ESI) (Rs)': w.skcContribAmount,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'SKC CONTRIBUTION');
+    XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_SKC_CONTRIBUTION_${mName.toUpperCase()}_${selectedYear}.xlsx`);
+    showToast('SKC Contribution statement exported to Excel successfully!', 'success');
+  };
+
+  const handleExportSkcContribPdf = () => {
+    const list = getSkcContribList();
+    const mName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const selectedDivObj = divisions.find(d => d.id === selectedDivisionId);
+    const divLabel = selectedDivObj ? selectedDivObj.name : 'ALL DIVISIONS';
+    const totalPf = list.reduce((sum, item) => sum + (Number(item.pfAmount) || 0), 0);
+    const totalEsi = list.reduce((sum, item) => sum + (Number(item.esiAmount) || 0), 0);
+    const totalContrib = list.reduce((sum, item) => sum + (Number(item.skcContribAmount) || 0), 0);
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    // Add SKC Logo if available
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, 'PNG', 14, 8, 22, 22);
+      } catch (e) {
+        console.error('Logo render error in PDF:', e);
+      }
+    }
+
+    // Company Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.setTextColor(30, 58, 138); // #1e3a8a
+    doc.text('SRI KRISHNA CONSTRUCTIONS', 148.5, 14, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setTextColor(51, 65, 85);
+    doc.text('H.NO 2436 RAGHAVENDRA COLONY, SHAKTINAGAR, RAICHUR - 584170', 148.5, 20, { align: 'center' });
+
+    doc.setFontSize(11);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`SKC CONTRIBUTION STATEMENT (PF + ESI) • ${mName.toUpperCase()} ${selectedYear}`, 148.5, 27, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Division: ${divLabel.toUpperCase()} | Generated on: ${new Date().toLocaleDateString('en-GB')}`, 148.5, 32, { align: 'center' });
+
+    // Table Data
+    const tableRows = list.map((w, idx) => [
+      idx + 1,
+      w.empId || '-',
+      (w.fullName || '').toUpperCase(),
+      (w.fatherName || '-').toUpperCase(),
+      (w.designation || 'WORKER').toUpperCase(),
+      (w.divisionName || divLabel).toUpperCase(),
+      (Number(w.pfAmount) || 0).toLocaleString('en-IN'),
+      (Number(w.esiAmount) || 0).toLocaleString('en-IN'),
+      (Number(w.skcContribAmount) || 0).toLocaleString('en-IN')
+    ]);
+
+    autoTable(doc, {
+      startY: 36,
+      head: [['SL', 'WORKER ID', 'EMPLOYEE NAME', 'FATHER NAME', 'DESIGNATION', 'DIVISION / SITE', 'PF (Rs)', 'ESI (Rs)', 'SKC CONTRIB (Rs)']],
+      body: tableRows,
+      foot: [['', '', 'TOTALS', '', '', '', totalPf.toLocaleString('en-IN'), totalEsi.toLocaleString('en-IN'), totalContrib.toLocaleString('en-IN')]],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [30, 58, 138],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        fontSize: 8.5,
+        halign: 'center',
+        cellPadding: 2
+      },
+      footStyles: {
+        fillColor: [243, 232, 255],
+        textColor: [88, 28, 135],
+        fontStyle: 'bold',
+        fontSize: 9,
+        halign: 'right',
+        cellPadding: 2
+      },
+      bodyStyles: {
+        textColor: [15, 23, 42],
+        fontSize: 8,
+        cellPadding: 1.8
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10 },
+        1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
+        2: { halign: 'left', cellWidth: 45, fontStyle: 'bold' },
+        3: { halign: 'left', cellWidth: 38 },
+        4: { halign: 'left', cellWidth: 30 },
+        5: { halign: 'left', cellWidth: 38 },
+        6: { halign: 'right', cellWidth: 24, fontStyle: 'bold' },
+        7: { halign: 'right', cellWidth: 24, fontStyle: 'bold' },
+        8: { halign: 'right', cellWidth: 30, fontStyle: 'bold', textColor: [107, 33, 168] }
+      },
+      margin: { left: 14, right: 14, bottom: 20 }
+    });
+
+    const finalY = (doc as any).lastAutoTable?.finalY || 160;
+
+    if (finalY < 185) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('sunilgouda1280@gmail.com', 14, finalY + 12);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 58, 138);
+      doc.text('For SRI KRISHNA CONSTRUCTIONS', 283, finalY + 12, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.text('Authorized Signatory', 283, finalY + 17, { align: 'right' });
+    }
+
+    doc.save(`SRI_KRISHNA_CONSTRUCTIONS_SKC_CONTRIBUTION_${mName.toUpperCase()}_${selectedYear}.pdf`);
+    showToast('SKC Contribution statement exported to PDF successfully!', 'success');
+  };
 
   return (
     <div className="bg-white rounded-xl shadow border border-slate-200 p-2.5 sm:p-6 space-y-3 sm:space-y-6">
@@ -1622,7 +1785,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         </div>
       </div>
 
-      {/* SUB-TABS: WORKERS PAYMENT REGISTER vs ESI PF vs CANARA BANK vs NON-CANARA BANK */}
+      {/* SUB-TABS: WORKERS PAYMENT REGISTER vs ESI PF vs CANARA BANK vs NON-CANARA BANK vs SKC CONTRIBUTION */}
       <div className="flex flex-wrap border-b border-slate-200 bg-slate-100/70 p-1 rounded-xl gap-1">
         <button
           onClick={() => setActiveWageTab('register')}
@@ -1663,6 +1826,16 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           }`}
         >
           <CreditCard className="w-4 h-4 text-emerald-300" /> 🏦 Non-Canara Banks ({getBankAdviceList('non_canara').length})
+        </button>
+        <button
+          onClick={() => setActiveWageTab('skc_contrib')}
+          className={`flex-1 min-w-[140px] py-2.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+            activeWageTab === 'skc_contrib'
+              ? 'bg-purple-800 text-white shadow-sm ring-2 ring-purple-400/40'
+              : 'text-purple-900 hover:text-purple-950 hover:bg-purple-50/80 font-bold'
+          }`}
+        >
+          <Building2 className="w-4 h-4 text-purple-300" /> 🏢 SKC Contribution ({getSkcContribList().length})
         </button>
       </div>
 
@@ -1791,6 +1964,23 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   <Check className="w-4 h-4" /> Save & Approve All
                 </button>
               )}
+            </>
+          ) : activeWageTab === 'skc_contrib' ? (
+            <>
+              <button
+                onClick={handleExportSkcContribExcel}
+                className="flex-1 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow cursor-pointer"
+                title="Download SKC Contribution Statement Excel (.xlsx)"
+              >
+                <Download className="w-3.5 h-3.5" /> Download Excel (.xlsx)
+              </button>
+              <button
+                onClick={handleExportSkcContribPdf}
+                className="flex-1 py-1.5 sm:py-2 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow cursor-pointer"
+                title="Download SKC Contribution Statement PDF (Landscape A4)"
+              >
+                <FileText className="w-3.5 h-3.5" /> Download PDF
+              </button>
             </>
           ) : (
             <>
@@ -2198,6 +2388,122 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             </tfoot>
           </table>
         </div>
+      ) : activeWageTab === 'skc_contrib' ? (
+        /* --- DEDICATED SKC CONTRIBUTION (PF + ESI) TAB VIEW --- */
+        (() => {
+          const list = getSkcContribList();
+          const totalPf = list.reduce((sum, item) => sum + (Number(item.pfAmount) || 0), 0);
+          const totalEsi = list.reduce((sum, item) => sum + (Number(item.esiAmount) || 0), 0);
+          const totalContrib = list.reduce((sum, item) => sum + (Number(item.skcContribAmount) || 0), 0);
+          const selectedDivObj = divisions.find(d => d.id === selectedDivisionId);
+          const divLabel = selectedDivObj ? selectedDivObj.name : 'All Divisions';
+
+          return (
+            <div className="space-y-4">
+              {/* TOP SUMMARY BANNER */}
+              <div className="bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white p-4 rounded-xl shadow-md border border-purple-900 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/30 border border-purple-400/50 flex items-center justify-center font-bold text-xl text-purple-200">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-black tracking-wide text-white flex items-center gap-2">
+                      SKC CONTRIBUTION STATEMENT (PF + ESI)
+                      <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white">
+                        {list.length} Workers
+                      </span>
+                    </h3>
+                    <p className="text-xs text-purple-200">
+                      Month: <strong>{monthName.toUpperCase()} {selectedYear}</strong> • Division: <strong>{divLabel}</strong>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-xs">
+                  <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/15">
+                    <span className="text-[10px] text-purple-300 block uppercase font-semibold">Total P.F.</span>
+                    <strong className="text-sm font-mono text-white">₹{totalPf.toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div className="bg-white/10 px-3 py-1.5 rounded-lg border border-white/15">
+                    <span className="text-[10px] text-purple-300 block uppercase font-semibold">Total ESI</span>
+                    <strong className="text-sm font-mono text-white">₹{totalEsi.toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div className="bg-purple-600/60 px-3.5 py-1.5 rounded-lg border border-purple-400">
+                    <span className="text-[10px] text-amber-200 block uppercase font-black">Total SKC Contrib</span>
+                    <strong className="text-base font-mono text-amber-300">₹{totalContrib.toLocaleString('en-IN')}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABLE */}
+              <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-[#1e3a8a] text-white text-[10px] uppercase font-bold">
+                    <tr>
+                      <th className="py-2.5 px-2 text-center w-12 border-r border-blue-900">#</th>
+                      <th className="py-2.5 px-2.5 border-r border-blue-900">Worker Code</th>
+                      <th className="py-2.5 px-3 border-r border-blue-900">Employee Name</th>
+                      <th className="py-2.5 px-3 border-r border-blue-900">Father Name</th>
+                      <th className="py-2.5 px-3 border-r border-blue-900">Designation</th>
+                      <th className="py-2.5 px-3 border-r border-blue-900">Division / Site</th>
+                      <th className="py-2.5 px-3 text-right bg-red-950 text-red-200 border-r border-red-900">P.F. (₹)</th>
+                      <th className="py-2.5 px-3 text-right bg-red-950 text-red-200 border-r border-red-900">ESI (₹)</th>
+                      <th className="py-2.5 px-3 text-right bg-purple-950 text-purple-200 font-black">SKC Contribution (₹)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {list.length === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="py-8 text-center text-slate-400 font-semibold">
+                          No workers found for the selected month and division.
+                        </td>
+                      </tr>
+                    ) : (
+                      list.map((w, idx) => (
+                        <tr key={w.workerId || idx} className="hover:bg-purple-50/40 transition-colors">
+                          <td className="py-2 px-2 text-center font-mono font-bold text-slate-500 border-r border-slate-100">{idx + 1}</td>
+                          <td className="py-2 px-2.5 font-mono font-bold text-[#1e3a8a] border-r border-slate-100">{w.empId}</td>
+                          <td className="py-2 px-3 font-bold text-slate-900 border-r border-slate-100">
+                            <div 
+                              onClick={() => handleOpenRegisterBook(w.workerId)}
+                              className="cursor-pointer hover:underline text-[#1e3a8a] flex items-center gap-1"
+                              title="Click to view register book"
+                            >
+                              <BookOpen className="w-3 h-3 text-amber-600" />
+                              <span>{w.fullName}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 text-slate-700 border-r border-slate-100">{w.fatherName || '-'}</td>
+                          <td className="py-2 px-3 text-slate-700 border-r border-slate-100">{w.designation || 'Worker'}</td>
+                          <td className="py-2 px-3 text-slate-700 font-semibold border-r border-slate-100">{w.divisionName || divLabel}</td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-red-700 bg-red-50/20 border-r border-slate-100">
+                            {formatIndianCurrency(w.pfAmount)}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-bold text-red-700 bg-red-50/20 border-r border-slate-100">
+                            {formatIndianCurrency(w.esiAmount)}
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono font-black text-purple-900 bg-purple-50/50">
+                            {formatIndianCurrency(w.skcContribAmount)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {list.length > 0 && (
+                    <tfoot className="bg-slate-800 text-white font-bold text-xs border-t-2 border-slate-700">
+                      <tr>
+                        <td colSpan={6} className="py-2.5 px-3 text-right uppercase tracking-wider">Total SKC Contribution:</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-red-200 bg-red-950/80">₹{totalPf.toLocaleString('en-IN')}</td>
+                        <td className="py-2.5 px-3 text-right font-mono text-red-200 bg-red-950/80">₹{totalEsi.toLocaleString('en-IN')}</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-black text-amber-300 bg-purple-950 text-sm">₹{totalContrib.toLocaleString('en-IN')}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            </div>
+          );
+        })()
       ) : activeWageTab === 'canara' || activeWageTab === 'non_canara' ? (
         /* --- DEDICATED BANK SALARY ADVICE LETTER & SCHEDULE (CANARA / NON-CANARA) --- */
         (() => {
@@ -2492,6 +2798,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 <th className="text-center py-2.5 px-1 bg-amber-900 text-amber-100">Adv.Ded</th>
                 <th className="text-right py-2.5 px-1 bg-amber-950/80 text-amber-200">Adv.Bal</th>
                 <th className="text-center py-2.5 px-1 bg-indigo-950 text-indigo-200">Extra</th>
+                <th className="text-right py-2.5 px-1 bg-purple-950 text-purple-200">SKC Contrib</th>
                 <th className="text-left py-2.5 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black">FINAL NET</th>
                 <th className="text-center py-2.5 px-1">Status</th>
                 <th className="text-center py-2.5 px-1">Actions</th>
@@ -2722,7 +3029,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       />
                     </td>
 
-                    {/* 19. Final Net Amount */}
+                    {/* 19. SKC Contribution (PF + ESI) */}
+                    <td className="text-right font-mono font-bold text-purple-900 bg-purple-50/50 py-1 px-1">
+                      {formatIndianCurrency(calc.pf + calc.esi)}
+                    </td>
+
+                    {/* 20. Final Net Amount */}
                     <td className="text-left font-mono font-black py-1 px-2 bg-gradient-to-r from-amber-100 via-orange-100 to-amber-200 text-slate-950 border-r border-amber-300">
                       <span className="text-xs font-black">{formatIndianCurrency(calc.finalNetAmount)}</span>
                     </td>
@@ -2805,6 +3117,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   <td className="text-center py-2 px-1 bg-amber-800 text-amber-100 border-t border-amber-700">{formatIndianCurrency(totals.advance)}</td>
                   <td className="text-right py-2 px-1 bg-amber-900/60 text-amber-200 border-t border-amber-700">{formatIndianCurrency(totals.remainingAdvance)}</td>
                   <td className="text-center py-2 px-1 bg-indigo-900/70 text-indigo-200 border-t border-indigo-700">{formatIndianCurrency(totals.extra)}</td>
+                  <td className="text-right py-2 px-1 bg-purple-900/80 text-purple-200 border-t border-purple-700">{formatIndianCurrency(totals.skcContrib)}</td>
                   <td className="text-left py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 font-black border-t border-orange-400">{formatIndianCurrency(totals.finalNetAmount)}</td>
                   <td colSpan={2} className="border-t border-slate-600"></td>
                 </tr>
@@ -2886,7 +3199,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) handleCloseRegisterBook(); }}
         >
-          <div className="bg-[#fcfaf2] rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col h-[94vh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+          <div className="bg-[#fcfaf2] rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col h-[92dvh] max-h-[92dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+            {/* Mobile Drag Indicator Bar */}
+            <div className="w-12 h-1.5 bg-[#b8860b]/40 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
+
             {/* REGISTER BOOK TOP BINDING HEADER */}
             <div className="bg-gradient-to-r from-[#2b1810] via-[#4a2612] to-[#2b1810] text-[#f5eed7] p-3 sm:p-4 flex justify-between items-center border-b-4 border-[#b8860b] shadow-lg shrink-0">
               <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
@@ -2912,7 +3228,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             </div>
 
             {/* REGISTER BOOK PAGE CONTENT WITH SMOOTH SCROLL */}
-            <div className="flex-1 overflow-y-auto overscroll-contain p-2.5 sm:p-5 space-y-3 sm:space-y-4 bg-[#fbf9f4] font-sans">
+            <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-2.5 sm:p-5 pb-8 space-y-3 sm:space-y-4 bg-[#fbf9f4] font-sans">
               {drilldownLoading || !drilldownData ? (
                 <div className="py-16 text-center text-[#5c3a21] font-semibold flex items-center justify-center gap-2">
                   <RefreshCw className="w-6 h-6 animate-spin text-[#b8860b]" /> Opening attendance register page...
@@ -3200,7 +3516,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
             onClick={(e) => { if (e.target === e.currentTarget) setSlipModalWorker(null); }}
           >
-            <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[94vh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+            <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92dvh] max-h-[92dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+              {/* Mobile Drag Indicator Bar */}
+              <div className="w-12 h-1.5 bg-blue-300/60 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
+
               {/* SLIP MODAL HEADER BAR */}
               <div className="bg-[#1e3a8a] text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
@@ -3232,7 +3551,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
               </div>
 
               {/* SLIP BODY (EXACT VISUAL MATCH TO SCREENSHOT) */}
-              <div className="flex-1 overflow-y-auto overscroll-contain p-2 sm:p-6 bg-slate-100 flex justify-center">
+              <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-2 sm:p-6 pb-8 bg-slate-100 flex justify-center">
                 <div className="bg-white p-3 sm:p-6 rounded-xl shadow-md border border-slate-300 w-full max-w-2xl text-black font-sans text-xs overflow-x-auto">
                   
                   {/* UNIFIED OUTER BOX WITH CLEAN INTERNAL BORDERS */}

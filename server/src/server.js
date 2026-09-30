@@ -1542,7 +1542,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
 // GET /api/individual-stocks - List all individual stock items with aggregated balances
 app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
   try {
-    const { search, cursor, limit = 50 } = req.query;
+    const { search, partNumber, kpclCode, cursor, page, limit = 50 } = req.query;
     const limitNum = parseInt(limit, 10) || 50;
 
     let whereClauses = [];
@@ -1553,13 +1553,26 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
       whereClauses.push(`(s."itemName" ILIKE $${params.length} OR s."partNumber" ILIKE $${params.length} OR s."kpclCode" ILIKE $${params.length} OR s."make" ILIKE $${params.length} OR s."hsnCode" ILIKE $${params.length} OR s."specifications" ILIKE $${params.length} OR s."remarks" ILIKE $${params.length})`);
     }
 
+    if (partNumber && partNumber.trim()) {
+      params.push(`%${partNumber.trim()}%`);
+      whereClauses.push(`s."partNumber" ILIKE $${params.length}`);
+    }
+
+    if (kpclCode && kpclCode.trim()) {
+      params.push(`%${kpclCode.trim()}%`);
+      whereClauses.push(`s."kpclCode" ILIKE $${params.length}`);
+    }
+
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "IndividualStock" s ${whereSql}`, params);
     const totalCount = countRes.rows[0]?.count || 0;
 
     let offsetNum = 0;
-    if (cursor) {
+    if (page) {
+      const p = parseInt(page, 10);
+      if (p > 1) offsetNum = (p - 1) * limitNum;
+    } else if (cursor) {
       const parsed = parseInt(cursor, 10);
       if (!isNaN(parsed)) offsetNum = parsed;
     }
@@ -1597,7 +1610,7 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
       };
     });
 
-    res.json({ items: itemsWithBalance, nextCursor: nextOffset, totalCount });
+    res.json({ items: itemsWithBalance, nextCursor: nextOffset, totalCount, page: parseInt(page, 10) || 1 });
   } catch (err) {
     console.error('Error fetching individual stocks:', err);
     res.status(500).json({ error: 'Failed to list individual stocks' });
@@ -1760,7 +1773,97 @@ app.delete('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER
   }
 });
 
-// GET /api/individual-stocks/:id/transactions - Get transaction history for an item
+// GET /api/individual-stocks/transactions - Get all transactions across items (with type, search, pagination)
+app.get('/api/individual-stocks/transactions', authenticateToken, async (req, res) => {
+  try {
+    const { type, search, invoiceNumber, dateFrom, dateTo, page, limit = 50 } = req.query;
+    const limitNum = parseInt(limit, 10) || 50;
+
+    let whereClauses = [];
+    let params = [];
+
+    if (type && type.trim()) {
+      params.push(type.trim().toUpperCase());
+      whereClauses.push(`tx.type = $${params.length}`);
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim()}%`);
+      whereClauses.push(`(
+        s."itemName" ILIKE $${params.length} OR 
+        s."partNumber" ILIKE $${params.length} OR 
+        tx."partyName" ILIKE $${params.length} OR 
+        tx."partyInvoiceNumber" ILIKE $${params.length} OR 
+        tx."remarks" ILIKE $${params.length}
+      )`);
+    }
+
+    if (invoiceNumber && invoiceNumber.trim()) {
+      params.push(`%${invoiceNumber.trim()}%`);
+      whereClauses.push(`tx."partyInvoiceNumber" ILIKE $${params.length}`);
+    }
+
+    if (dateFrom) {
+      params.push(new Date(dateFrom));
+      whereClauses.push(`tx."date" >= $${params.length}`);
+    }
+
+    if (dateTo) {
+      const endD = new Date(dateTo);
+      endD.setHours(23, 59, 59, 999);
+      params.push(endD);
+      whereClauses.push(`tx."date" <= $${params.length}`);
+    }
+
+    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+    const countRes = await pool.query(
+      `SELECT COUNT(*)::int as count 
+       FROM "IndividualStockTransaction" tx
+       LEFT JOIN "IndividualStock" s ON tx."stockId" = s.id
+       ${whereSql}`, 
+      params
+    );
+    const totalCount = countRes.rows[0]?.count || 0;
+
+    let offsetNum = 0;
+    if (page) {
+      const p = parseInt(page, 10);
+      if (p > 1) offsetNum = (p - 1) * limitNum;
+    }
+
+    const queryParams = [...params, limitNum, offsetNum];
+    const { rows } = await pool.query(
+      `SELECT tx.*, 
+              json_build_object(
+                'id', s.id, 
+                'itemName', s."itemName", 
+                'partNumber', s."partNumber", 
+                'kpclCode', s."kpclCode", 
+                'make', s."make", 
+                'unit', s."unit", 
+                'rate', s."rate"
+              ) as "stock",
+              json_build_object('fullName', u."fullName") as "addedBy",
+              json_build_object('fullName', au."fullName") as "approvedBy"
+       FROM "IndividualStockTransaction" tx
+       LEFT JOIN "IndividualStock" s ON tx."stockId" = s.id
+       LEFT JOIN "User" u ON tx."addedById" = u.id
+       LEFT JOIN "User" au ON tx."approvedById" = au.id
+       ${whereSql}
+       ORDER BY tx."date" DESC, tx."createdAt" DESC
+       LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`,
+      queryParams
+    );
+
+    res.json({ transactions: rows, totalCount, page: parseInt(page, 10) || 1 });
+  } catch (err) {
+    console.error('Error listing all individual transactions:', err);
+    res.status(500).json({ error: 'Failed to list transactions' });
+  }
+});
+
+// GET /api/individual-stocks/:id/transactions - Get transaction history for a single item
 app.get('/api/individual-stocks/:id/transactions', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -2638,7 +2741,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           tx."createdAt",
           ind."itemName" as "itemName",
           ind."partNumber" as "partNumber",
-          '-' as "kpclCode",
+          COALESCE(ind."kpclCode", '-') as "kpclCode",
           ind."unit" as "unit",
           '-' as "poNumber",
           '-' as "workOrderNumber",

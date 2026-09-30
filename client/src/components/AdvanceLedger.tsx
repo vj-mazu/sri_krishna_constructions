@@ -162,6 +162,28 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
     fetchAdvanceSummary();
   }, [fetchAdvanceSummary]);
 
+  // Modal Escape key handler + body scroll lock for mobile
+  useEffect(() => {
+    const anyModalOpen = !!selectedWorkerId || showDisburseModal || showRepayModal;
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      const handleEscapeKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          if (showDisburseModal) setShowDisburseModal(false);
+          else if (showRepayModal) setShowRepayModal(false);
+          else if (selectedWorkerId) { setSelectedWorkerId(null); setWorkerLedger(null); }
+        }
+      };
+      document.addEventListener('keydown', handleEscapeKey);
+      return () => {
+        document.body.style.overflow = '';
+        document.removeEventListener('keydown', handleEscapeKey);
+      };
+    } else {
+      document.body.style.overflow = '';
+    }
+  }, [selectedWorkerId, showDisburseModal, showRepayModal]);
+
   // Fetch individual drilldown ledger
   const openWorkerDrilldown = async (workerId: string) => {
     setSelectedWorkerId(workerId);
@@ -702,27 +724,32 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       {/* ========================================================================= */}
       {selectedWorkerId && (
         <div className="fixed inset-0 z-[99999] bg-slate-950/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1400px] h-[94vh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden text-slate-900">
+          <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl border border-slate-300 w-full max-w-[1400px] h-[92dvh] sm:h-auto sm:max-h-[92vh] flex flex-col overflow-hidden text-slate-900 touch-pan-y overscroll-contain">
             
+            {/* Mobile Drag Pill Handle */}
+            <div className="sm:hidden w-full pt-2.5 pb-1 flex justify-center bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] shrink-0">
+              <div className="w-12 h-1.5 bg-white/40 rounded-full" />
+            </div>
+
             {/* Sticky Modal Header */}
-            <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-5 py-3.5 flex items-center justify-between shadow-md shrink-0 sticky top-0 z-50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center font-black border border-white/20">
-                  <Wallet className="w-5 h-5 text-amber-300" />
+            <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0f172a] text-white px-4 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between shadow-md shrink-0 sticky top-0 z-50">
+              <div className="flex items-center gap-2.5 sm:gap-3">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white/10 flex items-center justify-center font-black border border-white/20 shrink-0">
+                  <Wallet className="w-4 h-4 sm:w-5 sm:h-5 text-amber-300" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base sm:text-lg font-black tracking-tight uppercase">
-                      Individual Worker Advance Ledger Statement
+                    <h2 className="text-sm sm:text-lg font-black tracking-tight uppercase">
+                      Advance Ledger Statement
                     </h2>
                     {workerLedger?.worker && (
-                      <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-amber-400 text-slate-950 font-black text-[10px] sm:text-[11px]">
                         {workerLedger.worker.workerId}
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-blue-200">
-                    Continuous double-entry advance disbursements and monthly salary deductions
+                  <p className="text-[10px] sm:text-xs text-blue-200">
+                    Double-entry advance disbursements and monthly salary deductions
                   </p>
                 </div>
               </div>
@@ -730,9 +757,9 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
               <div className="flex items-center gap-2">
                 <button
                   onClick={exportWorkerStatementPdf}
-                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                  className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow transition-all cursor-pointer"
                 >
-                  <Printer className="w-3.5 h-3.5" /> Print Statement PDF
+                  <Printer className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Print Statement</span> PDF
                 </button>
                 <button
                   onClick={() => {
