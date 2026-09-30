@@ -9,6 +9,7 @@ import {
   Building2, 
   Package, 
   ArrowDownToLine, 
+  Download,
   X,
   ChevronLeft,
   ChevronRight,
@@ -494,6 +495,8 @@ export const SalesLedger: React.FC = () => {
                           onClick={() => {
                             setSelectedSaleForInvoice({
                               ...sale,
+                              poNumber: sale.workOrderNumber && sale.workOrderNumber !== '-' ? sale.workOrderNumber : (sale.poNumber || ''),
+                              poDate: sale.workOrderDate || sale.date,
                               invoiceDate: sale.date,
                               partyName: sale.clientDepartment,
                               gstNumber: sale.clientGst,
@@ -507,10 +510,11 @@ export const SalesLedger: React.FC = () => {
                               }
                             });
                           }}
-                          className="p-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors"
-                          title="Generate Tax Invoice PDF"
+                          className="px-2 py-1 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-sm"
+                          title="Download Tax Invoice PDF"
                         >
-                          <FileText className="w-3.5 h-3.5" />
+                          <Download className="w-3.5 h-3.5" />
+                          <span>PDF</span>
                         </button>
                       </div>
                     </td>

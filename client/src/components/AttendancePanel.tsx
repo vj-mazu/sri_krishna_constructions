@@ -240,68 +240,95 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     const workerObj = workers.find(w => w.id === workerId);
     const workerName = workerObj?.fullName || 'Worker';
 
-    // If clicking the current status, toggle it off to unselect/unmarked
-    if (status !== '' && currentRec.status === status) {
-      setAttendanceRecords((prev) => ({
-        ...prev,
-        [workerId]: {
-          ...currentRec,
-          status: '',
-        },
-      }));
-      showToast(`Unselected attendance for ${workerName}`, 'info');
-      return;
-    }
-
     if (status === '') {
       setAttendanceRecords((prev) => ({
         ...prev,
         [workerId]: {
           ...currentRec,
           status: '',
+          divisionId: '',
+          secondDivisionId: '',
+          secondDivisionName: '',
         },
       }));
       showToast(`Cleared attendance for ${workerName}`, 'info');
       return;
     }
 
-    // Split Half-Day Business Validation:
-    // If worker was already marked HALF_DAY at another division:
-    const isAlreadyHalfDayAtOtherDiv = currentRec.status === 'HALF_DAY' && currentRec.divisionId && selectedDivisionId !== 'ALL' && currentRec.divisionId !== selectedDivisionId;
+    // Check if worker is already marked HALF_DAY at another division (Division 1)
+    const isAlreadyHalfDayAtOtherDiv = currentRec.status === 'HALF_DAY' && 
+      Boolean(currentRec.divisionId) && 
+      selectedDivisionId !== 'ALL' && 
+      currentRec.divisionId !== selectedDivisionId;
 
+    // SCENARIO 1: Worker has a Half-Day at Division 1, and now supervisor is in Division 2
     if (isAlreadyHalfDayAtOtherDiv) {
+      // If already marked 2nd half-day at THIS second division, clicking 'HALF_DAY' again toggles/removes the 2nd division
+      if (currentRec.secondDivisionId === selectedDivisionId && status === 'HALF_DAY') {
+        setAttendanceRecords((prev) => ({
+          ...prev,
+          [workerId]: {
+            ...currentRec,
+            secondDivisionId: '',
+            secondDivisionName: '',
+          },
+        }));
+        showToast(`Removed 2nd Half-Day for ${workerName} at this site`, 'info');
+        return;
+      }
+
+      // Cannot mark full 'PRESENT' because worker already did 0.5d at another division
       if (status === 'PRESENT') {
         const errAlert = `⚠️ Cannot mark full "Present" for ${workerName}. This worker already worked Half-Day at ${currentRec.divisionName || 'another site'} today. You can mark "Half Day" (0.5 day) here to complete 1.0 day!`;
         setError(errAlert);
         showToast(errAlert, 'error');
         return;
       }
+
+      // Marking 'HALF_DAY' in second division -> Successfully link 2nd half-day!
       if (status === 'HALF_DAY') {
-        // Splitting 2 half days across 2 divisions on the same day!
+        const selDivName = divisions.find(d => d.id === selectedDivisionId)?.name || 'Second Division';
         setAttendanceRecords((prev) => ({
           ...prev,
           [workerId]: {
             ...currentRec,
             status: 'HALF_DAY',
             secondDivisionId: selectedDivisionId,
-            secondDivisionName: divisions.find(d => d.id === selectedDivisionId)?.name || '',
+            secondDivisionName: selDivName,
           },
         }));
-        showToast(`Marked 2nd Half-Day for ${workerName} at this division (Total 1.0 Day Split)!`, 'success');
+        showToast(`Marked 2nd Half-Day for ${workerName} at ${selDivName} (Total 1.0 Day Split)!`, 'success');
         return;
       }
     }
 
-    setAttendanceRecords((prev) => {
-      return {
+    // SCENARIO 2: Worker is already marked at THIS division and clicks the same status -> Toggle off / unselect
+    const isMarkedInThisDiv = selectedDivisionId === 'ALL' || currentRec.divisionId === selectedDivisionId;
+    if (isMarkedInThisDiv && currentRec.status === status) {
+      setAttendanceRecords((prev) => ({
         ...prev,
         [workerId]: {
           ...currentRec,
-          status,
-          divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (currentRec.divisionId || ''),
+          status: '',
+          secondDivisionId: '',
+          secondDivisionName: '',
         },
-      };
-    });
+      }));
+      showToast(`Unselected attendance for ${workerName}`, 'info');
+      return;
+    }
+
+    // SCENARIO 3: Normal attendance assignment
+    setAttendanceRecords((prev) => ({
+      ...prev,
+      [workerId]: {
+        ...currentRec,
+        status,
+        divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (currentRec.divisionId || ''),
+        secondDivisionId: status === 'HALF_DAY' ? currentRec.secondDivisionId : '',
+        secondDivisionName: status === 'HALF_DAY' ? currentRec.secondDivisionName : '',
+      },
+    }));
   };
 
   const handleOtChange = (workerId: string, overtimeHours: string) => {
@@ -907,7 +934,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         { key: 'HALF_DAY', label: 'Half', icon: '🟡', activeBg: 'bg-amber-500 border-amber-600 text-white shadow-xs' },
                         { key: 'LEAVE', label: 'Leave', icon: '🟣', activeBg: 'bg-purple-600 border-purple-700 text-white shadow-xs' }
                       ] as const).map((item) => {
-                        const active = state.status === item.key;
+                        const active = selectedDivisionId === 'ALL'
+                          ? (state.status === item.key)
+                          : (
+                              (state.divisionId === selectedDivisionId && state.status === item.key) ||
+                              (state.secondDivisionId === selectedDivisionId && item.key === 'HALF_DAY')
+                            );
 
                         return (
                           <button
@@ -973,8 +1005,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       const state = attendanceRecords[w.id] || { status: '', overtimeHours: '0', dailyWageOverride: '' };
                       const isMarkedInThisSelectedDiv = selectedDivisionId === 'ALL' 
                         ? Boolean(state.status) 
-                        : (Boolean(state.status) && state.divisionId === selectedDivisionId);
-                      const isMarkedAtOtherSiteOnly = Boolean(state.status) && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId;
+                        : (Boolean(state.status) && (state.divisionId === selectedDivisionId || (state.status === 'HALF_DAY' && state.secondDivisionId === selectedDivisionId)));
+                      const isMarkedAtOtherSiteOnly = Boolean(state.status) && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId;
                       const isEditing = inlineEditWorkerId === w.id;
 
                       return (
@@ -1016,7 +1048,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             <td className="px-3 py-2">
                               <div className="flex items-center justify-center gap-1.5">
                                 {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                                  const active = isMarkedInThisSelectedDiv && state.status === status;
+                                  const active = selectedDivisionId === 'ALL'
+                                    ? (state.status === status)
+                                    : (
+                                        (state.divisionId === selectedDivisionId && state.status === status) ||
+                                        (state.secondDivisionId === selectedDivisionId && status === 'HALF_DAY')
+                                      );
                                   let colorClasses = '';
                                   if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
                                   if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';

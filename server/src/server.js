@@ -1685,6 +1685,7 @@ app.post('/api/individual-stocks', authenticateToken, requireRoles(['OWNER', 'MA
 
 // PUT /api/individual-stocks/:id - Update individual stock item (Owner/Manager)
 app.put('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { 
@@ -1703,54 +1704,82 @@ app.put('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER', 
       remarks 
     } = req.body;
 
-    const openStockNum = openingStock !== undefined ? (parseFloat(openingStock) || 0) : undefined;
-    const rateNum = rate !== undefined ? (parseFloat(rate) || 0) : undefined;
-    const cgstP = cgstPercent !== undefined ? (parseFloat(cgstPercent) || 0) : undefined;
-    const sgstP = sgstPercent !== undefined ? (parseFloat(sgstPercent) || 0) : undefined;
-    const igstP = igstPercent !== undefined ? (parseFloat(igstPercent) || 0) : undefined;
+    if (!itemName || !itemName.trim()) {
+      return res.status(400).json({ error: 'Item Name is required' });
+    }
 
-    const { rows } = await pool.query(
-      `UPDATE "IndividualStock"
-       SET "kpclCode" = CASE WHEN $1::text IS NOT NULL THEN $1 ELSE "kpclCode" END,
-           "itemName" = COALESCE($2, "itemName"),
-           "specifications" = CASE WHEN $3::text IS NOT NULL THEN $3 ELSE "specifications" END,
-           "partNumber" = CASE WHEN $4::text IS NOT NULL THEN $4 ELSE "partNumber" END,
-           "make" = CASE WHEN $5::text IS NOT NULL THEN $5 ELSE "make" END,
-           "hsnCode" = CASE WHEN $6::text IS NOT NULL THEN $6 ELSE "hsnCode" END,
-           "unit" = COALESCE($7, "unit"),
-           "openingStock" = COALESCE($8, "openingStock"),
-           "rate" = COALESCE($9, "rate"),
-           "basicAmount" = CASE WHEN $8::float IS NOT NULL AND $9::float IS NOT NULL THEN ROUND(($8::numeric * $9::numeric), 2) ELSE "basicAmount" END,
-           "cgstPercent" = COALESCE($10, "cgstPercent"),
-           "sgstPercent" = COALESCE($11, "sgstPercent"),
-           "igstPercent" = COALESCE($12, "igstPercent"),
-           "remarks" = CASE WHEN $13::text IS NOT NULL THEN $13 ELSE "remarks" END,
-           "updatedAt" = NOW()
-       WHERE "id" = $14
-       RETURNING *`,
-      [
-        kpclCode !== undefined ? (kpclCode ? kpclCode.trim().toUpperCase() : null) : null,
-        itemName ? itemName.trim() : null,
-        specifications !== undefined ? (specifications ? specifications.trim() : null) : null,
-        partNumber !== undefined ? (partNumber ? partNumber.trim().toUpperCase() : null) : null,
-        make !== undefined ? (make ? make.trim().toUpperCase() : null) : null,
-        hsnCode !== undefined ? (hsnCode ? hsnCode.trim().toUpperCase() : null) : null,
-        unit ? unit.trim().toUpperCase() : null,
-        openStockNum !== undefined ? openStockNum : null,
-        rateNum !== undefined ? rateNum : null,
-        cgstP !== undefined ? cgstP : null,
-        sgstP !== undefined ? sgstP : null,
-        igstP !== undefined ? igstP : null,
-        remarks !== undefined ? (remarks ? remarks.trim() : null) : null,
-        id
-      ]
-    );
+    const openStockNum = openingStock !== undefined ? (parseFloat(openingStock) || 0) : 0;
+    const rateNum = rate !== undefined ? (parseFloat(rate) || 0) : 0;
+    const basicAmt = Math.round((openStockNum * rateNum + Number.EPSILON) * 100) / 100;
+    const cgstP = cgstPercent !== undefined ? (parseFloat(cgstPercent) || 0) : 0;
+    const sgstP = sgstPercent !== undefined ? (parseFloat(sgstPercent) || 0) : 0;
+    const igstP = igstPercent !== undefined ? (parseFloat(igstPercent) || 0) : 0;
 
-    if (rows.length === 0) return res.status(404).json({ error: 'Individual stock item not found' });
+    await client.query('BEGIN');
+
+    const updateSql = `
+      UPDATE "IndividualStock"
+      SET "kpclCode" = $1,
+          "itemName" = $2,
+          "specifications" = $3,
+          "partNumber" = $4,
+          "make" = $5,
+          "hsnCode" = $6,
+          "unit" = $7,
+          "openingStock" = $8,
+          "rate" = $9,
+          "basicAmount" = $10,
+          "cgstPercent" = $11,
+          "sgstPercent" = $12,
+          "igstPercent" = $13,
+          "remarks" = $14,
+          "updatedAt" = NOW()
+      WHERE "id" = $15
+      RETURNING *
+    `;
+
+    const { rows } = await client.query(updateSql, [
+      kpclCode ? kpclCode.trim().toUpperCase() : null,
+      itemName.trim(),
+      specifications ? specifications.trim() : null,
+      partNumber ? partNumber.trim().toUpperCase() : null,
+      make ? make.trim().toUpperCase() : null,
+      hsnCode ? hsnCode.trim().toUpperCase() : null,
+      unit ? unit.trim().toUpperCase() : 'NOS',
+      openStockNum,
+      rateNum,
+      basicAmt,
+      cgstP,
+      sgstP,
+      igstP,
+      remarks ? remarks.trim() : null,
+      id
+    ]);
+
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Individual stock item not found' });
+    }
+
+    // Recalculate and sync currentStock based on updated openingStock + approved inward - approved outward
+    await client.query(`
+      UPDATE "IndividualStock" s
+      SET "currentStock" = GREATEST(0, (
+        s."openingStock" + 
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+      ))
+      WHERE s.id = $1
+    `, [id]);
+
+    await client.query('COMMIT');
     res.json({ message: 'Individual stock updated successfully!', item: rows[0] });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error updating individual stock:', err);
     res.status(500).json({ error: 'Failed to update individual stock' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1835,6 +1864,7 @@ app.get('/api/individual-stocks/transactions', authenticateToken, async (req, re
     const queryParams = [...params, limitNum, offsetNum];
     const { rows } = await pool.query(
       `SELECT tx.*, 
+              COALESCE(tx."partyInvoiceNumber", '') as "invoiceNumber",
               json_build_object(
                 'id', s.id, 
                 'itemName', s."itemName", 
@@ -1842,7 +1872,9 @@ app.get('/api/individual-stocks/transactions', authenticateToken, async (req, re
                 'kpclCode', s."kpclCode", 
                 'make', s."make", 
                 'unit', s."unit", 
-                'rate', s."rate"
+                'rate', s."rate",
+                'openingStock', s."openingStock",
+                'currentStock', s."currentStock"
               ) as "stock",
               json_build_object('fullName', u."fullName") as "addedBy",
               json_build_object('fullName', au."fullName") as "approvedBy"
@@ -1886,13 +1918,14 @@ app.get('/api/individual-stocks/:id/transactions', authenticateToken, async (req
   }
 });
 
-// POST /api/individual-stocks/purchase - Inward Purchase for Individual Stock (ACID safe)
-app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// SHARED INWARD PURCHASE HANDLER
+const handleInwardPurchase = async (req, res) => {
   const client = await pool.connect();
   try {
+    const stockId = req.params.stockId || req.body.stockId;
     const d = req.body;
-    if (!d.stockId) return res.status(400).json({ error: 'Stock item selection is required' });
-    if (!d.date) return res.status(400).json({ error: 'Purchase date is required' });
+    if (!stockId) return res.status(400).json({ error: 'Stock item selection is required' });
+    if (!d.date) return res.status(400).json({ error: 'Inward receipt date is required' });
 
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
@@ -1910,7 +1943,7 @@ app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OW
     await client.query('BEGIN');
 
     // Row-level lock on the stock item
-    const stockRes = await client.query(`SELECT * FROM "IndividualStock" WHERE id = $1 FOR UPDATE`, [d.stockId]);
+    const stockRes = await client.query(`SELECT * FROM "IndividualStock" WHERE id = $1 FOR UPDATE`, [stockId]);
     if (stockRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Individual stock item not found' });
@@ -1929,7 +1962,7 @@ app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OW
         $16, $17, $18, $19, 'APPROVED', $20, NOW()
       ) RETURNING *`,
       [
-        d.stockId, new Date(d.date), qty, rate, basicAmount,
+        stockId, new Date(d.date), qty, rate, basicAmount,
         cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
         totalAmount,
         d.partyName ? d.partyName.trim() : null,
@@ -1943,16 +1976,21 @@ app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OW
       ]
     );
 
-    // Update currentStock on master record
+    // Sync currentStock on master record
     await client.query(
       `UPDATE "IndividualStock"
-       SET "currentStock" = "currentStock" + $1, "updatedAt" = NOW()
-       WHERE id = $2`,
-      [qty, d.stockId]
+       SET "currentStock" = (
+         "openingStock" + 
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+       ),
+       "updatedAt" = NOW()
+       WHERE id = $1`,
+      [stockId]
     );
 
     await client.query('COMMIT');
-    res.status(201).json({ message: 'Inward purchase recorded successfully!', transaction: txRows[0] });
+    res.status(201).json({ message: 'Inward delivery recorded successfully!', transaction: txRows[0] });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error recording individual purchase:', err);
@@ -1960,16 +1998,22 @@ app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OW
   } finally {
     client.release();
   }
-});
+};
 
-// POST /api/individual-stocks/sale - Outward Sale Request for Individual Stock (Routes to Approval)
-app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
+app.post('/api/individual-stocks/purchase', authenticateToken, requireRoles(['OWNER', 'MANAGER']), handleInwardPurchase);
+app.post('/api/individual-stocks/:stockId/inward', authenticateToken, requireRoles(['OWNER', 'MANAGER']), handleInwardPurchase);
+
+// SHARED OUTWARD SALE HANDLER
+const handleOutwardSale = async (req, res) => {
   const client = await pool.connect();
   try {
+    const stockId = req.params.stockId || req.body.stockId;
     const d = req.body;
-    if (!d.stockId) return res.status(400).json({ error: 'Stock item selection is required' });
-    if (!d.invoiceNumber || !d.invoiceNumber.trim()) return res.status(400).json({ error: 'Invoice Number is required' });
-    if (!d.invoiceDate) return res.status(400).json({ error: 'Invoice Date is required' });
+    if (!stockId) return res.status(400).json({ error: 'Stock item selection is required' });
+    const invNo = (d.invoiceNumber || d.partyInvoiceNumber || '').trim().toUpperCase();
+    if (!invNo) return res.status(400).json({ error: 'Invoice Number is required' });
+    const saleDate = d.invoiceDate || d.date;
+    if (!saleDate) return res.status(400).json({ error: 'Invoice Date is required' });
 
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
@@ -1994,7 +2038,7 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
        FROM "IndividualStock" s
        WHERE s.id = $1
        FOR UPDATE`,
-      [d.stockId]
+      [stockId]
     );
 
     if (stockRes.rows.length === 0) {
@@ -2024,16 +2068,16 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
         gen_random_uuid()::text, $1, 'OUTWARD', $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, '29DWKPP3582H1ZV',
-        $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW()
+        $16, $17, $18, $19, $20, $21, $22, $23, NOW()
       ) RETURNING *`,
       [
-        d.stockId, new Date(d.invoiceDate), qty, rate, basicAmount,
+        stockId, new Date(saleDate), qty, rate, basicAmount,
         cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
         totalAmount,
         d.partyName ? d.partyName.trim() : null,
         d.supplierAddress ? d.supplierAddress.trim() : null,
         d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
-        d.invoiceNumber.trim().toUpperCase(),
+        invNo,
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
@@ -2051,9 +2095,14 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
     if (isOwner) {
       await client.query(
         `UPDATE "IndividualStock"
-         SET "currentStock" = GREATEST(0, "currentStock" - $1), "updatedAt" = NOW()
-         WHERE id = $2`,
-        [qty, d.stockId]
+         SET "currentStock" = (
+           "openingStock" + 
+           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
+           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+         ),
+         "updatedAt" = NOW()
+         WHERE id = $1`,
+        [stockId]
       );
     } else {
       await client.query(
@@ -2063,11 +2112,11 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
           req.user.id,
           JSON.stringify({
             transactionId: transaction.id,
-            stockId: d.stockId,
+            stockId: stockId,
             itemName: stock.itemName,
             partNumber: stock.partNumber,
-            invoiceNumber: d.invoiceNumber,
-            invoiceDate: d.invoiceDate,
+            invoiceNumber: invNo,
+            invoiceDate: saleDate,
             qty,
             rate,
             basicAmount,
@@ -2082,13 +2131,13 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
             supplierAddress: d.supplierAddress || '-',
             companyGstNumber: '29DWKPP3582H1ZV',
             gstNumber: d.gstNumber || '-',
-            partyInvoiceNumber: d.invoiceNumber,
+            partyInvoiceNumber: invNo,
             supplierInvoiceDate: d.supplierInvoiceDate || null,
             vehicleNumber: d.vehicleNumber || '-',
             eWayBillNumber: d.eWayBillNumber || '-',
             remarks: d.remarks || '-'
           }),
-          `Individual Stock Sale #${d.invoiceNumber} (${qty} ${stock.unit || 'units'} of ${stock.itemName}) submitted for Owner Approval`
+          `Individual Stock Sale #${invNo} (${qty} ${stock.unit || 'units'} of ${stock.itemName}) submitted for Owner Approval`
         ]
       );
     }
@@ -2106,7 +2155,216 @@ app.post('/api/individual-stocks/sale', authenticateToken, async (req, res) => {
   } finally {
     client.release();
   }
+};
+
+app.post('/api/individual-stocks/sale', authenticateToken, handleOutwardSale);
+app.post('/api/individual-stocks/:stockId/sale', authenticateToken, handleOutwardSale);
+
+// PUT /api/individual-stocks/transactions/:id - Edit an existing Inward or Outward transaction (Owner & Manager)
+app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const d = req.body;
+
+    await client.query('BEGIN');
+
+    // 1. Fetch existing transaction with lock
+    const txRes = await client.query(`SELECT * FROM "IndividualStockTransaction" WHERE id = $1 FOR UPDATE`, [id]);
+    if (txRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Transaction record not found' });
+    }
+
+    const currentTx = txRes.rows[0];
+    const stockId = currentTx.stockId;
+
+    // 2. Fetch stock item with lock
+    const stockRes = await client.query(
+      `SELECT s.*,
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED' AND tx.id != $1), 0)::float as "otherInward",
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED' AND tx.id != $1), 0)::float as "otherSold"
+       FROM "IndividualStock" s
+       WHERE s.id = $2
+       FOR UPDATE`,
+      [id, stockId]
+    );
+
+    if (stockRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Associated stock item not found' });
+    }
+
+    const stock = stockRes.rows[0];
+    const openingStock = parseFloat(stock.openingStock) || 0;
+
+    const newQty = d.qty !== undefined ? (parseFloat(d.qty) || 0) : currentTx.qty;
+    const newRate = d.rate !== undefined ? (parseFloat(d.rate) || 0) : currentTx.rate;
+    if (newQty <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Quantity must be greater than 0' });
+    }
+
+    // Stock constraint check:
+    if (currentTx.type === 'OUTWARD' && currentTx.status === 'APPROVED') {
+      const maxAllowedSale = openingStock + stock.otherInward - stock.otherSold;
+      if (newQty > maxAllowedSale) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Cannot update sale to ${newQty}. Only ${maxAllowedSale} units available in stock!` });
+      }
+    } else if (currentTx.type === 'INWARD') {
+      const remainingBalance = openingStock + stock.otherInward + newQty - stock.otherSold;
+      if (remainingBalance < 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Cannot reduce inward quantity to ${newQty}. Sold quantity already exceeds this level by ${Math.abs(remainingBalance)} units!` });
+      }
+    }
+
+    const basicAmount = Math.round((newQty * newRate + Number.EPSILON) * 100) / 100;
+    const cgstP = d.cgstPercent !== undefined ? (parseFloat(d.cgstPercent) || 0) : currentTx.cgstPercent;
+    const sgstP = d.sgstPercent !== undefined ? (parseFloat(d.sgstPercent) || 0) : currentTx.sgstPercent;
+    const igstP = d.igstPercent !== undefined ? (parseFloat(d.igstPercent) || 0) : currentTx.igstPercent;
+    const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+
+    const newDate = d.date || d.invoiceDate ? new Date(d.date || d.invoiceDate) : currentTx.date;
+    const newInvoiceNo = d.partyInvoiceNumber || d.invoiceNumber ? (d.partyInvoiceNumber || d.invoiceNumber).trim().toUpperCase() : currentTx.partyInvoiceNumber;
+    const newPartyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : currentTx.partyName;
+    const newSupplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : currentTx.supplierAddress;
+    const newGstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : currentTx.gstNumber;
+    const newVehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : currentTx.vehicleNumber;
+    const newEWayBill = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : currentTx.eWayBillNumber;
+    const newRemarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : currentTx.remarks;
+
+    const { rows: updatedRows } = await client.query(
+      `UPDATE "IndividualStockTransaction"
+       SET "date" = $1,
+           "qty" = $2,
+           "rate" = $3,
+           "basicAmount" = $4,
+           "cgstPercent" = $5,
+           "sgstPercent" = $6,
+           "igstPercent" = $7,
+           "cgstAmount" = $8,
+           "sgstAmount" = $9,
+           "igstAmount" = $10,
+           "totalAmount" = $11,
+           "partyName" = $12,
+           "supplierAddress" = $13,
+           "gstNumber" = $14,
+           "partyInvoiceNumber" = $15,
+           "vehicleNumber" = $16,
+           "eWayBillNumber" = $17,
+           "remarks" = $18
+       WHERE "id" = $19
+       RETURNING *`,
+      [
+        newDate, newQty, newRate, basicAmount,
+        cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
+        totalAmount,
+        newPartyName, newSupplierAddress, newGstNumber, newInvoiceNo,
+        newVehicleNumber, newEWayBill, newRemarks,
+        id
+      ]
+    );
+
+    // Sync master currentStock
+    await client.query(
+      `UPDATE "IndividualStock"
+       SET "currentStock" = GREATEST(0, (
+         "openingStock" + 
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+       )),
+       "updatedAt" = NOW()
+       WHERE id = $1`,
+      [stockId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Transaction updated successfully!', transaction: updatedRows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error updating individual transaction:', err);
+    res.status(500).json({ error: 'Failed to update transaction' });
+  } finally {
+    client.release();
+  }
 });
+
+// DELETE /api/individual-stocks/transactions/:id - Delete an existing Inward or Outward transaction (Owner & Manager)
+app.delete('/api/individual-stocks/transactions/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+
+    await client.query('BEGIN');
+
+    const txRes = await client.query(`SELECT * FROM "IndividualStockTransaction" WHERE id = $1 FOR UPDATE`, [id]);
+    if (txRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Transaction record not found' });
+    }
+
+    const tx = txRes.rows[0];
+    const stockId = tx.stockId;
+
+    // Check if removing an INWARD transaction would cause negative stock
+    if (tx.type === 'INWARD' && tx.status === 'APPROVED') {
+      const stockRes = await client.query(
+        `SELECT s.*,
+                COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = s.id AND t.type = 'INWARD' AND t.status = 'APPROVED' AND t.id != $1), 0)::float as "otherInward",
+                COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = s.id AND t.type = 'OUTWARD' AND t.status = 'APPROVED'), 0)::float as "totalSold"
+         FROM "IndividualStock" s
+         WHERE s.id = $2
+         FOR UPDATE`,
+        [id, stockId]
+      );
+
+      if (stockRes.rows.length > 0) {
+        const stock = stockRes.rows[0];
+        const remaining = (parseFloat(stock.openingStock) || 0) + stock.otherInward - stock.totalSold;
+        if (remaining < 0) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ 
+            error: `Cannot delete this inward receipt. Sold stock (${stock.totalSold}) exceeds remaining inventory (${(parseFloat(stock.openingStock) || 0) + stock.otherInward})!` 
+          });
+        }
+      }
+    }
+
+    // Delete any pending approval requests tied to this transaction
+    await client.query(`DELETE FROM "ApprovalRequest" WHERE "payload"::text LIKE $1`, [`%"transactionId":"${id}"%`]);
+
+    // Delete transaction
+    await client.query(`DELETE FROM "IndividualStockTransaction" WHERE id = $1`, [id]);
+
+    // Recalculate and update master currentStock
+    await client.query(
+      `UPDATE "IndividualStock"
+       SET "currentStock" = GREATEST(0, (
+         "openingStock" + 
+         COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = $1 AND t.type = 'INWARD' AND t.status = 'APPROVED'), 0) -
+         COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = $1 AND t.type = 'OUTWARD' AND t.status = 'APPROVED'), 0)
+       )),
+       "updatedAt" = NOW()
+       WHERE id = $1`,
+      [stockId]
+    );
+
+    await client.query('COMMIT');
+    res.json({ message: 'Transaction record deleted successfully!' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Error deleting individual transaction:', err);
+    res.status(500).json({ error: 'Failed to delete transaction' });
+  } finally {
+    client.release();
+  }
+});
+
 app.post('/api/approvals/request', authenticateToken, async (req, res) => {
   try {
     const { type, payload, reason } = req.body;
