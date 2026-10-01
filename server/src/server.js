@@ -4309,6 +4309,7 @@ app.post('/api/attendance/correction-requests', authenticateToken, async (req, r
 });
 
 app.put('/api/attendance/correction-requests/:id/review', authenticateToken, requireRoles(['MANAGER', 'OWNER']), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { action, rejectionReason } = req.body; // 'APPROVED' or 'REJECTED'
@@ -4317,16 +4318,21 @@ app.put('/api/attendance/correction-requests/:id/review', authenticateToken, req
       return res.status(400).json({ error: 'Action must be APPROVED or REJECTED' });
     }
 
-    const { rows: reqRows } = await pool.query(
-      `SELECT * FROM "AttendanceCorrectionRequest" WHERE "id" = $1`,
+    await client.query('BEGIN');
+
+    const { rows: reqRows } = await client.query(
+      `SELECT * FROM "AttendanceCorrectionRequest" WHERE "id" = $1 FOR UPDATE`,
       [id]
     );
-    if (reqRows.length === 0) return res.status(404).json({ error: 'Correction request not found' });
+    if (reqRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Correction request not found' });
+    }
     const corrReq = reqRows[0];
 
     if (action === 'APPROVED') {
       // 1. Update Attendance table directly with corrected values!
-      await pool.query(
+      await client.query(
         `INSERT INTO "Attendance" ("id", "workerId", "date", "status", "overtimeHours", "otHours", "divisionId", "secondDivisionId", "notes", "recordedById", "markedById", "createdAt", "updatedAt")
          VALUES (gen_random_uuid()::text, $1, $2, $3::"AttendanceStatus", $4, $4, $5, NULL, $6, $7, $7, NOW(), NOW())
          ON CONFLICT ("workerId", "date")
@@ -4343,17 +4349,21 @@ app.put('/api/attendance/correction-requests/:id/review', authenticateToken, req
     }
 
     // 2. Update the correction request record status
-    await pool.query(
+    await client.query(
       `UPDATE "AttendanceCorrectionRequest"
-       SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW()
+       SET "status" = $1::text, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW()
        WHERE "id" = $4`,
       [action, req.user.id, rejectionReason || null, id]
     );
 
+    await client.query('COMMIT');
     res.json({ message: `Attendance correction request ${action.toLowerCase()} successfully!` });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Review correction request error:', err);
-    res.status(500).json({ error: 'Failed to process attendance correction review' });
+    res.status(500).json({ error: err.message || 'Failed to process attendance correction review' });
+  } finally {
+    client.release();
   }
 });
 

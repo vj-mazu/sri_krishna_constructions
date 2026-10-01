@@ -488,7 +488,7 @@ export const initializeDatabaseTables = async () => {
         "newDivisionId" TEXT NOT NULL REFERENCES "Division"("id"),
         "newOvertimeHours" DOUBLE PRECISION NOT NULL DEFAULT 0,
         "reason" TEXT NOT NULL,
-        "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+        "status" TEXT NOT NULL DEFAULT 'PENDING',
         "requestedById" TEXT NOT NULL REFERENCES "User"("id"),
         "approvedById" TEXT REFERENCES "User"("id"),
         "rejectionReason" TEXT,
@@ -597,6 +597,11 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Division" DROP CONSTRAINT IF EXISTS "Division_name_key";
       DROP INDEX IF EXISTS "Division_name_key";
       CREATE UNIQUE INDEX IF NOT EXISTS "Division_name_type_unique_idx" ON "Division" (LOWER("name"), "type");
+
+      -- Fix AttendanceCorrectionRequest status column: change type to TEXT so 'APPROVED', 'REJECTED', 'PENDING' work seamlessly
+      ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" DROP DEFAULT;
+      ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" TYPE TEXT USING "status"::text;
+      ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING';
 
       -- Mathematically synchronize IndividualStock currentStock based on opening + (INWARD/PURCHASE) - (OUTWARD/SALE)
       UPDATE "IndividualStock" s
