@@ -371,14 +371,14 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
       WHERE "date" >= $1 AND "date" <= $2
     `, [todayStart, todayEnd]);
 
-    // 2. Today's Sales (Dispatched)
+    // 2. Today's Sales (Dispatched & Approved)
     const todaySales = await pool.query(`
       SELECT 
         COALESCE(SUM(qty), 0)::float as "totalQty",
         COALESCE(SUM("totalAmount"), 0)::float as "totalAmount",
         COUNT(*)::int as "count"
       FROM "Sale"
-      WHERE "invoiceDate" >= $1 AND "invoiceDate" <= $2
+      WHERE "invoiceDate" >= $1 AND "invoiceDate" <= $2 AND status = 'APPROVED'
     `, [todayStart, todayEnd]);
 
     // 3. Today's Attendance (supporting both overtimeHours and otHours column naming)
@@ -539,8 +539,8 @@ app.get('/api/purchase-orders/:id', authenticateToken, async (req, res) => {
         COALESCE(SUM(poi.qty), 0)::float as "totalOrderedQty",
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1)), 0)::float as "totalInwardQty",
         COALESCE((SELECT SUM(pur."totalAmount") FROM "Purchase" pur WHERE pur."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1)), 0)::float as "totalInwardValue",
-        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1)), 0)::float as "totalSoldQty",
-        COALESCE((SELECT SUM(s."totalAmount") FROM "Sale" s WHERE s."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1)), 0)::float as "totalSalesValue",
+        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1) AND s.status = 'APPROVED'), 0)::float as "totalSoldQty",
+        COALESCE((SELECT SUM(s."totalAmount") FROM "Sale" s WHERE s."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1) AND s.status = 'APPROVED'), 0)::float as "totalSalesValue",
         COUNT(DISTINCT poi.id)::int as "totalItemsCount"
       FROM "PurchaseOrderItem" poi
       WHERE poi."purchaseOrderId" = $1
@@ -616,7 +616,7 @@ app.get('/api/purchase-orders/:id/items', authenticateToken, async (req, res) =>
       SELECT 
         poi.*,
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as "purchasedQty",
-        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)::float as "soldQty"
+        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)::float as "soldQty"
       FROM "PurchaseOrderItem" poi
       ${whereSql}
       ORDER BY poi."createdAt" ASC, poi."id" ASC
@@ -1374,11 +1374,11 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
     }
 
     if (stockStatus === 'IN_STOCK') {
-      whereClauses.push(`(COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)) > 0`);
+      whereClauses.push(`(COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)) > 0`);
     } else if (stockStatus === 'OUT_OF_STOCK') {
-      whereClauses.push(`(COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)) <= 0`);
+      whereClauses.push(`(COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)) <= 0`);
     } else if (stockStatus === 'LOW_STOCK') {
-      whereClauses.push(`(COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)) > 0 AND (COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)) <= 10`);
+      whereClauses.push(`(COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)) > 0 AND (COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) - COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)) <= 10`);
     } else if (stockStatus === 'PENDING_INWARD') {
       whereClauses.push(`COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0) < poi.qty`);
     }
@@ -1473,7 +1473,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
         COALESCE(po."poNumber", (SELECT po2."poNumber" FROM "PurchaseOrder" po2 WHERE po2.id = poi."purchaseOrderId"), '-') as "poNumber",
         COALESCE(po."date", (SELECT po2."date" FROM "PurchaseOrder" po2 WHERE po2.id = poi."purchaseOrderId"), NULL) as "poDate",
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as "totalPurchased",
-        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id), 0)::float as "totalSold"
+        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)::float as "totalSold"
       FROM "PurchaseOrderItem" poi
       LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
       ${whereSql}
