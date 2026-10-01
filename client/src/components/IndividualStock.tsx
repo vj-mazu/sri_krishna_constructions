@@ -55,6 +55,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
   const [salesPage, setSalesPage] = useState(1);
   const [salesPageSize, setSalesPageSize] = useState(25);
   const [salesTotalCount, setSalesTotalCount] = useState(0);
+  const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
   // --- TAB 4: INVOICES PREVIEW & MODAL ---
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
@@ -592,19 +593,32 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       if (!map[invNo]) map[invNo] = [];
       map[invNo].push(s);
     });
-    return Object.entries(map).map(([invNo, saleItems]) => ({
-      invoiceNumber: invNo,
-      date: saleItems[0]?.invoiceDate || saleItems[0]?.date,
-      partyName: saleItems[0]?.partyName || 'Customer',
-      vehicleNumber: saleItems[0]?.vehicleNumber || '-',
-      itemsCount: saleItems.length,
-      totalAmount: saleItems.reduce((acc, curr) => {
+    return Object.entries(map).map(([invNo, saleItems]) => {
+      const primary = saleItems[0] || {};
+      const totalQty = saleItems.reduce((acc, curr) => acc + Number(curr.qty || 0), 0);
+      const totalBasic = saleItems.reduce((acc, curr) => acc + (Number(curr.qty || 0) * Number(curr.rate || 0)), 0);
+      const totalTax = saleItems.reduce((acc, curr) => {
         const b = Number(curr.qty || 0) * Number(curr.rate || 0);
-        const tax = b * ((Number(curr.cgstPercent || 0) + Number(curr.sgstPercent || 0) + Number(curr.igstPercent || 0)) / 100);
-        return acc + b + tax;
-      }, 0),
-      sales: saleItems,
-    }));
+        return acc + (b * ((Number(curr.cgstPercent || 0) + Number(curr.sgstPercent || 0) + Number(curr.igstPercent || 0)) / 100));
+      }, 0);
+      const totalAmount = totalBasic + totalTax;
+
+      return {
+        invoiceNumber: invNo,
+        date: primary.invoiceDate || primary.date,
+        partyName: primary.partyName || 'Direct Client',
+        partyAddress: primary.partyAddress || primary.supplierAddress || '',
+        gstNumber: primary.gstNumber || '-',
+        vehicleNumber: primary.vehicleNumber || '-',
+        eWayBillNumber: primary.eWayBillNumber || '',
+        itemsCount: saleItems.length,
+        totalQty,
+        totalBasic,
+        totalTax,
+        totalAmount,
+        sales: saleItems,
+      };
+    });
   }, [sales]);
 
   return (
@@ -1121,90 +1135,152 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       {/* ========================================================= */}
       {activeTab === 'sales' && (
         <div className="bg-white rounded-b-xl border border-slate-200 shadow-sm p-4 space-y-4">
-          {/* Filters Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-            <div className="relative">
-              <input
-                type="text"
-                value={salesSearch}
-                onChange={(e) => { setSalesSearch(e.target.value); setSalesPage(1); }}
-                placeholder="Search Buyer, Item, Invoice..."
-                className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-900"
-              />
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+          
+          {/* Top Actions & Multi-Select Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <div className="flex flex-wrap items-center gap-2">
+              {selectedSaleIds.length > 0 && (
+                <button
+                  onClick={() => {
+                    const chosenSales = sales
+                      .filter(s => selectedSaleIds.includes(s.id))
+                      .map(s => {
+                        const itm = s.stock || s.item || allItemsList.find(i => i.id === s.stockId) || {};
+                        const invNo = s.invoiceNumber || s.partyInvoiceNumber || `INV-${s.id?.slice(0, 6) || 'GENERAL'}`;
+                        return {
+                          ...s,
+                          invoiceNumber: invNo,
+                          invoiceDate: s.invoiceDate || s.date,
+                          partyName: s.partyName,
+                          partyAddress: s.partyAddress || s.supplierAddress,
+                          gstNumber: s.gstNumber,
+                          quantity: s.qty,
+                          unitPrice: s.rate,
+                          cgstPercent: s.cgstPercent,
+                          sgstPercent: s.sgstPercent,
+                          igstPercent: s.igstPercent,
+                          item: {
+                            itemName: itm.itemName || s.itemName,
+                            partNumber: itm.partNumber || s.partNumber,
+                            kpclCode: itm.kpclCode || s.kpclCode || '-',
+                            unit: itm.unit || s.unit || 'NOS'
+                          }
+                        };
+                      });
+                    if (chosenSales.length > 0) {
+                      setPreviewSaleInvoice(chosenSales);
+                    }
+                  }}
+                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md animate-pulse cursor-pointer transition-all"
+                >
+                  <Receipt className="w-3.5 h-3.5" /> View &amp; Download Invoice ({selectedSaleIds.length} Selected)
+                </button>
+              )}
             </div>
 
-            <div>
-              <input
-                type="text"
-                value={salesInvoiceNumber}
-                onChange={(e) => { setSalesInvoiceNumber(e.target.value); setSalesPage(1); }}
-                placeholder="Filter Invoice Number..."
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
-              />
-            </div>
+            {/* Quick Filters */}
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 flex-1 max-w-3xl">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={salesSearch}
+                  onChange={(e) => { setSalesSearch(e.target.value); setSalesPage(1); }}
+                  placeholder="Search Buyer, Item, Invoice..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]"
+                />
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              </div>
 
-            <div>
-              <input
-                type="date"
-                value={salesDateFrom}
-                onChange={(e) => { setSalesDateFrom(e.target.value); setSalesPage(1); }}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold"
-              />
-            </div>
+              <div>
+                <input
+                  type="text"
+                  value={salesInvoiceNumber}
+                  onChange={(e) => { setSalesInvoiceNumber(e.target.value); setSalesPage(1); }}
+                  placeholder="Invoice Number..."
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]"
+                />
+              </div>
 
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
-                <span>Show:</span>
+              <div>
+                <input
+                  type="date"
+                  value={salesDateFrom}
+                  onChange={(e) => { setSalesDateFrom(e.target.value); setSalesPage(1); }}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
                 <select
                   value={salesPageSize}
                   onChange={(e) => { setSalesPageSize(Number(e.target.value)); setSalesPage(1); }}
-                  className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold"
+                  className="px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-700"
                 >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
+                  <option value={10}>10 / page</option>
+                  <option value={25}>25 / page</option>
+                  <option value={50}>50 / page</option>
+                  <option value={100}>100 / page</option>
                 </select>
+                <button
+                  onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesDateFrom(''); setSalesDateTo(''); setSelectedSaleIds([]); setSalesPage(1); fetchSales(); }}
+                  className="p-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-700 transition-colors"
+                  title="Reset Filters"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesDateFrom(''); setSalesDateTo(''); setSalesPage(1); fetchSales(); }}
-                className="p-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-700"
-                title="Reset Filters"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
             </div>
           </div>
 
-          {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
+          {/* Premium Desktop Table Matching PO Sales */}
+          <div className="overflow-x-auto rounded-xl border border-slate-300 shadow-sm max-h-[650px]">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300">
-                  <th className="p-3 text-center w-12 border-r border-slate-200">SL</th>
-                  <th className="p-3 border-r border-slate-200 w-28">Sale Date</th>
-                  <th className="p-3 border-r border-slate-200 w-36">Invoice Number</th>
-                  <th className="p-3 border-r border-slate-200">Stock Item Sold</th>
-                  <th className="p-3 border-r border-slate-200 w-44">Buyer / Customer</th>
-                  <th className="p-3 border-r border-slate-200 text-right w-24 bg-emerald-50 text-emerald-900 font-bold">Sold Qty</th>
-                  <th className="p-3 border-r border-slate-200 text-right w-24">Rate (₹)</th>
-                  <th className="p-3 border-r border-slate-200 text-right w-28 font-bold">Invoice Total</th>
-                  <th className="p-3 border-r border-slate-200 w-28">Vehicle / E-Way</th>
-                  <th className="p-3 text-center w-32">Actions</th>
+              <thead className="bg-sky-950 text-sky-200 sticky top-0 z-20 font-bold tracking-wide">
+                <tr className="border-b border-sky-800 text-[11px]">
+                  <th className="p-2.5 text-center w-10">
+                    <input 
+                      type="checkbox"
+                      checked={sales.length > 0 && selectedSaleIds.length === sales.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedSaleIds(sales.map(s => s.id));
+                        } else {
+                          setSelectedSaleIds([]);
+                        }
+                      }}
+                      className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer"
+                    />
+                  </th>
+                  <th className="p-2.5 text-center w-12 border-r border-sky-900">SL</th>
+                  <th className="p-2.5 border-r border-sky-900 min-w-[130px]">Buyer / Party</th>
+                  <th className="p-2.5 border-r border-sky-900 min-w-[120px]">Party GSTIN</th>
+                  <th className="p-2.5 border-r border-sky-900 min-w-[140px]">Stock Item Sold</th>
+                  <th className="p-2.5 border-r border-sky-900 min-w-[110px]">Part Number</th>
+                  <th className="p-2.5 border-r border-sky-900 min-w-[120px]">Invoice Number</th>
+                  <th className="p-2.5 border-r border-sky-900 w-24 whitespace-nowrap">Sale Date</th>
+                  <th className="p-2.5 border-r border-sky-900 min-w-[110px]">Vehicle / E-Way</th>
+                  <th className="p-2.5 border-r border-sky-900 text-center w-20 bg-blue-900/60 text-blue-100 font-bold">Qty</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-24 whitespace-nowrap">Rate (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-24 whitespace-nowrap">Basic (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">CGST (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">SGST (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">IGST (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-28 whitespace-nowrap font-black bg-emerald-950/60 text-emerald-200">Total (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-center w-24">Status</th>
+                  <th className="p-2.5 text-center w-28 sticky right-0 bg-sky-950 z-20 border-l border-sky-800 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.3)]">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
+              <tbody className="divide-y divide-slate-200 bg-white">
                 {salesLoading ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-slate-500">
-                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-900 mb-2" />
+                    <td colSpan={18} className="p-12 text-center text-slate-500 font-semibold">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#1e3a8a] mb-2" />
                       Loading sales records...
                     </td>
                   </tr>
                 ) : sales.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="p-8 text-center text-slate-400 font-semibold">
+                    <td colSpan={18} className="p-12 text-center text-slate-400 font-semibold">
                       No sales recorded yet. Click "Record Sale" to record an outward dispatch.
                     </td>
                   </tr>
@@ -1213,31 +1289,77 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                     const itm = s.stock || s.item || allItemsList.find(i => i.id === s.stockId) || {};
                     const qty = Number(s.qty || 0);
                     const rate = Number(s.rate || 0);
-                    const base = qty * rate;
-                    const tax = base * ((Number(s.cgstPercent || 0) + Number(s.sgstPercent || 0) + Number(s.igstPercent || 0)) / 100);
+                    const basic = qty * rate;
+                    const cgst = basic * (Number(s.cgstPercent || 0) / 100);
+                    const sgst = basic * (Number(s.sgstPercent || 0) / 100);
+                    const igst = basic * (Number(s.igstPercent || 0) / 100);
+                    const total = basic + cgst + sgst + igst;
+
                     const slNo = (salesPage - 1) * salesPageSize + idx + 1;
-                    const invNo = s.invoiceNumber || s.partyInvoiceNumber;
+                    const invNo = s.invoiceNumber || s.partyInvoiceNumber || '-';
+                    const isApproved = s.status === 'APPROVED' || !s.status;
+                    const isPending = s.status === 'PENDING';
+                    const isRejected = s.status === 'REJECTED';
+                    const isSelected = selectedSaleIds.includes(s.id);
 
                     return (
-                      <tr key={s.id || idx} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-3 text-center font-mono text-slate-500 font-bold border-r border-slate-200">{slNo}</td>
-                        <td className="p-3 border-r border-slate-200 font-mono text-slate-800">{formatDate(s.invoiceDate || s.date)}</td>
-                        <td className="p-3 border-r border-slate-200 font-mono font-bold text-emerald-950">{invNo || '-'}</td>
-                        <td className="p-3 border-r border-slate-200 font-bold text-slate-900">
+                      <tr 
+                        key={s.id || idx} 
+                        className={`hover:bg-blue-50/40 transition-colors ${isSelected ? 'bg-blue-50/70' : (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40')}`}
+                      >
+                        <td className="p-2 text-center">
+                          <input 
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedSaleIds(prev => [...prev, s.id]);
+                              } else {
+                                setSelectedSaleIds(prev => prev.filter(id => id !== s.id));
+                              }
+                            }}
+                            className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-2 text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{slNo}</td>
+                        <td className="p-2 border-r border-slate-200">
+                          <div className="font-bold text-slate-900">{s.partyName || '-'}</div>
+                          {s.supplierAddress && <div className="text-[10px] text-slate-500 line-clamp-1">{s.supplierAddress}</div>}
+                        </td>
+                        <td className="p-2 border-r border-slate-200 font-mono text-slate-700 uppercase font-semibold">{s.gstNumber || '-'}</td>
+                        <td className="p-2 border-r border-slate-200 font-bold text-slate-900">
                           <div>{itm.itemName || s.itemName || 'Stock Item'}</div>
-                          {itm.partNumber && <div className="text-[10px] text-slate-500 font-mono font-normal">Part: {itm.partNumber}</div>}
                         </td>
-                        <td className="p-3 border-r border-slate-200 text-slate-800">{s.partyName || '-'}</td>
-                        <td className="p-3 border-r border-slate-200 text-right font-mono font-black text-emerald-800 bg-emerald-50/40">
-                          -{qty} {itm.unit || 'NOS'}
+                        <td className="p-2 border-r border-slate-200 font-mono text-slate-700 font-semibold">{itm.partNumber || s.partNumber || '-'}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono font-bold text-[#1e3a8a]">{invNo}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono text-slate-700 whitespace-nowrap">{formatDate(s.invoiceDate || s.date)}</td>
+                        <td className="p-2 border-r border-slate-200 font-mono text-slate-600">
+                          <div className="font-bold uppercase text-slate-800">{s.vehicleNumber || '-'}</div>
+                          {s.eWayBillNumber && (
+                            <span className="text-[9px] bg-blue-50 text-blue-900 px-1 py-0.5 rounded border border-blue-200">
+                              E-Way: {s.eWayBillNumber}
+                            </span>
+                          )}
                         </td>
-                        <td className="p-3 border-r border-slate-200 text-right font-mono text-slate-700">{fmtCurrency(rate)}</td>
-                        <td className="p-3 border-r border-slate-200 text-right font-mono font-black text-slate-900">{fmtCurrency(base + tax)}</td>
-                        <td className="p-3 border-r border-slate-200 font-mono text-slate-600">
-                          <div>{s.vehicleNumber || '-'}</div>
-                          {s.eWayBillNumber && <div className="text-[10px] text-slate-400">E-Way: {s.eWayBillNumber}</div>}
+                        <td className="p-2 border-r border-slate-200 text-center font-mono font-black text-[#1e3a8a] bg-blue-50/50 whitespace-nowrap">
+                          {qty} {itm.unit || 'NOS'}
                         </td>
-                        <td className="p-3 text-center">
+                        <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-700 whitespace-nowrap">{fmtCurrency(rate)}</td>
+                        <td className="p-2 border-r border-slate-200 text-right font-mono font-semibold text-slate-800 whitespace-nowrap">{fmtCurrency(basic)}</td>
+                        <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-600 whitespace-nowrap">{fmtCurrency(cgst)}</td>
+                        <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-600 whitespace-nowrap">{fmtCurrency(sgst)}</td>
+                        <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-600 whitespace-nowrap">{fmtCurrency(igst)}</td>
+                        <td className="p-2 border-r border-slate-200 text-right font-mono font-black text-slate-900 bg-slate-50 whitespace-nowrap">{fmtCurrency(total)}</td>
+                        <td className="p-2 border-r border-slate-200 text-center">
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                            isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
+                            isPending ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                            'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}>
+                            {isApproved ? 'APPROVED' : (isPending ? 'PENDING' : 'REJECTED')}
+                          </span>
+                        </td>
+                        <td className="p-2 text-center sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                           <div className="flex items-center justify-center gap-1">
                             <button
                               onClick={() => setPreviewSaleInvoice([{
@@ -1245,20 +1367,24 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                                 invoiceNumber: invNo,
                                 invoiceDate: s.invoiceDate || s.date,
                                 partyName: s.partyName,
+                                partyAddress: s.partyAddress || s.supplierAddress,
                                 gstNumber: s.gstNumber,
                                 quantity: s.qty,
                                 unitPrice: s.rate,
+                                cgstPercent: s.cgstPercent,
+                                sgstPercent: s.sgstPercent,
+                                igstPercent: s.igstPercent,
                                 item: {
                                   itemName: itm.itemName || s.itemName,
                                   partNumber: itm.partNumber || s.partNumber,
-                                  kpclCode: itm.kpclCode || s.kpclCode,
-                                  unit: itm.unit || s.unit
+                                  kpclCode: itm.kpclCode || s.kpclCode || '-',
+                                  unit: itm.unit || s.unit || 'NOS'
                                 }
                               }])}
-                              className="p-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-[10px] font-bold shadow-sm"
-                              title="View / Print Tax Invoice PDF"
+                              className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
+                              title="View &amp; Download Official Tax Invoice"
                             >
-                              <Download className="w-3.5 h-3.5" />
+                              <Receipt className="w-3.5 h-3.5" />
                             </button>
                             {isManagerOrOwner && (
                               <>
@@ -1268,7 +1394,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                                     invoiceNumber: invNo,
                                     invoiceDate: s.invoiceDate ? new Date(s.invoiceDate).toISOString().slice(0, 10) : (s.date ? new Date(s.date).toISOString().slice(0, 10) : '')
                                   })}
-                                  className="p-1.5 text-blue-700 hover:bg-blue-50 rounded-lg border border-blue-200 bg-white shadow-sm"
+                                  className="p-1.5 text-[#1e3a8a] hover:bg-blue-50 rounded-lg border border-blue-200 bg-white shadow-sm"
                                   title="Edit Sale Record"
                                 >
                                   <Edit className="w-3.5 h-3.5" />
@@ -1305,7 +1431,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
               >
                 <ChevronLeft className="w-3.5 h-3.5" /> Prev
               </button>
-              <span className="px-3 py-1.5 bg-blue-900 text-white font-bold text-xs rounded-lg font-mono">
+              <span className="px-3 py-1.5 bg-[#1e3a8a] text-white font-bold text-xs rounded-lg font-mono">
                 Page {salesPage} of {Math.max(1, Math.ceil(salesTotalCount / salesPageSize))}
               </span>
               <button
@@ -1324,63 +1450,153 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       {/* TAB 4: SALE INVOICES GROUPED VIEW                         */}
       {/* ========================================================= */}
       {activeTab === 'invoices' && (
-        <div className="bg-white rounded-b-xl border border-slate-200 shadow-sm p-4 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-white rounded-b-xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-6">
+          
+          {/* Header & Metric Banner */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <Receipt className="w-5 h-5 text-[#1e3a8a]" /> Individual Sale Tax Invoices Register
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Grouped official GST Tax Invoices generated from outward stock dispatches
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="px-3.5 py-1.5 bg-blue-50 border border-blue-200 rounded-xl text-xs">
+                <span className="text-slate-500 font-semibold block text-[10px]">Total Invoices</span>
+                <span className="font-mono font-black text-[#1e3a8a] text-sm">{groupedInvoices.length}</span>
+              </div>
+              <div className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs">
+                <span className="text-emerald-700 font-semibold block text-[10px]">Total Turnover</span>
+                <span className="font-mono font-black text-emerald-800 text-sm">
+                  {fmtCurrency(groupedInvoices.reduce((acc, inv) => acc + inv.totalAmount, 0))}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Premium Invoices Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {groupedInvoices.length === 0 ? (
-              <div className="col-span-full p-12 text-center text-slate-400 font-semibold">
-                No sale invoices generated yet.
+              <div className="col-span-full p-16 text-center text-slate-400 font-semibold border-2 border-dashed border-slate-200 rounded-2xl">
+                <Receipt className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                No sale invoices generated yet. Record a sale to see grouped invoices here.
               </div>
             ) : (
               groupedInvoices.map((inv, idx) => (
-                <div key={idx} className="bg-slate-50 hover:bg-blue-50/40 transition-colors p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-3">
-                  <div className="flex items-start justify-between gap-2">
+                <div 
+                  key={idx} 
+                  className="bg-white hover:shadow-lg transition-all duration-200 rounded-2xl border border-slate-200 overflow-hidden flex flex-col justify-between group hover:border-[#1e3a8a]"
+                >
+                  {/* Top Gradient Header */}
+                  <div className="bg-gradient-to-r from-[#1e3a8a] to-sky-900 p-3.5 text-white flex items-start justify-between gap-2">
                     <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">GST Tax Invoice</span>
-                      <h3 className="font-black text-sm text-blue-950 font-mono mt-0.5">{inv.invoiceNumber}</h3>
-                      <div className="text-xs text-slate-600 font-semibold mt-1">{inv.partyName}</div>
+                      <span className="text-[9px] font-black uppercase tracking-wider text-amber-300 block">
+                        GST TAX INVOICE
+                      </span>
+                      <h3 className="font-mono font-black text-sm tracking-wide mt-0.5 text-white">
+                        {inv.invoiceNumber}
+                      </h3>
                     </div>
-                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-black rounded-full">
-                      {inv.itemsCount} Item(s)
+                    <span className="px-2 py-0.5 bg-white/20 text-white text-[10px] font-black rounded-full backdrop-blur-sm border border-white/20">
+                      {inv.itemsCount} Item{inv.itemsCount > 1 ? 's' : ''}
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-xs">
+                  {/* Body Content */}
+                  <div className="p-4 space-y-3 flex-1">
+                    {/* Buyer Details */}
                     <div>
-                      <span className="text-[10px] text-slate-400 block">Date</span>
-                      <span className="font-mono font-semibold text-slate-700">{formatDate(inv.date)}</span>
+                      <div className="flex items-center gap-1.5 text-slate-900 font-bold text-xs">
+                        <Building2 className="w-3.5 h-3.5 text-[#1e3a8a] shrink-0" />
+                        <span className="truncate">{inv.partyName}</span>
+                      </div>
+                      {inv.gstNumber && inv.gstNumber !== '-' && (
+                        <div className="text-[10px] text-slate-500 font-mono mt-0.5 pl-5">
+                          GSTIN: <span className="font-bold text-slate-700">{inv.gstNumber}</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block">Total Value</span>
-                      <span className="font-mono font-black text-slate-900 text-sm">{fmtCurrency(inv.totalAmount)}</span>
+
+                    {/* Vehicle & Date Pills */}
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] pt-1">
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 font-mono rounded border border-slate-200">
+                        Date: <strong>{formatDate(inv.date)}</strong>
+                      </span>
+                      {inv.vehicleNumber && inv.vehicleNumber !== '-' && (
+                        <span className="px-2 py-0.5 bg-blue-50 text-[#1e3a8a] font-mono font-bold rounded border border-blue-200 flex items-center gap-1">
+                          <Truck className="w-3 h-3" /> {inv.vehicleNumber}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Item Chips Preview */}
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Items Dispatched</span>
+                      <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                        {inv.sales.map((s: any, sIdx: number) => {
+                          const itm = s.stock || s.item || allItemsList.find(i => i.id === s.stockId) || {};
+                          return (
+                            <div key={sIdx} className="flex justify-between items-center text-[11px]">
+                              <span className="font-medium text-slate-800 truncate max-w-[170px]">
+                                • {itm.itemName || s.itemName || 'Stock Item'}
+                              </span>
+                              <span className="font-mono font-bold text-[#1e3a8a] shrink-0">
+                                {s.qty} {itm.unit || 'NOS'} @ ₹{s.rate}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Tax & Total Summary */}
+                    <div className="pt-2 border-t border-slate-200 flex justify-between items-center">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block font-semibold">Basic Amount</span>
+                        <span className="font-mono text-xs text-slate-700 font-semibold">{fmtCurrency(inv.totalBasic)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-400 block font-semibold">Total Invoice Value</span>
+                        <span className="font-mono font-black text-sm text-emerald-800">{fmtCurrency(inv.totalAmount)}</span>
+                      </div>
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      const salesFormatted = inv.sales.map(s => {
-                        const itm = s.stock || s.item || allItemsList.find(i => i.id === s.stockId) || {};
-                        return {
-                          ...s,
-                          invoiceNumber: inv.invoiceNumber,
-                          invoiceDate: s.invoiceDate || s.date,
-                          partyName: s.partyName,
-                          gstNumber: s.gstNumber,
-                          quantity: s.qty,
-                          unitPrice: s.rate,
-                          item: {
-                            itemName: itm.itemName || s.itemName,
-                            partNumber: itm.partNumber || s.partNumber,
-                            kpclCode: itm.kpclCode || s.kpclCode,
-                            unit: itm.unit || s.unit
-                          }
-                        };
-                      });
-                      setPreviewSaleInvoice(salesFormatted);
-                    }}
-                    className="w-full py-2 bg-blue-900 hover:bg-blue-800 active:scale-95 text-white rounded-lg text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition-all"
-                  >
-                    <Download className="w-3.5 h-3.5 text-amber-300" /> View &amp; Print Official Tax Invoice
-                  </button>
+                  {/* Footer Button */}
+                  <div className="p-3 bg-slate-50 border-t border-slate-200">
+                    <button
+                      onClick={() => {
+                        const salesFormatted = inv.sales.map((s: any) => {
+                          const itm = s.stock || s.item || allItemsList.find(i => i.id === s.stockId) || {};
+                          return {
+                            ...s,
+                            invoiceNumber: inv.invoiceNumber,
+                            invoiceDate: s.invoiceDate || s.date,
+                            partyName: s.partyName,
+                            partyAddress: s.partyAddress || s.supplierAddress,
+                            gstNumber: s.gstNumber,
+                            quantity: s.qty,
+                            unitPrice: s.rate,
+                            cgstPercent: s.cgstPercent,
+                            sgstPercent: s.sgstPercent,
+                            igstPercent: s.igstPercent,
+                            item: {
+                              itemName: itm.itemName || s.itemName,
+                              partNumber: itm.partNumber || s.partNumber,
+                              kpclCode: itm.kpclCode || s.kpclCode || '-',
+                              unit: itm.unit || s.unit || 'NOS'
+                            }
+                          };
+                        });
+                        setPreviewSaleInvoice(salesFormatted);
+                      }}
+                      className="w-full py-2 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-95 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer group-hover:bg-[#1e40af]"
+                    >
+                      <Download className="w-3.5 h-3.5 text-amber-300" /> View &amp; Print Official Tax Invoice
+                    </button>
+                  </div>
                 </div>
               ))
             )}

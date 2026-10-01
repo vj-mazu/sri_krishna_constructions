@@ -25,13 +25,38 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
   if (salesList.length === 0) return null;
 
   const primarySale = salesList[0];
-  const invoiceNo = primarySale.invoiceNumber || primarySale.invoiceRefNo || `SKC/2025-26/${primarySale.id?.slice(0, 4) || '01'}`;
-  const invoiceDate = primarySale.invoiceDate ? new Date(primarySale.invoiceDate).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB');
-  const poNumber = primarySale.poNumber || primarySale.purchaseOrder?.poNumber || 'EEP/EE(P)/2025-26/287/11289';
-  const orderDate = primarySale.poDate ? new Date(primarySale.poDate).toLocaleDateString('en-GB') : (primarySale.purchaseOrder?.date ? new Date(primarySale.purchaseOrder.date).toLocaleDateString('en-GB') : '09/06/2025');
+  const invoiceNo = primarySale.invoiceNumber || primarySale.partyInvoiceNumber || primarySale.invoiceRefNo || `SKC/2025-26/${primarySale.id?.slice(0, 4) || '01'}`;
+  const invoiceDate = primarySale.invoiceDate ? new Date(primarySale.invoiceDate).toLocaleDateString('en-GB') : (primarySale.date ? new Date(primarySale.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'));
+  
+  // Dynamic Reference: Work Order vs PO vs Direct Sale
+  const isWorkOrder = primarySale.sourceType === 'WORK_ORDER' || !!primarySale.workOrderNumber;
+  const isPo = !!(primarySale.purchaseOrder?.poNumber || (primarySale.poNumber && primarySale.poNumber !== '-'));
+  
+  const refLabel = isWorkOrder ? 'WO No' : (isPo ? 'PO No' : 'Ref No');
+  const refNumber = isWorkOrder 
+    ? (primarySale.workOrderNumber || primarySale.poNumber || '-') 
+    : (primarySale.poNumber || primarySale.purchaseOrder?.poNumber || '-');
+  
+  const dateLabel = isWorkOrder ? 'WO Date' : (isPo ? 'PO Date' : 'Order Date');
+  const rawRefDate = isWorkOrder 
+    ? (primarySale.workOrderDate || primarySale.poDate) 
+    : (primarySale.poDate || primarySale.purchaseOrder?.date);
+  const refDate = rawRefDate ? new Date(rawRefDate).toLocaleDateString('en-GB') : invoiceDate;
 
-  // Format currency helper
-  const fmt = (n: number) => Math.round(n + Number.EPSILON).toLocaleString('en-IN');
+  // Party info
+  const partyName = primarySale.partyName || 'Customer';
+  const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || '';
+  const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || '';
+  const isKpclParty = /kpcl|rtps|raichur thermal/i.test(partyName);
+
+  // Format currency helper preserving paise if fractional
+  const fmt = (n: number) => {
+    const rounded = Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    return rounded.toLocaleString('en-IN', {
+      minimumFractionDigits: rounded % 1 !== 0 ? 2 : 0,
+      maximumFractionDigits: 2
+    });
+  };
   const round2 = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
 
   // Calculate totals across all items with precision
@@ -45,9 +70,14 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
     const q = Number(s.qty || s.quantity || 0);
     const r = Number(s.rate || s.unitPrice || 0);
     const b = round2(q * r);
-    const cg = round2(b * (Number(s.cgstPercent || 0) / 100));
-    const sg = round2(b * (Number(s.sgstPercent || 0) / 100));
-    const ig = round2(b * (Number(s.igstPercent || 0) / 100));
+    
+    const cgstPct = s.cgstPercent !== undefined ? Number(s.cgstPercent) : 0;
+    const sgstPct = s.sgstPercent !== undefined ? Number(s.sgstPercent) : 0;
+    const igstPct = s.igstPercent !== undefined ? Number(s.igstPercent) : 0;
+
+    const cg = round2(b * (cgstPct / 100));
+    const sg = round2(b * (sgstPct / 100));
+    const ig = round2(b * (igstPct / 100));
 
     totalBasic = round2(totalBasic + b);
     totalCgst = round2(totalCgst + cg);
@@ -58,16 +88,23 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       slNo: idx + 1,
       kpclCode: itm.kpclCode || s.kpclCode || '-',
       itemName: itm.itemName || s.itemName || 'STANDALONE ITEM',
-      specifications: itm.specifications || s.remarks || 'DIRECT PURCHASE / SALE',
+      specifications: itm.specifications || s.description || s.remarks || 'DIRECT PURCHASE / SALE',
       partNumber: itm.partNumber || s.partNumber || '',
       unit: itm.unit || s.unit || "NOS",
       qty: q,
       rate: r,
-      amount: b
+      amount: b,
+      cgstPercent: cgstPct,
+      sgstPercent: sgstPct,
+      igstPercent: igstPct
     };
   });
 
-  const totalInvoiceAmount = Math.round(totalBasic + totalCgst + totalSgst + totalIgst + Number.EPSILON);
+  const totalInvoiceAmount = round2(totalBasic + totalCgst + totalSgst + totalIgst);
+
+  const effectiveCgstPercent = primarySale.cgstPercent !== undefined ? Number(primarySale.cgstPercent) : (itemsRows[0]?.cgstPercent || 0);
+  const effectiveSgstPercent = primarySale.sgstPercent !== undefined ? Number(primarySale.sgstPercent) : (itemsRows[0]?.sgstPercent || 0);
+  const effectiveIgstPercent = primarySale.igstPercent !== undefined ? Number(primarySale.igstPercent) : (itemsRows[0]?.igstPercent || 0);
 
   const downloadPdf = () => {
     try {
@@ -151,48 +188,69 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       doc.line(margin, ly + 1.5, margin + colHalf, ly + 1.5);
 
       ly += 4.5;
-      doc.text(`SUPPLY To : ${primarySale.partyName || 'SHAKTINAGAR'}`, margin + 2, ly);
+      doc.text(`SUPPLY To : ${partyName}`, margin + 2, ly);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.2);
-      doc.text(`TO Paying Authority: Deputy General Manager(F)RTPS`, margin + 2, ly + 3.8);
-      doc.text(`Raichur Thermal Power Station (RTPS),KPCL`, margin + 2, ly + 7.2);
-      doc.text(`Plant Premises, Shaktinagara, PIN-584170`, margin + 2, ly + 10.6);
-      doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 14.0);
+      
+      if (partyAddress) {
+        const addressLines = doc.splitTextToSize(partyAddress, colHalf - 4);
+        doc.text(addressLines.slice(0, 4), margin + 2, ly + 3.8);
+      } else if (isKpclParty) {
+        doc.text(`TO Paying Authority: Deputy General Manager(F)RTPS`, margin + 2, ly + 3.8);
+        doc.text(`Raichur Thermal Power Station (RTPS),KPCL`, margin + 2, ly + 7.2);
+        doc.text(`Plant Premises, Shaktinagara, PIN-584170`, margin + 2, ly + 10.6);
+        doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 14.0);
+      } else {
+        doc.text(`Customer Location: Shaktinagar / Raichur Region`, margin + 2, ly + 3.8);
+      }
+      
       doc.setFont('helvetica', 'bold');
-      doc.text(`GST NO: ${primarySale.gstNumber || '29AAACK8032D1ZQ'}`, margin + 2, ly + 17.5);
+      doc.setFontSize(7.2);
+      doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + 2, ly + 17.5);
       doc.line(margin, ly + 19, margin + colHalf, ly + 19);
 
-      doc.setFontSize(7.2);
-      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}${primarySale.eWayBillNumber ? `  |  E-Way Bill: ${primarySale.eWayBillNumber}` : ''}`;
+      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}${primarySale.eWayBillNumber ? `  |  E-Way: ${primarySale.eWayBillNumber}` : ''}`;
       doc.text(vehicleLine, margin + 2, ly + 23.5);
 
       // Right Column items
       let ry = y + 4;
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.2);
-      doc.text(`PO No: ${poNumber}`, margin + colHalf + 2, ry);
+      doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
       doc.line(margin + colHalf, ry + 1.5, margin + contentWidth, ry + 1.5);
 
       ry += 5;
-      doc.text(`Order Date: ${orderDate}`, margin + colHalf + 2, ry);
+      doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, ry);
       doc.line(margin + colHalf, ry + 1.5, margin + contentWidth, ry + 1.5);
 
       ry += 4.5;
-      doc.text(`State of Supply: KARNATAKA`, margin + colHalf + 2, ry);
+      doc.text(`State of Supply: KARNATAKA (29)`, margin + colHalf + 2, ry);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.2);
-      doc.text(`Shipped To: Executive Engineer(Stores) Raichur Thermal`, margin + colHalf + 2, ry + 3.8);
-      doc.text(`Power Station (RTPS),KPCL Plant Premises,`, margin + colHalf + 2, ry + 7.2);
-      doc.text(`Shaktinagara, PIN-584170`, margin + colHalf + 2, ry + 10.6);
+      
+      if (isKpclParty) {
+        doc.text(`Shipped To: Executive Engineer(Stores) Raichur Thermal`, margin + colHalf + 2, ry + 3.8);
+        doc.text(`Power Station (RTPS),KPCL Plant Premises,`, margin + colHalf + 2, ry + 7.2);
+        doc.text(`Shaktinagara, PIN-584170`, margin + colHalf + 2, ry + 10.6);
+      } else if (partyAddress) {
+        doc.text(`Shipped To: ${partyName}`, margin + colHalf + 2, ry + 3.8);
+        const shipLines = doc.splitTextToSize(partyAddress, colHalf - 4);
+        doc.text(shipLines.slice(0, 3), margin + colHalf + 2, ry + 7.2);
+      } else {
+        doc.text(`Shipped To: ${partyName}`, margin + colHalf + 2, ry + 3.8);
+        doc.text(`Delivery as per Order Instruction`, margin + colHalf + 2, ry + 7.2);
+      }
+      
       doc.setFont('helvetica', 'bold');
-      doc.text(`GST NO: ${primarySale.gstNumber || '29AAACK8032D1ZQ'}`, margin + colHalf + 2, ry + 17.5);
+      doc.setFontSize(7.2);
+      doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
 
       y += boxHeight;
 
-      // 5. TAX INVOICE ITEMS TABLE (EXACT EXCEL / PHOTO LAYOUT)
+      // 5. TAX INVOICE ITEMS TABLE
       const tableBody = itemsRows.map((r) => [
         r.slNo.toString(),
-        r.kpclCode,
+        r.kpclCode || '-',
         r.itemName,
         `${r.specifications}${r.partNumber ? `\nPart No: ${r.partNumber}` : ''}`,
         r.unit,
@@ -205,7 +263,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
         startY: y,
         margin: { left: margin, right: margin },
         head: [
-          ['SI.\nNO', 'KPCL ITEM\nCODE', 'Description', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
+          ['SI.\nNO', 'ITEM CODE', 'ITEM NAME', 'SPECIFICATIONS & PART NO', 'UNIT', 'QTY', 'RATE (₹)', 'AMOUNT (₹)']
         ],
         body: tableBody,
         theme: 'grid',
@@ -227,9 +285,9 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
         },
         columnStyles: {
           0: { halign: 'center', cellWidth: 10 },
-          1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
-          2: { cellWidth: 32, fontStyle: 'bold' },
-          3: { cellWidth: 64 },
+          1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
+          2: { cellWidth: 36, fontStyle: 'bold' },
+          3: { cellWidth: 62 },
           4: { halign: 'center', cellWidth: 12 },
           5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
           6: { halign: 'right', cellWidth: 15, fontStyle: 'bold' },
@@ -243,31 +301,36 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       let fy = finalTableY + 4;
 
       // Draw Summary Box
-      doc.rect(margin + 105, fy, 81, 24);
+      const taxBoxHeight = (totalCgst > 0 || totalSgst > 0 || totalIgst > 0) ? 25 : 18;
+      doc.rect(margin + 105, fy, 81, taxBoxHeight);
       doc.setFontSize(7.2);
       doc.setFont('helvetica', 'normal');
       doc.text(`Basic Amount:`, margin + 107, fy + 4.5);
       doc.text(`₹${fmt(totalBasic)}`, margin + 184, fy + 4.5, { align: 'right' });
 
+      let taxOffset = 4.5;
       if (totalCgst > 0 || totalSgst > 0) {
-        doc.text(`CGST (${primarySale.cgstPercent || 9}%):`, margin + 107, fy + 9);
-        doc.text(`₹${fmt(totalCgst)}`, margin + 184, fy + 9, { align: 'right' });
+        taxOffset += 4.5;
+        doc.text(`CGST (${effectiveCgstPercent}%):`, margin + 107, fy + taxOffset);
+        doc.text(`₹${fmt(totalCgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
 
-        doc.text(`SGST (${primarySale.sgstPercent || 9}%):`, margin + 107, fy + 13.5);
-        doc.text(`₹${fmt(totalSgst)}`, margin + 184, fy + 13.5, { align: 'right' });
+        taxOffset += 4.5;
+        doc.text(`SGST (${effectiveSgstPercent}%):`, margin + 107, fy + taxOffset);
+        doc.text(`₹${fmt(totalSgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
       } else if (totalIgst > 0) {
-        doc.text(`IGST (${primarySale.igstPercent || 18}%):`, margin + 107, fy + 9);
-        doc.text(`₹${fmt(totalIgst)}`, margin + 184, fy + 9, { align: 'right' });
+        taxOffset += 4.5;
+        doc.text(`IGST (${effectiveIgstPercent}%):`, margin + 107, fy + taxOffset);
+        doc.text(`₹${fmt(totalIgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
       }
 
-      doc.line(margin + 105, fy + 16.5, margin + 186, fy + 16.5);
+      doc.line(margin + 105, fy + taxOffset + 3, margin + 186, fy + taxOffset + 3);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text(`TOTAL AMOUNT:`, margin + 107, fy + 21);
-      doc.text(`₹${fmt(totalInvoiceAmount)}`, margin + 184, fy + 21, { align: 'right' });
+      doc.text(`TOTAL AMOUNT:`, margin + 107, fy + taxOffset + 7.5);
+      doc.text(`₹${fmt(totalInvoiceAmount)}`, margin + 184, fy + taxOffset + 7.5, { align: 'right' });
 
       // Signature blocks
-      const sigY = fy + 32;
+      const sigY = fy + taxOffset + 20;
       doc.setFontSize(7.2);
       doc.setFont('helvetica', 'normal');
       doc.text('Receiver\'s Signature with Seal', margin + 6, sigY);
@@ -381,12 +444,20 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                   INVOICE DATE: <span className="font-mono">{invoiceDate}</span>
                 </div>
                 <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">SUPPLY To : {primarySale.partyName || 'SHAKTINAGAR'}</div>
-                  <div className="text-[10px] text-slate-700">TO Paying Authority: Deputy General Manager(F)RTPS</div>
-                  <div className="text-[10px] text-slate-700">Raichur Thermal Power Station (RTPS),KPCL</div>
-                  <div className="text-[10px] text-slate-700">Plant Premises, Shaktinagara, PIN-584170</div>
-                  <div className="text-[10px] text-slate-700">Phone 9449596504 Fax 8532247846</div>
-                  <div className="font-bold mt-1">GST NO: {primarySale.gstNumber || '29AAACK8032D1ZQ'}</div>
+                  <div className="font-bold">SUPPLY To : {partyName}</div>
+                  {partyAddress ? (
+                    <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
+                  ) : isKpclParty ? (
+                    <>
+                      <div className="text-[10px] text-slate-700">TO Paying Authority: Deputy General Manager(F)RTPS</div>
+                      <div className="text-[10px] text-slate-700">Raichur Thermal Power Station (RTPS),KPCL</div>
+                      <div className="text-[10px] text-slate-700">Plant Premises, Shaktinagara, PIN-584170</div>
+                      <div className="text-[10px] text-slate-700">Phone 9449596504 Fax 8532247846</div>
+                    </>
+                  ) : (
+                    <div className="text-[10px] text-slate-700">Customer Location: Shaktinagar / Raichur Region</div>
+                  )}
+                  <div className="font-bold mt-1">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                 </div>
                 <div className="p-1.5 font-bold flex flex-wrap items-center justify-between gap-2">
                   <span>Vehicle No : <span className="font-mono uppercase">{primarySale.vehicleNumber || '-'}</span></span>
@@ -401,17 +472,31 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
               {/* Right Column */}
               <div className="divide-y divide-black">
                 <div className="p-1.5 font-bold">
-                  PO No: <span className="font-mono">{poNumber}</span>
+                  {refLabel}: <span className="font-mono">{refNumber}</span>
                 </div>
                 <div className="p-1.5 font-bold">
-                  Order Date: <span className="font-mono">{orderDate}</span>
+                  {dateLabel}: <span className="font-mono">{refDate}</span>
                 </div>
                 <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">State of Supply: KARNATAKA</div>
-                  <div className="text-[10px] text-slate-700">Shipped To: Executive Engineer(Stores) Raichur Thermal</div>
-                  <div className="text-[10px] text-slate-700">Power Station (RTPS),KPCL Plant Premises,</div>
-                  <div className="text-[10px] text-slate-700">Shaktinagara, PIN-584170</div>
-                  <div className="font-bold mt-2">GST NO: {primarySale.gstNumber || '29AAACK8032D1ZQ'}</div>
+                  <div className="font-bold">State of Supply: KARNATAKA (29)</div>
+                  {isKpclParty ? (
+                    <>
+                      <div className="text-[10px] text-slate-700">Shipped To: Executive Engineer(Stores) Raichur Thermal</div>
+                      <div className="text-[10px] text-slate-700">Power Station (RTPS),KPCL Plant Premises,</div>
+                      <div className="text-[10px] text-slate-700">Shaktinagara, PIN-584170</div>
+                    </>
+                  ) : partyAddress ? (
+                    <>
+                      <div className="text-[10px] text-slate-700 font-bold">Shipped To: {partyName}</div>
+                      <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[10px] text-slate-700 font-bold">Shipped To: {partyName}</div>
+                      <div className="text-[10px] text-slate-700">Delivery as per Order Instruction</div>
+                    </>
+                  )}
+                  <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                 </div>
               </div>
             </div>
@@ -422,20 +507,20 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                 <thead>
                   <tr className="border-b border-black text-center font-bold bg-slate-50">
                     <th className="p-2 border-r border-black w-10">SI. NO</th>
-                    <th className="p-2 border-r border-black w-28">KPCL ITEM CODE</th>
-                    <th className="p-2 border-r border-black">Description</th>
-                    <th className="p-2 border-r border-black min-w-[180px]">ITEM NAME & SPECIFICATION</th>
+                    <th className="p-2 border-r border-black w-24">ITEM CODE</th>
+                    <th className="p-2 border-r border-black w-36">ITEM NAME</th>
+                    <th className="p-2 border-r border-black min-w-[180px]">SPECIFICATIONS & PART NO</th>
                     <th className="p-2 border-r border-black w-14">UNIT</th>
                     <th className="p-2 border-r border-black w-14">QTY</th>
-                    <th className="p-2 border-r border-black w-20">PRICE</th>
-                    <th className="p-2 w-24 text-right">AMOUNT</th>
+                    <th className="p-2 border-r border-black w-20 text-right">RATE (₹)</th>
+                    <th className="p-2 w-24 text-right">AMOUNT (₹)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
                   {itemsRows.map((r) => (
                     <tr key={r.slNo}>
                       <td className="p-2 text-center font-mono font-bold border-r border-black">{r.slNo}</td>
-                      <td className="p-2 text-center font-mono font-bold border-r border-black">{r.kpclCode}</td>
+                      <td className="p-2 text-center font-mono font-bold border-r border-black">{r.kpclCode || '-'}</td>
                       <td className="p-2 font-bold border-r border-black">{r.itemName}</td>
                       <td className="p-2 border-r border-black text-[10px] font-mono whitespace-pre-wrap">
                         {r.specifications}
@@ -458,24 +543,23 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                   <span className="font-semibold">Basic Amount:</span>
                   <span className="font-mono font-bold">₹{fmt(totalBasic)}</span>
                 </div>
-                {totalCgst > 0 && (
+                {(totalCgst > 0 || totalSgst > 0) ? (
+                  <>
+                    <div className="p-2 flex justify-between">
+                      <span>CGST ({effectiveCgstPercent}%):</span>
+                      <span className="font-mono font-bold">₹{fmt(totalCgst)}</span>
+                    </div>
+                    <div className="p-2 flex justify-between">
+                      <span>SGST ({effectiveSgstPercent}%):</span>
+                      <span className="font-mono font-bold">₹{fmt(totalSgst)}</span>
+                    </div>
+                  </>
+                ) : totalIgst > 0 ? (
                   <div className="p-2 flex justify-between">
-                    <span>CGST ({primarySale.cgstPercent || 9}%):</span>
-                    <span className="font-mono font-bold">₹{fmt(totalCgst)}</span>
-                  </div>
-                )}
-                {totalSgst > 0 && (
-                  <div className="p-2 flex justify-between">
-                    <span>SGST ({primarySale.sgstPercent || 9}%):</span>
-                    <span className="font-mono font-bold">₹{fmt(totalSgst)}</span>
-                  </div>
-                )}
-                {totalIgst > 0 && (
-                  <div className="p-2 flex justify-between">
-                    <span>IGST ({primarySale.igstPercent || 18}%):</span>
+                    <span>IGST ({effectiveIgstPercent}%):</span>
                     <span className="font-mono font-bold">₹{fmt(totalIgst)}</span>
                   </div>
-                )}
+                ) : null}
                 <div className="p-2.5 flex justify-between bg-blue-50/80 font-black text-xs border-t-2 border-black">
                   <span className="text-[#1e3a8a]">TOTAL AMOUNT:</span>
                   <span className="font-mono text-sm text-[#1e3a8a]">₹{fmt(totalInvoiceAmount)}</span>

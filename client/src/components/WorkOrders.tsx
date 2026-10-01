@@ -566,21 +566,31 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           onClick={() => {
                             setSelectedForInvoice({
                               ...wo,
+                              sourceType: 'WORK_ORDER',
+                              workOrderNumber: wo.workOrderNumber,
+                              workOrderDate: wo.workOrderDate,
                               poNumber: wo.workOrderNumber,
                               poDate: wo.workOrderDate,
                               partyName: wo.partyName,
+                              partyAddress: wo.partyAddress,
                               gstNumber: wo.partyGstNumber,
+                              companyName: wo.companyName,
+                              companyGstNumber: wo.companyGstNumber,
                               quantity: wo.qty,
                               unitPrice: wo.rate,
+                              cgstPercent: wo.cgstPercent,
+                              sgstPercent: wo.sgstPercent,
+                              igstPercent: wo.igstPercent,
                               item: {
                                 itemName: wo.itemName,
                                 specifications: wo.description || 'Work Order Direct Sale',
                                 partNumber: wo.partNumber || '',
+                                kpclCode: '-',
                                 unit: wo.unit || 'NOS'
                               }
                             });
                           }}
-                          className="p-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors"
+                          className="p-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors shadow-sm"
                           title="Print / Download Tax Invoice"
                         >
                           <FileText className="w-3.5 h-3.5" />
@@ -1092,16 +1102,26 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 onClick={() => {
                   const toPrint = {
                     ...inspectItem,
+                    sourceType: 'WORK_ORDER',
+                    workOrderNumber: inspectItem.workOrderNumber,
+                    workOrderDate: inspectItem.workOrderDate,
                     poNumber: inspectItem.workOrderNumber,
                     poDate: inspectItem.workOrderDate,
                     partyName: inspectItem.partyName,
+                    partyAddress: inspectItem.partyAddress,
                     gstNumber: inspectItem.partyGstNumber,
+                    companyName: inspectItem.companyName,
+                    companyGstNumber: inspectItem.companyGstNumber,
                     quantity: inspectItem.qty,
                     unitPrice: inspectItem.rate,
+                    cgstPercent: inspectItem.cgstPercent,
+                    sgstPercent: inspectItem.sgstPercent,
+                    igstPercent: inspectItem.igstPercent,
                     item: {
                       itemName: inspectItem.itemName,
                       specifications: inspectItem.description || 'Work Order Direct Sale',
                       partNumber: inspectItem.partNumber || '',
+                      kpclCode: '-',
                       unit: inspectItem.unit || 'NOS'
                     }
                   };
