@@ -130,6 +130,7 @@ export const initializeDatabaseTables = async () => {
         "dailyWage" DOUBLE PRECISION NOT NULL,
         "otHourlyRate" DOUBLE PRECISION NOT NULL,
         "divisionId" TEXT NOT NULL REFERENCES "Division"("id") ON DELETE CASCADE,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -460,9 +461,10 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "advanceDeducted" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "MonthlyPayment" ADD COLUMN IF NOT EXISTS "divisionSummary" JSONB DEFAULT '{}'::jsonb;
       
-      -- Division and Purchase Order active/inactive status
+      -- Division, Purchase Order, and Worker active/inactive status
       ALTER TABLE "Division" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
       ALTER TABLE "PurchaseOrder" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
 
       -- Individual Stock Rich Item Master Synchronization
       ALTER TABLE "IndividualStock" ADD COLUMN IF NOT EXISTS "kpclCode" TEXT;
@@ -533,6 +535,7 @@ export const initializeDatabaseTables = async () => {
       CREATE INDEX IF NOT EXISTS "idx_worker_workerid" ON "Worker"("workerId");
       CREATE INDEX IF NOT EXISTS "idx_worker_fullname" ON "Worker"("fullName");
       CREATE INDEX IF NOT EXISTS "idx_worker_div" ON "Worker"("divisionId");
+      CREATE INDEX IF NOT EXISTS "idx_worker_isactive" ON "Worker"("isActive");
       CREATE INDEX IF NOT EXISTS "idx_att_date" ON "Attendance"("date");
       CREATE INDEX IF NOT EXISTS "idx_att_worker_date" ON "Attendance"("workerId", "date");
       CREATE INDEX IF NOT EXISTS "idx_att_div" ON "Attendance"("divisionId");

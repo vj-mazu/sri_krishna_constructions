@@ -393,8 +393,8 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
       WHERE "date" >= $1 AND "date" <= $2
     `, [todayStart, todayEnd]);
 
-    // 4. Total Workers Registered
-    const totalWorkersRes = await pool.query(`SELECT COUNT(*)::int as count FROM "Worker"`);
+    // 4. Total Active Workers Registered
+    const totalWorkersRes = await pool.query(`SELECT COUNT(*)::int as count FROM "Worker" WHERE COALESCE("isActive", true) = true`);
 
     res.json({
       todayPurchases: todayPurchases.rows[0] || { totalQty: 0, totalAmount: 0, count: 0 },
@@ -3362,7 +3362,7 @@ app.delete('/api/divisions/:id', authenticateToken, requireRoles(['OWNER', 'MANA
 // --- WORKERS REGISTRY API (DIRECT POSTGRESQL LAYER) ---
 app.get('/api/workers', authenticateToken, async (req, res) => {
   try {
-    const { divisionId, limit = 50, cursor } = req.query;
+    const { divisionId, limit = 50, cursor, status, isActive } = req.query;
     const limitNum = parseInt(limit, 10) || 50;
 
     let query = `
@@ -3372,6 +3372,7 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
              COALESCE(w."advanceBalance", 0) as "advanceBalance",
              COALESCE(w."otAllowance", 0) as "otAllowance",
              w."otHourlyRate", w."divisionId",
+             COALESCE(w."isActive", true) as "isActive",
              COALESCE(w."pfNumber", '') as "pfNumber",
              COALESCE(w."esiNumber", '') as "esiNumber",
              COALESCE(w."uanNumber", '') as "uanNumber",
@@ -3390,6 +3391,12 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
     if (divisionId) {
       params.push(divisionId);
       whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    if (status === 'ACTIVE' || status === 'active' || isActive === 'true') {
+      whereClauses.push(`COALESCE(w."isActive", true) = true`);
+    } else if (status === 'INACTIVE' || status === 'inactive' || isActive === 'false') {
+      whereClauses.push(`COALESCE(w."isActive", true) = false`);
     }
 
     if (cursor) {
@@ -3431,7 +3438,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Worker registration is restricted to Owners or Managers only!' });
     }
 
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, isActive, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
     if (!workerId || !fullName || !mobileNumber || !dailyWage || !divisionId) {
       return res.status(400).json({ error: 'Worker ID, Full Name, Mobile Number, Daily Wage, and Division are mandatory!' });
     }
@@ -3462,14 +3469,15 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
     const numAdvBal = advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : numAdvTaken;
     const numOtAllowance = otAllowance !== undefined && otAllowance !== '' ? (parseFloat(otAllowance) || 0) : 0;
     const numOtRate = otHourlyRate ? parseFloat(otHourlyRate) : numDailyWage / 8;
+    const boolIsActive = isActive !== undefined ? Boolean(isActive) : true;
 
     const advGivenDate = advanceTakenDate ? new Date(advanceTakenDate) : (numAdvTaken > 0 ? new Date() : null);
     const advExpReturnDate = advanceReturnDate ? new Date(advanceReturnDate) : null;
     const advProofReason = advanceReason ? advanceReason.trim() : null;
 
     const { rows } = await pool.query(
-      `INSERT INTO "Worker" ("id", "workerId", "fullName", "fatherName", "designation", "mobileNumber", "dailyWage", "dailyAllowance", "advanceTaken", "advanceBalance", "advanceTakenDate", "advanceReason", "advanceReturnDate", "otAllowance", "otHourlyRate", "divisionId", "pfNumber", "esiNumber", "uanNumber", "bankAccountNo", "ifscCode", "placeOfWork", "natureOfWork", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
+      `INSERT INTO "Worker" ("id", "workerId", "fullName", "fatherName", "designation", "mobileNumber", "dailyWage", "dailyAllowance", "advanceTaken", "advanceBalance", "advanceTakenDate", "advanceReason", "advanceReturnDate", "otAllowance", "otHourlyRate", "divisionId", "isActive", "pfNumber", "esiNumber", "uanNumber", "bankAccountNo", "ifscCode", "placeOfWork", "natureOfWork", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW(), NOW())
        RETURNING *`,
       [
         workerId.trim(),
@@ -3487,6 +3495,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
         numOtAllowance,
         numOtRate,
         divisionId,
+        boolIsActive,
         pfNumber ? pfNumber.trim() : null,
         esiNumber ? esiNumber.trim() : null,
         uanNumber ? uanNumber.trim() : null,
@@ -3529,7 +3538,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
 app.put('/api/workers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, isActive, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
 
     const { rows: existing } = await pool.query(`SELECT * FROM "Worker" WHERE "id" = $1`, [id]);
     if (existing.length === 0) return res.status(404).json({ error: 'Worker not found' });
@@ -3590,6 +3599,7 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const newAdvReturnDate = advanceReturnDate !== undefined ? (advanceReturnDate ? new Date(advanceReturnDate) : null) : existing[0].advanceReturnDate;
     const newOtAllowance = otAllowance !== undefined ? (parseFloat(otAllowance) || 0) : (existing[0].otAllowance || 0);
     const newOtRate = otHourlyRate !== undefined ? parseFloat(otHourlyRate) : existing[0].otHourlyRate;
+    const newIsActive = isActive !== undefined ? Boolean(isActive) : (existing[0].isActive !== undefined ? existing[0].isActive : true);
     const newPfNumber = pfNumber !== undefined ? (pfNumber ? pfNumber.trim() : null) : existing[0].pfNumber;
     const newEsiNumber = esiNumber !== undefined ? (esiNumber ? esiNumber.trim() : null) : existing[0].esiNumber;
     const newUanNumber = uanNumber !== undefined ? (uanNumber ? uanNumber.trim() : null) : existing[0].uanNumber;
@@ -3603,12 +3613,12 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
        SET "workerId" = $1, "fullName" = $2, "fatherName" = $3, "designation" = $4, "mobileNumber" = $5,
            "dailyWage" = $6, "dailyAllowance" = $7, "advanceTaken" = $8, "advanceBalance" = $9,
            "advanceTakenDate" = $10, "advanceReason" = $11, "advanceReturnDate" = $12,
-           "otAllowance" = $13, "otHourlyRate" = $14, "divisionId" = $15,
-           "pfNumber" = $16, "esiNumber" = $17, "uanNumber" = $18, "bankAccountNo" = $19, "ifscCode" = $20, "placeOfWork" = $21, "natureOfWork" = $22,
+           "otAllowance" = $13, "otHourlyRate" = $14, "divisionId" = $15, "isActive" = $16,
+           "pfNumber" = $17, "esiNumber" = $18, "uanNumber" = $19, "bankAccountNo" = $20, "ifscCode" = $21, "placeOfWork" = $22, "natureOfWork" = $23,
            "updatedAt" = NOW()
-       WHERE "id" = $23
+       WHERE "id" = $24
        RETURNING *`,
-      [newWorkerId, newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
+      [newWorkerId, newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newIsActive, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
     );
 
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [newDivisionId]);
@@ -3618,6 +3628,36 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Update worker error:', err);
     res.status(500).json({ error: 'Failed to update worker registry' });
+  }
+});
+
+app.patch('/api/workers/:id/toggle-active', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (req.user.role === 'SUPERVISOR') {
+      return res.status(403).json({ error: 'Worker status toggling is restricted to Owners or Managers only!' });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE "Worker"
+       SET "isActive" = NOT COALESCE("isActive", true),
+           "updatedAt" = NOW()
+       WHERE "id" = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [rows[0].divisionId]);
+    const worker = { ...rows[0], division: divRows[0] || null };
+
+    res.json({ worker });
+  } catch (err) {
+    console.error('Toggle worker active status error:', err);
+    res.status(500).json({ error: 'Failed to toggle worker active status' });
   }
 });
 
@@ -3677,6 +3717,7 @@ app.get('/api/advance-ledger', authenticateToken, async (req, res) => {
         w."advanceTakenDate",
         w."advanceReason",
         w."advanceReturnDate",
+        COALESCE(w."isActive", true) as "isActive",
         d.id as "divisionId",
         d.name as "divisionName",
         COALESCE((
@@ -4264,6 +4305,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
              COALESCE(w."advanceBalance", 0) as "advanceBalance",
              COALESCE(w."otAllowance", 0) as "otAllowance",
              w."otHourlyRate", w."divisionId",
+             COALESCE(w."isActive", true) as "isActive",
              COALESCE(w."pfNumber", '') as "pfNumber",
              COALESCE(w."esiNumber", '') as "esiNumber",
              COALESCE(w."uanNumber", '') as "uanNumber",
@@ -4278,13 +4320,25 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
     const workerParams = [];
     const isFiltered = divisionId && divisionId !== 'ALL' && divisionId !== 'all' && divisionId !== '';
     if (isFiltered) {
-      workerQuery += ` WHERE EXISTS (
+      workerQuery += ` WHERE (
+        COALESCE(w."isActive", true) = true
+        OR EXISTS (SELECT 1 FROM "Attendance" a WHERE a."workerId" = w."id" AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp)
+        OR EXISTS (SELECT 1 FROM "MonthlyPayment" mp WHERE mp."workerId" = w."id" AND mp."month" = $4 AND mp."year" = $5)
+      )
+      AND EXISTS (
         SELECT 1 FROM "Attendance" a 
         WHERE a."workerId" = w."id" 
           AND (a."divisionId" = $1 OR a."secondDivisionId" = $1)
           AND a."date" >= $2::timestamp AND a."date" <= $3::timestamp
       )`;
-      workerParams.push(divisionId, startDate, endDate);
+      workerParams.push(divisionId, startDate, endDate, m, y);
+    } else {
+      workerQuery += ` WHERE (
+        COALESCE(w."isActive", true) = true
+        OR EXISTS (SELECT 1 FROM "Attendance" a WHERE a."workerId" = w."id" AND a."date" >= $1::timestamp AND a."date" <= $2::timestamp)
+        OR EXISTS (SELECT 1 FROM "MonthlyPayment" mp WHERE mp."workerId" = w."id" AND mp."month" = $3 AND mp."year" = $4)
+      )`;
+      workerParams.push(startDate, endDate, m, y);
     }
     workerQuery += ` ORDER BY w."workerId" ASC, w."fullName" ASC`;
 

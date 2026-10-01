@@ -50,8 +50,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editDivisionActive, setEditDivisionActive] = useState<boolean>(true);
 
   // --- WORKERS STATE ---
+  const [workerStatusFilter, setWorkerStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [workers, setWorkers] = useState<any[]>([]);
   const [showAddWorkerForm, setShowAddWorkerForm] = useState(false);
+  const [workerActive, setWorkerActive] = useState<boolean>(true);
   const [workerId, setWorkerId] = useState('');
   const [workerName, setWorkerName] = useState('');
   const [workerFatherName, setWorkerFatherName] = useState('');
@@ -77,6 +79,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
   // Edit worker wage helper
   const [editingWorker, setEditingWorker] = useState<any>(null);
+  const [editWorkerActive, setEditWorkerActive] = useState<boolean>(true);
   const [editWorkerId, setEditWorkerId] = useState('');
   const [editWorkerName, setEditWorkerName] = useState('');
   const [editFatherName, setEditFatherName] = useState('');
@@ -738,6 +741,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         otAllowance: otAllowance ? parseFloat(otAllowance) : 0,
         otHourlyRate: otHourlyRate ? parseFloat(otHourlyRate) : parseFloat(dailyWage) / 8,
         divisionId: workerDivisionId,
+        isActive: workerActive,
         pfNumber: workerPfNumber.trim() || undefined,
         esiNumber: workerEsiNumber.trim() || undefined,
         uanNumber: workerUanNumber.trim() || undefined,
@@ -765,6 +769,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       setOtAllowance('');
       setOtHourlyRate('');
       setWorkerDivisionId('');
+      setWorkerActive(true);
       setWorkerPfNumber('');
       setWorkerEsiNumber('');
       setWorkerUanNumber('');
@@ -780,6 +785,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       showToast(errMsg, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleWorkerActive = async (id: string, name: string, currentActive: boolean) => {
+    try {
+      clearMessages();
+      await api.patch(`/workers/${id}/toggle-active`);
+      setWorkers(prev => prev.map(w => w.id === id ? { ...w, isActive: !currentActive } : w));
+      const msg = `Worker '${name}' marked as ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update worker active status';
+      setError(errMsg);
+      showToast(errMsg, 'error');
     }
   };
 
@@ -836,6 +856,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         otAllowance: editOtAllowance ? parseFloat(editOtAllowance) : 0,
         otHourlyRate: editOtRate ? parseFloat(editOtRate) : parseFloat(editWage) / 8,
         divisionId: editWorkerDivisionId,
+        isActive: editWorkerActive,
         pfNumber: editPfNumber.trim() || undefined,
         esiNumber: editEsiNumber.trim() || undefined,
         uanNumber: editUanNumber.trim() || undefined,
@@ -1573,21 +1594,62 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       {/* --- SUB-TAB: WORKERS --- */}
       {activeSubTab === 'workers' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-800">Workers Roster Registry</h3>
+          <div className="flex flex-wrap justify-between items-center gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Workers Roster Registry</h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Manage worker profiles, wages, statutory IDs, and active employment status.
+              </p>
+            </div>
             {currentUserRole !== 'SUPERVISOR' && (
               <button
                 onClick={() => { setShowAddWorkerForm(!showAddWorkerForm); setEditingWorker(null); }}
-                className="px-3 py-1.5 bg-gradient-to-r from-[#667eea] to-[#764ba2] hover:opacity-90 text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-[#1e3a8a] to-[#3b82f6] hover:opacity-90 text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 shadow"
               >
                 <Users className="w-4 h-4" /> {showAddWorkerForm ? 'Hide Registry Form' : '+ Register Worker'}
               </button>
             )}
           </div>
 
+          {/* ACTIVE / INACTIVE SUB-FILTER BAR */}
+          <div className="flex flex-wrap justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-slate-700 mr-1 text-[11px] uppercase tracking-wider">Status:</span>
+              {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(status => {
+                const count = status === 'ACTIVE' 
+                  ? workers.filter(w => w.isActive !== false).length 
+                  : status === 'INACTIVE' 
+                  ? workers.filter(w => w.isActive === false).length 
+                  : workers.length;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setWorkerStatusFilter(status)}
+                    className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1.5 ${
+                      workerStatusFilter === status 
+                        ? (status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-xs' : status === 'INACTIVE' ? 'bg-rose-600 text-white shadow-xs' : 'bg-[#1e3a8a] text-white shadow-xs')
+                        : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    <span>{status === 'ACTIVE' ? '🟢 Active' : status === 'INACTIVE' ? '🔴 Inactive' : '📋 All'}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      workerStatusFilter === status ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
+              Showing {workerStatusFilter === 'ACTIVE' ? 'Active' : workerStatusFilter === 'INACTIVE' ? 'Inactive (Left Company)' : 'All'} Workers
+            </span>
+          </div>
+
           {showAddWorkerForm && (
             <form onSubmit={handleCreateWorker} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-              <h4 className="font-bold text-xs text-[#667eea] uppercase">Register Worker details</h4>
+              <h4 className="font-bold text-xs text-[#1e3a8a] uppercase">Register Worker details</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Worker ID / Badge No *</label>
@@ -1597,7 +1659,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerId}
                     onChange={(e) => setWorkerId(e.target.value)}
                     placeholder="e.g. SKC-W-104"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1608,7 +1670,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerName}
                     onChange={(e) => setWorkerName(e.target.value)}
                     placeholder="Worker full name"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1618,7 +1680,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerFatherName}
                     onChange={(e) => setWorkerFatherName(e.target.value)}
                     placeholder="Father's name"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1628,7 +1690,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerDesignation}
                     onChange={(e) => setWorkerDesignation(e.target.value)}
                     placeholder="e.g. Mason, Welder, Fitter, Helper"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1640,7 +1702,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerMobile}
                     onChange={(e) => setWorkerMobile(e.target.value)}
                     placeholder="10-digit number"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1658,7 +1720,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       }
                     }}
                     placeholder="Wage per day (e.g. 601)"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1668,7 +1730,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={dailyAllowance}
                     onChange={(e) => setDailyAllowance(e.target.value)}
                     placeholder="Allowance per day (e.g. 565)"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1692,7 +1754,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     type="date"
                     value={advanceTakenDate}
                     onChange={(e) => setAdvanceTakenDate(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1702,7 +1764,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={advanceReason}
                     onChange={(e) => setAdvanceReason(e.target.value)}
                     placeholder="e.g. Festival Advance, Medical, Festival Bonus"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1711,7 +1773,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     type="date"
                     value={advanceReturnDate}
                     onChange={(e) => setAdvanceReturnDate(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1733,7 +1795,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={otAllowance}
                     onChange={(e) => setOtAllowance(e.target.value)}
                     placeholder="e.g. 200 (or 0)"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1744,7 +1806,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={otHourlyRate}
                     onChange={(e) => setOtHourlyRate(e.target.value)}
                     placeholder="e.g. 150 (Wage / 8)"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1753,12 +1815,25 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     required
                     value={workerDivisionId}
                     onChange={(e) => setWorkerDivisionId(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-semibold bg-white"
                   >
                     <option value="">-- Choose Division --</option>
                     {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && d.isActive !== false).map((d) => (
                       <option key={d.id} value={d.id}>{d.name}</option>
                     ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Employment Status *</label>
+                  <select
+                    value={workerActive ? 'ACTIVE' : 'INACTIVE'}
+                    onChange={(e) => setWorkerActive(e.target.value === 'ACTIVE')}
+                    className={`w-full p-2 border rounded focus:ring-1 outline-none font-bold text-xs ${
+                      workerActive ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-rose-50 border-rose-300 text-rose-800'
+                    }`}
+                  >
+                    <option value="ACTIVE">🟢 Active (Employed)</option>
+                    <option value="INACTIVE">🔴 Inactive (Left Company)</option>
                   </select>
                 </div>
                 <div>
@@ -1768,7 +1843,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerPlaceOfWork}
                     onChange={(e) => setWorkerPlaceOfWork(e.target.value)}
                     placeholder="e.g. UNIT5 TO 8 COMPRESSOR TURBINE"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1778,7 +1853,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerNatureOfWork}
                     onChange={(e) => setWorkerNatureOfWork(e.target.value)}
                     placeholder="e.g. MAINTENANCE, PIPELINE"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
                   />
                 </div>
                 <div>
@@ -1788,7 +1863,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerPfNumber}
                     onChange={(e) => setWorkerPfNumber(e.target.value)}
                     placeholder="e.g. Canara Bank, SBI, HDFC"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-medium"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-medium"
                   />
                 </div>
                 <div>
@@ -1798,7 +1873,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerEsiNumber}
                     onChange={(e) => setWorkerEsiNumber(e.target.value)}
                     placeholder="e.g. 71000088340001099"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1808,7 +1883,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerUanNumber}
                     onChange={(e) => setWorkerUanNumber(e.target.value)}
                     placeholder="e.g. 100493430949"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1818,7 +1893,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerBankAcc}
                     onChange={(e) => setWorkerBankAcc(e.target.value)}
                     placeholder="e.g. 06222200019793"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono"
                   />
                 </div>
                 <div>
@@ -1828,7 +1903,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     value={workerIfsc}
                     onChange={(e) => setWorkerIfsc(e.target.value)}
                     placeholder="e.g. CNRB0010622"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono uppercase"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono uppercase"
                   />
                 </div>
               </div>
@@ -1836,7 +1911,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-5 py-2 bg-[#667eea] text-white font-bold rounded-lg text-xs shadow disabled:opacity-50"
+                  className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow disabled:opacity-50"
                 >
                   {loading ? 'Registering...' : 'Register Worker'}
                 </button>
@@ -1950,16 +2025,31 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           />
                         </div>
                       </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={10}
-                          value={editWorkerMobile}
-                          onChange={(e) => setEditWorkerMobile(e.target.value)}
-                          className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
-                        />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Mobile Number *</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={10}
+                            value={editWorkerMobile}
+                            onChange={(e) => setEditWorkerMobile(e.target.value)}
+                            className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold text-slate-700 mb-1">Employment Status *</label>
+                          <select
+                            value={editWorkerActive ? 'ACTIVE' : 'INACTIVE'}
+                            onChange={(e) => setEditWorkerActive(e.target.value === 'ACTIVE')}
+                            className={`w-full p-2 border rounded focus:ring-1 outline-none font-bold text-xs ${
+                              editWorkerActive ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-rose-50 border-rose-300 text-rose-800'
+                            }`}
+                          >
+                            <option value="ACTIVE">🟢 Active (Employed)</option>
+                            <option value="INACTIVE">🔴 Inactive (Left Company)</option>
+                          </select>
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <div>
@@ -2149,7 +2239,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl">No workers registered yet.</div>
             ) : (
               (() => {
-                const sorted = [...workers].sort((a, b) => {
+                const filtered = workers.filter(w => {
+                  if (workerStatusFilter === 'ACTIVE') return w.isActive !== false;
+                  if (workerStatusFilter === 'INACTIVE') return w.isActive === false;
+                  return true;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl">
+                      No {workerStatusFilter === 'ACTIVE' ? 'active' : workerStatusFilter === 'INACTIVE' ? 'inactive' : ''} workers found.
+                    </div>
+                  );
+                }
+
+                const sorted = [...filtered].sort((a, b) => {
                   const extractNum = (str: string) => {
                     if (!str) return 999999;
                     const match = str.match(/\d+/);
@@ -2174,9 +2278,20 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           </div>
                         </div>
                       </div>
-                      <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-900 font-bold text-[10px] border border-blue-200">
-                        {w.division?.name || 'General'}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-900 font-bold text-[10px] border border-blue-200">
+                          {w.division?.name || 'General'}
+                        </span>
+                        {w.isActive === false ? (
+                          <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-bold text-[10px] border border-rose-200">
+                            Inactive
+                          </span>
+                        ) : (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] border border-emerald-200">
+                            Active
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] bg-slate-50/60 p-2 rounded-lg border border-slate-100 font-mono">
@@ -2205,9 +2320,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     <div className="flex justify-between items-center pt-1">
                       <span className="text-[10px] text-slate-400 font-mono">{w.mobileNumber}</span>
                       <div className="flex items-center gap-1.5">
+                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                          <button
+                            onClick={() => handleToggleWorkerActive(w.id, w.fullName, w.isActive !== false)}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+                              w.isActive === false
+                                ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                                : 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200'
+                            }`}
+                            title={w.isActive === false ? 'Activate Worker' : 'Deactivate Worker (Left Company)'}
+                          >
+                            {w.isActive === false ? 'Activate' : 'Deactivate'}
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setEditingWorker(w);
+                            setEditWorkerActive(w.isActive !== false);
                             setEditWorkerId(w.workerId || '');
                             setEditWorkerName(w.fullName);
                             setEditFatherName(w.fatherName || '');
@@ -2369,17 +2498,30 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                                   />
                                 </div>
                                 <div>
-                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Assigned Division *</label>
+                                  <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Employment Status *</label>
                                   <select
-                                    value={editWorkerDivisionId}
-                                    onChange={(e) => setEditWorkerDivisionId(e.target.value)}
-                                    className="w-full p-1.5 border border-slate-300 rounded bg-white font-semibold text-xs text-[#1e3a8a]"
+                                    value={editWorkerActive ? 'ACTIVE' : 'INACTIVE'}
+                                    onChange={(e) => setEditWorkerActive(e.target.value === 'ACTIVE')}
+                                    className={`w-full p-1.5 border rounded font-bold text-xs ${
+                                      editWorkerActive ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-rose-50 border-rose-300 text-rose-800'
+                                    }`}
                                   >
-                                    {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editWorkerDivisionId)).map((d) => (
-                                      <option key={d.id} value={d.id}>{d.name}</option>
-                                    ))}
+                                    <option value="ACTIVE">🟢 Active</option>
+                                    <option value="INACTIVE">🔴 Inactive</option>
                                   </select>
                                 </div>
+                              </div>
+                              <div>
+                                <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Assigned Division *</label>
+                                <select
+                                  value={editWorkerDivisionId}
+                                  onChange={(e) => setEditWorkerDivisionId(e.target.value)}
+                                  className="w-full p-1.5 border border-slate-300 rounded bg-white font-semibold text-xs text-[#1e3a8a]"
+                                >
+                                  {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE' && (d.isActive !== false || d.id === editWorkerDivisionId)).map((d) => (
+                                    <option key={d.id} value={d.id}>{d.name}</option>
+                                  ))}
+                                </select>
                               </div>
                             </div>
 
@@ -2576,7 +2718,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             )}
           </div>
 
-          {/* 💻 DESKTOP/TABLET TABLE (100% UNTOUCHED) */}
+          {/* 💻 DESKTOP/TABLET TABLE */}
           <div className="hidden md:block overflow-x-auto border border-slate-200 rounded-lg">
             <table className="w-full text-left text-xs excel-table">
               <thead>
@@ -2588,6 +2730,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   <th>Designation</th>
                   <th>Mobile Number</th>
                   <th>Assigned Division</th>
+                  <th>Status</th>
                   {currentUserRole !== 'SUPERVISOR' && (
                     <>
                       <th>Daily Wage</th>
@@ -2603,7 +2746,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               </thead>
               <tbody>
                 {(() => {
-                  const sortedWorkers = [...workers].sort((a, b) => {
+                  const filtered = workers.filter(w => {
+                    if (workerStatusFilter === 'ACTIVE') return w.isActive !== false;
+                    if (workerStatusFilter === 'INACTIVE') return w.isActive === false;
+                    return true;
+                  });
+
+                  const sortedWorkers = [...filtered].sort((a, b) => {
                     const extractNum = (str: string) => {
                       if (!str) return 999999;
                       const match = str.match(/\d+/);
@@ -2618,8 +2767,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   if (sortedWorkers.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 13 : 8} className="p-8 text-center text-slate-400">
-                          No workers registered yet.
+                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 14 : 9} className="p-8 text-center text-slate-400">
+                          No {workerStatusFilter === 'ACTIVE' ? 'active' : workerStatusFilter === 'INACTIVE' ? 'inactive' : ''} workers registered yet.
                         </td>
                       </tr>
                     );
@@ -2638,6 +2787,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       </td>
                     <td className="font-mono text-slate-600">{w.mobileNumber}</td>
                     <td className="font-semibold text-blue-900">{w.division?.name || '-'}</td>
+                    <td>
+                      {w.isActive === false ? (
+                        <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200 text-[10px] font-bold">
+                          🔴 Inactive
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10px] font-bold">
+                          🟢 Active
+                        </span>
+                      )}
+                    </td>
                     {currentUserRole !== 'SUPERVISOR' && (
                       <>
                         <td className="font-mono font-bold text-slate-700">{formatIndianCurrency(w.dailyWage)}</td>
@@ -2660,11 +2820,26 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     )}
                     <td className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
+                        {/* Owner or Manager can quickly toggle Active / Inactive status */}
+                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                          <button
+                            onClick={() => handleToggleWorkerActive(w.id, w.fullName, w.isActive !== false)}
+                            className={`px-2 py-1 rounded text-[11px] font-bold border transition-colors ${
+                              w.isActive === false
+                                ? 'text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border-emerald-200'
+                                : 'text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border-amber-200'
+                            }`}
+                            title={w.isActive === false ? 'Reactivate Worker' : 'Deactivate Worker (Left Company)'}
+                          >
+                            {w.isActive === false ? 'Activate' : 'Deactivate'}
+                          </button>
+                        )}
                         {/* Owner, Manager or Supervisor can edit (Supervisor can only change division) */}
                         {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER' || currentUserRole === 'SUPERVISOR') && (
                           <button
                             onClick={() => {
                               setEditingWorker(w);
+                              setEditWorkerActive(w.isActive !== false);
                               setEditWorkerId(w.workerId || '');
                               setEditWorkerName(w.fullName);
                               setEditFatherName(w.fatherName || '');

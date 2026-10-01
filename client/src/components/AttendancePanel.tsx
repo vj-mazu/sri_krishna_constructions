@@ -497,6 +497,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const filteredWorkers = useMemo(() => {
     let list = workers.filter((w) => {
       const rec = attendanceRecords[w.id];
+      const isMarkedToday = rec && Boolean(rec.status);
+
+      // Inactive workers (left the company) should NOT show up unless already marked for this date
+      if (w.isActive === false && !isMarkedToday) {
+        return false;
+      }
+
       const query = searchQuery.toLowerCase().trim();
       
       // 1. Text Search Filter (Worker Name or ID)
