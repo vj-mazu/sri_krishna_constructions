@@ -2385,19 +2385,27 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <th>Basic</th>
                         <th className="text-center">Inward</th>
                         <th className="text-center">Sold</th>
-                        <th className="text-center">Balance</th>
+                        <th className="text-center bg-emerald-950/60 text-emerald-200">Stock Avail</th>
+                        <th className="text-center bg-rose-950/60 text-rose-200">To Receive</th>
                         <th className="text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {itemsLoading ? (
-                        <tr><td colSpan={15} className="p-8 text-center text-slate-500 font-semibold">Loading items...</td></tr>
+                        <tr><td colSpan={16} className="p-8 text-center text-slate-500 font-semibold">Loading items...</td></tr>
                       ) : poItems.length === 0 ? (
-                        <tr><td colSpan={15} className="p-8 text-center text-slate-400">No items match your filter.</td></tr>
+                        <tr><td colSpan={16} className="p-8 text-center text-slate-400">No items match your filter.</td></tr>
                       ) : (
                         poItems.map((item, idx) => {
                           const basicCost = (item.qty || 0) * (item.rate || 0);
                           const serialNo = (parseInt(itemsCursor || '0', 10) || 0) + idx + 1;
+                          const availableForSale = item.availableForSale !== undefined 
+                            ? item.availableForSale 
+                            : Math.max(0, (item.purchasedQty || 0) - (item.soldQty || 0));
+                          const toReceive = item.remainingQty !== undefined 
+                            ? item.remainingQty 
+                            : Math.max(0, (item.qty || 0) - (item.purchasedQty || 0));
+
                           return (
                             <React.Fragment key={item.id}>
                               <tr className="hover:bg-slate-50/80 border-t-2 border-slate-400 bg-white">
@@ -2414,7 +2422,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <td className="text-left font-mono font-semibold">{formatCurrency(basicCost)}</td>
                                 <td className="text-center font-mono font-bold text-slate-800 bg-slate-50">{item.purchasedQty || 0}</td>
                                 <td className="text-center font-mono font-bold text-[#1e3a8a] bg-blue-50/50">{item.soldQty || 0}</td>
-                                <td className="text-center font-mono font-bold text-rose-700 bg-rose-50/50">{item.remainingQty || 0}</td>
+                                <td className="text-center font-mono font-bold text-emerald-800 bg-emerald-50/80">{availableForSale}</td>
+                                <td className="text-center font-mono font-bold text-rose-700 bg-rose-50/50">{toReceive}</td>
                                 <td className="text-center">
                                   {isManagerOrOwner && (
                                     <div className="flex items-center justify-center gap-1">
@@ -2463,7 +2472,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 const b = calculateBreakdown(item.qty, item.rate, item.cgstPercent, item.sgstPercent, item.igstPercent, item.discount, item.freight, item.pAndF, item.insurance);
                                 return (
                                   <tr className="bg-slate-50/90 border-b-2 border-slate-400 text-[11px] text-slate-700 font-mono">
-                                    <td colSpan={15} className="px-4 py-2">
+                                    <td colSpan={16} className="px-4 py-2">
                                       <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 w-full">
                                         {/* LEFT: TAX & CHARGES PILLS */}
                                         <div className="flex flex-wrap gap-2.5 items-center">
