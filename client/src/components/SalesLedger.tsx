@@ -68,8 +68,8 @@ export const SalesLedger: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [totalServerCount, setTotalServerCount] = useState(0);
-  // Sort order state: 'DESC' (latest date / newest slNo first) or 'ASC' (oldest first, Sl.No 1 at top)
-  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
+  // Sort order state: 'ASC' (chronological, Sl.No 1 at top) or 'DESC' (newest first)
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('ASC');
 
   const fetchSalesLedger = useCallback(async () => {
     setLoading(true);

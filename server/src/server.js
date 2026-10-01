@@ -4026,6 +4026,11 @@ app.post('/api/advance-ledger/repay', authenticateToken, requireRoles(['OWNER', 
       return res.status(400).json({ error: `${worker.fullName} has no outstanding advance balance to repay.` });
     }
 
+    if (numAmount > prevBal) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Repayment amount (₹${numAmount}) cannot exceed outstanding advance balance (₹${prevBal}).` });
+    }
+
     const newBal = Math.max(0, prevBal - numAmount);
     const txDate = date ? new Date(date) : new Date();
 
@@ -4951,6 +4956,22 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
       const { rows: existingRows } = await client.query(`SELECT "advanceDeducted" FROM "MonthlyPayment" WHERE "workerId" = $1 AND "month" = $2 AND "year" = $3 FOR UPDATE`, [workerId, m, y]);
       const prevAdvanceDeducted = existingRows.length > 0 ? (parseFloat(existingRows[0].advanceDeducted) || 0) : 0;
 
+      // Available advance pool for this month is current advanceBalance + any advance previously deducted for this specific month
+      const currentWorkerBal = parseFloat(workerCheck[0].advanceBalance) || 0;
+      const totalAvailableAdvance = Math.max(0, currentWorkerBal + prevAdvanceDeducted);
+
+      // Rule: Worker with 0 attendance / 0 total payment OR 0 advance taken/balance CANNOT have advance deducted.
+      // Also advance deducted cannot exceed either available advance balance or total earned payment.
+      let safeAdv = adv;
+      if (totalAvailableAdvance <= 0 || (pDays <= 0 && hDays <= 0 && totPay <= 0)) {
+        safeAdv = 0;
+      } else {
+        safeAdv = Math.min(safeAdv, totalAvailableAdvance, Math.max(0, totPay));
+      }
+
+      // Recompute finalNet based on safeAdv
+      const safeFinalNet = Math.max(0, totPay - safeAdv + extra);
+
       const { rows } = await client.query(
         `INSERT INTO "MonthlyPayment" (
            "id", "workerId", "month", "year", "presentDays", "absentDays", "halfDays", "leaveDays", "totalOtHours",
@@ -4998,18 +5019,18 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
           workerId, m, y, pDays, aDays, hDays, lDays, otH,
           dWage, dAllow, otH > 0 ? (dWage > 0 ? dWage / 8 : 0) : 0,
           wAmt, allAmt, gross, pf, esi, netBase,
-          otPay, otAll, totPay, adv, extra, finalNet,
-          finalNet, divisionSummary ? JSON.stringify(divisionSummary) : '{}', req.user.id
+          otPay, otAll, totPay, safeAdv, extra, safeFinalNet,
+          safeFinalNet, divisionSummary ? JSON.stringify(divisionSummary) : '{}', req.user.id
         ]
       );
 
-      if (adv > 0 || prevAdvanceDeducted > 0) {
+      if (safeAdv > 0 || prevAdvanceDeducted > 0) {
         const { rows: updatedWorker } = await client.query(
           `UPDATE "Worker"
            SET "advanceBalance" = GREATEST(0, COALESCE("advanceBalance", 0) + $1 - $2), "updatedAt" = NOW()
            WHERE "id" = $3
            RETURNING "advanceBalance"`,
-          [prevAdvanceDeducted, adv, workerId]
+          [prevAdvanceDeducted, safeAdv, workerId]
         );
 
         const newBalAfter = updatedWorker.length > 0 ? parseFloat(updatedWorker[0].advanceBalance) : 0;
@@ -5020,7 +5041,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
           [rows[0].id]
         );
 
-        if (adv > 0) {
+        if (safeAdv > 0) {
           await client.query(
             `INSERT INTO "AdvanceTransaction" (
                "id", "workerId", "type", "date", "amount", "balanceAfter", "source", "referenceId", "reason", "recordedById", "createdAt"
@@ -5030,7 +5051,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
              )`,
             [
               workerId,
-              adv,
+              safeAdv,
               newBalAfter,
               rows[0].id,
               `Monthly Wage Payroll Deduction (${m}/${y})`,

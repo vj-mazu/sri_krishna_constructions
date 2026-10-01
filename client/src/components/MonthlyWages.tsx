@@ -265,8 +265,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     // Advance balance from worker master record
     const advanceBalance = parseFloat(w.advanceBalance) || 0;
     // Advance deducted this month (from override or saved payment)
-    const advanceVal = customAdvance[w.workerId] ?? parseFloat(w.advanceDeducted) ?? 0;
-    const advance = advanceVal === '' ? 0 : parseFloat(advanceVal as string) || 0;
+    const rawAdvVal = customAdvance[w.workerId] ?? parseFloat(w.advanceDeducted) ?? 0;
+    const requestedAdv = rawAdvVal === '' ? 0 : parseFloat(rawAdvVal as string) || 0;
+    // Cannot deduct advance if worker has 0 advance balance, never took an advance, or has 0 working days / attendance.
+    // Also advance deduction cannot exceed either the outstanding advance balance or the earned gross/base payment.
+    const advance = (advanceBalance <= 0 || workingDays <= 0) ? 0 : Math.min(requestedAdv, advanceBalance);
     // Remaining balance AFTER deduction
     const remainingAdvance = Math.max(0, advanceBalance - advance);
     const advanceTaken = parseFloat(w.advanceTaken) || 0;
@@ -3003,15 +3006,26 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
-                        value={customAdvance[w.workerId] !== undefined ? customAdvance[w.workerId] : (w.advanceDeducted || '')}
+                        max={Math.min(calc.advanceBalance, calc.totalPayment)}
+                        disabled={calc.advanceBalance <= 0 || calc.workingDays <= 0}
+                        value={(calc.advanceBalance <= 0 || calc.workingDays <= 0) ? 0 : (customAdvance[w.workerId] !== undefined ? customAdvance[w.workerId] : (w.advanceDeducted || ''))}
                         onChange={(e) => {
                           const raw = e.target.value;
-                          const val = raw === '' ? '' : (parseFloat(raw) || 0);
+                          const maxAdv = Math.min(calc.advanceBalance, calc.totalPayment);
+                          const val = raw === '' ? '' : Math.min(maxAdv, Math.max(0, parseFloat(raw) || 0));
                           setCustomAdvance(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-amber-900 bg-amber-100/60 border border-amber-300 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-amber-500"
-                        title="Enter Advance deduction for this month"
+                        className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          (calc.advanceBalance <= 0 || calc.workingDays <= 0)
+                            ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' 
+                            : 'text-amber-900 bg-amber-100/60 border border-amber-300 focus:ring-amber-500'
+                        }`}
+                        title={
+                          calc.advanceBalance <= 0 
+                            ? 'No outstanding advance taken by this worker' 
+                            : (calc.workingDays <= 0 ? 'Worker has no attendance/earnings this month' : `Max advance deduction: ₹${Math.min(calc.advanceBalance, calc.totalPayment)}`)
+                        }
                       />
                     </td>
 
