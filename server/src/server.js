@@ -1856,7 +1856,10 @@ app.get('/api/individual-stocks/transactions', authenticateToken, async (req, re
     const totalCount = countRes.rows[0]?.count || 0;
 
     let offsetNum = 0;
-    if (page) {
+    if (req.query.offset !== undefined) {
+      const parsedOffset = parseInt(req.query.offset, 10);
+      if (!isNaN(parsedOffset) && parsedOffset >= 0) offsetNum = parsedOffset;
+    } else if (page) {
       const p = parseInt(page, 10);
       if (p > 1) offsetNum = (p - 1) * limitNum;
     }
