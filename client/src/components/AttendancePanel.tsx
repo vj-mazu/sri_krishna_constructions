@@ -435,6 +435,23 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return;
       }
 
+      // Validate split half-day entries: primary and secondary division cannot be identical
+      for (const [workerId, data] of markedEntries) {
+        if (data.status === 'HALF_DAY') {
+          const workerObj = workers.find(w => w.id === workerId);
+          const primDiv = data.divisionId || (selectedDivisionId !== 'ALL' ? selectedDivisionId : workerObj?.divisionId);
+          const secDiv = data.secondDivisionId;
+          if (secDiv && primDiv && secDiv === primDiv) {
+            const workerName = workerObj?.fullName || 'Worker';
+            const msg = `Split half-day error for ${workerName}: Primary division and 2nd half division cannot be the same. Please choose two different divisions or use normal attendance.`;
+            setError(msg);
+            showToast(msg, 'error');
+            setSaving(false);
+            return;
+          }
+        }
+      }
+
       // Prepare records with dynamic divisionId and secondDivisionId for the day
       const recordsToSave = markedEntries.map(([workerId, data]) => {
         const workerObj = workers.find(w => w.id === workerId);

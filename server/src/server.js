@@ -1420,8 +1420,8 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
           COALESCE(s."hsnCode", '-') as "hsnCode",
           s."unit",
           s."openingStock" as "orderedQty",
-          (s."openingStock" + COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0))::float as "totalPurchased",
-          COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)::float as "totalSold"
+          (s."openingStock" + COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0))::float as "totalPurchased",
+          COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)::float as "totalSold"
         FROM "IndividualStock" s
         ${indWhereSql}
         ORDER BY s."createdAt" DESC
@@ -1582,9 +1582,9 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
       SELECT 
         s.*,
         json_build_object('fullName', u."fullName") as "addedBy",
-        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0)::float as "totalInward",
-        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)::float as "totalSold",
-        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'PENDING'), 0)::float as "pendingSold"
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0)::float as "totalInward",
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)::float as "totalSold",
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'PENDING'), 0)::float as "pendingSold"
       FROM "IndividualStock" s
       LEFT JOIN "User" u ON s."addedById" = u.id
       ${whereSql}
@@ -1766,8 +1766,8 @@ app.put('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER', 
       UPDATE "IndividualStock" s
       SET "currentStock" = GREATEST(0, (
         s."openingStock" + 
-        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
-        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
       ))
       WHERE s.id = $1
     `, [id]);
@@ -1883,7 +1883,7 @@ app.get('/api/individual-stocks/transactions', authenticateToken, async (req, re
        LEFT JOIN "User" u ON tx."addedById" = u.id
        LEFT JOIN "User" au ON tx."approvedById" = au.id
        ${whereSql}
-       ORDER BY tx."date" DESC, tx."createdAt" DESC
+       ORDER BY tx."date" DESC, tx."createdAt" DESC, tx."id" DESC
        LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`,
       queryParams
     );
@@ -1907,7 +1907,7 @@ app.get('/api/individual-stocks/:id/transactions', authenticateToken, async (req
        LEFT JOIN "User" u ON tx."addedById" = u.id
        LEFT JOIN "User" au ON tx."approvedById" = au.id
        WHERE tx."stockId" = $1
-       ORDER BY tx."date" DESC, tx."createdAt" DESC`,
+       ORDER BY tx."date" DESC, tx."createdAt" DESC, tx."id" DESC`,
       [id]
     );
 
@@ -1981,8 +1981,8 @@ const handleInwardPurchase = async (req, res) => {
       `UPDATE "IndividualStock"
        SET "currentStock" = (
          "openingStock" + 
-         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
-         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
        ),
        "updatedAt" = NOW()
        WHERE id = $1`,
@@ -2033,8 +2033,8 @@ const handleOutwardSale = async (req, res) => {
     // Row-level lock on the stock item to compute available balance accurately
     const stockRes = await client.query(
       `SELECT s.*,
-              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0)::float as "totalInward",
-              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)::float as "totalSold"
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0)::float as "totalInward",
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)::float as "totalSold"
        FROM "IndividualStock" s
        WHERE s.id = $1
        FOR UPDATE`,
@@ -2097,8 +2097,8 @@ const handleOutwardSale = async (req, res) => {
         `UPDATE "IndividualStock"
          SET "currentStock" = (
            "openingStock" + 
-           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
-           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
          ),
          "updatedAt" = NOW()
          WHERE id = $1`,
@@ -2182,8 +2182,8 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
     // 2. Fetch stock item with lock
     const stockRes = await client.query(
       `SELECT s.*,
-              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'INWARD' AND tx.status = 'APPROVED' AND tx.id != $1), 0)::float as "otherInward",
-              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED' AND tx.id != $1), 0)::float as "otherSold"
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED' AND tx.id != $1), 0)::float as "otherInward",
+              COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED' AND tx.id != $1), 0)::float as "otherSold"
        FROM "IndividualStock" s
        WHERE s.id = $2
        FOR UPDATE`,
@@ -2206,13 +2206,13 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
     }
 
     // Stock constraint check:
-    if (currentTx.type === 'OUTWARD' && currentTx.status === 'APPROVED') {
+    if ((currentTx.type === 'OUTWARD' || currentTx.type === 'SALE') && currentTx.status === 'APPROVED') {
       const maxAllowedSale = openingStock + stock.otherInward - stock.otherSold;
       if (newQty > maxAllowedSale) {
         await client.query('ROLLBACK');
         return res.status(400).json({ error: `Cannot update sale to ${newQty}. Only ${maxAllowedSale} units available in stock!` });
       }
-    } else if (currentTx.type === 'INWARD') {
+    } else if (currentTx.type === 'INWARD' || currentTx.type === 'PURCHASE') {
       const remainingBalance = openingStock + stock.otherInward + newQty - stock.otherSold;
       if (remainingBalance < 0) {
         await client.query('ROLLBACK');
@@ -2275,8 +2275,8 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
       `UPDATE "IndividualStock"
        SET "currentStock" = GREATEST(0, (
          "openingStock" + 
-         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'INWARD' AND tx.status = 'APPROVED'), 0) -
-         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type = 'OUTWARD' AND tx.status = 'APPROVED'), 0)
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
        )),
        "updatedAt" = NOW()
        WHERE id = $1`,
@@ -2312,11 +2312,11 @@ app.delete('/api/individual-stocks/transactions/:id', authenticateToken, require
     const stockId = tx.stockId;
 
     // Check if removing an INWARD transaction would cause negative stock
-    if (tx.type === 'INWARD' && tx.status === 'APPROVED') {
+    if ((tx.type === 'INWARD' || tx.type === 'PURCHASE') && tx.status === 'APPROVED') {
       const stockRes = await client.query(
         `SELECT s.*,
-                COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = s.id AND t.type = 'INWARD' AND t.status = 'APPROVED' AND t.id != $1), 0)::float as "otherInward",
-                COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = s.id AND t.type = 'OUTWARD' AND t.status = 'APPROVED'), 0)::float as "totalSold"
+                COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = s.id AND t.type IN ('INWARD', 'PURCHASE') AND t.status = 'APPROVED' AND t.id != $1), 0)::float as "otherInward",
+                COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = s.id AND t.type IN ('OUTWARD', 'SALE') AND t.status = 'APPROVED'), 0)::float as "totalSold"
          FROM "IndividualStock" s
          WHERE s.id = $2
          FOR UPDATE`,
@@ -2346,8 +2346,8 @@ app.delete('/api/individual-stocks/transactions/:id', authenticateToken, require
       `UPDATE "IndividualStock"
        SET "currentStock" = GREATEST(0, (
          "openingStock" + 
-         COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = $1 AND t.type = 'INWARD' AND t.status = 'APPROVED'), 0) -
-         COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = $1 AND t.type = 'OUTWARD' AND t.status = 'APPROVED'), 0)
+         COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = $1 AND t.type IN ('INWARD', 'PURCHASE') AND t.status = 'APPROVED'), 0) -
+         COALESCE((SELECT SUM(t.qty) FROM "IndividualStockTransaction" t WHERE t."stockId" = $1 AND t.type IN ('OUTWARD', 'SALE') AND t.status = 'APPROVED'), 0)
        )),
        "updatedAt" = NOW()
        WHERE id = $1`,
@@ -2525,12 +2525,17 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
             [req.user.id, txId]
           );
 
-          // Deduct from currentStock
+          // Synchronize currentStock
           await client.query(
             `UPDATE "IndividualStock"
-             SET "currentStock" = GREATEST(0, "currentStock" - $1), "updatedAt" = NOW()
-             WHERE id = $2`,
-            [qty, stockId]
+             SET "currentStock" = GREATEST(0, (
+               "openingStock" + 
+               COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+               COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
+             )),
+             "updatedAt" = NOW()
+             WHERE id = $1`,
+            [stockId]
           );
         } else if (status === 'REJECTED') {
           await client.query(
@@ -2928,10 +2933,46 @@ app.delete('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MA
 // --- GLOBAL SALES LEDGER API (CONTINUOUS SEQUENTIAL SL NO ACROSS ALL SALES & WORK ORDERS) ---
 app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
   try {
-    const { search, dateFrom, dateTo } = req.query;
+    const { search, dateFrom, dateTo, sourceType, limit: queryLimit, offset: queryOffset } = req.query;
+    const limit = Math.min(Math.max(parseInt(queryLimit, 10) || 50, 1), 500);
+    const offset = Math.max(parseInt(queryOffset, 10) || 0, 0);
 
-    // Combined query of PO Sales, Individual Stock Outward Sales, and Work Order Direct Sales
-    const querySql = `
+    const conditions = [];
+    const params = [];
+
+    if (sourceType && sourceType !== 'ALL') {
+      params.push(sourceType);
+      conditions.push(`all_sales."sourceType" = $${params.length}`);
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      const pIdx = params.length;
+      conditions.push(`(
+        LOWER(COALESCE(all_sales."invoiceNumber", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."clientDepartment", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."clientGst", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."vehicleNumber", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."eWayBillNumber", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."itemName", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."partNumber", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."workOrderNumber", '')) LIKE $${pIdx}
+      )`);
+    }
+
+    if (dateFrom) {
+      params.push(new Date(dateFrom));
+      conditions.push(`all_sales."date" >= $${params.length}`);
+    }
+
+    if (dateTo) {
+      params.push(new Date(dateTo));
+      conditions.push(`all_sales."date" <= $${params.length}`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const baseCte = `
       WITH all_sales AS (
         -- 1. PO Sales
         SELECT 
@@ -3048,38 +3089,44 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
         FROM "WorkOrder" wo
         WHERE wo."status" = 'APPROVED'
       )
-      SELECT 
-        ROW_NUMBER() OVER (ORDER BY "date" ASC, "createdAt" ASC)::int as "slNo",
-        all_sales.*
-      FROM all_sales
-      ORDER BY "date" DESC, "createdAt" DESC
     `;
 
-    const { rows } = await pool.query(querySql);
+    const dataParams = [...params, limit, offset];
+    const dataQuery = `
+      ${baseCte}
+      SELECT all_sales.*
+      FROM all_sales
+      ${whereClause}
+      ORDER BY all_sales."date" DESC, all_sales."createdAt" DESC, all_sales.id DESC
+      LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
+    `;
 
-    // Apply optional client-side/in-memory filters if specified
-    let filtered = rows;
-    if (search && search.trim()) {
-      const q = search.trim().toLowerCase();
-      filtered = filtered.filter(r => 
-        (r.invoiceNumber && r.invoiceNumber.toLowerCase().includes(q)) ||
-        (r.clientDepartment && r.clientDepartment.toLowerCase().includes(q)) ||
-        (r.clientGst && r.clientGst.toLowerCase().includes(q)) ||
-        (r.vehicleNumber && r.vehicleNumber.toLowerCase().includes(q)) ||
-        (r.eWayBillNumber && r.eWayBillNumber.toLowerCase().includes(q)) ||
-        (r.itemName && r.itemName.toLowerCase().includes(q)) ||
-        (r.partNumber && r.partNumber.toLowerCase().includes(q)) ||
-        (r.workOrderNumber && r.workOrderNumber.toLowerCase().includes(q))
-      );
-    }
-    if (dateFrom) {
-      filtered = filtered.filter(r => new Date(r.date) >= new Date(dateFrom));
-    }
-    if (dateTo) {
-      filtered = filtered.filter(r => new Date(r.date) <= new Date(dateTo));
-    }
+    const countQuery = `
+      ${baseCte}
+      SELECT COUNT(*)::int as count
+      FROM all_sales
+      ${whereClause}
+    `;
 
-    res.json({ sales: filtered, totalCount: filtered.length });
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(dataQuery, dataParams),
+      pool.query(countQuery, params)
+    ]);
+
+    const totalCount = countResult.rows[0]?.count || 0;
+    const sales = dataResult.rows.map((r, idx) => ({
+      ...r,
+      slNo: offset + idx + 1
+    }));
+
+    res.json({
+      sales,
+      totalCount,
+      limit,
+      offset,
+      page: Math.floor(offset / limit) + 1,
+      totalPages: Math.ceil(totalCount / limit) || 1
+    });
   } catch (err) {
     console.error('Error fetching sales ledger:', err);
     res.status(500).json({ error: 'Failed to fetch sales ledger' });
@@ -4062,6 +4109,17 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
         `DELETE FROM "Attendance" WHERE "date"::date = $1::date AND "workerId" = ANY($2::text[])`,
         [date, clearedWorkerIds]
       );
+    }
+
+    // Validate that split half-day attendance does not have matching divisionId and secondDivisionId
+    if (attendanceData && Array.isArray(attendanceData)) {
+      for (const rec of attendanceData) {
+        if (rec.status === 'HALF_DAY' && rec.secondDivisionId && rec.divisionId && rec.secondDivisionId === rec.divisionId) {
+          return res.status(400).json({ 
+            error: 'Split half-day error: Primary division and 2nd half division cannot be identical. Select two different divisions or use normal attendance.' 
+          });
+        }
+      }
     }
 
     const queryDateStr = `${date} 00:00:00`;

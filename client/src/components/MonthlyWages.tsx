@@ -3207,7 +3207,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) handleCloseRegisterBook(); }}
         >
-          <div className="bg-[#fcfaf2] rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col h-[92dvh] max-h-[92dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+          <div className="bg-[#fcfaf2] rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-5xl border-2 border-[#d4af37] flex flex-col h-[92vh] max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
             {/* Mobile Drag Indicator Bar */}
             <div className="w-12 h-1.5 bg-[#b8860b]/40 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
 
@@ -3531,7 +3531,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
             onClick={(e) => { if (e.target === e.currentTarget) setSlipModalWorker(null); }}
           >
-            <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92dvh] max-h-[92dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+            <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92vh] max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
               {/* Mobile Drag Indicator Bar */}
               <div className="w-12 h-1.5 bg-blue-300/60 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
 

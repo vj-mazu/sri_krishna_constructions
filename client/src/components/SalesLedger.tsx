@@ -67,21 +67,31 @@ export const SalesLedger: React.FC = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [totalServerCount, setTotalServerCount] = useState(0);
   // Sort order state: 'DESC' (latest date / newest slNo first) or 'ASC' (oldest first, Sl.No 1 at top)
   const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
 
   const fetchSalesLedger = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch master sales list
-      const res = await api.get('/sales-ledger');
+      const params: any = {
+        limit: pageSize,
+        offset: (currentPage - 1) * pageSize
+      };
+      if (searchTerm.trim()) params.search = searchTerm.trim();
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = dateTo;
+      if (sourceFilter !== 'ALL') params.sourceType = sourceFilter;
+
+      const res = await api.get('/sales-ledger', { params });
       setSales(res.data.sales || []);
+      setTotalServerCount(res.data.totalCount || 0);
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to load sales ledger', 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, pageSize, searchTerm, dateFrom, dateTo, sourceFilter]);
 
   useEffect(() => {
     fetchSalesLedger();
@@ -90,81 +100,21 @@ export const SalesLedger: React.FC = () => {
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, dateFrom, dateTo, sourceFilter, pageSize, sortOrder]);
+  }, [searchTerm, dateFrom, dateTo, sourceFilter, pageSize]);
 
-  // Comprehensive client-side filtering for fast real-time search
-  const filteredSales = useMemo(() => {
-    let result = [...sales];
-
-    // Source Filter
-    if (sourceFilter !== 'ALL') {
-      result = result.filter(s => s.sourceType === sourceFilter);
-    }
-
-    // Search Filter (checks invoiceNumber, client, gstin, vehicle, eWayBill, itemName, partNumber, poNumber, workOrderNumber)
-    if (searchTerm.trim()) {
-      const q = searchTerm.trim().toLowerCase();
-      result = result.filter(s => {
-        const inv = (s.invoiceNumber || '').toLowerCase();
-        const client = (s.clientDepartment || '').toLowerCase();
-        const gst = (s.clientGst || '').toLowerCase();
-        const veh = (s.vehicleNumber || '').toLowerCase();
-        const eway = (s.eWayBillNumber || '').toLowerCase();
-        const item = (s.itemName || '').toLowerCase();
-        const part = (s.partNumber || '').toLowerCase();
-        const po = (s.poNumber || '').toLowerCase();
-        const wo = (s.workOrderNumber || '').toLowerCase();
-        const sl = String(s.slNo || '');
-        const dateStr = formatDate(s.date).toLowerCase();
-
-        return inv.includes(q) || client.includes(q) || gst.includes(q) ||
-               veh.includes(q) || eway.includes(q) || item.includes(q) ||
-               part.includes(q) || po.includes(q) || wo.includes(q) ||
-               sl.includes(q) || dateStr.includes(q);
-      });
-    }
-
-    // Date From Filter
-    if (dateFrom) {
-      const fromDate = new Date(dateFrom);
-      fromDate.setHours(0, 0, 0, 0);
-      result = result.filter(s => {
-        if (!s.date) return false;
-        const d = new Date(s.date);
-        d.setHours(0, 0, 0, 0);
-        return d >= fromDate;
-      });
-    }
-
-    // Date To Filter
-    if (dateTo) {
-      const toDate = new Date(dateTo);
-      toDate.setHours(23, 59, 59, 999);
-      result = result.filter(s => {
-        if (!s.date) return false;
-        const d = new Date(s.date);
-        return d <= toDate;
-      });
-    }
-
-    // Sorting
-    result.sort((a, b) => {
-      if (sortOrder === 'ASC') {
-        return (a.slNo || 0) - (b.slNo || 0);
-      } else {
-        return (b.slNo || 0) - (a.slNo || 0);
-      }
-    });
-
-    return result;
-  }, [sales, sourceFilter, searchTerm, dateFrom, dateTo, sortOrder]);
-
-  // Paginated slice
-  const totalPages = Math.max(1, Math.ceil(filteredSales.length / pageSize));
+  // Sorted slice for the current page
   const paginatedSales = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredSales.slice(start, start + pageSize);
-  }, [filteredSales, currentPage, pageSize]);
+    let result = [...sales];
+    if (sortOrder === 'ASC') {
+      result.sort((a, b) => (a.slNo || 0) - (b.slNo || 0));
+    } else {
+      result.sort((a, b) => (b.slNo || 0) - (a.slNo || 0));
+    }
+    return result;
+  }, [sales, sortOrder]);
+
+  const filteredSales = paginatedSales;
+  const totalPages = Math.max(1, Math.ceil(totalServerCount / pageSize));
 
   const formatCurrency = (amount: number | string | undefined | null) => {
     if (amount === undefined || amount === null || amount === '') return '₹0';

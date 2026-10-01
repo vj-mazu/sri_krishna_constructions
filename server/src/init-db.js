@@ -597,11 +597,20 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Division" DROP CONSTRAINT IF EXISTS "Division_name_key";
       DROP INDEX IF EXISTS "Division_name_key";
       CREATE UNIQUE INDEX IF NOT EXISTS "Division_name_type_unique_idx" ON "Division" (LOWER("name"), "type");
+
+      -- Mathematically synchronize IndividualStock currentStock based on opening + (INWARD/PURCHASE) - (OUTWARD/SALE)
+      UPDATE "IndividualStock" s
+      SET "currentStock" = GREATEST(0, (
+        s."openingStock" + 
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+        COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
+      )),
+      "updatedAt" = NOW();
     `);
 
     client.release();
     await pool.end();
-    console.log('✅ Database tables and indexes successfully verified and ready!');
+    console.log('✅ Database tables, indexes and stock balances successfully verified and ready!');
   } catch (err) {
     console.error('⚠️ Database table auto-initialization error:', err.message);
     await pool.end();

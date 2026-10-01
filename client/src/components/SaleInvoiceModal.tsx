@@ -295,7 +295,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       }}
     >
       {/* CLEAN MODAL CONTAINER (EXACT MATCH TO SALARY SLIP) */}
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92dvh] max-h-[92dvh] sm:h-auto sm:max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92vh] max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
         
         {/* Mobile Drag Indicator Bar */}
         <div className="w-12 h-1.5 bg-blue-300/60 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
