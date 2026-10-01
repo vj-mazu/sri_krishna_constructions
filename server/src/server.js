@@ -3094,13 +3094,21 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
       )
     `;
 
+    const sortDirection = (req.query.sortOrder || 'DESC').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
     const dataParams = [...params, limit, offset];
     const dataQuery = `
-      ${baseCte}
-      SELECT all_sales.*
-      FROM all_sales
-      ${whereClause}
-      ORDER BY all_sales."date" DESC, all_sales."createdAt" DESC, all_sales.id DESC
+      ${baseCte},
+      numbered_sales AS (
+        SELECT 
+          all_sales.*,
+          ROW_NUMBER() OVER (ORDER BY all_sales."date" ASC, all_sales."createdAt" ASC, all_sales.id ASC) as "slNo"
+        FROM all_sales
+        ${whereClause}
+      )
+      SELECT *
+      FROM numbered_sales
+      ORDER BY numbered_sales."date" ${sortDirection}, numbered_sales."createdAt" ${sortDirection}, numbered_sales.id ${sortDirection}
       LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}
     `;
 
@@ -3117,9 +3125,9 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
     ]);
 
     const totalCount = countResult.rows[0]?.count || 0;
-    const sales = dataResult.rows.map((r, idx) => ({
+    const sales = dataResult.rows.map(r => ({
       ...r,
-      slNo: offset + idx + 1
+      slNo: parseInt(r.slNo, 10)
     }));
 
     res.json({

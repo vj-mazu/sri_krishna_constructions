@@ -76,7 +76,8 @@ export const SalesLedger: React.FC = () => {
     try {
       const params: any = {
         limit: pageSize,
-        offset: (currentPage - 1) * pageSize
+        offset: (currentPage - 1) * pageSize,
+        sortOrder: sortOrder
       };
       if (searchTerm.trim()) params.search = searchTerm.trim();
       if (dateFrom) params.dateFrom = dateFrom;
@@ -91,7 +92,7 @@ export const SalesLedger: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, searchTerm, dateFrom, dateTo, sourceFilter]);
+  }, [currentPage, pageSize, searchTerm, dateFrom, dateTo, sourceFilter, sortOrder]);
 
   useEffect(() => {
     fetchSalesLedger();
@@ -102,16 +103,10 @@ export const SalesLedger: React.FC = () => {
     setCurrentPage(1);
   }, [searchTerm, dateFrom, dateTo, sourceFilter, pageSize]);
 
-  // Sorted slice for the current page
+  // The server returns rows with their exact permanent chronological slNo and requested sort order
   const paginatedSales = useMemo(() => {
-    let result = [...sales];
-    if (sortOrder === 'ASC') {
-      result.sort((a, b) => (a.slNo || 0) - (b.slNo || 0));
-    } else {
-      result.sort((a, b) => (b.slNo || 0) - (a.slNo || 0));
-    }
-    return result;
-  }, [sales, sortOrder]);
+    return sales;
+  }, [sales]);
 
   const filteredSales = paginatedSales;
   const totalPages = Math.max(1, Math.ceil(totalServerCount / pageSize));
