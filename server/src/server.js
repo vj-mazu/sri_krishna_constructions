@@ -720,11 +720,17 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
 app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { cursor, limit = 20, search, invoiceNumber, partNumber, dateFrom, dateTo } = req.query;
+    const { cursor, limit = 20, search, invoiceNumber, partNumber, dateFrom, dateTo, status: statusFilter } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
     let whereClauses = [`poi."purchaseOrderId" = $1`];
     let params = [id];
+
+    // Filter by sale status (APPROVED, PENDING, REJECTED)
+    if (statusFilter && ['APPROVED', 'PENDING', 'REJECTED'].includes(statusFilter.toUpperCase())) {
+      params.push(statusFilter.toUpperCase());
+      whereClauses.push(`s."status" = $${params.length}`);
+    }
 
     if (search && search.trim()) {
       params.push(`%${search.trim()}%`);
@@ -974,11 +980,11 @@ app.delete('/api/purchase-order-items/:id', authenticateToken, requireRoles(['OW
     const checkRes = await pool.query(`
       SELECT 
         (SELECT COUNT(*)::int FROM "Purchase" WHERE "purchaseOrderItemId" = $1) as purchases,
-        (SELECT COUNT(*)::int FROM "Sale" WHERE "purchaseOrderItemId" = $1) as sales
+        (SELECT COUNT(*)::int FROM "Sale" WHERE "purchaseOrderItemId" = $1 AND status IN ('APPROVED', 'PENDING')) as sales
     `, [req.params.id]);
 
     if (checkRes.rows[0]?.purchases > 0 || checkRes.rows[0]?.sales > 0) {
-      return res.status(400).json({ error: 'Cannot delete item with existing purchases or sales' });
+      return res.status(400).json({ error: 'Cannot delete item with existing purchases or active/pending sales' });
     }
     await pool.query(`DELETE FROM "PurchaseOrderItem" WHERE id = $1`, [req.params.id]);
     res.json({ message: 'Item deleted' });
