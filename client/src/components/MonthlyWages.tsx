@@ -1426,23 +1426,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
 
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-    // Header Logo if available
-    if (logoBase64 || SKC_LOGO_BASE64) {
-      try {
-        const logoData = logoBase64 || SKC_LOGO_BASE64;
-        doc.addImage(logoData, 'PNG', 14, 8, 14, 14);
-      } catch (err) {
-        console.error('Bank advice logo error:', err);
-      }
-    }
-
-    // Company Header
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(13);
-    doc.text('SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170', 105, 14, { align: 'center' });
-
-    // ~9 lines of blank space left after company name for manual typing/letterhead notes (~52mm vertical gap)
-    const letterStartY = 68;
+    // ~9 lines of blank space left on top for manual typing / pre-printed letterhead (~55mm vertical space)
+    const letterStartY = 55;
 
     // Addressing Branch
     doc.setFontSize(10);
