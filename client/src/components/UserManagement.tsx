@@ -29,7 +29,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [fullName, setFullName] = useState('');
   const [userMobile, setUserMobile] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'MANAGER' | 'SUPERVISOR'>('SUPERVISOR');
+  const [role, setRole] = useState<'OWNER' | 'MANAGER' | 'SUPERVISOR'>('SUPERVISOR');
 
   // Edit user state
   const [editingAccount, setEditingAccount] = useState<any>(null);
@@ -1103,18 +1103,39 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       )}
 
       {/* --- SUB-TAB: ACCOUNTS --- */}
-      {activeSubTab === 'accounts' && (
+      {activeSubTab === 'accounts' && (() => {
+        const ownerCount = users.filter((u) => u.role === 'OWNER').length;
+        const managerCount = users.filter((u) => u.role === 'MANAGER').length;
+        const supervisorCount = users.filter((u) => u.role === 'SUPERVISOR').length;
+
+        return (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-slate-800">Operational System Accounts</h3>
-            {currentUserRole === 'OWNER' && (
-              <button
-                onClick={() => setShowAddUserForm(!showAddUserForm)}
-                className="px-3 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 shadow"
-              >
-                <UserPlus className="w-4 h-4" /> {showAddUserForm ? 'Hide Form' : '+ Add New Login'}
-              </button>
-            )}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Operational System Accounts</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Role Limits: Owner (Max 2), Manager (Max 2), Supervisor (Max 3)</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${ownerCount >= 2 ? 'bg-purple-100 text-purple-900 border-purple-300' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                  👑 Owner: <strong>{ownerCount}/2</strong>
+                </span>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${managerCount >= 2 ? 'bg-blue-100 text-blue-900 border-blue-300' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                  👔 Manager: <strong>{managerCount}/2</strong>
+                </span>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${supervisorCount >= 3 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                  👷 Supervisor: <strong>{supervisorCount}/3</strong>
+                </span>
+              </div>
+              {currentUserRole === 'OWNER' && (
+                <button
+                  onClick={() => setShowAddUserForm(!showAddUserForm)}
+                  className="px-3 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-semibold rounded-lg text-xs flex items-center gap-1.5 shadow"
+                >
+                  <UserPlus className="w-4 h-4" /> {showAddUserForm ? 'Hide Form' : '+ Add New Login'}
+                </button>
+              )}
+            </div>
           </div>
 
           {showAddUserForm && (
@@ -1173,8 +1194,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     onChange={(e: any) => setRole(e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
                   >
-                    <option value="SUPERVISOR">SUPERVISOR</option>
-                    <option value="MANAGER">MANAGER</option>
+                    <option value="SUPERVISOR" disabled={supervisorCount >= 3}>
+                      SUPERVISOR {supervisorCount >= 3 ? '(Limit of 3 reached)' : `(${supervisorCount}/3)`}
+                    </option>
+                    <option value="MANAGER" disabled={managerCount >= 2}>
+                      MANAGER {managerCount >= 2 ? '(Limit of 2 reached)' : `(${managerCount}/2)`}
+                    </option>
+                    <option value="OWNER" disabled={ownerCount >= 2}>
+                      OWNER {ownerCount >= 2 ? '(Limit of 2 reached)' : `(${ownerCount}/2)`}
+                    </option>
                   </select>
                 </div>
               </div>
@@ -1324,9 +1352,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       onChange={(e: any) => setEditAccountRole(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
                     >
-                      {editingAccount?.role === 'OWNER' && <option value="OWNER">OWNER</option>}
-                      <option value="SUPERVISOR">SUPERVISOR</option>
-                      <option value="MANAGER">MANAGER</option>
+                      <option value="SUPERVISOR" disabled={editAccountRole !== 'SUPERVISOR' && supervisorCount >= 3}>
+                        SUPERVISOR {editAccountRole !== 'SUPERVISOR' && supervisorCount >= 3 ? '(Limit of 3 reached)' : ''}
+                      </option>
+                      <option value="MANAGER" disabled={editAccountRole !== 'MANAGER' && managerCount >= 2}>
+                        MANAGER {editAccountRole !== 'MANAGER' && managerCount >= 2 ? '(Limit of 2 reached)' : ''}
+                      </option>
+                      <option value="OWNER" disabled={editAccountRole !== 'OWNER' && ownerCount >= 2}>
+                        OWNER {editAccountRole !== 'OWNER' && ownerCount >= 2 ? '(Limit of 2 reached)' : ''}
+                      </option>
                     </select>
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
@@ -1350,7 +1384,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* --- SUB-TAB: DIVISIONS --- */}
       {activeSubTab === 'divisions' && (

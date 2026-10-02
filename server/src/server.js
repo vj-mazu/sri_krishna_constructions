@@ -3182,8 +3182,26 @@ app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, r
       return res.status(400).json({ error: 'Mobile number must be a valid 10-digit phone number' });
     }
 
-    if (!['SUPERVISOR', 'MANAGER'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be either MANAGER or SUPERVISOR' });
+    if (!['OWNER', 'MANAGER', 'SUPERVISOR'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be OWNER, MANAGER, or SUPERVISOR' });
+    }
+
+    // ROLE CAPACITY LIMITS: OWNER: max 2, MANAGER: max 2, SUPERVISOR: max 3
+    if (role === 'OWNER') {
+      const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
+      if (ownerCount >= 2) {
+        return res.status(400).json({ error: 'Cannot create more Owner accounts. Maximum limit of 2 Owners reached.' });
+      }
+    } else if (role === 'MANAGER') {
+      const managerCount = await prisma.user.count({ where: { role: 'MANAGER' } });
+      if (managerCount >= 2) {
+        return res.status(400).json({ error: 'Cannot create more Manager accounts. Maximum limit of 2 Managers reached.' });
+      }
+    } else if (role === 'SUPERVISOR') {
+      const supervisorCount = await prisma.user.count({ where: { role: 'SUPERVISOR' } });
+      if (supervisorCount >= 3) {
+        return res.status(400).json({ error: 'Cannot create more Supervisor accounts. Maximum limit of 3 Supervisors reached.' });
+      }
     }
 
     const existing = await prisma.user.findUnique({ where: { username } });
@@ -3244,6 +3262,28 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       if (!['SUPERVISOR', 'MANAGER', 'OWNER'].includes(role)) {
         return res.status(400).json({ error: 'Role must be OWNER, MANAGER, or SUPERVISOR' });
       }
+
+      // Check capacity limit if role is changing
+      const currentUser = await prisma.user.findUnique({ where: { id } });
+      if (currentUser && currentUser.role !== role) {
+        if (role === 'OWNER') {
+          const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
+          if (ownerCount >= 2) {
+            return res.status(400).json({ error: 'Cannot assign Owner role. Maximum limit of 2 Owners reached.' });
+          }
+        } else if (role === 'MANAGER') {
+          const managerCount = await prisma.user.count({ where: { role: 'MANAGER' } });
+          if (managerCount >= 2) {
+            return res.status(400).json({ error: 'Cannot assign Manager role. Maximum limit of 2 Managers reached.' });
+          }
+        } else if (role === 'SUPERVISOR') {
+          const supervisorCount = await prisma.user.count({ where: { role: 'SUPERVISOR' } });
+          if (supervisorCount >= 3) {
+            return res.status(400).json({ error: 'Cannot assign Supervisor role. Maximum limit of 3 Supervisors reached.' });
+          }
+        }
+      }
+
       data.role = role;
     }
     if (password && password.trim() !== '') {

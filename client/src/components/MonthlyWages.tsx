@@ -1441,30 +1441,33 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     doc.setFontSize(13);
     doc.text('SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170', 105, 14, { align: 'center' });
 
+    // ~9 lines of blank space left after company name for manual typing/letterhead notes (~52mm vertical gap)
+    const letterStartY = 68;
+
     // Addressing Branch
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('To', 14, 25);
-    doc.text('The Branch Manager,', 14, 30);
-    doc.text('Canara Bank,', 14, 35);
-    doc.text('Deosugur -584 170', 14, 40);
+    doc.text('To', 14, letterStartY);
+    doc.text('The Branch Manager,', 14, letterStartY + 5);
+    doc.text('Canara Bank,', 14, letterStartY + 10);
+    doc.text('Deosugur -584 170', 14, letterStartY + 15);
 
     // Subject
-    doc.text('SUB:SALARY DISTRUBUTION', 14, 47);
+    doc.text('SUB:SALARY DISTRUBUTION', 14, letterStartY + 22);
 
     // Account Number Center
     doc.setFontSize(10.5);
-    doc.text(`ACCOUNT No. ${companyAccountNo}`, 105, 53, { align: 'center' });
+    doc.text(`ACCOUNT No. ${companyAccountNo}`, 105, letterStartY + 28, { align: 'center' });
 
     // Covering Letter Paragraph
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9.5);
     const coveringText = `We are enclosed herewith a cheque for Rs${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear} ,Please credit the amount to following accounts.`;
-    doc.text(coveringText, 14, 59, { maxWidth: 182 });
+    doc.text(coveringText, 14, letterStartY + 34, { maxWidth: 182 });
 
     // Cheque No and Date
-    doc.text(`Cheque No :${chequeNo}`, 14, 71);
-    doc.text(`Date:- ${bankBranchDate}`, 196, 71, { align: 'right' });
+    doc.text(`Cheque No :${chequeNo}`, 14, letterStartY + 46);
+    doc.text(`Date:- ${bankBranchDate}`, 196, letterStartY + 46, { align: 'right' });
 
     // Table Data
     const tableRows = list.map((w, idx) => [
@@ -1476,7 +1479,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     ]);
 
     autoTable(doc, {
-      startY: 74,
+      startY: letterStartY + 49,
       head: [['SI NO', 'NAME', 'ACOUNT NUMBER', 'IFSC CODE', 'AMOUNT']],
       body: tableRows,
       foot: [['', 'Total Amount', '', '', totalAmount.toLocaleString('en-IN')]],
