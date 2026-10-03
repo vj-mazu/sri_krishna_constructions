@@ -2565,7 +2565,7 @@ app.get('/api/approvals', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
       FROM "ApprovalRequest" a
       LEFT JOIN "User" u ON a."requestedById" = u.id
       WHERE a.status = 'PENDING' AND a.type != 'EDIT_ATTENDANCE'
-      ORDER BY a."createdAt" DESC
+      ORDER BY a."createdAt" ASC, a."id" ASC
     `);
 
     res.json({ approvals: rows });
@@ -4484,7 +4484,7 @@ app.get('/api/attendance/correction-requests', authenticateToken, async (req, re
        JOIN "Division" d ON r."newDivisionId" = d."id"
        JOIN "User" u ON r."requestedById" = u."id"
        LEFT JOIN "User" a ON r."approvedById" = a."id"
-       ORDER BY r."createdAt" DESC`
+       ORDER BY r."createdAt" ASC, r."id" ASC`
     );
     res.json({ requests: rows });
   } catch (err) {
