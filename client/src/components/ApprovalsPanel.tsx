@@ -502,10 +502,13 @@ export const ApprovalsPanel: React.FC = () => {
               {(inspectModal.type === 'SALE_ENTRY' || inspectModal.type === 'INDIVIDUAL_SALE') ? (() => {
                 const p = typeof inspectModal.payload === 'string' ? safeParsePayload(inspectModal.payload) : inspectModal.payload;
                 const isInd = inspectModal.type === 'INDIVIDUAL_SALE';
-                const basic = p?.basicAmount || ((p?.qty || 0) * (p?.rate || 0));
-                const cgst = p?.cgstAmount || (basic * ((p?.cgstPercent || 0) / 100));
-                const sgst = p?.sgstAmount || (basic * ((p?.sgstPercent || 0) / 100));
-                const igst = p?.igstAmount || (basic * ((p?.igstPercent || 0) / 100));
+                const basic = Number(p?.basicAmount) || ((Number(p?.qty) || 0) * (Number(p?.rate) || 0));
+                const cgstP = Number(p?.cgstPercent) || 0;
+                const sgstP = Number(p?.sgstPercent) || 0;
+                const igstP = Number(p?.igstPercent) || 0;
+                const cgst = p?.cgstAmount !== undefined && p?.cgstAmount !== null ? Number(p.cgstAmount) : (basic * (cgstP / 100));
+                const sgst = p?.sgstAmount !== undefined && p?.sgstAmount !== null ? Number(p.sgstAmount) : (basic * (sgstP / 100));
+                const igst = p?.igstAmount !== undefined && p?.igstAmount !== null ? Number(p.igstAmount) : (basic * (igstP / 100));
 
                 return (
                   <>
@@ -553,28 +556,38 @@ export const ApprovalsPanel: React.FC = () => {
                     </div>
 
                     {/* TAX BREAKDOWN CARD */}
-                    <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 space-y-1 text-xs font-mono">
+                    <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 space-y-1.5 text-xs font-mono">
                       <div className="flex justify-between text-slate-700">
                         <span>Basic Value:</span>
                         <strong className="text-slate-900">{formatCurrency(basic)}</strong>
                       </div>
-                      <div className="flex justify-between text-blue-800">
-                        <span>CGST ({p?.cgstPercent || 0}%):</span>
-                        <span>+{formatCurrency(cgst)}</span>
-                      </div>
-                      <div className="flex justify-between text-blue-800">
-                        <span>SGST ({p?.sgstPercent || 0}%):</span>
-                        <span>+{formatCurrency(sgst)}</span>
-                      </div>
-                      {(p?.igstPercent || 0) > 0 && (
+                      {cgstP > 0 && (
+                        <div className="flex justify-between text-blue-800">
+                          <span>CGST ({cgstP}%):</span>
+                          <span>+{formatCurrency(cgst)}</span>
+                        </div>
+                      )}
+                      {sgstP > 0 && (
+                        <div className="flex justify-between text-blue-800">
+                          <span>SGST ({sgstP}%):</span>
+                          <span>+{formatCurrency(sgst)}</span>
+                        </div>
+                      )}
+                      {igstP > 0 && (
                         <div className="flex justify-between text-indigo-800">
-                          <span>IGST ({p?.igstPercent}%):</span>
+                          <span>IGST ({igstP}%):</span>
                           <span>+{formatCurrency(igst)}</span>
+                        </div>
+                      )}
+                      {cgstP === 0 && sgstP === 0 && igstP === 0 && (
+                        <div className="flex justify-between text-slate-500 italic text-[11px]">
+                          <span>GST (0%):</span>
+                          <span className="font-semibold text-slate-600">₹0 (Nil Tax)</span>
                         </div>
                       )}
                       <div className="flex justify-between font-black text-sm text-blue-950 pt-2 border-t border-blue-200">
                         <span>Total Invoice Amount:</span>
-                        <span className="text-blue-900">{formatCurrency(p?.totalAmount)}</span>
+                        <span className="text-blue-900">{formatCurrency(p?.totalAmount || (basic + cgst + sgst + igst))}</span>
                       </div>
                     </div>
                   </>

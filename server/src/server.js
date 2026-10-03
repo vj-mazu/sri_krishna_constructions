@@ -788,7 +788,7 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
       JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
       LEFT JOIN "User" u ON s."addedById" = u.id
       ${whereSql}
-      ORDER BY s."invoiceDate" DESC, s."id" DESC
+      ORDER BY s."invoiceDate" ASC, s."createdAt" ASC, s."id" ASC
       LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
     `;
 
@@ -1268,8 +1268,9 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
   }
 });
 
-// PUT /api/sales/:id - Update sale (Only Owner can update approved, or pending can be updated)
+// PUT /api/sales/:id - Update sale (Requires re-approval by Owner)
 app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const d = req.body;
@@ -1285,7 +1286,27 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
     const igstAmount = basicAmount * (igstPercent / 100);
     const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount;
 
-    const { rows } = await pool.query(
+    await client.query('BEGIN');
+
+    // Fetch existing sale and item details
+    const existingRes = await client.query(`
+      SELECT s.*, poi."partNumber", poi."itemName"
+      FROM "Sale" s
+      JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+      WHERE s.id = $1
+      FOR UPDATE
+    `, [id]);
+
+    if (existingRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Sale record not found' });
+    }
+
+    const existingSale = existingRes.rows[0];
+    const partNumber = existingSale.partNumber || '-';
+    const itemName = existingSale.itemName || '-';
+
+    const { rows } = await client.query(
       `UPDATE "Sale"
        SET "invoiceNumber" = COALESCE($1, "invoiceNumber"),
            "invoiceDate" = $2, "qty" = $3, "rate" = $4, "basicAmount" = $5,
@@ -1295,7 +1316,10 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
            "partyName" = $13, "supplierAddress" = $14, "gstNumber" = $15,
            "companyGstNumber" = $16,
            "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18,
-           "vehicleNumber" = $19, "remarks" = $20
+           "vehicleNumber" = $19, "remarks" = $20,
+           "status" = 'PENDING',
+           "approvedById" = NULL,
+           "approvedAt" = NULL
        WHERE id = $21
        RETURNING *`,
       [
@@ -1316,11 +1340,77 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
       ]
     );
 
-    if (rows.length === 0) return res.status(404).json({ error: 'Sale record not found' });
-    res.json(rows[0]);
+    const payloadObj = {
+      saleId: id,
+      partNumber: partNumber,
+      itemName: itemName,
+      invoiceNumber: d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : existingSale.invoiceNumber || '-',
+      invoiceDate: d.invoiceDate || existingSale.invoiceDate,
+      qty: qty,
+      rate: rate,
+      basicAmount: basicAmount,
+      cgstPercent: cgstPercent,
+      sgstPercent: sgstPercent,
+      igstPercent: igstPercent,
+      cgstAmount: cgstAmount,
+      sgstAmount: sgstAmount,
+      igstAmount: igstAmount,
+      totalAmount: totalAmount,
+      partyName: d.partyName ? d.partyName.trim() : existingSale.partyName || '-',
+      supplierAddress: d.supplierAddress ? d.supplierAddress.trim() : existingSale.supplierAddress || '-',
+      companyGstNumber: d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : existingSale.companyGstNumber || '-',
+      gstNumber: d.gstNumber ? d.gstNumber.trim().toUpperCase() : existingSale.gstNumber || '-',
+      partyInvoiceNumber: d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : existingSale.partyInvoiceNumber || '-',
+      supplierInvoiceDate: d.supplierInvoiceDate || existingSale.supplierInvoiceDate || null,
+      vehicleNumber: d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : existingSale.vehicleNumber || '-',
+      eWayBillNumber: d.eWayBillNumber || existingSale.eWayBillNumber || '-',
+      remarks: d.remarks ? d.remarks.trim() : existingSale.remarks || '-'
+    };
+
+    // Check if an existing ApprovalRequest exists for this sale
+    const approvalCheck = await client.query(
+      `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'SALE_ENTRY' ORDER BY "createdAt" DESC LIMIT 1`,
+      [`%"saleId":"${id}"%`]
+    );
+
+    if (approvalCheck.rows.length > 0) {
+      await client.query(
+        `UPDATE "ApprovalRequest"
+         SET "status" = 'PENDING',
+             "payload" = $1,
+             "reason" = $2,
+             "requestedById" = $3,
+             "approvedById" = NULL,
+             "rejectionReason" = NULL,
+             "updatedAt" = NOW()
+         WHERE id = $4`,
+        [
+          JSON.stringify(payloadObj),
+          `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`,
+          req.user.id,
+          approvalCheck.rows[0].id
+        ]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify(payloadObj),
+          `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: 'Sale invoice updated and re-submitted for Owner Approval', sale: rows[0] });
   } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('Error updating sale:', err);
     res.status(500).json({ error: 'Failed to update sale record' });
+  } finally {
+    client.release();
   }
 });
 
@@ -2247,6 +2337,9 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
     const newEWayBill = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : currentTx.eWayBillNumber;
     const newRemarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : currentTx.remarks;
 
+    const isOutwardSale = currentTx.type === 'OUTWARD' || currentTx.type === 'SALE';
+    const nextStatus = isOutwardSale ? 'PENDING' : currentTx.status;
+
     const { rows: updatedRows } = await client.query(
       `UPDATE "IndividualStockTransaction"
        SET "date" = $1,
@@ -2266,8 +2359,11 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
            "partyInvoiceNumber" = $15,
            "vehicleNumber" = $16,
            "eWayBillNumber" = $17,
-           "remarks" = $18
-       WHERE "id" = $19
+           "remarks" = $18,
+           "status" = $19,
+           "approvedById" = CASE WHEN $19 = 'PENDING' THEN NULL ELSE "approvedById" END,
+           "approvedAt" = CASE WHEN $19 = 'PENDING' THEN NULL ELSE "approvedAt" END
+       WHERE "id" = $20
        RETURNING *`,
       [
         newDate, newQty, newRate, basicAmount,
@@ -2275,9 +2371,74 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
         totalAmount,
         newPartyName, newSupplierAddress, newGstNumber, newInvoiceNo,
         newVehicleNumber, newEWayBill, newRemarks,
+        nextStatus,
         id
       ]
     );
+
+    if (isOutwardSale) {
+      const indPayload = {
+        transactionId: id,
+        stockId: stockId,
+        itemName: stock.itemName,
+        partNumber: stock.partNumber,
+        invoiceNumber: newInvoiceNo,
+        invoiceDate: newDate,
+        qty: newQty,
+        rate: newRate,
+        basicAmount,
+        cgstPercent: cgstP,
+        sgstPercent: sgstP,
+        igstPercent: igstP,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
+        totalAmount,
+        partyName: newPartyName || '-',
+        supplierAddress: newSupplierAddress || '-',
+        companyGstNumber: '29DWKPP3582H1ZV',
+        gstNumber: newGstNumber || '-',
+        partyInvoiceNumber: newInvoiceNo,
+        vehicleNumber: newVehicleNumber || '-',
+        eWayBillNumber: newEWayBill || '-',
+        remarks: newRemarks || '-'
+      };
+
+      const indAppCheck = await client.query(
+        `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'INDIVIDUAL_SALE' ORDER BY "createdAt" DESC LIMIT 1`,
+        [`%"transactionId":"${id}"%`]
+      );
+
+      if (indAppCheck.rows.length > 0) {
+        await client.query(
+          `UPDATE "ApprovalRequest"
+           SET "status" = 'PENDING',
+               "payload" = $1,
+               "reason" = $2,
+               "requestedById" = $3,
+               "approvedById" = NULL,
+               "rejectionReason" = NULL,
+               "updatedAt" = NOW()
+           WHERE id = $4`,
+          [
+            JSON.stringify(indPayload),
+            `Individual Stock Sale #${newInvoiceNo} (${newQty} units of ${stock.itemName}) edited and re-submitted for Owner Approval`,
+            req.user.id,
+            indAppCheck.rows[0].id
+          ]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, 'INDIVIDUAL_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+          [
+            req.user.id,
+            JSON.stringify(indPayload),
+            `Individual Stock Sale #${newInvoiceNo} (${newQty} units of ${stock.itemName}) edited and re-submitted for Owner Approval`
+          ]
+        );
+      }
+    }
 
     // Sync master currentStock
     await client.query(
