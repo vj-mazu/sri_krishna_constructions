@@ -1684,7 +1684,7 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
       FROM "IndividualStock" s
       LEFT JOIN "User" u ON s."addedById" = u.id
       ${whereSql}
-      ORDER BY s."createdAt" DESC, s."id" DESC
+      ORDER BY s."createdAt" ASC, s."id" ASC
       LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
     `;
 
@@ -1982,7 +1982,7 @@ app.get('/api/individual-stocks/transactions', authenticateToken, async (req, re
        LEFT JOIN "User" u ON tx."addedById" = u.id
        LEFT JOIN "User" au ON tx."approvedById" = au.id
        ${whereSql}
-       ORDER BY tx."date" DESC, tx."createdAt" DESC, tx."id" DESC
+       ORDER BY tx."date" ASC, tx."createdAt" ASC, tx."id" ASC
        LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}`,
       queryParams
     );
@@ -2006,7 +2006,7 @@ app.get('/api/individual-stocks/:id/transactions', authenticateToken, async (req
        LEFT JOIN "User" u ON tx."addedById" = u.id
        LEFT JOIN "User" au ON tx."approvedById" = au.id
        WHERE tx."stockId" = $1
-       ORDER BY tx."date" DESC, tx."createdAt" DESC, tx."id" DESC`,
+       ORDER BY tx."date" ASC, tx."createdAt" ASC, tx."id" ASC`,
       [id]
     );
 
@@ -2871,7 +2871,7 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
       query += ` WHERE ` + whereClauses.join(' AND ');
     }
 
-    query += ` ORDER BY wo."invoiceDate" DESC, wo."createdAt" DESC`;
+    query += ` ORDER BY wo."invoiceDate" ASC, wo."createdAt" ASC, wo."id" ASC`;
 
     const { rows } = await pool.query(query, params);
     res.json({ workOrders: rows, totalCount: rows.length });

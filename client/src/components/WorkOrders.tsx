@@ -71,7 +71,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   // Pagination & Sorting state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('ASC');
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
