@@ -59,6 +59,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
 
   // --- TAB 4: INVOICES PREVIEW & MODAL ---
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
+  const [previewInwardReceipt, setPreviewInwardReceipt] = useState<any | null>(null);
 
   // All Items Dropdown cache for Inward / Sale forms
   const [allItemsList, setAllItemsList] = useState<any[]>([]);
@@ -80,12 +81,12 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
   });
 
   const [purchaseForm, setPurchaseForm] = useState({
-    stockId: '', date: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0,
+    stockId: '', date: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
     partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
   });
 
   const [saleForm, setSaleForm] = useState({
-    stockId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0,
+    stockId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
     partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
   });
 
@@ -320,11 +321,12 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
         cgstPercent: Number(purchaseForm.cgstPercent) || 0,
         sgstPercent: Number(purchaseForm.sgstPercent) || 0,
         igstPercent: Number(purchaseForm.igstPercent) || 0,
+        shippingCharges: Number(purchaseForm.shippingCharges) || 0,
       });
       showToast('Inward delivery recorded successfully', 'success');
       setShowAddPurchaseModal(false);
       setPurchaseForm({
-        stockId: '', date: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0,
+        stockId: '', date: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
       });
       fetchPurchases();
@@ -354,6 +356,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
         cgstPercent: Number(editingPurchase.cgstPercent) || 0,
         sgstPercent: Number(editingPurchase.sgstPercent) || 0,
         igstPercent: Number(editingPurchase.igstPercent) || 0,
+        shippingCharges: Number(editingPurchase.shippingCharges) || 0,
       });
       showToast('Inward transaction updated successfully', 'success');
       setEditingPurchase(null);
@@ -422,11 +425,12 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
         cgstPercent: Number(saleForm.cgstPercent) || 0,
         sgstPercent: Number(saleForm.sgstPercent) || 0,
         igstPercent: Number(saleForm.igstPercent) || 0,
+        shippingCharges: Number(saleForm.shippingCharges) || 0,
       });
       showToast('Sale dispatch recorded successfully', 'success');
       setShowAddSaleModal(false);
       setSaleForm({
-        stockId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0,
+        stockId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
       });
       fetchSales();
@@ -463,6 +467,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
         cgstPercent: Number(editingSale.cgstPercent) || 0,
         sgstPercent: Number(editingSale.sgstPercent) || 0,
         igstPercent: Number(editingSale.igstPercent) || 0,
+        shippingCharges: Number(editingSale.shippingCharges) || 0,
       });
       showToast('Sale dispatch record updated successfully', 'success');
       setEditingSale(null);
@@ -1025,23 +1030,24 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   <th className="p-3 border-r border-slate-200 w-44">Supplier / Party</th>
                   <th className="p-3 border-r border-slate-200 text-right w-24 bg-blue-50 text-blue-900 font-bold">Inward Qty</th>
                   <th className="p-3 border-r border-slate-200 text-right w-24">Rate (₹)</th>
+                  <th className="p-3 border-r border-slate-200 text-right w-24">Shipping (₹)</th>
                   <th className="p-3 border-r border-slate-200 text-right w-28 font-bold">Total Amount</th>
                   <th className="p-3 border-r border-slate-200 w-28">Vehicle No</th>
                   <th className="p-3 border-r border-slate-200">Remarks</th>
-                  {isManagerOrOwner && <th className="p-3 text-center w-24">Actions</th>}
+                  <th className="p-3 text-center w-28">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {purchasesLoading ? (
                   <tr>
-                    <td colSpan={11} className="p-8 text-center text-slate-500">
+                    <td colSpan={12} className="p-8 text-center text-slate-500">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-900 mb-2" />
                       Loading inward deliveries...
                     </td>
                   </tr>
                 ) : purchases.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="p-8 text-center text-slate-400 font-semibold">
+                    <td colSpan={12} className="p-8 text-center text-slate-400 font-semibold">
                       No inward deliveries recorded. Click "Stock In (Inward)" to record inward goods.
                     </td>
                   </tr>
@@ -1050,8 +1056,10 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                     const itm = p.stock || p.item || allItemsList.find(i => i.id === p.stockId) || {};
                     const qty = Number(p.qty || 0);
                     const rate = Number(p.rate || 0);
+                    const ship = Number(p.shippingCharges || 0);
                     const base = qty * rate;
                     const tax = base * ((Number(p.cgstPercent || 0) + Number(p.sgstPercent || 0) + Number(p.igstPercent || 0)) / 100);
+                    const total = base + tax + ship;
                     const slNo = (purchasesPage - 1) * purchasesPageSize + idx + 1;
 
                     return (
@@ -1068,32 +1076,71 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                           +{qty} {itm.unit || 'NOS'}
                         </td>
                         <td className="p-3 border-r border-slate-200 text-right font-mono text-slate-700">{fmtCurrency(rate)}</td>
-                        <td className="p-3 border-r border-slate-200 text-right font-mono font-black text-slate-900">{fmtCurrency(base + tax)}</td>
+                        <td className="p-3 border-r border-slate-200 text-right font-mono text-blue-900">{ship ? fmtCurrency(ship) : '-'}</td>
+                        <td className="p-3 border-r border-slate-200 text-right font-mono font-black text-slate-900">{fmtCurrency(total)}</td>
                         <td className="p-3 border-r border-slate-200 font-mono text-slate-600">{p.vehicleNumber || '-'}</td>
                         <td className="p-3 border-r border-slate-200 text-slate-500">{p.remarks || '-'}</td>
-                        {isManagerOrOwner && (
-                          <td className="p-3 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                onClick={() => setEditingPurchase({
+                        <td className="p-3 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              onClick={() => {
+                                setPreviewInwardReceipt({
                                   ...p,
-                                  date: p.date ? new Date(p.date).toISOString().slice(0, 10) : ''
-                                })}
-                                className="p-1.5 text-blue-700 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition-colors border border-blue-200 bg-white shadow-sm"
-                                title="Edit Inward Delivery"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeletePurchase(p.id, p.partyInvoiceNumber)}
-                                className="p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-800 rounded-lg transition-colors border border-rose-200 bg-white shadow-sm"
-                                title="Delete Inward Delivery"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
+                                  type: 'INWARD',
+                                  invoiceNumber: p.partyInvoiceNumber,
+                                  invoiceDate: p.date,
+                                  partyName: p.partyName,
+                                  partyAddress: p.supplierAddress,
+                                  gstNumber: p.gstNumber,
+                                  quantity: p.qty,
+                                  rate: p.rate,
+                                  unitPrice: p.rate,
+                                  cgstPercent: p.cgstPercent,
+                                  sgstPercent: p.sgstPercent,
+                                  igstPercent: p.igstPercent,
+                                  shippingCharges: p.shippingCharges || 0,
+                                  item: {
+                                    itemName: itm.itemName || p.receivedItemName || 'Stock Item',
+                                    partNumber: itm.partNumber || p.receivedPartNumber || '-',
+                                    kpclCode: itm.kpclCode || '-',
+                                    unit: itm.unit || 'NOS'
+                                  },
+                                  purchaseOrderItem: {
+                                    itemName: itm.itemName || p.receivedItemName || 'Stock Item',
+                                    partNumber: itm.partNumber || p.receivedPartNumber || '-',
+                                    unit: itm.unit || 'NOS'
+                                  }
+                                });
+                              }}
+                              className="p-1.5 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-900 rounded-lg transition-colors border border-emerald-200 bg-white shadow-sm"
+                              title="View & Download Inward Material Receipt"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                            </button>
+                            {isManagerOrOwner && (
+                              <>
+                                <button
+                                  onClick={() => setEditingPurchase({
+                                    ...p,
+                                    shippingCharges: p.shippingCharges || 0,
+                                    date: p.date ? new Date(p.date).toISOString().slice(0, 10) : ''
+                                  })}
+                                  className="p-1.5 text-blue-700 hover:bg-blue-50 hover:text-blue-900 rounded-lg transition-colors border border-blue-200 bg-white shadow-sm"
+                                  title="Edit Inward Delivery"
+                                >
+                                  <Edit className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeletePurchase(p.id, p.partyInvoiceNumber)}
+                                  className="p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-800 rounded-lg transition-colors border border-rose-200 bg-white shadow-sm"
+                                  title="Delete Inward Delivery"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     );
                   })
@@ -1265,6 +1312,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">CGST (₹)</th>
                   <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">SGST (₹)</th>
                   <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">IGST (₹)</th>
+                  <th className="p-2.5 border-r border-sky-900 text-right w-20 whitespace-nowrap">Shipping (₹)</th>
                   <th className="p-2.5 border-r border-sky-900 text-right w-28 whitespace-nowrap font-black bg-emerald-950/60 text-emerald-200">Total (₹)</th>
                   <th className="p-2.5 border-r border-sky-900 text-center w-24">Status</th>
                   <th className="p-2.5 text-center w-28 sticky right-0 bg-sky-950 z-20 border-l border-sky-800 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.3)]">Actions</th>
@@ -1273,14 +1321,14 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
               <tbody className="divide-y divide-slate-200 bg-white">
                 {salesLoading ? (
                   <tr>
-                    <td colSpan={18} className="p-12 text-center text-slate-500 font-semibold">
+                    <td colSpan={19} className="p-12 text-center text-slate-500 font-semibold">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#1e3a8a] mb-2" />
                       Loading sales records...
                     </td>
                   </tr>
                 ) : sales.length === 0 ? (
                   <tr>
-                    <td colSpan={18} className="p-12 text-center text-slate-400 font-semibold">
+                    <td colSpan={19} className="p-12 text-center text-slate-400 font-semibold">
                       No sales recorded yet. Click "Record Sale" to record an outward dispatch.
                     </td>
                   </tr>
@@ -1289,11 +1337,12 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                     const itm = s.stock || s.item || allItemsList.find(i => i.id === s.stockId) || {};
                     const qty = Number(s.qty || 0);
                     const rate = Number(s.rate || 0);
+                    const ship = Number(s.shippingCharges || 0);
                     const basic = qty * rate;
                     const cgst = basic * (Number(s.cgstPercent || 0) / 100);
                     const sgst = basic * (Number(s.sgstPercent || 0) / 100);
                     const igst = basic * (Number(s.igstPercent || 0) / 100);
-                    const total = basic + cgst + sgst + igst;
+                    const total = basic + cgst + sgst + igst + ship;
 
                     const slNo = (salesPage - 1) * salesPageSize + idx + 1;
                     const invNo = s.invoiceNumber || s.partyInvoiceNumber || '-';
@@ -1349,6 +1398,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                         <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-600 whitespace-nowrap">{fmtCurrency(cgst)}</td>
                         <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-600 whitespace-nowrap">{fmtCurrency(sgst)}</td>
                         <td className="p-2 border-r border-slate-200 text-right font-mono text-slate-600 whitespace-nowrap">{fmtCurrency(igst)}</td>
+                        <td className="p-2 border-r border-slate-200 text-right font-mono text-blue-900 whitespace-nowrap">{ship ? fmtCurrency(ship) : '-'}</td>
                         <td className="p-2 border-r border-slate-200 text-right font-mono font-black text-slate-900 bg-slate-50 whitespace-nowrap">{fmtCurrency(total)}</td>
                         <td className="p-2 border-r border-slate-200 text-center">
                           <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
@@ -1374,6 +1424,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                                 cgstPercent: s.cgstPercent,
                                 sgstPercent: s.sgstPercent,
                                 igstPercent: s.igstPercent,
+                                shippingCharges: s.shippingCharges || 0,
                                 item: {
                                   itemName: itm.itemName || s.itemName,
                                   partNumber: itm.partNumber || s.partNumber,
@@ -1382,7 +1433,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                                 }
                               }])}
                               className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
-                              title="View &amp; Download Official Tax Invoice"
+                              title="View & Download Official Tax Invoice"
                             >
                               <Receipt className="w-3.5 h-3.5" />
                             </button>
@@ -1391,6 +1442,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                                 <button
                                   onClick={() => setEditingSale({
                                     ...s,
+                                    shippingCharges: s.shippingCharges || 0,
                                     invoiceNumber: invNo,
                                     invoiceDate: s.invoiceDate ? new Date(s.invoiceDate).toISOString().slice(0, 10) : (s.date ? new Date(s.date).toISOString().slice(0, 10) : '')
                                   })}
@@ -2088,6 +2140,50 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
 
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:col-span-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">CGST %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={purchaseForm.cgstPercent}
+                      onChange={(e) => setPurchaseForm(prev => ({ ...prev, cgstPercent: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">SGST %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={purchaseForm.sgstPercent}
+                      onChange={(e) => setPurchaseForm(prev => ({ ...prev, sgstPercent: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">IGST %</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={purchaseForm.igstPercent}
+                      onChange={(e) => setPurchaseForm(prev => ({ ...prev, igstPercent: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Shipping Charges (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={purchaseForm.shippingCharges || ''}
+                      onChange={(e) => setPurchaseForm(prev => ({ ...prev, shippingCharges: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                    />
+                  </div>
+                </div>
+
                 <div className="sm:col-span-2">
                   <label className="text-xs font-bold text-slate-700 block mb-1">Remarks / Delivery Note</label>
                   <input
@@ -2099,6 +2195,36 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
               </div>
+
+              {/* LIVE BREAKDOWN */}
+              {(() => {
+                const qty = Number(purchaseForm.qty || 0);
+                const rate = Number(purchaseForm.rate || 0);
+                const cgstP = Number(purchaseForm.cgstPercent || 0);
+                const sgstP = Number(purchaseForm.sgstPercent || 0);
+                const igstP = Number(purchaseForm.igstPercent || 0);
+                const ship = Number(purchaseForm.shippingCharges || 0);
+                const base = qty * rate;
+                const cgst = base * (cgstP / 100);
+                const sgst = base * (sgstP / 100);
+                const igst = base * (igstP / 100);
+                const total = base + cgst + sgst + igst + ship;
+
+                return (
+                  <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="text-slate-600">Basic: <strong>{fmtCurrency(base)}</strong></span>
+                      <span className="text-emerald-700">CGST ({cgstP}%): +{fmtCurrency(cgst)}</span>
+                      <span className="text-emerald-700">SGST ({sgstP}%): +{fmtCurrency(sgst)}</span>
+                      {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{fmtCurrency(igst)}</span>}
+                      {ship > 0 && <span className="text-blue-900 font-bold">Shipping: +{fmtCurrency(ship)}</span>}
+                    </div>
+                    <span className="text-sm font-black text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 shadow-sm">
+                      Total Inward: {fmtCurrency(total)}
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
                 <button
@@ -2211,7 +2337,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:col-span-2">
                   <div>
                     <label className="text-[10px] font-bold text-slate-600 block mb-1">CGST %</label>
                     <input
@@ -2242,6 +2368,17 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                       className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
                     />
                   </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Shipping Charges (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={editingPurchase.shippingCharges || ''}
+                      onChange={(e) => setEditingPurchase((prev: any) => ({ ...prev, shippingCharges: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                    />
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -2254,6 +2391,36 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
               </div>
+
+              {/* LIVE BREAKDOWN */}
+              {(() => {
+                const qty = Number(editingPurchase.qty || 0);
+                const rate = Number(editingPurchase.rate || 0);
+                const cgstP = Number(editingPurchase.cgstPercent || 0);
+                const sgstP = Number(editingPurchase.sgstPercent || 0);
+                const igstP = Number(editingPurchase.igstPercent || 0);
+                const ship = Number(editingPurchase.shippingCharges || 0);
+                const base = qty * rate;
+                const cgst = base * (cgstP / 100);
+                const sgst = base * (sgstP / 100);
+                const igst = base * (igstP / 100);
+                const total = base + cgst + sgst + igst + ship;
+
+                return (
+                  <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="text-slate-600">Basic: <strong>{fmtCurrency(base)}</strong></span>
+                      <span className="text-emerald-700">CGST ({cgstP}%): +{fmtCurrency(cgst)}</span>
+                      <span className="text-emerald-700">SGST ({sgstP}%): +{fmtCurrency(sgst)}</span>
+                      {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{fmtCurrency(igst)}</span>}
+                      {ship > 0 && <span className="text-blue-900 font-bold">Shipping: +{fmtCurrency(ship)}</span>}
+                    </div>
+                    <span className="text-sm font-black text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 shadow-sm">
+                      Total Inward: {fmtCurrency(total)}
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
                 <button
@@ -2415,7 +2582,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:col-span-2">
                   <div>
                     <label className="text-[10px] font-bold text-slate-600 block mb-1">CGST %</label>
                     <input
@@ -2446,6 +2613,17 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                       className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
                     />
                   </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Shipping Charges (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={saleForm.shippingCharges || ''}
+                      onChange={(e) => setSaleForm(prev => ({ ...prev, shippingCharges: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                    />
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -2459,6 +2637,36 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
               </div>
+
+              {/* LIVE BREAKDOWN */}
+              {(() => {
+                const qty = Number(saleForm.qty || 0);
+                const rate = Number(saleForm.rate || 0);
+                const cgstP = Number(saleForm.cgstPercent || 0);
+                const sgstP = Number(saleForm.sgstPercent || 0);
+                const igstP = Number(saleForm.igstPercent || 0);
+                const ship = Number(saleForm.shippingCharges || 0);
+                const base = qty * rate;
+                const cgst = base * (cgstP / 100);
+                const sgst = base * (sgstP / 100);
+                const igst = base * (igstP / 100);
+                const total = base + cgst + sgst + igst + ship;
+
+                return (
+                  <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="text-slate-600">Basic: <strong>{fmtCurrency(base)}</strong></span>
+                      <span className="text-amber-800">CGST ({cgstP}%): +{fmtCurrency(cgst)}</span>
+                      <span className="text-amber-800">SGST ({sgstP}%): +{fmtCurrency(sgst)}</span>
+                      {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{fmtCurrency(igst)}</span>}
+                      {ship > 0 && <span className="text-blue-900 font-bold">Shipping: +{fmtCurrency(ship)}</span>}
+                    </div>
+                    <span className="text-sm font-black text-amber-900 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm">
+                      Total Sale: {fmtCurrency(total)}
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
                 <button
@@ -2593,7 +2801,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:col-span-2">
                   <div>
                     <label className="text-[10px] font-bold text-slate-600 block mb-1">CGST %</label>
                     <input
@@ -2624,6 +2832,17 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                       className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
                     />
                   </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Shipping Charges (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={editingSale.shippingCharges || ''}
+                      onChange={(e) => setEditingSale((prev: any) => ({ ...prev, shippingCharges: parseFloat(e.target.value) || 0 }))}
+                      className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono font-bold"
+                    />
+                  </div>
                 </div>
 
                 <div className="sm:col-span-2">
@@ -2636,6 +2855,36 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   />
                 </div>
               </div>
+
+              {/* LIVE BREAKDOWN */}
+              {(() => {
+                const qty = Number(editingSale.qty || 0);
+                const rate = Number(editingSale.rate || 0);
+                const cgstP = Number(editingSale.cgstPercent || 0);
+                const sgstP = Number(editingSale.sgstPercent || 0);
+                const igstP = Number(editingSale.igstPercent || 0);
+                const ship = Number(editingSale.shippingCharges || 0);
+                const base = qty * rate;
+                const cgst = base * (cgstP / 100);
+                const sgst = base * (sgstP / 100);
+                const igst = base * (igstP / 100);
+                const total = base + cgst + sgst + igst + ship;
+
+                return (
+                  <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                    <div className="flex flex-wrap gap-2 text-[11px]">
+                      <span className="text-slate-600">Basic: <strong>{fmtCurrency(base)}</strong></span>
+                      <span className="text-amber-800">CGST ({cgstP}%): +{fmtCurrency(cgst)}</span>
+                      <span className="text-amber-800">SGST ({sgstP}%): +{fmtCurrency(sgst)}</span>
+                      {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{fmtCurrency(igst)}</span>}
+                      {ship > 0 && <span className="text-blue-900 font-bold">Shipping: +{fmtCurrency(ship)}</span>}
+                    </div>
+                    <span className="text-sm font-black text-amber-900 bg-white px-2.5 py-1 rounded-lg border border-amber-300 shadow-sm">
+                      Total Sale: {fmtCurrency(total)}
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-200">
                 <button
@@ -2666,6 +2915,15 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
         <SaleInvoiceModal
           sale={previewSaleInvoice}
           onClose={() => setPreviewSaleInvoice(null)}
+        />
+      )}
+
+      {/* MODAL 8: PREVIEW & PRINT OFFICIAL INWARD MATERIAL RECEIPT */}
+      {previewInwardReceipt && (
+        <SaleInvoiceModal
+          sale={previewInwardReceipt}
+          invoiceType="INWARD"
+          onClose={() => setPreviewInwardReceipt(null)}
         />
       )}
 

@@ -5,7 +5,11 @@ import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
 import { showToast } from '../toast';
 
-export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void }> = ({ sale, onClose }) => {
+export const SaleInvoiceModal: React.FC<{ 
+  sale: any | any[]; 
+  onClose: () => void;
+  invoiceType?: 'INWARD' | 'OUTWARD' | 'WORK_ORDER';
+}> = ({ sale, onClose, invoiceType }) => {
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -20,34 +24,41 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
   if (!sale) return null;
   
-  // Normalize to array of sales
+  // Normalize to array of sales / inward records
   const salesList: any[] = Array.isArray(sale) ? sale : [sale];
   if (salesList.length === 0) return null;
 
   const primarySale = salesList[0];
+  const isInward = invoiceType === 'INWARD' || primarySale.type === 'INWARD' || primarySale.type === 'PURCHASE';
   const invoiceNo = primarySale.invoiceNumber || primarySale.partyInvoiceNumber || primarySale.invoiceRefNo || `SKC/2025-26/${primarySale.id?.slice(0, 4) || '01'}`;
-  const invoiceDate = primarySale.invoiceDate ? new Date(primarySale.invoiceDate).toLocaleDateString('en-GB') : (primarySale.date ? new Date(primarySale.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'));
+  const invoiceDate = primarySale.invoiceDate 
+    ? new Date(primarySale.invoiceDate).toLocaleDateString('en-GB') 
+    : (primarySale.date ? new Date(primarySale.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'));
   
-  // Dynamic Reference: Work Order vs PO vs Direct Sale
-  const isWorkOrder = primarySale.sourceType === 'WORK_ORDER' || !!primarySale.workOrderNumber;
+  // Dynamic Reference: Work Order vs PO vs Inward vs Direct Sale
+  const isWorkOrder = invoiceType === 'WORK_ORDER' || primarySale.sourceType === 'WORK_ORDER' || !!primarySale.workOrderNumber;
   const isPo = !!(primarySale.purchaseOrder?.poNumber || (primarySale.poNumber && primarySale.poNumber !== '-'));
   
-  const refLabel = isWorkOrder ? 'WO No' : (isPo ? 'PO No' : 'Ref No');
-  const refNumber = isWorkOrder 
-    ? (primarySale.workOrderNumber || primarySale.poNumber || '-') 
-    : (primarySale.poNumber || primarySale.purchaseOrder?.poNumber || '-');
+  const refLabel = isInward ? 'Supplier Inv No' : (isWorkOrder ? 'WO No' : (isPo ? 'PO No' : 'Ref No'));
+  const refNumber = isInward 
+    ? (primarySale.partyInvoiceNumber || primarySale.invoiceNumber || '-')
+    : (isWorkOrder 
+      ? (primarySale.workOrderNumber || primarySale.poNumber || '-') 
+      : (primarySale.poNumber || primarySale.purchaseOrder?.poNumber || '-'));
   
-  const dateLabel = isWorkOrder ? 'WO Date' : (isPo ? 'PO Date' : 'Order Date');
-  const rawRefDate = isWorkOrder 
-    ? (primarySale.workOrderDate || primarySale.poDate) 
-    : (primarySale.poDate || primarySale.purchaseOrder?.date);
+  const dateLabel = isInward ? 'Supplier Inv Date' : (isWorkOrder ? 'WO Date' : (isPo ? 'PO Date' : 'Order Date'));
+  const rawRefDate = isInward
+    ? (primarySale.supplierInvoiceDate || primarySale.invoiceDate || primarySale.date)
+    : (isWorkOrder 
+      ? (primarySale.workOrderDate || primarySale.poDate) 
+      : (primarySale.poDate || primarySale.purchaseOrder?.date));
   const refDate = rawRefDate ? new Date(rawRefDate).toLocaleDateString('en-GB') : invoiceDate;
 
   // Party info
-  const partyName = primarySale.partyName || 'Customer';
+  const partyName = primarySale.partyName || (isInward ? 'Supplier' : 'Customer');
   const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || '';
   const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || '';
-  const isKpclParty = /kpcl|rtps|raichur thermal/i.test(partyName);
+  const isKpclParty = !isInward && /kpcl|rtps|raichur thermal/i.test(partyName);
 
   // Format currency helper preserving paise if fractional
   const fmt = (n: number) => {
@@ -64,12 +75,14 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
   let totalCgst = 0;
   let totalSgst = 0;
   let totalIgst = 0;
+  let totalShipping = 0;
 
   const itemsRows = salesList.map((s, idx) => {
     const itm = s.purchaseOrderItem || s.item || s.stock || {};
     const q = Number(s.qty || s.quantity || 0);
     const r = Number(s.rate || s.unitPrice || 0);
     const b = round2(q * r);
+    const ship = Number(s.shippingCharges || 0);
     
     const cgstPct = s.cgstPercent !== undefined ? Number(s.cgstPercent) : 0;
     const sgstPct = s.sgstPercent !== undefined ? Number(s.sgstPercent) : 0;
@@ -83,24 +96,26 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
     totalCgst = round2(totalCgst + cg);
     totalSgst = round2(totalSgst + sg);
     totalIgst = round2(totalIgst + ig);
+    totalShipping = round2(totalShipping + ship);
 
     return {
       slNo: idx + 1,
       kpclCode: itm.kpclCode || s.kpclCode || '-',
       itemName: itm.itemName || s.itemName || 'STANDALONE ITEM',
-      specifications: itm.specifications || s.description || s.remarks || 'DIRECT PURCHASE / SALE',
-      partNumber: itm.partNumber || s.partNumber || '',
+      specifications: itm.specifications || s.description || s.remarks || (isInward ? 'INWARD MATERIAL RECEIPT' : 'DIRECT PURCHASE / SALE'),
+      partNumber: itm.partNumber || s.partNumber || s.receivedPartNumber || '',
       unit: itm.unit || s.unit || "NOS",
       qty: q,
       rate: r,
       amount: b,
+      shippingCharges: ship,
       cgstPercent: cgstPct,
       sgstPercent: sgstPct,
       igstPercent: igstPct
     };
   });
 
-  const totalInvoiceAmount = round2(totalBasic + totalCgst + totalSgst + totalIgst);
+  const totalInvoiceAmount = round2(totalBasic + totalCgst + totalSgst + totalIgst + totalShipping);
 
   const effectiveCgstPercent = primarySale.cgstPercent !== undefined ? Number(primarySale.cgstPercent) : (itemsRows[0]?.cgstPercent || 0);
   const effectiveSgstPercent = primarySale.sgstPercent !== undefined ? Number(primarySale.sgstPercent) : (itemsRows[0]?.sgstPercent || 0);
@@ -162,11 +177,11 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       doc.line(margin, y, margin + contentWidth, y);
       y += 3.5;
 
-      // 3. BOXED "TAX INVOICE" TITLE
+      // 3. BOXED TITLE
       doc.rect(margin, y, contentWidth, 7.5);
-      doc.setFontSize(12);
+      doc.setFontSize(11);
       doc.setFont('helvetica', 'bold');
-      doc.text('TAX INVOICE', margin + (contentWidth / 2), y + 5.5, { align: 'center' });
+      doc.text(isInward ? 'INWARD MATERIAL RECEIPT / PURCHASE INVOICE' : 'TAX INVOICE', margin + (contentWidth / 2), y + 5.2, { align: 'center' });
       y += 7.5;
 
       // 4. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID
@@ -180,15 +195,15 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       doc.setFontSize(7.2);
       let ly = y + 4;
       doc.setFont('helvetica', 'bold');
-      doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
+      doc.text(`${isInward ? 'RECEIPT NO' : 'INVOICE NO'}: ${invoiceNo}`, margin + 2, ly);
       doc.line(margin, ly + 1.5, margin + colHalf, ly + 1.5);
       
       ly += 5;
-      doc.text(`INVOICE DATE: ${invoiceDate}`, margin + 2, ly);
+      doc.text(`${isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: ${invoiceDate}`, margin + 2, ly);
       doc.line(margin, ly + 1.5, margin + colHalf, ly + 1.5);
 
       ly += 4.5;
-      doc.text(`SUPPLY To : ${partyName}`, margin + 2, ly);
+      doc.text(`${isInward ? 'SUPPLIER / PARTY' : 'SUPPLY To'} : ${partyName}`, margin + 2, ly);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.2);
       
@@ -201,7 +216,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
         doc.text(`Plant Premises, Shaktinagara, PIN-584170`, margin + 2, ly + 10.6);
         doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 14.0);
       } else {
-        doc.text(`Customer Location: Shaktinagar / Raichur Region`, margin + 2, ly + 3.8);
+        doc.text(isInward ? `Supplier Location: Verified Vendor` : `Customer Location: Shaktinagar / Raichur Region`, margin + 2, ly + 3.8);
       }
       
       doc.setFont('helvetica', 'bold');
@@ -224,30 +239,38 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       doc.line(margin + colHalf, ry + 1.5, margin + contentWidth, ry + 1.5);
 
       ry += 4.5;
-      doc.text(`State of Supply: KARNATAKA (29)`, margin + colHalf + 2, ry);
+      doc.text(isInward ? `DELIVERED TO (RECEIVER):` : `State of Supply: KARNATAKA (29)`, margin + colHalf + 2, ry);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.2);
       
-      if (isKpclParty) {
+      if (isInward) {
+        doc.text(`SRI KRISHNA CONSTRUCTIONS`, margin + colHalf + 2, ry + 3.8);
+        doc.text(`#2436, Raghavendar Colony, Shaktinagar - 584170`, margin + colHalf + 2, ry + 7.2);
+        doc.text(`Raichur Dist, Karnataka`, margin + colHalf + 2, ry + 10.6);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`GST NO: 29DWKPP3582H1ZV`, margin + colHalf + 2, ry + 17.5);
+      } else if (isKpclParty) {
         doc.text(`Shipped To: Executive Engineer(Stores) Raichur Thermal`, margin + colHalf + 2, ry + 3.8);
         doc.text(`Power Station (RTPS),KPCL Plant Premises,`, margin + colHalf + 2, ry + 7.2);
         doc.text(`Shaktinagara, PIN-584170`, margin + colHalf + 2, ry + 10.6);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
       } else if (partyAddress) {
         doc.text(`Shipped To: ${partyName}`, margin + colHalf + 2, ry + 3.8);
         const shipLines = doc.splitTextToSize(partyAddress, colHalf - 4);
         doc.text(shipLines.slice(0, 3), margin + colHalf + 2, ry + 7.2);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
       } else {
         doc.text(`Shipped To: ${partyName}`, margin + colHalf + 2, ry + 3.8);
         doc.text(`Delivery as per Order Instruction`, margin + colHalf + 2, ry + 7.2);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
       }
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
-      doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
 
       y += boxHeight;
 
-      // 5. TAX INVOICE ITEMS TABLE
+      // 5. INVOICE / RECEIPT ITEMS TABLE
       const tableBody = itemsRows.map((r) => [
         r.slNo.toString(),
         r.kpclCode || '-',
@@ -301,7 +324,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       let fy = finalTableY + 4;
 
       // Draw Summary Box
-      const taxBoxHeight = (totalCgst > 0 || totalSgst > 0 || totalIgst > 0) ? 25 : 18;
+      const taxBoxHeight = (totalCgst > 0 || totalSgst > 0 || totalIgst > 0) ? (totalShipping > 0 ? 30 : 25) : (totalShipping > 0 ? 23 : 18);
       doc.rect(margin + 105, fy, 81, taxBoxHeight);
       doc.setFontSize(7.2);
       doc.setFont('helvetica', 'normal');
@@ -323,6 +346,12 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
         doc.text(`₹${fmt(totalIgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
       }
 
+      if (totalShipping > 0) {
+        taxOffset += 4.5;
+        doc.text(`Shipping Charges:`, margin + 107, fy + taxOffset);
+        doc.text(`₹${fmt(totalShipping)}`, margin + 184, fy + taxOffset, { align: 'right' });
+      }
+
       doc.line(margin + 105, fy + taxOffset + 3, margin + 186, fy + taxOffset + 3);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
@@ -333,17 +362,17 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
       const sigY = fy + taxOffset + 20;
       doc.setFontSize(7.2);
       doc.setFont('helvetica', 'normal');
-      doc.text('Receiver\'s Signature with Seal', margin + 6, sigY);
+      doc.text(isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal', margin + 6, sigY);
 
       doc.setFont('helvetica', 'bold');
       doc.text('For SRI KRISHNA CONSTRUCTIONS', margin + 120, sigY - 7);
       doc.setFont('helvetica', 'normal');
-      doc.text('Authorised Signatory', margin + 135, sigY);
+      doc.text(isInward ? 'Verified & Approved Signatory' : 'Authorised Signatory', margin + 130, sigY);
 
       doc.setFontSize(6.5);
       doc.text('Page 1 of 1', pageWidth / 2, 288, { align: 'center' });
 
-      doc.save(`TAX_INVOICE_${invoiceNo.replaceAll('/', '_')}.pdf`);
+      doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
     } catch (error) {
       console.error('Failed to generate Tax Invoice PDF:', error);
       showToast('Error generating PDF. Please check console for details.', 'error');
@@ -369,10 +398,10 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
             <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
             <div className="min-w-0">
               <h3 className="font-bold text-xs sm:text-base truncate">
-                Tax Invoice • {invoiceNo}
+                {isInward ? 'Inward Material Receipt / Invoice' : 'Tax Invoice'} • {invoiceNo}
               </h3>
               <p className="text-[9px] sm:text-xs text-blue-200 truncate">
-                {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} • Invoice Date: {invoiceDate}
+                {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} • Date: {invoiceDate}
               </p>
             </div>
           </div>
@@ -430,7 +459,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
 
             {/* 3. TAX INVOICE TITLE BOX */}
             <div className="border border-black my-2.5 py-1.5 text-center font-serif font-black text-base sm:text-lg uppercase tracking-widest bg-slate-50">
-              TAX INVOICE
+              {isInward ? 'INWARD MATERIAL RECEIPT / PURCHASE INVOICE' : 'TAX INVOICE'}
             </div>
 
             {/* 4. TWO-COLUMN INVOICE & DISPATCH DETAILS */}
@@ -438,13 +467,13 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
               {/* Left Column */}
               <div className="sm:border-r border-b sm:border-b-0 border-black divide-y divide-black">
                 <div className="p-1.5 font-bold">
-                  INVOICE NO: <span className="font-mono">{invoiceNo}</span>
+                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-mono">{invoiceNo}</span>
                 </div>
                 <div className="p-1.5 font-bold">
-                  INVOICE DATE: <span className="font-mono">{invoiceDate}</span>
+                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-mono">{invoiceDate}</span>
                 </div>
                 <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">SUPPLY To : {partyName}</div>
+                  <div className="font-bold">{isInward ? 'SUPPLIER / PARTY' : 'SUPPLY To'} : {partyName}</div>
                   {partyAddress ? (
                     <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
                   ) : isKpclParty ? (
@@ -455,7 +484,7 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                       <div className="text-[10px] text-slate-700">Phone 9449596504 Fax 8532247846</div>
                     </>
                   ) : (
-                    <div className="text-[10px] text-slate-700">Customer Location: Shaktinagar / Raichur Region</div>
+                    <div className="text-[10px] text-slate-700">{isInward ? 'Supplier Location: Verified Vendor' : 'Customer Location: Shaktinagar / Raichur Region'}</div>
                   )}
                   <div className="font-bold mt-1">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                 </div>
@@ -478,25 +507,34 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                   {dateLabel}: <span className="font-mono">{refDate}</span>
                 </div>
                 <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">State of Supply: KARNATAKA (29)</div>
-                  {isKpclParty ? (
+                  <div className="font-bold">{isInward ? 'DELIVERED TO (RECEIVER):' : 'State of Supply: KARNATAKA (29)'}</div>
+                  {isInward ? (
+                    <>
+                      <div className="text-[10px] text-slate-700 font-bold">SRI KRISHNA CONSTRUCTIONS</div>
+                      <div className="text-[10px] text-slate-700">#2436, Raghavendar Colony, Shaktinagar - 584170</div>
+                      <div className="text-[10px] text-slate-700">Raichur Dist, Karnataka</div>
+                      <div className="font-bold mt-1">GST NO: 29DWKPP3582H1ZV</div>
+                    </>
+                  ) : isKpclParty ? (
                     <>
                       <div className="text-[10px] text-slate-700">Shipped To: Executive Engineer(Stores) Raichur Thermal</div>
                       <div className="text-[10px] text-slate-700">Power Station (RTPS),KPCL Plant Premises,</div>
                       <div className="text-[10px] text-slate-700">Shaktinagara, PIN-584170</div>
+                      <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                     </>
                   ) : partyAddress ? (
                     <>
                       <div className="text-[10px] text-slate-700 font-bold">Shipped To: {partyName}</div>
                       <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
+                      <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                     </>
                   ) : (
                     <>
                       <div className="text-[10px] text-slate-700 font-bold">Shipped To: {partyName}</div>
                       <div className="text-[10px] text-slate-700">Delivery as per Order Instruction</div>
+                      <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                     </>
                   )}
-                  <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
                 </div>
               </div>
             </div>
@@ -560,6 +598,12 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
                     <span className="font-mono font-bold">₹{fmt(totalIgst)}</span>
                   </div>
                 ) : null}
+                {totalShipping > 0 && (
+                  <div className="p-2 flex justify-between text-blue-900 font-semibold">
+                    <span>Shipping Charges:</span>
+                    <span className="font-mono font-bold">+₹{fmt(totalShipping)}</span>
+                  </div>
+                )}
                 <div className="p-2.5 flex justify-between bg-blue-50/80 font-black text-xs border-t-2 border-black">
                   <span className="text-[#1e3a8a]">TOTAL AMOUNT:</span>
                   <span className="font-mono text-sm text-[#1e3a8a]">₹{fmt(totalInvoiceAmount)}</span>
@@ -571,12 +615,12 @@ export const SaleInvoiceModal: React.FC<{ sale: any | any[]; onClose: () => void
             <div className="flex justify-between items-end mt-12 pt-4 text-xs font-bold border-t border-slate-200">
               <div>
                 <div className="w-48 border-b border-black mb-2"></div>
-                <div>Receiver's Signature with Seal</div>
+                <div>{isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal'}</div>
               </div>
               <div className="text-center">
                 <div>For SRI KRISHNA CONSTRUCTIONS</div>
                 <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
-                <div className="font-normal text-slate-600 text-[11px]">Authorised Signatory</div>
+                <div className="font-normal text-slate-600 text-[11px]">{isInward ? 'Verified & Approved Signatory' : 'Authorised Signatory'}</div>
               </div>
             </div>
 

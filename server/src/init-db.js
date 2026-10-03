@@ -392,6 +392,7 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "remarks" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "receivedItemName" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "receivedPartNumber" TEXT;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
       -- Sale outward buyer/party details, eWayBillNumber & mandatory Owner approval system
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
@@ -407,9 +408,14 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
-      -- Individual Stock Transaction eWayBillNumber
+      -- Individual Stock Transaction eWayBillNumber & shippingCharges
       ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "eWayBillNumber" TEXT;
+      ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+      -- WorkOrder shippingCharges
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
       -- Worker master enhancements (Father Name, Designation, Daily Allowance, Advance Balance, Advance Dates/Reason, Statutory & Bank Details)
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;

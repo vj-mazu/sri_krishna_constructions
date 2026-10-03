@@ -1004,12 +1004,13 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
     const cgstPercent = parseFloat(d.cgstPercent) || 0;
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
 
     const basicAmount = qty * rate;
     const cgstAmount = basicAmount * (cgstPercent / 100);
     const sgstAmount = basicAmount * (sgstPercent / 100);
     const igstAmount = basicAmount * (igstPercent / 100);
-    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount;
+    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
 
     await client.query('BEGIN');
 
@@ -1036,12 +1037,12 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
         "id", "purchaseOrderItemId", "date", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
         "totalAmount", "partyName", "supplierAddress", "gstNumber", "partyInvoiceNumber",
-        "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "addedById", "createdAt"
+        "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "shippingCharges", "addedById", "createdAt"
       ) VALUES (
         gen_random_uuid()::text, $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, NOW()
+        $17, $18, $19, $20, $21, $22, $23, NOW()
       ) RETURNING *`,
       [
         d.purchaseOrderItemId, new Date(d.date), qty, rate, basicAmount,
@@ -1056,6 +1057,7 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
         d.remarks ? d.remarks.trim() : null,
         d.receivedItemName ? d.receivedItemName.trim() : null,
         d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null,
+        shippingCharges,
         req.user.id
       ]
     );
@@ -1081,12 +1083,13 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
     const cgstPercent = parseFloat(d.cgstPercent) || 0;
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
 
     const basicAmount = qty * rate;
     const cgstAmount = basicAmount * (cgstPercent / 100);
     const sgstAmount = basicAmount * (sgstPercent / 100);
     const igstAmount = basicAmount * (igstPercent / 100);
-    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount;
+    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
 
     const { rows } = await pool.query(
       `UPDATE "Purchase"
@@ -1097,8 +1100,9 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
            "partyName" = $12, "supplierAddress" = $13, "gstNumber" = $14,
            "partyInvoiceNumber" = $15, "supplierInvoiceDate" = $16,
            "vehicleNumber" = $17, "remarks" = $18,
-           "receivedItemName" = $19, "receivedPartNumber" = $20
-       WHERE id = $21
+           "receivedItemName" = $19, "receivedPartNumber" = $20,
+           "shippingCharges" = $21
+       WHERE id = $22
        RETURNING *`,
       [
         qty, rate, basicAmount,
@@ -1114,6 +1118,7 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
         d.remarks ? d.remarks.trim() : null,
         d.receivedItemName !== undefined ? (d.receivedItemName ? d.receivedItemName.trim() : null) : null,
         d.receivedPartNumber !== undefined ? (d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null) : null,
+        shippingCharges,
         id
       ]
     );
@@ -1138,7 +1143,6 @@ app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANA
   }
 });
 
-// POST /api/sales - Outward sale record with ACID transactional safety
 // POST /api/sales - Outward sale record with ACID transactional safety & mandatory Owner approval
 app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
@@ -1149,12 +1153,13 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
     const cgstPercent = parseFloat(d.cgstPercent) || 0;
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
 
     const basicAmount = qty * rate;
     const cgstAmount = basicAmount * (cgstPercent / 100);
     const sgstAmount = basicAmount * (sgstPercent / 100);
     const igstAmount = basicAmount * (igstPercent / 100);
-    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount;
+    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
 
     await client.query('BEGIN');
 
@@ -1187,12 +1192,12 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
         "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
         "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber", "partyInvoiceNumber",
-        "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "status", "addedById", "createdAt"
+        "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "shippingCharges", "status", "addedById", "createdAt"
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7,
         $8, $9, $10, $11, $12, $13,
         $14, $15, $16, $17, $18, $19,
-        $20, $21, $22, $23, 'PENDING', $24, NOW()
+        $20, $21, $22, $23, $24, 'PENDING', $25, NOW()
       ) RETURNING *`,
       [
         saleId, d.purchaseOrderItemId, d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
@@ -1209,6 +1214,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
+        shippingCharges,
         req.user.id
       ]
     );
@@ -1239,6 +1245,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
           cgstAmount: cgstAmount,
           sgstAmount: sgstAmount,
           igstAmount: igstAmount,
+          shippingCharges: shippingCharges,
           totalAmount: totalAmount,
           partyName: d.partyName || '-',
           supplierAddress: d.supplierAddress || '-',
@@ -1279,12 +1286,13 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
     const cgstPercent = parseFloat(d.cgstPercent) || 0;
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
 
     const basicAmount = qty * rate;
     const cgstAmount = basicAmount * (cgstPercent / 100);
     const sgstAmount = basicAmount * (sgstPercent / 100);
     const igstAmount = basicAmount * (igstPercent / 100);
-    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount;
+    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
 
     await client.query('BEGIN');
 
@@ -1317,10 +1325,11 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
            "companyGstNumber" = $16,
            "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18,
            "vehicleNumber" = $19, "remarks" = $20,
+           "shippingCharges" = $21,
            "status" = 'PENDING',
            "approvedById" = NULL,
            "approvedAt" = NULL
-       WHERE id = $21
+       WHERE id = $22
        RETURNING *`,
       [
         d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
@@ -1336,6 +1345,7 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
+        shippingCharges,
         id
       ]
     );
@@ -1355,6 +1365,7 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
       cgstAmount: cgstAmount,
       sgstAmount: sgstAmount,
       igstAmount: igstAmount,
+      shippingCharges: shippingCharges,
       totalAmount: totalAmount,
       partyName: d.partyName ? d.partyName.trim() : existingSale.partyName || '-',
       supplierAddress: d.supplierAddress ? d.supplierAddress.trim() : existingSale.supplierAddress || '-',
@@ -2028,6 +2039,7 @@ const handleInwardPurchase = async (req, res) => {
 
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
     if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
 
     const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
@@ -2037,7 +2049,7 @@ const handleInwardPurchase = async (req, res) => {
     const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
     const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
-    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
     await client.query('BEGIN');
 
@@ -2052,18 +2064,18 @@ const handleInwardPurchase = async (req, res) => {
       `INSERT INTO "IndividualStockTransaction" (
         "id", "stockId", "type", "date", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
+        "shippingCharges", "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
         "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber", "remarks", "status", "addedById", "createdAt"
       ) VALUES (
         gen_random_uuid()::text, $1, 'INWARD', $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, '29DWKPP3582H1ZV',
-        $16, $17, $18, $19, 'APPROVED', $20, NOW()
+        $12, $13, $14, $15, $16, '29DWKPP3582H1ZV',
+        $17, $18, $19, $20, 'APPROVED', $21, NOW()
       ) RETURNING *`,
       [
         stockId, new Date(d.date), qty, rate, basicAmount,
         cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
-        totalAmount,
+        shippingCharges, totalAmount,
         d.partyName ? d.partyName.trim() : null,
         d.supplierAddress ? d.supplierAddress.trim() : null,
         d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
@@ -2116,6 +2128,7 @@ const handleOutwardSale = async (req, res) => {
 
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
     if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
 
     const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
@@ -2125,7 +2138,7 @@ const handleOutwardSale = async (req, res) => {
     const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
     const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
-    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
     await client.query('BEGIN');
 
@@ -2161,18 +2174,18 @@ const handleOutwardSale = async (req, res) => {
       `INSERT INTO "IndividualStockTransaction" (
         "id", "stockId", "type", "date", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
+        "shippingCharges", "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
         "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt"
       ) VALUES (
         gen_random_uuid()::text, $1, 'OUTWARD', $2, $3, $4, $5,
         $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, '29DWKPP3582H1ZV',
-        $16, $17, $18, $19, $20, $21, $22, $23, NOW()
+        $12, $13, $14, $15, $16, '29DWKPP3582H1ZV',
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, NOW()
       ) RETURNING *`,
       [
         stockId, new Date(saleDate), qty, rate, basicAmount,
         cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
-        totalAmount,
+        shippingCharges, totalAmount,
         d.partyName ? d.partyName.trim() : null,
         d.supplierAddress ? d.supplierAddress.trim() : null,
         d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
@@ -2225,6 +2238,7 @@ const handleOutwardSale = async (req, res) => {
             cgstAmount,
             sgstAmount,
             igstAmount,
+            shippingCharges,
             totalAmount,
             partyName: d.partyName || '-',
             supplierAddress: d.supplierAddress || '-',
@@ -2323,10 +2337,11 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
     const cgstP = d.cgstPercent !== undefined ? (parseFloat(d.cgstPercent) || 0) : currentTx.cgstPercent;
     const sgstP = d.sgstPercent !== undefined ? (parseFloat(d.sgstPercent) || 0) : currentTx.sgstPercent;
     const igstP = d.igstPercent !== undefined ? (parseFloat(d.igstPercent) || 0) : currentTx.igstPercent;
+    const shippingCharges = d.shippingCharges !== undefined ? (parseFloat(d.shippingCharges) || 0) : (parseFloat(currentTx.shippingCharges) || 0);
     const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
     const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
-    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
     const newDate = d.date || d.invoiceDate ? new Date(d.date || d.invoiceDate) : currentTx.date;
     const newInvoiceNo = d.partyInvoiceNumber || d.invoiceNumber ? (d.partyInvoiceNumber || d.invoiceNumber).trim().toUpperCase() : currentTx.partyInvoiceNumber;
@@ -2352,23 +2367,24 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
            "cgstAmount" = $8,
            "sgstAmount" = $9,
            "igstAmount" = $10,
-           "totalAmount" = $11,
-           "partyName" = $12,
-           "supplierAddress" = $13,
-           "gstNumber" = $14,
-           "partyInvoiceNumber" = $15,
-           "vehicleNumber" = $16,
-           "eWayBillNumber" = $17,
-           "remarks" = $18,
-           "status" = $19,
-           "approvedById" = CASE WHEN $19 = 'PENDING' THEN NULL ELSE "approvedById" END,
-           "approvedAt" = CASE WHEN $19 = 'PENDING' THEN NULL ELSE "approvedAt" END
-       WHERE "id" = $20
+           "shippingCharges" = $11,
+           "totalAmount" = $12,
+           "partyName" = $13,
+           "supplierAddress" = $14,
+           "gstNumber" = $15,
+           "partyInvoiceNumber" = $16,
+           "vehicleNumber" = $17,
+           "eWayBillNumber" = $18,
+           "remarks" = $19,
+           "status" = $20,
+           "approvedById" = CASE WHEN $20 = 'PENDING' THEN NULL ELSE "approvedById" END,
+           "approvedAt" = CASE WHEN $20 = 'PENDING' THEN NULL ELSE "approvedAt" END
+       WHERE "id" = $21
        RETURNING *`,
       [
         newDate, newQty, newRate, basicAmount,
         cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount,
-        totalAmount,
+        shippingCharges, totalAmount,
         newPartyName, newSupplierAddress, newGstNumber, newInvoiceNo,
         newVehicleNumber, newEWayBill, newRemarks,
         nextStatus,
@@ -2393,6 +2409,7 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
         cgstAmount,
         sgstAmount,
         igstAmount,
+        shippingCharges,
         totalAmount,
         partyName: newPartyName || '-',
         supplierAddress: newSupplierAddress || '-',
@@ -2900,6 +2917,7 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
 
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
+    const shippingCharges = parseFloat(d.shippingCharges) || 0;
     if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
 
     const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
@@ -2909,7 +2927,7 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
     const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
     const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
-    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
     const isAutoApproved = req.user.role === 'OWNER';
     const initialStatus = isAutoApproved ? 'APPROVED' : 'PENDING';
@@ -2920,13 +2938,13 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
         "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
         "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
         "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
+        "shippingCharges", "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
       ) VALUES (
         gen_random_uuid()::text, $1, $2, $3, $4,
         $5, $6, $7, $8, $9,
         $10, $11, $12, $13, $14, $15, $16,
         $17, $18, $19, $20, $21, $22,
-        $23, $24, $25, $26, $27, $28, $29, $30, NOW(), NOW()
+        $23, $24, $25, $26, $27, $28, $29, $30, $31, NOW(), NOW()
       ) RETURNING *`,
       [
         d.workOrderNumber.trim().toUpperCase(),
@@ -2951,6 +2969,7 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
         cgstAmount,
         sgstAmount,
         igstAmount,
+        shippingCharges,
         totalAmount,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
         d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
@@ -2979,6 +2998,7 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
             itemName: createdWO.itemName,
             qty: createdWO.qty,
             rate: createdWO.rate,
+            shippingCharges: createdWO.shippingCharges,
             totalAmount: createdWO.totalAmount
           }),
           `Work Order Direct Sale created by ${req.user.fullName || req.user.username} (${createdWO.invoiceNumber} / ₹${totalAmount})`
@@ -3006,6 +3026,7 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
 
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
+    const shippingCharges = d.shippingCharges !== undefined ? (parseFloat(d.shippingCharges) || 0) : 0;
     if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
 
     const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
@@ -3015,7 +3036,7 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
     const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
     const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
-    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + Number.EPSILON) * 100) / 100;
+    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
     const { rows } = await pool.query(
       `UPDATE "WorkOrder"
@@ -3041,12 +3062,13 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
            "cgstAmount" = $20,
            "sgstAmount" = $21,
            "igstAmount" = $22,
-           "totalAmount" = $23,
-           "vehicleNumber" = $24,
-           "eWayBillNumber" = $25,
-           "remarks" = $26,
+           "shippingCharges" = $23,
+           "totalAmount" = $24,
+           "vehicleNumber" = $25,
+           "eWayBillNumber" = $26,
+           "remarks" = $27,
            "updatedAt" = NOW()
-       WHERE "id" = $27
+       WHERE "id" = $28
        RETURNING *`,
       [
         d.workOrderNumber ? d.workOrderNumber.trim().toUpperCase() : null,
@@ -3071,6 +3093,7 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
         cgstAmount,
         sgstAmount,
         igstAmount,
+        shippingCharges,
         totalAmount,
         d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : null,
         d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : null,
@@ -3164,6 +3187,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           s."cgstAmount",
           s."sgstAmount",
           s."igstAmount",
+          COALESCE(s."shippingCharges", 0) as "shippingCharges",
           s."totalAmount",
           s."status",
           s."remarks",
@@ -3204,6 +3228,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           tx."cgstAmount",
           tx."sgstAmount",
           tx."igstAmount",
+          COALESCE(tx."shippingCharges", 0) as "shippingCharges",
           tx."totalAmount",
           tx."status",
           tx."remarks",
@@ -3243,6 +3268,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           wo."cgstAmount",
           wo."sgstAmount",
           wo."igstAmount",
+          COALESCE(wo."shippingCharges", 0) as "shippingCharges",
           wo."totalAmount",
           wo."status",
           wo."remarks",

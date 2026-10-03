@@ -276,6 +276,12 @@ export const ApprovalsPanel: React.FC = () => {
                       <span className="text-slate-500">Qty × Rate:</span>
                       <span>{p?.qty} × {formatCurrency(p?.rate)} = {formatCurrency(p?.basicAmount || ((p?.qty || 0) * (p?.rate || 0)))}</span>
                     </div>
+                    {Number(p?.shippingCharges) > 0 && (
+                      <div className="flex justify-between text-blue-900 font-bold">
+                        <span>Shipping:</span>
+                        <span>+{formatCurrency(Number(p.shippingCharges))}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between font-bold text-blue-950 bg-blue-100/60 p-1.5 rounded">
                       <span>Total Invoice:</span>
                       <span className="text-xs">{formatCurrency(p?.totalAmount)}</span>
@@ -579,6 +585,12 @@ export const ApprovalsPanel: React.FC = () => {
                           <span>+{formatCurrency(igst)}</span>
                         </div>
                       )}
+                      {Number(p?.shippingCharges) > 0 && (
+                        <div className="flex justify-between text-blue-900 font-bold">
+                          <span>Shipping Charges:</span>
+                          <span>+{formatCurrency(Number(p.shippingCharges))}</span>
+                        </div>
+                      )}
                       {cgstP === 0 && sgstP === 0 && igstP === 0 && (
                         <div className="flex justify-between text-slate-500 italic text-[11px]">
                           <span>GST (0%):</span>
@@ -587,7 +599,7 @@ export const ApprovalsPanel: React.FC = () => {
                       )}
                       <div className="flex justify-between font-black text-sm text-blue-950 pt-2 border-t border-blue-200">
                         <span>Total Invoice Amount:</span>
-                        <span className="text-blue-900">{formatCurrency(p?.totalAmount || (basic + cgst + sgst + igst))}</span>
+                        <span className="text-blue-900">{formatCurrency(p?.totalAmount || (basic + cgst + sgst + igst + (Number(p?.shippingCharges) || 0)))}</span>
                       </div>
                     </div>
                   </>

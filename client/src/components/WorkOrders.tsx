@@ -48,6 +48,7 @@ interface WorkOrderItem {
   cgstAmount: number;
   sgstAmount: number;
   igstAmount: number;
+  shippingCharges?: number;
   totalAmount: number;
   vehicleNumber?: string;
   eWayBillNumber?: string;
@@ -100,6 +101,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     cgstPercent: '9',
     sgstPercent: '9',
     igstPercent: '0',
+    shippingCharges: '',
     vehicleNumber: '',
     eWayBillNumber: '',
     remarks: ''
@@ -211,10 +213,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const formCgstP = parseFloat(formData.cgstPercent) || 0;
   const formSgstP = parseFloat(formData.sgstPercent) || 0;
   const formIgstP = parseFloat(formData.igstPercent) || 0;
+  const formShip = parseFloat(formData.shippingCharges) || 0;
   const formCgstAmt = Math.round((formBasic * (formCgstP / 100) + Number.EPSILON) * 100) / 100;
   const formSgstAmt = Math.round((formBasic * (formSgstP / 100) + Number.EPSILON) * 100) / 100;
   const formIgstAmt = Math.round((formBasic * (formIgstP / 100) + Number.EPSILON) * 100) / 100;
-  const formTotalAmt = Math.round((formBasic + formCgstAmt + formSgstAmt + formIgstAmt + Number.EPSILON) * 100) / 100;
+  const formTotalAmt = Math.round((formBasic + formCgstAmt + formSgstAmt + formIgstAmt + formShip + Number.EPSILON) * 100) / 100;
 
   const handleOpenAdd = () => {
     setEditItem(null);
@@ -243,6 +246,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       cgstPercent: item.cgstPercent.toString(),
       sgstPercent: item.sgstPercent.toString(),
       igstPercent: item.igstPercent.toString(),
+      shippingCharges: item.shippingCharges ? item.shippingCharges.toString() : '',
       vehicleNumber: item.vehicleNumber || '',
       eWayBillNumber: item.eWayBillNumber || '',
       remarks: item.remarks || ''
@@ -493,6 +497,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 <th className="p-2.5 whitespace-nowrap">Part No</th>
                 <th className="p-2.5 text-center whitespace-nowrap">Qty</th>
                 <th className="p-2.5 text-right whitespace-nowrap">Rate (₹)</th>
+                <th className="p-2.5 text-right whitespace-nowrap">Shipping (₹)</th>
                 <th className="p-2.5 text-right whitespace-nowrap">Total Value (₹)</th>
                 <th className="p-2.5 whitespace-nowrap">Vehicle / E-Way</th>
                 <th className="p-2.5 text-center sticky right-0 bg-sky-950 text-sky-200 z-20 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.2)] min-w-[110px]">Actions</th>
@@ -501,14 +506,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="text-center py-12 text-slate-400 font-semibold">
+                  <td colSpan={13} className="text-center py-12 text-slate-400 font-semibold">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
                     Loading work orders...
                   </td>
                 </tr>
               ) : paginatedWorkOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="text-center py-12 text-slate-400">
+                  <td colSpan={13} className="text-center py-12 text-slate-400">
                     No work orders match the selected filters.
                   </td>
                 </tr>
@@ -550,6 +555,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <td className="text-right font-mono text-slate-700 whitespace-nowrap p-2.5">
                       {formatCurrency(wo.rate)}
                     </td>
+                    <td className="text-right font-mono text-blue-900 whitespace-nowrap p-2.5">
+                      {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
+                    </td>
                     <td className="text-right font-mono font-black text-blue-950 whitespace-nowrap p-2.5">
                       {formatCurrency(wo.totalAmount)}
                     </td>
@@ -581,6 +589,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                               cgstPercent: wo.cgstPercent,
                               sgstPercent: wo.sgstPercent,
                               igstPercent: wo.igstPercent,
+                              shippingCharges: wo.shippingCharges || 0,
                               item: {
                                 itemName: wo.itemName,
                                 specifications: wo.description || 'Work Order Direct Sale',
@@ -919,6 +928,27 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
                     />
                   </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">IGST %</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.igstPercent}
+                      onChange={(e) => setFormData({ ...formData, igstPercent: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Shipping (₹)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="0.00"
+                      value={formData.shippingCharges}
+                      onChange={(e) => setFormData({ ...formData, shippingCharges: e.target.value })}
+                      className="w-full p-2 border border-blue-300 bg-blue-50/20 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                    />
+                  </div>
                 </div>
 
                 {/* LIVE CALCULATION SUMMARY CARD */}
@@ -939,6 +969,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <div className="flex justify-between text-indigo-800">
                       <span>IGST ({formIgstP}%):</span>
                       <span>+{formatCurrency(formIgstAmt)}</span>
+                    </div>
+                  )}
+                  {formShip > 0 && (
+                    <div className="flex justify-between text-blue-900 font-bold">
+                      <span>Shipping Charges:</span>
+                      <span>+{formatCurrency(formShip)}</span>
                     </div>
                   )}
                   <div className="flex justify-between text-sm font-black text-blue-950 pt-1.5 border-t border-blue-200">
@@ -1074,6 +1110,18 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   <span>SGST ({inspectItem.sgstPercent}%):</span>
                   <span>+{formatCurrency(inspectItem.sgstAmount)}</span>
                 </div>
+                {inspectItem.igstPercent > 0 && (
+                  <div className="flex justify-between text-indigo-800">
+                    <span>IGST ({inspectItem.igstPercent}%):</span>
+                    <span>+{formatCurrency(inspectItem.igstAmount)}</span>
+                  </div>
+                )}
+                {Boolean(inspectItem.shippingCharges && inspectItem.shippingCharges > 0) && (
+                  <div className="flex justify-between text-blue-900 font-bold">
+                    <span>Shipping Charges:</span>
+                    <span>+{formatCurrency(inspectItem.shippingCharges)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm font-black text-blue-950 pt-2 border-t border-blue-200">
                   <span>Total Invoice Amount:</span>
                   <span className="text-blue-900">{formatCurrency(inspectItem.totalAmount)}</span>
@@ -1117,6 +1165,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     cgstPercent: inspectItem.cgstPercent,
                     sgstPercent: inspectItem.sgstPercent,
                     igstPercent: inspectItem.igstPercent,
+                    shippingCharges: inspectItem.shippingCharges || 0,
                     item: {
                       itemName: inspectItem.itemName,
                       specifications: inspectItem.description || 'Work Order Direct Sale',

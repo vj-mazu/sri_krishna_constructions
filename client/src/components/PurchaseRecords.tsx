@@ -338,13 +338,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   });
 
   const [purchaseForm, setPurchaseForm] = useState({
-    itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+    itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
     partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
     receivedItemName: '', receivedPartNumber: ''
   });
 
   const [saleForm, setSaleForm] = useState({
-    itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+    itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
     partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
   });
 
@@ -360,6 +360,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     cgstPercent?: number;
     sgstPercent?: number;
     igstPercent?: number;
+    shippingCharges?: number;
     partyName?: string;
     supplierAddress?: string;
     gstNumber?: string;
@@ -378,6 +379,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     cgstPercent?: number;
     sgstPercent?: number;
     igstPercent?: number;
+    shippingCharges?: number;
     partyName?: string;
     supplierAddress?: string;
     gstNumber?: string;
@@ -395,6 +397,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [divisions, setDivisions] = useState<Array<{ id: string; name: string; type?: string; isActive?: boolean }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
+  const [previewInwardReceipt, setPreviewInwardReceipt] = useState<any | null>(null);
   const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
   // Fetch divisions for PO creation/edit dropdowns (Filtered to PO Divisions/Clients)
@@ -559,13 +562,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // Global Escape key handler for all modals + body scroll lock
   useEffect(() => {
-    const anyModalOpen = showAddItem || showAddPurchase || showAddSale || !!editingPurchase || !!editingSale || !!previewSaleInvoice;
+    const anyModalOpen = showAddItem || showAddPurchase || showAddSale || !!editingPurchase || !!editingSale || !!previewSaleInvoice || !!previewInwardReceipt;
     
     if (anyModalOpen) {
       document.body.style.overflow = 'hidden';
       const handleEscapeKey = (e: KeyboardEvent) => {
         if (e.key === 'Escape') {
           if (previewSaleInvoice) setPreviewSaleInvoice(null);
+          else if (previewInwardReceipt) setPreviewInwardReceipt(null);
           else if (editingPurchase) { setEditingPurchase(null); }
           else if (editingSale) { setEditingSale(null); }
           else if (showAddSale) setShowAddSale(false);
@@ -581,7 +585,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     } else {
       document.body.style.overflow = '';
     }
-  }, [showAddItem, showAddPurchase, showAddSale, editingPurchase, editingSale, previewSaleInvoice]);
+  }, [showAddItem, showAddPurchase, showAddSale, editingPurchase, editingSale, previewSaleInvoice, previewInwardReceipt]);
 
   // --- ACTIONS: ADD ITEM (DOUBLE SUBMISSION PROTECTED) ---
   const handleAddItem = async (e: React.FormEvent) => {
@@ -662,7 +666,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       showToast('Inward material recorded successfully', 'success');
       setShowAddPurchase(false);
       setPurchaseForm({
-        itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+        itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
         receivedItemName: '', receivedPartNumber: ''
       });
@@ -691,7 +695,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       showToast('Sale invoice recorded! Submitted for Owner Approval.', 'success');
       setShowAddSale(false);
       setSaleForm({
-        itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0,
+        itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
@@ -1723,8 +1727,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       />
                     </div>
 
-                    {/* TAX PERCENTAGES */}
-                    <div className="grid grid-cols-3 gap-3">
+                    {/* TAX PERCENTAGES & SHIPPING CHARGES */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">CGST %</label>
                         <input
@@ -1755,6 +1759,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Shipping Charges (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editPurchaseForm.shippingCharges ?? ''}
+                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, shippingCharges: Number(e.target.value) }))}
+                          placeholder="0.00"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
+                        />
+                      </div>
                     </div>
 
                     {/* LIVE CALCULATION BREAKDOWN PREVIEW */}
@@ -1764,11 +1779,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const cgstP = Number(editPurchaseForm.cgstPercent || 0);
                       const sgstP = Number(editPurchaseForm.sgstPercent || 0);
                       const igstP = Number(editPurchaseForm.igstPercent || 0);
+                      const shipping = Number(editPurchaseForm.shippingCharges || 0);
                       const basic = qty * rate;
                       const cgst = basic * (cgstP / 100);
                       const sgst = basic * (sgstP / 100);
                       const igst = basic * (igstP / 100);
-                      const total = basic + cgst + sgst + igst;
+                      const total = basic + cgst + sgst + igst + shipping;
 
                       return (
                         <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
@@ -1777,6 +1793,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             <span className="text-emerald-700">CGST ({cgstP}%): +{formatCurrency(cgst)}</span>
                             <span className="text-emerald-700">SGST ({sgstP}%): +{formatCurrency(sgst)}</span>
                             {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{formatCurrency(igst)}</span>}
+                            {shipping > 0 && <span className="text-blue-900 font-bold">Shipping: +{formatCurrency(shipping)}</span>}
                           </div>
                           <span className="text-sm font-black text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 shadow-sm">
                             Total Inward: {formatCurrency(total)}
@@ -1965,8 +1982,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </div>
                     </div>
 
-                    {/* TAX PERCENTAGES */}
-                    <div className="grid grid-cols-3 gap-3">
+                    {/* TAX PERCENTAGES & SHIPPING CHARGES */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">CGST %</label>
                         <input
@@ -1997,6 +2014,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
+                      <div>
+                        <label className="block font-semibold text-slate-700 mb-1">Shipping Charges (₹)</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editSaleForm.shippingCharges ?? ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, shippingCharges: Number(e.target.value) }))}
+                          placeholder="0.00"
+                          className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
+                        />
+                      </div>
                     </div>
 
                     {/* LIVE SALE SUMMARY */}
@@ -2006,11 +2034,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const cgstP = Number(editSaleForm.cgstPercent || 0);
                       const sgstP = Number(editSaleForm.sgstPercent || 0);
                       const igstP = Number(editSaleForm.igstPercent || 0);
+                      const shipping = Number(editSaleForm.shippingCharges || 0);
                       const basic = qty * rate;
                       const cgst = basic * (cgstP / 100);
                       const sgst = basic * (sgstP / 100);
                       const igst = basic * (igstP / 100);
-                      const total = basic + cgst + sgst + igst;
+                      const total = basic + cgst + sgst + igst + shipping;
 
                       return (
                         <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
@@ -2019,6 +2048,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             <span className="text-blue-800">CGST ({cgstP}%): +{formatCurrency(cgst)}</span>
                             <span className="text-blue-800">SGST ({sgstP}%): +{formatCurrency(sgst)}</span>
                             {igstP > 0 && <span className="text-indigo-700">IGST ({igstP}%): +{formatCurrency(igst)}</span>}
+                            {shipping > 0 && <span className="text-blue-950 font-bold">Shipping: +{formatCurrency(shipping)}</span>}
                           </div>
                           <span className="text-sm font-black text-blue-900 bg-white px-2.5 py-1 rounded-lg border border-blue-300 shadow-sm">
                             Total Sale: {formatCurrency(total)}
@@ -2787,20 +2817,34 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         );
                       })()}
                     </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping Charges (₹)</label>
+                      <input 
+                        type="number" 
+                        step="0.01" 
+                        placeholder="0.00" 
+                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" 
+                        value={purchaseForm.shippingCharges || ''} 
+                        onChange={e => handlePurchaseChange('shippingCharges', e.target.value === '' ? 0 : Number(e.target.value))} 
+                      />
+                    </div>
 
                     </div>
 
                     <div className="bg-white p-3.5 border-t border-emerald-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                       {(() => {
                         const b = calculateBreakdown(purchaseForm.qty, purchaseForm.rate, purchaseForm.cgstPercent, purchaseForm.sgstPercent, purchaseForm.igstPercent);
+                        const ship = Number(purchaseForm.shippingCharges || 0);
+                        const totalWithShip = b.totalAmount + ship;
                         return (
                           <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
                             <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(b.basicAmount)}</strong></span>
                             <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">CGST {b.cgstPercent}%: +{formatCurrency(b.cgstAmount)}</span>
                             <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">SGST {b.sgstPercent}%: +{formatCurrency(b.sgstAmount)}</span>
                             {b.igstPercent > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST {b.igstPercent}%: +{formatCurrency(b.igstAmount)}</span>}
+                            {ship > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(ship)}</span>}
                             <span className="text-sm font-black text-emerald-800 ml-2 bg-emerald-100/50 px-3 py-1 rounded-lg border border-emerald-300">
-                              Total Inward: {formatCurrency(b.totalAmount)}
+                              Total Inward: {formatCurrency(totalWithShip)}
                             </span>
                           </div>
                         );
@@ -2829,7 +2873,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const cgst = basic * ((pur.cgstPercent || 0) / 100);
                       const sgst = basic * ((pur.sgstPercent || 0) / 100);
                       const igst = basic * ((pur.igstPercent || 0) / 100);
-                      const total = basic + cgst + sgst + igst;
+                      const ship = Number(pur.shippingCharges || 0);
+                      const total = basic + cgst + sgst + igst + ship;
 
                       return (
                         <div key={pur.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
@@ -2881,40 +2926,51 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             <div>
                               <span className="text-[10px] font-bold text-slate-500 uppercase">Total Amount</span>
                               <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
+                              {ship > 0 && <span className="text-[10px] text-blue-900 font-mono font-semibold">+₹{ship} ship</span>}
                             </div>
-                            {isManagerOrOwner && (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => {
-                                    setEditingPurchase(pur);
-                                    setEditPurchaseForm({
-                                      date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
-                                      qty: pur.qty || 0,
-                                      rate: pur.rate || 0,
-                                      cgstPercent: pur.cgstPercent || 0,
-                                      sgstPercent: pur.sgstPercent || 0,
-                                      igstPercent: pur.igstPercent || 0,
-                                      partyName: pur.partyName || '',
-                                      supplierAddress: pur.supplierAddress || '',
-                                      gstNumber: pur.gstNumber || '',
-                                      partyInvoiceNumber: pur.partyInvoiceNumber || '',
-                                      supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
-                                      vehicleNumber: pur.vehicleNumber || '',
-                                      remarks: pur.remarks || ''
-                                    });
-                                  }}
-                                  className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
-                                >
-                                  <Edit className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                  onClick={() => handleDeletePurchase(pur.id)}
-                                  className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setPreviewInwardReceipt({ ...pur, purchaseOrder: selectedPo, type: 'INWARD' })}
+                                className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
+                                title="View & Download Inward Material Receipt"
+                              >
+                                <Receipt className="w-3.5 h-3.5" />
+                              </button>
+                              {isManagerOrOwner && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingPurchase(pur);
+                                      setEditPurchaseForm({
+                                        date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
+                                        qty: pur.qty || 0,
+                                        rate: pur.rate || 0,
+                                        cgstPercent: pur.cgstPercent || 0,
+                                        sgstPercent: pur.sgstPercent || 0,
+                                        igstPercent: pur.igstPercent || 0,
+                                        shippingCharges: pur.shippingCharges || 0,
+                                        partyName: pur.partyName || '',
+                                        supplierAddress: pur.supplierAddress || '',
+                                        gstNumber: pur.gstNumber || '',
+                                        partyInvoiceNumber: pur.partyInvoiceNumber || '',
+                                        supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                        vehicleNumber: pur.vehicleNumber || '',
+                                        remarks: pur.remarks || ''
+                                      });
+                                    }}
+                                    className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeletePurchase(pur.id)}
+                                    className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
@@ -2943,6 +2999,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <th className="px-2 py-1.5 whitespace-nowrap">CGST</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">SGST</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">IGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Shipping</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Total Inward</th>
                         <th className="px-2 py-1.5 min-w-[110px]">Remarks</th>
                         <th className="px-2 py-1.5 min-w-[90px]">Added By</th>
@@ -2951,15 +3008,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </thead>
                     <tbody>
                       {purchasesLoading ? (
-                        <tr><td colSpan={20} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
+                        <tr><td colSpan={21} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
                       ) : poPurchases.length === 0 ? (
-                        <tr><td colSpan={20} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
+                        <tr><td colSpan={21} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
                       ) : (
                         poPurchases.map((pur, idx) => {
                           const basic = (pur.qty || 0) * (pur.rate || 0);
                           const cgst = basic * ((pur.cgstPercent || 0) / 100);
                           const sgst = basic * ((pur.sgstPercent || 0) / 100);
                           const igst = basic * ((pur.igstPercent || 0) / 100);
+                          const ship = Number(pur.shippingCharges || 0);
+                          const total = basic + cgst + sgst + igst + ship;
                           const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
                           return (
                             <tr key={pur.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
@@ -3005,45 +3064,56 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap text-blue-900 font-semibold">{ship > 0 ? formatCurrency(ship) : '-'}</td>
+                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(total)}</td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{pur.remarks || '-'}</td>
                               <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{pur.addedBy?.fullName || '-'}</td>
                               <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
-                                {isManagerOrOwner && (
-                                  <div className="flex items-center justify-center gap-1.5">
-                                    <button
-                                      onClick={() => {
-                                        setEditingPurchase(pur);
-                                        setEditPurchaseForm({
-                                          date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
-                                          qty: pur.qty || 0,
-                                          rate: pur.rate || 0,
-                                          cgstPercent: pur.cgstPercent || 0,
-                                          sgstPercent: pur.sgstPercent || 0,
-                                          igstPercent: pur.igstPercent || 0,
-                                          partyName: pur.partyName || '',
-                                          supplierAddress: pur.supplierAddress || '',
-                                          gstNumber: pur.gstNumber || '',
-                                          partyInvoiceNumber: pur.partyInvoiceNumber || '',
-                                          supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
-                                          vehicleNumber: pur.vehicleNumber || '',
-                                          remarks: pur.remarks || ''
-                                        });
-                                      }}
-                                      className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
-                                      title="Edit Inward Purchase"
-                                    >
-                                      <Edit className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeletePurchase(pur.id)}
-                                      className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
-                                      title="Delete Inward Purchase"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => setPreviewInwardReceipt({ ...pur, purchaseOrder: selectedPo, type: 'INWARD' })}
+                                    className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
+                                    title="View & Download Inward Material Receipt"
+                                  >
+                                    <Receipt className="w-3.5 h-3.5" />
+                                  </button>
+                                  {isManagerOrOwner && (
+                                    <>
+                                      <button
+                                        onClick={() => {
+                                          setEditingPurchase(pur);
+                                          setEditPurchaseForm({
+                                            date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
+                                            qty: pur.qty || 0,
+                                            rate: pur.rate || 0,
+                                            cgstPercent: pur.cgstPercent || 0,
+                                            sgstPercent: pur.sgstPercent || 0,
+                                            igstPercent: pur.igstPercent || 0,
+                                            shippingCharges: pur.shippingCharges || 0,
+                                            partyName: pur.partyName || '',
+                                            supplierAddress: pur.supplierAddress || '',
+                                            gstNumber: pur.gstNumber || '',
+                                            partyInvoiceNumber: pur.partyInvoiceNumber || '',
+                                            supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
+                                            vehicleNumber: pur.vehicleNumber || '',
+                                            remarks: pur.remarks || ''
+                                          });
+                                        }}
+                                        className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
+                                        title="Edit Inward Purchase"
+                                      >
+                                        <Edit className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeletePurchase(pur.id)}
+                                        className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
+                                        title="Delete Inward Purchase"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           );
@@ -3311,19 +3381,33 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           );
                         })()}
                       </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping Charges (₹)</label>
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" 
+                          value={saleForm.shippingCharges || ''} 
+                          onChange={e => handleSaleChange('shippingCharges', e.target.value === '' ? 0 : Number(e.target.value))} 
+                        />
+                      </div>
                     </div>
 
                     <div className="bg-white p-3.5 border-t border-amber-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                       {(() => {
                         const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
+                        const ship = Number(saleForm.shippingCharges || 0);
+                        const totalWithShip = b.totalAmount + ship;
                         return (
                           <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
                             <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(b.basicAmount)}</strong></span>
                             <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">CGST {b.cgstPercent}%: +{formatCurrency(b.cgstAmount)}</span>
                             <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SGST {b.sgstPercent}%: +{formatCurrency(b.sgstAmount)}</span>
                             {b.igstPercent > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST {b.igstPercent}%: +{formatCurrency(b.igstAmount)}</span>}
+                            {ship > 0 && <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">Shipping: +{formatCurrency(ship)}</span>}
                             <span className="text-sm font-black text-amber-900 ml-2 bg-amber-100/50 px-3 py-1 rounded-lg border border-amber-300">
-                              Total Invoice: {formatCurrency(b.totalAmount)}
+                              Total Invoice: {formatCurrency(totalWithShip)}
                             </span>
                           </div>
                         );
@@ -3352,7 +3436,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const cgst = basic * ((sale.cgstPercent || 0) / 100);
                       const sgst = basic * ((sale.sgstPercent || 0) / 100);
                       const igst = basic * ((sale.igstPercent || 0) / 100);
-                      const total = basic + cgst + sgst + igst;
+                      const ship = Number(sale.shippingCharges || 0);
+                      const total = basic + cgst + sgst + igst + ship;
                       const isApproved = sale.status === 'APPROVED';
                       const isPending = sale.status === 'PENDING';
                       const isRejected = sale.status === 'REJECTED';
@@ -3413,6 +3498,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             <div>
                               <span className="text-[10px] font-bold text-slate-500 uppercase">Total Invoice Value</span>
                               <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
+                              {ship > 0 && <span className="text-[10px] text-blue-900 font-mono font-semibold">+₹{ship} ship</span>}
                             </div>
                             <div className="flex items-center gap-1.5">
                               <button
@@ -3435,6 +3521,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         cgstPercent: sale.cgstPercent || 0,
                                         sgstPercent: sale.sgstPercent || 0,
                                         igstPercent: sale.igstPercent || 0,
+                                        shippingCharges: sale.shippingCharges || 0,
                                         partyName: sale.partyName || '',
                                         supplierAddress: sale.supplierAddress || '',
                                         companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
@@ -3503,6 +3590,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <th className="px-2 py-1.5 whitespace-nowrap">CGST</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">SGST</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">IGST</th>
+                        <th className="px-2 py-1.5 whitespace-nowrap">Shipping</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Total Invoice</th>
                         <th className="px-2 py-1.5 min-w-[90px] text-center">Status</th>
                         <th className="px-2 py-1.5 min-w-[110px]">Remarks</th>
@@ -3512,15 +3600,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </thead>
                     <tbody>
                       {salesLoading ? (
-                        <tr><td colSpan={24} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
+                        <tr><td colSpan={25} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
                       ) : poSales.length === 0 ? (
-                        <tr><td colSpan={24} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
+                        <tr><td colSpan={25} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
                       ) : (
                         poSales.map((sale, idx) => {
                           const basic = (sale.qty || 0) * (sale.rate || 0);
                           const cgst = basic * ((sale.cgstPercent || 0) / 100);
                           const sgst = basic * ((sale.sgstPercent || 0) / 100);
                           const igst = basic * ((sale.igstPercent || 0) / 100);
+                          const ship = Number(sale.shippingCharges || 0);
                           const isApproved = sale.status === 'APPROVED';
                           const isPending = sale.status === 'PENDING';
                           const isRejected = sale.status === 'REJECTED';
@@ -3561,7 +3650,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
                               <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst)}</td>
+                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap text-blue-900">{sale.shippingCharges ? formatCurrency(sale.shippingCharges) : '-'}</td>
+                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst + ship)}</td>
                               <td className="text-center px-2 py-1.5">
                                 <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                                   isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
@@ -3595,6 +3685,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                             cgstPercent: sale.cgstPercent || 0,
                                             sgstPercent: sale.sgstPercent || 0,
                                             igstPercent: sale.igstPercent || 0,
+                                            shippingCharges: sale.shippingCharges || 0,
                                             partyName: sale.partyName || '',
                                             supplierAddress: sale.supplierAddress || '',
                                             companyGstNumber: sale.companyGstNumber || '29ABCDE1234F1Z5',
@@ -3669,6 +3760,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           <SaleInvoiceModal
             sale={previewSaleInvoice}
             onClose={() => setPreviewSaleInvoice(null)}
+          />
+        )}
+
+        {/* INWARD MATERIAL RECEIPT MODAL & PDF PREVIEW */}
+        {previewInwardReceipt && (
+          <SaleInvoiceModal
+            sale={previewInwardReceipt}
+            invoiceType="INWARD"
+            onClose={() => setPreviewInwardReceipt(null)}
           />
         )}
       </div>
@@ -4023,6 +4123,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         <SaleInvoiceModal
           sale={previewSaleInvoice}
           onClose={() => setPreviewSaleInvoice(null)}
+        />
+      )}
+
+      {/* INWARD MATERIAL RECEIPT MODAL & PDF PREVIEW */}
+      {previewInwardReceipt && (
+        <SaleInvoiceModal
+          sale={previewInwardReceipt}
+          invoiceType="INWARD"
+          onClose={() => setPreviewInwardReceipt(null)}
         />
       )}
     </div>
