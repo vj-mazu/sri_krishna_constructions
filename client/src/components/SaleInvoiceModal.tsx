@@ -117,6 +117,51 @@ export const SaleInvoiceModal: React.FC<{
 
   const totalInvoiceAmount = round2(totalBasic + totalCgst + totalSgst + totalIgst + totalShipping);
 
+  // Number to Indian Rupees words converter
+  const numberToWords = (num: number): string => {
+    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    const inWords = (n: number): string => {
+      let str = '';
+      if (n > 9999999) {
+        str += inWords(Math.floor(n / 10000000)) + 'Crore ';
+        n %= 10000000;
+      }
+      if (n > 99999) {
+        str += inWords(Math.floor(n / 100000)) + 'Lakh ';
+        n %= 100000;
+      }
+      if (n > 999) {
+        str += inWords(Math.floor(n / 1000)) + 'Thousand ';
+        n %= 1000;
+      }
+      if (n > 99) {
+        str += inWords(Math.floor(n / 100)) + 'Hundred ';
+        n %= 100;
+      }
+      if (n > 0) {
+        if (n < 20) {
+          str += a[n];
+        } else {
+          str += b[Math.floor(n / 10)] + (n % 10 > 0 ? ' ' + a[n % 10] : ' ');
+        }
+      }
+      return str;
+    };
+
+    const whole = Math.floor(num);
+    const fraction = Math.round((num - whole) * 100);
+    let result = inWords(whole) || 'Zero ';
+    result = 'INR ' + result.trim() + ' Rupees';
+    if (fraction > 0) {
+      result += ' and ' + inWords(fraction).trim() + ' Paise';
+    }
+    return result + ' Only';
+  };
+
+  const amountInWordsText = numberToWords(totalInvoiceAmount);
+
   const effectiveCgstPercent = primarySale.cgstPercent !== undefined ? Number(primarySale.cgstPercent) : (itemsRows[0]?.cgstPercent || 0);
   const effectiveSgstPercent = primarySale.sgstPercent !== undefined ? Number(primarySale.sgstPercent) : (itemsRows[0]?.sgstPercent || 0);
   const effectiveIgstPercent = primarySale.igstPercent !== undefined ? Number(primarySale.igstPercent) : (itemsRows[0]?.igstPercent || 0);
@@ -320,46 +365,65 @@ export const SaleInvoiceModal: React.FC<{
 
       const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 35);
 
-      // 6. TAX TOTALS & SIGNATURE FOOTER
-      let fy = finalTableY + 4;
+      // 6. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS BOX
+      let fy = finalTableY + 3;
 
-      // Draw Summary Box
-      const taxBoxHeight = (totalCgst > 0 || totalSgst > 0 || totalIgst > 0) ? (totalShipping > 0 ? 30 : 25) : (totalShipping > 0 ? 23 : 18);
-      doc.rect(margin + 105, fy, 81, taxBoxHeight);
+      // Draw Bank Details & Terms on Left (98mm wide)
+      doc.rect(margin, fy, 98, 30);
+      doc.setFontSize(6.8);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Amount in Words:', margin + 2, fy + 3.8);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.2);
+      const wordsSplit = doc.splitTextToSize(amountInWordsText, 94);
+      doc.text(wordsSplit.slice(0, 2), margin + 2, fy + 7.2);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.8);
+      doc.text('Company Bank & Payment Details:', margin + 2, fy + 14.5);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.2);
+      doc.text('Bank Name: Canara Bank, Shaktinagar Branch', margin + 2, fy + 18.0);
+      doc.text('A/C No: 06222200019793  |  IFSC: CNRB0010622', margin + 2, fy + 21.5);
+      doc.text('Terms: Subject to Raichur Jurisdiction • E.&O.E.', margin + 2, fy + 25.0);
+
+      // Draw Summary Box on Right (85mm wide)
+      const taxBoxHeight = 30;
+      doc.rect(margin + 101, fy, 85, taxBoxHeight);
       doc.setFontSize(7.2);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Basic Amount:`, margin + 107, fy + 4.5);
+      doc.text(`Basic Amount:`, margin + 103, fy + 4.5);
       doc.text(`₹${fmt(totalBasic)}`, margin + 184, fy + 4.5, { align: 'right' });
 
       let taxOffset = 4.5;
       if (totalCgst > 0 || totalSgst > 0) {
         taxOffset += 4.5;
-        doc.text(`CGST (${effectiveCgstPercent}%):`, margin + 107, fy + taxOffset);
+        doc.text(`CGST (${effectiveCgstPercent}%):`, margin + 103, fy + taxOffset);
         doc.text(`₹${fmt(totalCgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
 
         taxOffset += 4.5;
-        doc.text(`SGST (${effectiveSgstPercent}%):`, margin + 107, fy + taxOffset);
+        doc.text(`SGST (${effectiveSgstPercent}%):`, margin + 103, fy + taxOffset);
         doc.text(`₹${fmt(totalSgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
       } else if (totalIgst > 0) {
         taxOffset += 4.5;
-        doc.text(`IGST (${effectiveIgstPercent}%):`, margin + 107, fy + taxOffset);
+        doc.text(`IGST (${effectiveIgstPercent}%):`, margin + 103, fy + taxOffset);
         doc.text(`₹${fmt(totalIgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
       }
 
       if (totalShipping > 0) {
         taxOffset += 4.5;
-        doc.text(`Shipping Charges:`, margin + 107, fy + taxOffset);
+        doc.text(`Shipping Charges:`, margin + 103, fy + taxOffset);
         doc.text(`₹${fmt(totalShipping)}`, margin + 184, fy + taxOffset, { align: 'right' });
       }
 
-      doc.line(margin + 105, fy + taxOffset + 3, margin + 186, fy + taxOffset + 3);
+      doc.line(margin + 101, fy + 20.5, margin + 186, fy + 20.5);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text(`TOTAL AMOUNT:`, margin + 107, fy + taxOffset + 7.5);
-      doc.text(`₹${fmt(totalInvoiceAmount)}`, margin + 184, fy + taxOffset + 7.5, { align: 'right' });
+      doc.text(`TOTAL AMOUNT:`, margin + 103, fy + 25.5);
+      doc.text(`₹${fmt(totalInvoiceAmount)}`, margin + 184, fy + 25.5, { align: 'right' });
 
       // Signature blocks
-      const sigY = fy + taxOffset + 20;
+      const sigY = fy + 42;
       doc.setFontSize(7.2);
       doc.setFont('helvetica', 'normal');
       doc.text(isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal', margin + 6, sigY);
@@ -373,6 +437,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.text('Page 1 of 1', pageWidth / 2, 288, { align: 'center' });
 
       doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
+      showToast('Tax Invoice PDF downloaded successfully', 'success');
     } catch (error) {
       console.error('Failed to generate Tax Invoice PDF:', error);
       showToast('Error generating PDF. Please check console for details.', 'error');
@@ -381,37 +446,34 @@ export const SaleInvoiceModal: React.FC<{
 
   return (
     <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
+      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* CLEAN MODAL CONTAINER (EXACT MATCH TO SALARY SLIP) */}
-      <div className="bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[92vh] max-h-[92vh] overflow-hidden animate-fadeIn relative z-[100000]">
+      {/* CLEAN ENTERPRISE MODAL CONTAINER */}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[94vh] max-h-[94vh] overflow-hidden animate-fadeIn relative z-[100000]">
         
-        {/* Mobile Drag Indicator Bar */}
-        <div className="w-12 h-1.5 bg-blue-300/60 rounded-full mx-auto my-1.5 sm:hidden shrink-0" />
-
         {/* MODAL TOP HEADER BAR */}
-        <div className="bg-[#1e3a8a] text-white p-3 sm:p-4 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <Printer className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 shrink-0" />
+        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-5 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Printer className="w-5 h-5 text-amber-400 shrink-0" />
             <div className="min-w-0">
-              <h3 className="font-bold text-xs sm:text-base truncate">
+              <h3 className="font-bold text-sm sm:text-base truncate">
                 {isInward ? 'Inward Material Receipt / Invoice' : 'Tax Invoice'} • {invoiceNo}
               </h3>
-              <p className="text-[9px] sm:text-xs text-blue-200 truncate">
+              <p className="text-[10px] sm:text-xs text-blue-200 truncate">
                 {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} • Date: {invoiceDate}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={downloadPdf}
-              className="px-2.5 sm:px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] sm:text-xs rounded-lg flex items-center gap-1 shadow cursor-pointer transition-all active:scale-95"
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all cursor-pointer"
               title="Download Portrait PDF"
             >
-              <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span> PDF
+              <Download className="w-4 h-4" /> Download PDF
             </button>
             <button
               onClick={onClose}
@@ -424,8 +486,8 @@ export const SaleInvoiceModal: React.FC<{
         </div>
 
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
-        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-2 sm:p-6 pb-8 bg-slate-100 flex justify-center">
-          <div className="bg-white p-3 sm:p-6 rounded-xl shadow-md border border-slate-300 w-full max-w-3xl text-black font-sans text-xs overflow-x-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center">
+          <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-3xl text-black font-sans text-xs overflow-x-auto my-auto">
             
             {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
             <div className="flex items-start gap-4 pb-3 border-b-2 border-black">
@@ -574,9 +636,31 @@ export const SaleInvoiceModal: React.FC<{
               </table>
             </div>
 
-            {/* 6. TAX TOTALS SUMMARY */}
-            <div className="flex justify-end mt-4">
-              <div className="w-80 border-2 border-black divide-y divide-black text-[11px] bg-slate-50/50">
+            {/* 6. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+              {/* Left Box: Amount in words & Bank info */}
+              <div className="border border-black p-2.5 text-[10px] sm:text-[11px] space-y-2 bg-slate-50/50">
+                <div>
+                  <span className="font-bold block text-slate-900">Amount Chargeable (in words):</span>
+                  <span className="font-serif italic font-bold text-slate-800 text-[11px] block mt-0.5">
+                    {amountInWordsText}
+                  </span>
+                </div>
+                <div className="pt-2 border-t border-slate-300">
+                  <span className="font-bold block text-slate-900">Company Bank &amp; Payment Details:</span>
+                  <div className="text-[10px] text-slate-700 space-y-0.5 mt-0.5">
+                    <div>Bank Name: <strong>Canara Bank</strong>, Shaktinagar Branch</div>
+                    <div>Account No: <strong className="font-mono">06222200019793</strong></div>
+                    <div>IFSC Code: <strong className="font-mono">CNRB0010622</strong></div>
+                  </div>
+                </div>
+                <div className="text-[9px] text-slate-500 pt-1">
+                  Terms: Subject to Raichur Jurisdiction • E.&O.E. • Authenticated Tax Invoice.
+                </div>
+              </div>
+
+              {/* Right Box: Tax Breakdown Summary */}
+              <div className="border-2 border-black divide-y divide-black text-[11px] bg-slate-50/50">
                 <div className="p-2 flex justify-between">
                   <span className="font-semibold">Basic Amount:</span>
                   <span className="font-mono font-bold">₹{fmt(totalBasic)}</span>
@@ -627,27 +711,27 @@ export const SaleInvoiceModal: React.FC<{
           </div>
         </div>
 
-        {/* BOTTOM MODAL FOOTER BAR (MATCHES EXACT SALARY SLIP ACTION BAR) */}
-        <div className="p-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
-          <span className="text-xs text-slate-500 font-medium hidden sm:inline">
-            Invoice No: <strong className="font-mono text-slate-800">{invoiceNo}</strong> • Amount: <strong className="font-mono text-slate-800">₹{fmt(totalInvoiceAmount)}</strong>
+        {/* BOTTOM MODAL FOOTER BAR */}
+        <div className="px-4 py-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
+          <span className="text-xs text-slate-600 font-medium hidden sm:inline">
+            Invoice No: <strong className="font-mono text-slate-900">{invoiceNo}</strong> • Total Amount: <strong className="font-mono text-emerald-800">₹{fmt(totalInvoiceAmount)}</strong>
           </span>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
             <button
               onClick={() => window.print()}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg flex items-center gap-1.5 border border-slate-300 transition-all cursor-pointer"
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-slate-300 transition-all cursor-pointer"
             >
-              <Printer className="w-3.5 h-3.5" /> Print
+              <Printer className="w-4 h-4" /> Print
             </button>
             <button
               onClick={downloadPdf}
-              className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5" /> Download PDF
+              <Download className="w-4 h-4" /> Download PDF
             </button>
             <button
               onClick={onClose}
-              className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg cursor-pointer transition-all"
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-all"
             >
               Close
             </button>

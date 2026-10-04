@@ -918,7 +918,34 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   return (
                     <tr 
                       key={wo.id} 
-                      onClick={() => setInspectItem(wo)}
+                      onClick={() => {
+                        setSelectedForInvoice({
+                          ...wo,
+                          sourceType: 'WORK_ORDER',
+                          workOrderNumber: wo.workOrderNumber,
+                          workOrderDate: wo.workOrderDate,
+                          poNumber: wo.workOrderNumber,
+                          poDate: wo.workOrderDate,
+                          partyName: wo.partyName,
+                          partyAddress: wo.partyAddress,
+                          gstNumber: wo.partyGstNumber,
+                          companyName: wo.companyName,
+                          companyGstNumber: wo.companyGstNumber,
+                          quantity: wo.qty,
+                          unitPrice: wo.rate,
+                          cgstPercent: wo.cgstPercent,
+                          sgstPercent: wo.sgstPercent,
+                          igstPercent: wo.igstPercent,
+                          shippingCharges: wo.shippingCharges || 0,
+                          item: {
+                            itemName: wo.itemName,
+                            specifications: wo.description || 'Work Order Direct Sale',
+                            partNumber: wo.partNumber || '',
+                            kpclCode: '-',
+                            unit: wo.unit || 'NOS'
+                          }
+                        });
+                      }}
                       className={`cursor-pointer border-b border-slate-200 transition-colors ${isSelected ? 'bg-blue-50/80 font-medium' : 'hover:bg-blue-50/40'}`}
                     >
                       <td className="text-center border-r border-slate-200 p-2.5" onClick={(e) => e.stopPropagation()}>
