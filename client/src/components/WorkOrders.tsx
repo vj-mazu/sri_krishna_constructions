@@ -700,38 +700,39 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 5. ADD / EDIT WORK ORDER MODAL */}
       {showAddModal && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
         >
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden max-h-[92vh] flex flex-col animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-5 py-4 flex justify-between items-center shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-white/20 text-white font-bold flex items-center justify-center shadow-inner">
-                  <Receipt className="w-5 h-5" />
+            <div className="bg-gradient-to-r from-sky-950 via-blue-900 to-indigo-950 text-white px-5 py-3.5 flex justify-between items-center shrink-0 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-white/15 backdrop-blur-md text-white font-bold flex items-center justify-center border border-white/20 shadow-xs">
+                  <Receipt className="w-5 h-5 text-sky-300" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base">
+                  <h3 className="font-bold text-sm sm:text-base text-white tracking-tight">
                     {editItem ? `Edit Work Order: ${editItem.workOrderNumber}` : 'New Work Order Direct Sale Entry'}
                   </h3>
-                  <p className="text-xs text-blue-200">
-                    Direct sales order & invoice entry
+                  <p className="text-[11px] text-sky-200/90 font-medium">
+                    Record direct work order sales invoice, taxes, freight & logistics
                   </p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="text-white/80 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-white/10 transition-colors"
+                className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                title="Close Modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto text-xs">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               {/* SECTION 1: WORK ORDER & INVOICE DETAILS */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
                   <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" /> Work Order & Tax Invoice Identifiers
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -740,10 +741,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       required
-                      placeholder="Enter Work Order No"
+                      placeholder="e.g. WO/2026/001"
                       value={formData.workOrderNumber}
                       onChange={(e) => setFormData({ ...formData, workOrderNumber: e.target.value.toUpperCase() })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -753,7 +754,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       required
                       value={formData.workOrderDate}
                       onChange={(e) => setFormData({ ...formData, workOrderDate: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -761,10 +762,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       required
-                      placeholder="Enter Invoice No"
+                      placeholder="e.g. INV-2026-089"
                       value={formData.invoiceNumber}
                       onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value.toUpperCase() })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -774,15 +775,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       required
                       value={formData.invoiceDate}
                       onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                 </div>
               </div>
 
               {/* SECTION 2: PARTY & COMPANY DETAILS */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
                   <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Party (Client) & Billing Company Details
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
@@ -791,20 +792,20 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       required
-                      placeholder="Enter Party / Client Name"
+                      placeholder="e.g. JSW Energy Limited"
                       value={formData.partyName}
                       onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Party GSTIN Number</label>
                     <input
                       type="text"
-                      placeholder="Enter Party GSTIN"
+                      placeholder="e.g. 29AAAAA0000A1Z5"
                       value={formData.partyGstNumber}
                       onChange={(e) => setFormData({ ...formData, partyGstNumber: e.target.value.toUpperCase() })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -813,25 +814,25 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="text"
                       disabled
                       value={formData.companyGstNumber}
-                      className="w-full p-2 border border-slate-200 rounded-lg font-mono font-bold bg-slate-100 text-slate-600 outline-none"
+                      className="w-full p-2.5 border border-slate-200 rounded-lg font-mono font-bold bg-slate-100 text-slate-600 outline-none text-xs"
                     />
                   </div>
                   <div className="sm:col-span-2 md:col-span-3">
                     <label className="block font-bold text-slate-700 mb-1">Party Billing Address</label>
                     <input
                       type="text"
-                      placeholder="Enter billing address"
+                      placeholder="e.g. Toranagallu, Sandur Taluk, Ballari District, Karnataka - 583123"
                       value={formData.partyAddress}
                       onChange={(e) => setFormData({ ...formData, partyAddress: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                 </div>
               </div>
 
               {/* SECTION 3: ITEMS, DESCRIPTION, QTY, RATE & TAXES */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
                   <Package className="w-4 h-4 text-[#1e3a8a]" /> Item Specifications, Pricing & Tax Breakdown
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
@@ -840,20 +841,20 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       required
-                      placeholder="Enter Item Name"
+                      placeholder="e.g. Fabrication and Erection Structure Work"
                       value={formData.itemName}
                       onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Part No / Model</label>
                     <input
                       type="text"
-                      placeholder="Enter Part No"
+                      placeholder="e.g. WO-STR-01"
                       value={formData.partNumber}
                       onChange={(e) => setFormData({ ...formData, partNumber: e.target.value.toUpperCase() })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -861,7 +862,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <select
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     >
                       <option value="NOS">NOS</option>
                       <option value="SET">SET</option>
@@ -876,12 +877,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <label className="block font-bold text-slate-700 mb-1">Item Description / Work Scope</label>
                     <textarea
                       rows={2}
-                      placeholder="Detailed specifications, work scope or special clauses..."
+                      placeholder="Detailed specifications, scope of work, technical remarks or special clauses..."
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Quantity *</label>
                     <input
@@ -889,10 +893,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       step="any"
                       min="0.01"
                       required
-                      placeholder="1"
+                      placeholder="1.00"
                       value={formData.qty}
                       onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -905,7 +909,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       placeholder="0.00"
                       value={formData.rate}
                       onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -915,7 +919,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       step="any"
                       value={formData.cgstPercent}
                       onChange={(e) => setFormData({ ...formData, cgstPercent: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -925,7 +929,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       step="any"
                       value={formData.sgstPercent}
                       onChange={(e) => setFormData({ ...formData, sgstPercent: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -935,7 +939,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       step="any"
                       value={formData.igstPercent}
                       onChange={(e) => setFormData({ ...formData, igstPercent: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
@@ -946,47 +950,36 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       placeholder="0.00"
                       value={formData.shippingCharges}
                       onChange={(e) => setFormData({ ...formData, shippingCharges: e.target.value })}
-                      className="w-full p-2 border border-blue-300 bg-blue-50/20 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 border border-blue-300 bg-blue-50/40 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                 </div>
 
                 {/* LIVE CALCULATION SUMMARY CARD */}
-                <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 text-xs font-mono space-y-1.5">
-                  <div className="flex justify-between text-slate-700">
-                    <span>Basic Amount:</span>
-                    <strong>{formatCurrency(formBasic)}</strong>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50/80 p-3.5 rounded-xl border border-blue-200 text-xs font-mono space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-slate-600 font-medium">Basic Amount: <strong className="text-slate-900">{formatCurrency(formBasic)}</strong></span>
+                    <span className="text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded border border-blue-200">CGST ({formCgstP}%): +{formatCurrency(formCgstAmt)}</span>
+                    <span className="text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded border border-blue-200">SGST ({formSgstP}%): +{formatCurrency(formSgstAmt)}</span>
+                    {formIgstP > 0 && (
+                      <span className="text-indigo-800 bg-indigo-100/70 px-2 py-0.5 rounded border border-indigo-200">IGST ({formIgstP}%): +{formatCurrency(formIgstAmt)}</span>
+                    )}
+                    {formShip > 0 && (
+                      <span className="text-amber-900 bg-amber-100/70 px-2 py-0.5 rounded border border-amber-200 font-bold">Shipping: +{formatCurrency(formShip)}</span>
+                    )}
                   </div>
-                  <div className="flex justify-between text-blue-800">
-                    <span>CGST ({formCgstP}%):</span>
-                    <span>+{formatCurrency(formCgstAmt)}</span>
-                  </div>
-                  <div className="flex justify-between text-blue-800">
-                    <span>SGST ({formSgstP}%):</span>
-                    <span>+{formatCurrency(formSgstAmt)}</span>
-                  </div>
-                  {formIgstP > 0 && (
-                    <div className="flex justify-between text-indigo-800">
-                      <span>IGST ({formIgstP}%):</span>
-                      <span>+{formatCurrency(formIgstAmt)}</span>
-                    </div>
-                  )}
-                  {formShip > 0 && (
-                    <div className="flex justify-between text-blue-900 font-bold">
-                      <span>Shipping Charges:</span>
-                      <span>+{formatCurrency(formShip)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm font-black text-blue-950 pt-1.5 border-t border-blue-200">
+                  <div className="flex justify-between items-center text-sm font-black text-blue-950 pt-2 border-t border-blue-200">
                     <span>Grand Total Value:</span>
-                    <span>{formatCurrency(formTotalAmt)}</span>
+                    <span className="text-base font-black text-blue-900 bg-white px-3 py-1 rounded-lg border border-blue-300 shadow-xs font-mono">
+                      {formatCurrency(formTotalAmt)}
+                    </span>
                   </div>
                 </div>
               </div>
 
               {/* SECTION 4: DISPATCH & REMARKS */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
                   <span>🚚</span> Dispatch Logistics & Remarks
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -994,51 +987,60 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <label className="block font-bold text-slate-700 mb-1">Vehicle Number <span className="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
                     <input
                       type="text"
-                      placeholder="e.g. KA-37-M-1234 (Optional)"
+                      placeholder="e.g. KA-34-A-1234"
                       value={formData.vehicleNumber}
                       onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value.toUpperCase() })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">E-Way Bill Number <span className="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
                     <input
                       type="text"
-                      placeholder="e.g. 541289654123 (Optional)"
+                      placeholder="e.g. 541289654123"
                       value={formData.eWayBillNumber}
                       onChange={(e) => setFormData({ ...formData, eWayBillNumber: e.target.value.toUpperCase() })}
-                      className="w-full p-2 border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Remarks / Note <span className="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
                     <input
                       type="text"
-                      placeholder="Any additional remarks..."
+                      placeholder="Special instructions, gate pass ref..."
                       value={formData.remarks}
                       onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                      className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                 </div>
               </div>
 
               {/* FOOTER ACTIONS */}
-              <div className="pt-2 flex justify-end gap-2 shrink-0">
+              <div className="pt-2 flex justify-end items-center gap-2.5 shrink-0 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs transition-colors"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-6 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition-all disabled:opacity-50"
+                  className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-50"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  {submitting ? 'Saving...' : editItem ? 'Update Work Order' : 'Save Work Order & Add to Sales'}
+                  {submitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Saving Work Order...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>{editItem ? 'Update Work Order' : 'Save Work Order & Add to Sales'}</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -1049,21 +1051,21 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 6. VIEW DETAILS INSPECT MODAL */}
       {inspectItem && (
         <div 
-          className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-hidden animate-fadeIn"
+          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) setInspectItem(null); }}
         >
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col animate-fadeIn">
-            <div className="bg-gradient-to-r from-blue-900 to-indigo-950 text-white px-5 py-4 flex justify-between items-center shrink-0">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
+            <div className="bg-gradient-to-r from-sky-950 via-blue-900 to-indigo-950 text-white px-5 py-3.5 flex justify-between items-center shrink-0 border-b border-white/10">
               <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-full bg-white/20 text-white font-mono font-bold text-xs flex items-center justify-center shadow-inner">
+                <span className="w-8 h-8 rounded-xl bg-white/15 text-sky-200 font-mono font-bold text-xs flex items-center justify-center border border-white/20 shadow-inner">
                   WO
                 </span>
                 <div>
-                  <h3 className="font-bold text-base">Work Order: {inspectItem.workOrderNumber}</h3>
-                  <p className="text-xs text-blue-200">Invoice: {inspectItem.invoiceNumber} | Date: {formatDate(inspectItem.invoiceDate)}</p>
+                  <h3 className="font-bold text-sm sm:text-base">Work Order: {inspectItem.workOrderNumber}</h3>
+                  <p className="text-[11px] text-sky-200/90">Invoice: {inspectItem.invoiceNumber} | Date: {formatDate(inspectItem.invoiceDate)}</p>
                 </div>
               </div>
-              <button onClick={() => setInspectItem(null)} className="text-white/80 hover:text-white text-xl font-bold p-1 rounded-lg hover:bg-white/10 transition-colors">
+              <button onClick={() => setInspectItem(null)} className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
