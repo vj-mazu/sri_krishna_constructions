@@ -187,7 +187,7 @@ export const initializeDatabaseTables = async () => {
         "kpclCode" TEXT NOT NULL,
         "itemName" TEXT NOT NULL,
         "specifications" TEXT,
-        "partNumber" TEXT UNIQUE NOT NULL,
+        "partNumber" TEXT NOT NULL,
         "make" TEXT,
         "hsnCode" TEXT,
         "unit" TEXT NOT NULL DEFAULT 'NOS',
@@ -206,7 +206,8 @@ export const initializeDatabaseTables = async () => {
         "insurance" DOUBLE PRECISION NOT NULL DEFAULT 0,
         "totalAmount" DOUBLE PRECISION NOT NULL,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "PurchaseOrderItem_po_partNumber_key" UNIQUE ("purchaseOrderId", "partNumber")
       );
 
       -- 9. Create Purchase Table
@@ -416,6 +417,18 @@ export const initializeDatabaseTables = async () => {
 
       -- WorkOrder shippingCharges
       ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
+
+      -- Allow same Part Number across different POs by dropping global unique key and making it unique per PO
+      ALTER TABLE "PurchaseOrderItem" DROP CONSTRAINT IF EXISTS "PurchaseOrderItem_partNumber_key";
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'PurchaseOrderItem_po_partNumber_key'
+        ) THEN
+          ALTER TABLE "PurchaseOrderItem" ADD CONSTRAINT "PurchaseOrderItem_po_partNumber_key" UNIQUE ("purchaseOrderId", "partNumber");
+        END IF;
+      EXCEPTION
+        WHEN OTHERS THEN null;
+      END $$;
 
       -- Worker master enhancements (Father Name, Designation, Daily Allowance, Advance Balance, Advance Dates/Reason, Statutory & Bank Details)
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "fatherName" TEXT;

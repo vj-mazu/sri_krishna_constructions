@@ -905,7 +905,7 @@ app.post('/api/purchase-order-items', authenticateToken, requireRoles(['OWNER', 
   } catch (err) {
     console.error('Error adding PO item:', err);
     if (err.code === '23505') {
-      return res.status(400).json({ error: 'Part number must be unique across POs' });
+      return res.status(400).json({ error: 'Part number already exists in this Purchase Order' });
     }
     res.status(500).json({ error: 'Failed to add PO item' });
   }
@@ -970,6 +970,9 @@ app.put('/api/purchase-order-items/:id', authenticateToken, requireRoles(['OWNER
     res.json(rows[0]);
   } catch (err) {
     console.error('Error updating PO item:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Part number already exists in this Purchase Order' });
+    }
     res.status(500).json({ error: 'Failed to update PO item' });
   }
 });
