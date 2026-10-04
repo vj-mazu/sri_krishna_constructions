@@ -80,6 +80,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const [editItem, setEditItem] = useState<WorkOrderItem | null>(null);
   const [inspectItem, setInspectItem] = useState<WorkOrderItem | null>(null);
   const [selectedForInvoice, setSelectedForInvoice] = useState<any | null>(null);
+  const [selectedWorkOrderIds, setSelectedWorkOrderIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Form State
@@ -459,6 +460,47 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedWorkOrderIds.length > 0 && (
+            <button
+              onClick={() => {
+                const chosen = workOrders
+                  .filter(w => selectedWorkOrderIds.includes(w.id))
+                  .map(wo => ({
+                    ...wo,
+                    sourceType: 'WORK_ORDER',
+                    workOrderNumber: wo.workOrderNumber,
+                    workOrderDate: wo.workOrderDate,
+                    poNumber: wo.workOrderNumber,
+                    poDate: wo.workOrderDate,
+                    partyName: wo.partyName,
+                    partyAddress: wo.partyAddress,
+                    gstNumber: wo.partyGstNumber,
+                    companyName: wo.companyName,
+                    companyGstNumber: wo.companyGstNumber,
+                    quantity: wo.qty,
+                    unitPrice: wo.rate,
+                    cgstPercent: wo.cgstPercent,
+                    sgstPercent: wo.sgstPercent,
+                    igstPercent: wo.igstPercent,
+                    shippingCharges: wo.shippingCharges || 0,
+                    item: {
+                      itemName: wo.itemName,
+                      specifications: wo.description || 'Work Order Direct Sale',
+                      partNumber: wo.partNumber || '',
+                      kpclCode: '-',
+                      unit: wo.unit || 'NOS'
+                    }
+                  }));
+                if (chosen.length > 0) {
+                  setSelectedForInvoice(chosen);
+                }
+              }}
+              className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md animate-pulse cursor-pointer transition-all"
+            >
+              <Receipt className="w-3.5 h-3.5" /> View &amp; Download Invoice ({selectedWorkOrderIds.length} Selected)
+            </button>
+          )}
+
           <input
             type="date"
             className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
@@ -816,6 +858,23 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           <table className="w-full text-left text-xs excel-table">
             <thead className="sticky top-0 z-10">
               <tr className="bg-sky-950 text-sky-200 font-bold">
+                <th className="w-10 text-center border-r border-sky-800 p-2.5">
+                  <input
+                    type="checkbox"
+                    checked={paginatedWorkOrders.length > 0 && paginatedWorkOrders.every(wo => selectedWorkOrderIds.includes(wo.id))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        const allIds = Array.from(new Set([...selectedWorkOrderIds, ...paginatedWorkOrders.map(wo => wo.id)]));
+                        setSelectedWorkOrderIds(allIds);
+                      } else {
+                        const pageIds = new Set(paginatedWorkOrders.map(wo => wo.id));
+                        setSelectedWorkOrderIds(selectedWorkOrderIds.filter(id => !pageIds.has(id)));
+                      }
+                    }}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                    title="Select all on this page"
+                  />
+                </th>
                 <th className="w-16 text-center border-r border-sky-800 p-2.5">
                   <button 
                     onClick={() => setSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
@@ -842,126 +901,143 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="text-center py-12 text-slate-400 font-semibold">
+                  <td colSpan={14} className="text-center py-12 text-slate-400 font-semibold">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
                     Loading work orders...
                   </td>
                 </tr>
               ) : paginatedWorkOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="text-center py-12 text-slate-400">
+                  <td colSpan={14} className="text-center py-12 text-slate-400">
                     No work orders match the selected filters.
                   </td>
                 </tr>
               ) : (
-                paginatedWorkOrders.map((wo, idx) => (
-                  <tr 
-                    key={wo.id} 
-                    onClick={() => setInspectItem(wo)}
-                    className="hover:bg-blue-50/50 cursor-pointer border-b border-slate-200 transition-colors"
-                  >
-                    <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
-                      {(currentPage - 1) * pageSize + idx + 1}
-                    </td>
-                    <td className="p-2.5">
-                      <div className="font-bold text-[#1e3a8a] font-mono">{wo.workOrderNumber}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{formatDate(wo.workOrderDate)}</div>
-                    </td>
-                    <td className="p-2.5">
-                      <div className="font-bold text-slate-900 font-mono">{wo.invoiceNumber}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{formatDate(wo.invoiceDate)}</div>
-                    </td>
-                    <td className="p-2.5">
-                      <div className="font-bold text-slate-900">{wo.partyName}</div>
-                      {wo.partyAddress && <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{wo.partyAddress}</div>}
-                    </td>
-                    <td className="font-mono font-semibold text-slate-800 uppercase whitespace-nowrap p-2.5">
-                      {wo.partyGstNumber || '-'}
-                    </td>
-                    <td className="p-2.5">
-                      <div className="font-bold text-slate-800">{wo.itemName}</div>
-                      {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
-                    </td>
-                    <td className="font-mono text-slate-600 whitespace-nowrap p-2.5">
-                      {wo.partNumber || '-'}
-                    </td>
-                    <td className="text-center font-mono font-bold text-slate-900 p-2.5">
-                      {wo.qty} {wo.unit || 'NOS'}
-                    </td>
-                    <td className="text-right font-mono text-slate-700 whitespace-nowrap p-2.5">
-                      {formatCurrency(wo.rate)}
-                    </td>
-                    <td className="text-right font-mono text-blue-900 whitespace-nowrap p-2.5">
-                      {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
-                    </td>
-                    <td className="text-right font-mono font-black text-blue-950 whitespace-nowrap p-2.5">
-                      {formatCurrency(wo.totalAmount)}
-                    </td>
-                    <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
-                      <div>{wo.vehicleNumber || '-'}</div>
-                      {wo.eWayBillNumber && <div className="text-[10px] text-blue-700 font-bold">{wo.eWayBillNumber}</div>}
-                    </td>
-                    <td 
-                      className="text-center p-2.5 sticky right-0 bg-white/95 backdrop-blur-sm border-l border-slate-200 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.1)]"
-                      onClick={(e) => e.stopPropagation()}
+                paginatedWorkOrders.map((wo, idx) => {
+                  const isSelected = selectedWorkOrderIds.includes(wo.id);
+                  return (
+                    <tr 
+                      key={wo.id} 
+                      onClick={() => setInspectItem(wo)}
+                      className={`cursor-pointer border-b border-slate-200 transition-colors ${isSelected ? 'bg-blue-50/80 font-medium' : 'hover:bg-blue-50/40'}`}
                     >
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => {
-                            setSelectedForInvoice({
-                              ...wo,
-                              sourceType: 'WORK_ORDER',
-                              workOrderNumber: wo.workOrderNumber,
-                              workOrderDate: wo.workOrderDate,
-                              poNumber: wo.workOrderNumber,
-                              poDate: wo.workOrderDate,
-                              partyName: wo.partyName,
-                              partyAddress: wo.partyAddress,
-                              gstNumber: wo.partyGstNumber,
-                              companyName: wo.companyName,
-                              companyGstNumber: wo.companyGstNumber,
-                              quantity: wo.qty,
-                              unitPrice: wo.rate,
-                              cgstPercent: wo.cgstPercent,
-                              sgstPercent: wo.sgstPercent,
-                              igstPercent: wo.igstPercent,
-                              shippingCharges: wo.shippingCharges || 0,
-                              item: {
-                                itemName: wo.itemName,
-                                specifications: wo.description || 'Work Order Direct Sale',
-                                partNumber: wo.partNumber || '',
-                                kpclCode: '-',
-                                unit: wo.unit || 'NOS'
-                              }
-                            });
+                      <td className="text-center border-r border-slate-200 p-2.5" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedWorkOrderIds(prev => [...prev, wo.id]);
+                            } else {
+                              setSelectedWorkOrderIds(prev => prev.filter(id => id !== wo.id));
+                            }
                           }}
-                          className="p-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors shadow-sm"
-                          title="Print / Download Tax Invoice"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                        </button>
-                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                          <>
-                            <button
-                              onClick={() => handleOpenEdit(wo)}
-                              className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg transition-colors border border-amber-300"
-                              title="Edit Work Order"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(wo.id, wo.workOrderNumber)}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors border border-rose-300"
-                              title="Delete Work Order"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                        />
+                      </td>
+                      <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
+                        {(currentPage - 1) * pageSize + idx + 1}
+                      </td>
+                      <td className="p-2.5">
+                        <div className="font-bold text-[#1e3a8a] font-mono">{wo.workOrderNumber}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{formatDate(wo.workOrderDate)}</div>
+                      </td>
+                      <td className="p-2.5">
+                        <div className="font-bold text-slate-900 font-mono">{wo.invoiceNumber}</div>
+                        <div className="text-[10px] text-slate-500 font-mono">{formatDate(wo.invoiceDate)}</div>
+                      </td>
+                      <td className="p-2.5">
+                        <div className="font-bold text-slate-900">{wo.partyName}</div>
+                        {wo.partyAddress && <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{wo.partyAddress}</div>}
+                      </td>
+                      <td className="font-mono font-semibold text-slate-800 uppercase whitespace-nowrap p-2.5">
+                        {wo.partyGstNumber || '-'}
+                      </td>
+                      <td className="p-2.5">
+                        <div className="font-bold text-slate-800">{wo.itemName}</div>
+                        {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
+                      </td>
+                      <td className="font-mono text-slate-600 whitespace-nowrap p-2.5">
+                        {wo.partNumber || '-'}
+                      </td>
+                      <td className="text-center font-mono font-bold text-slate-900 p-2.5">
+                        {wo.qty} {wo.unit || 'NOS'}
+                      </td>
+                      <td className="text-right font-mono text-slate-700 whitespace-nowrap p-2.5">
+                        {formatCurrency(wo.rate)}
+                      </td>
+                      <td className="text-right font-mono text-blue-900 whitespace-nowrap p-2.5">
+                        {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
+                      </td>
+                      <td className="text-right font-mono font-black text-blue-950 whitespace-nowrap p-2.5">
+                        {formatCurrency(wo.totalAmount)}
+                      </td>
+                      <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
+                        <div>{wo.vehicleNumber || '-'}</div>
+                        {wo.eWayBillNumber && <div className="text-[10px] text-blue-700 font-bold">{wo.eWayBillNumber}</div>}
+                      </td>
+                      <td 
+                        className="text-center p-2.5 sticky right-0 bg-white/95 backdrop-blur-sm border-l border-slate-200 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.1)]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => {
+                              setSelectedForInvoice({
+                                ...wo,
+                                sourceType: 'WORK_ORDER',
+                                workOrderNumber: wo.workOrderNumber,
+                                workOrderDate: wo.workOrderDate,
+                                poNumber: wo.workOrderNumber,
+                                poDate: wo.workOrderDate,
+                                partyName: wo.partyName,
+                                partyAddress: wo.partyAddress,
+                                gstNumber: wo.partyGstNumber,
+                                companyName: wo.companyName,
+                                companyGstNumber: wo.companyGstNumber,
+                                quantity: wo.qty,
+                                unitPrice: wo.rate,
+                                cgstPercent: wo.cgstPercent,
+                                sgstPercent: wo.sgstPercent,
+                                igstPercent: wo.igstPercent,
+                                shippingCharges: wo.shippingCharges || 0,
+                                item: {
+                                  itemName: wo.itemName,
+                                  specifications: wo.description || 'Work Order Direct Sale',
+                                  partNumber: wo.partNumber || '',
+                                  kpclCode: '-',
+                                  unit: wo.unit || 'NOS'
+                                }
+                              });
+                            }}
+                            className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm"
+                            title="Print / Download Official Tax Invoice (GST)"
+                          >
+                            <Receipt className="w-3.5 h-3.5" />
+                          </button>
+                          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                            <>
+                              <button
+                                onClick={() => handleOpenEdit(wo)}
+                                className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg transition-colors border border-amber-300"
+                                title="Edit Work Order"
+                              >
+                                <Edit className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(wo.id, wo.workOrderNumber)}
+                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors border border-rose-300"
+                                title="Delete Work Order"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

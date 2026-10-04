@@ -226,7 +226,13 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
                 <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Present Workers:</span>
                 <div className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono mt-0.5 flex items-baseline gap-2">
                   <span>{attendance.presentCount}</span>
-                  <span className="text-xs font-bold text-slate-400">/ {totalWorkers || 0} Registered</span>
+                  <button
+                    onClick={() => onSelectTab('master_creation')}
+                    className="text-xs font-bold text-slate-500 hover:text-[#1e3a8a] hover:underline bg-slate-100 hover:bg-blue-50 px-2 py-0.5 rounded-lg transition-colors"
+                    title="Click to view all Registered Workers in Master Registry"
+                  >
+                    / {totalWorkers || 0} Registered Workers
+                  </button>
                 </div>
               </div>
 
@@ -268,7 +274,7 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
         <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
           Quick Workspaces
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <button
             onClick={() => onSelectTab('purchase_orders')}
             className="flex items-center gap-3.5 p-3.5 rounded-2xl border border-slate-200 hover:border-[#1e3a8a] active:bg-blue-50/60 hover:bg-blue-50/30 transition-all text-left group"
@@ -303,8 +309,21 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
               <Calendar className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-800">Workforce & Attendance</div>
-              <div className="text-[10px] text-slate-500">Daily site attendance & wages</div>
+              <div className="text-xs font-bold text-slate-800">Workforce Attendance</div>
+              <div className="text-[10px] text-slate-500">Daily site attendance & logs</div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('master_creation')}
+            className="flex items-center gap-3.5 p-3.5 rounded-2xl border border-slate-200 hover:border-blue-700 active:bg-blue-50/60 hover:bg-blue-50/30 transition-all text-left group"
+          >
+            <div className="p-2.5 rounded-xl bg-blue-50 text-[#1e3a8a] group-hover:bg-[#1e3a8a] group-hover:text-white transition-colors">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-slate-800">Registered Workers</div>
+              <div className="text-[10px] text-slate-500">{totalWorkers || 0} active workers in registry</div>
             </div>
           </button>
         </div>
