@@ -1097,7 +1097,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 5. EDIT WORK ORDER MODAL (Only when editing an existing item) */}
       {showAddModal && editItem && (
         <div 
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-[99998] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditItem(null); } }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
@@ -1448,7 +1448,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {/* 6. VIEW DETAILS INSPECT MODAL */}
       {inspectItem && (
         <div 
-          className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-[99998] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) setInspectItem(null); }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl border border-slate-200 overflow-hidden my-auto max-h-[90vh] flex flex-col animate-fadeIn">
