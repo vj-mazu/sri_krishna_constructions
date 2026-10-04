@@ -1017,7 +1017,7 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
 
     await client.query('BEGIN');
 
-    // Row-level lock on item to prevent race conditions during high concurrency
+    // Row-level lock on item to verify and enforce ordered PO quantity limit
     const itemRes = await client.query(`
       SELECT poi.qty, COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as purchased
       FROM "PurchaseOrderItem" poi
@@ -1029,10 +1029,14 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'PO item not found' });
     }
+
     const item = itemRes.rows[0];
-    if (qty > (item.qty - item.purchased)) {
+    const remainingAllowed = (item.qty || 0) - (item.purchased || 0);
+    if (qty > remainingAllowed) {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: `Quantity (${qty}) exceeds remaining order balance (${item.qty - item.purchased})` });
+      return res.status(400).json({
+        error: `Cannot inward ${qty} units. Ordered PO item quantity is ${item.qty}, already received ${item.purchased} units. Remaining balance is ${Math.max(0, remainingAllowed)} units!`
+      });
     }
 
     const { rows } = await client.query(
