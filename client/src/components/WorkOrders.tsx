@@ -7,6 +7,7 @@ import {
   Search, 
   RefreshCw, 
   Plus, 
+  Minus,
   Trash2, 
   Edit, 
   FileText, 
@@ -397,10 +398,18 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
           {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER' || currentUserRole === 'STAFF') && (
             <button
-              onClick={handleOpenAdd}
+              onClick={() => {
+                if (showAddModal) {
+                  setShowAddModal(false);
+                  setEditItem(null);
+                } else {
+                  handleOpenAdd();
+                }
+              }}
               className="bg-white text-[#1e3a8a] hover:bg-blue-50 rounded-xl px-4 py-2 shadow-md text-xs font-black flex items-center gap-1.5 transition-all"
             >
-              <Plus className="w-4 h-4 text-[#1e3a8a] stroke-[3]" /> New Work Order Sale
+              {showAddModal && !editItem ? <Minus className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 text-[#1e3a8a] stroke-[3]" />}
+              {showAddModal && !editItem ? 'Cancel Form' : '+ New Work Order Sale'}
             </button>
           )}
         </div>
@@ -474,7 +483,334 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       </div>
 
-      {/* 4. WORK ORDERS DATA TABLE */}
+      {/* 4. INLINE WORK ORDER ENTRY FORM (Full-width card matching Inward / PO Sales) */}
+      {showAddModal && !editItem && (
+        <form onSubmit={handleSubmit} className="bg-sky-50/40 rounded-2xl border border-sky-200 animate-fadeIn shadow-lg overflow-visible">
+          <div className="font-bold text-sm text-[#1e3a8a] border-b border-sky-200 p-4 bg-sky-100/60 rounded-t-2xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-[#1e3a8a]" />
+              <span>Record New Work Order Direct Sale</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAddModal(false)}
+              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-white/50 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4 text-xs">
+            {/* SECTION 1: WORK ORDER & INVOICE DETAILS */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" /> Work Order & Tax Invoice Identifiers
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order No *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. WO/2026/001"
+                    value={formData.workOrderNumber}
+                    onChange={(e) => setFormData({ ...formData, workOrderNumber: e.target.value.toUpperCase() })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.workOrderDate}
+                    onChange={(e) => setFormData({ ...formData, workOrderDate: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Tax Invoice No *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. INV-2026-089"
+                    value={formData.invoiceNumber}
+                    onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value.toUpperCase() })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.invoiceDate}
+                    onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 2: PARTY & COMPANY DETAILS */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Party (Client) & Billing Details
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Client Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. JSW Energy Limited"
+                    value={formData.partyName}
+                    onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GSTIN Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 29AAAAA0000A1Z5"
+                    value={formData.partyGstNumber}
+                    onChange={(e) => setFormData({ ...formData, partyGstNumber: e.target.value.toUpperCase() })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GSTIN (SKC)</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={formData.companyGstNumber}
+                    className="w-full p-2 border border-slate-200 rounded-lg font-mono font-bold bg-slate-100 text-slate-600 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Billing Address</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Toranagallu, Sandur Taluk, Ballari..."
+                    value={formData.partyAddress}
+                    onChange={(e) => setFormData({ ...formData, partyAddress: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: ITEM SPECIFICATIONS, QTY, RATE & TAXES */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                <Package className="w-4 h-4 text-[#1e3a8a]" /> Item Specifications, Pricing & Tax Breakdown
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Fabrication and Erection Structure Work"
+                    value={formData.itemName}
+                    onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Part No / Model</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. WO-STR-01"
+                    value={formData.partNumber}
+                    onChange={(e) => setFormData({ ...formData, partNumber: e.target.value.toUpperCase() })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit *</label>
+                  <select
+                    value={formData.unit}
+                    onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                    className="w-full p-2 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  >
+                    <option value="NOS">NOS</option>
+                    <option value="SET">SET</option>
+                    <option value="MTR">MTR</option>
+                    <option value="KG">KG</option>
+                    <option value="LOT">LOT</option>
+                    <option value="JOB">JOB</option>
+                    <option value="HRS">HRS</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2 md:col-span-4">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Description / Work Scope</label>
+                  <input
+                    type="text"
+                    placeholder="Detailed specifications, scope of work, technical remarks or special clauses..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity *</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.01"
+                    required
+                    placeholder="1.00"
+                    value={formData.qty}
+                    onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit Rate (₹) *</label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    required
+                    placeholder="0.00"
+                    value={formData.rate}
+                    onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST %</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.cgstPercent}
+                    onChange={(e) => setFormData({ ...formData, cgstPercent: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST %</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.sgstPercent}
+                    onChange={(e) => setFormData({ ...formData, sgstPercent: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST %</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={formData.igstPercent}
+                    onChange={(e) => setFormData({ ...formData, igstPercent: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping (₹)</label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="0.00"
+                    value={formData.shippingCharges}
+                    onChange={(e) => setFormData({ ...formData, shippingCharges: e.target.value })}
+                    className="w-full p-2 border border-blue-300 bg-blue-50/40 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 4: LOGISTICS & REMARKS */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+              <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-2">
+                <span>🚚</span> Dispatch Logistics & Remarks
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle Number <span className="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. KA-34-A-1234"
+                    value={formData.vehicleNumber}
+                    onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value.toUpperCase() })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number <span className="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 541289654123"
+                    value={formData.eWayBillNumber}
+                    onChange={(e) => setFormData({ ...formData, eWayBillNumber: e.target.value.toUpperCase() })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note <span className="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                  <input
+                    type="text"
+                    placeholder="Special instructions, gate pass ref..."
+                    value={formData.remarks}
+                    onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ACTION & CALCULATION FOOTER */}
+          <div className="bg-white p-4 border-t border-sky-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+              <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(formBasic)}</strong></span>
+              <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">CGST {formCgstP}%: +{formatCurrency(formCgstAmt)}</span>
+              <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SGST {formSgstP}%: +{formatCurrency(formSgstAmt)}</span>
+              {formIgstP > 0 && <span className="text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST {formIgstP}%: +{formatCurrency(formIgstAmt)}</span>}
+              {formShip > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(formShip)}</span>}
+              <span className="text-sm font-black text-blue-950 ml-2 bg-blue-100/60 px-3 py-1 rounded-lg border border-blue-300">
+                Total Work Order: {formatCurrency(formTotalAmt)}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 self-end md:self-auto">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="bg-[#1e3a8a] hover:bg-[#1e40af] text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {submitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Save Work Order</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* 5. WORK ORDERS DATA TABLE */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="w-full text-left text-xs excel-table">
@@ -697,11 +1033,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       </div>
 
-      {/* 5. ADD / EDIT WORK ORDER MODAL */}
-      {showAddModal && (
+      {/* 5. EDIT WORK ORDER MODAL (Only when editing an existing item) */}
+      {showAddModal && editItem && (
         <div 
           className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditItem(null); } }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col animate-fadeIn">
             {/* Modal Header */}
@@ -712,15 +1048,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 </div>
                 <div>
                   <h3 className="font-bold text-sm sm:text-base text-white tracking-tight">
-                    {editItem ? `Edit Work Order: ${editItem.workOrderNumber}` : 'New Work Order Direct Sale Entry'}
+                    Edit Work Order: {editItem.workOrderNumber}
                   </h3>
                   <p className="text-[11px] text-sky-200/90 font-medium">
-                    Record direct work order sales invoice, taxes, freight & logistics
+                    Update work order details, taxes, freight & logistics
                   </p>
                 </div>
               </div>
               <button 
-                onClick={() => setShowAddModal(false)}
+                onClick={() => { setShowAddModal(false); setEditItem(null); }}
                 className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
                 title="Close Modal"
               >
@@ -1020,7 +1356,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               <div className="pt-2 flex justify-end items-center gap-2.5 shrink-0 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setShowAddModal(false); setEditItem(null); }}
                   className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
                 >
                   Cancel
@@ -1033,12 +1369,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   {submitting ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Saving Work Order...</span>
+                      <span>Updating...</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4" />
-                      <span>{editItem ? 'Update Work Order' : 'Save Work Order & Add to Sales'}</span>
+                      <span>Update Work Order</span>
                     </>
                   )}
                 </button>
