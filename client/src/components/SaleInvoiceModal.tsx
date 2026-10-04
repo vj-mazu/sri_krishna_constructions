@@ -452,10 +452,10 @@ export const SaleInvoiceModal: React.FC<{
       }}
     >
       {/* CLEAN ENTERPRISE MODAL CONTAINER */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl border border-slate-300 flex flex-col h-[94vh] max-h-[94vh] overflow-hidden animate-fadeIn relative z-[100000]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl border border-slate-300 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden animate-fadeIn relative z-[100000]">
         
         {/* MODAL TOP HEADER BAR */}
-        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-5 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950">
+        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-6 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950">
           <div className="flex items-center gap-2.5 min-w-0">
             <Printer className="w-5 h-5 text-amber-400 shrink-0" />
             <div className="min-w-0">
@@ -487,7 +487,7 @@ export const SaleInvoiceModal: React.FC<{
 
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
         <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center">
-          <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-3xl text-black font-sans text-xs overflow-x-auto my-auto">
+          <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black font-sans text-xs self-start my-1 sm:my-3">
             
             {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
             <div className="flex items-start gap-4 pb-3 border-b-2 border-black">
