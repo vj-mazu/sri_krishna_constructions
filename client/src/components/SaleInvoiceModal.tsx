@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Download, Printer, X } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -444,15 +445,15 @@ export const SaleInvoiceModal: React.FC<{
     }
   };
 
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-fadeIn"
+      className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[999999] flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-fadeIn"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       {/* CLEAN ENTERPRISE MODAL CONTAINER */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl border border-slate-300 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden animate-fadeIn relative z-[100000]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl border border-slate-300 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden animate-fadeIn relative z-[1000000]">
         
         {/* MODAL TOP HEADER BAR */}
         <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-6 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950">
@@ -739,6 +740,7 @@ export const SaleInvoiceModal: React.FC<{
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

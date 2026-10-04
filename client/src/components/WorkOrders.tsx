@@ -362,7 +362,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const totalQty = workOrders.reduce((acc, curr) => acc + (Number(curr.qty) || 0), 0);
 
   return (
-    <div className="flex flex-col h-full space-y-4 animate-fadeIn">
+    <div className="flex flex-col h-full space-y-4">
       {/* 1. HEADER BANNER */}
       <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0369a1] border border-blue-400/30 rounded-2xl shadow-lg p-4 text-white flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
