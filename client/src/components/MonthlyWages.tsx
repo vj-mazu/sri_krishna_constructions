@@ -3280,9 +3280,14 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         {drilldownData.worker.fullName.charAt(0)}
                       </div>
                       <div>
-                        <h4 className="text-base font-bold text-[#1e3a8a] flex items-center gap-2">
-                          {drilldownData.worker.fullName}
-                        </h4>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-base font-bold text-[#1e3a8a]">
+                            {drilldownData.worker.fullName}
+                          </h4>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-black bg-blue-100 text-blue-900 border border-blue-300 shadow-2xs">
+                            ID: {drilldownData.worker.empId || drilldownData.worker.id}
+                          </span>
+                        </div>
                         <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-3 gap-y-1 mt-0.5">
                           <span><strong>Father's Name:</strong> {drilldownData.worker.fatherName}</span>
                           <span>•</span>
@@ -3326,7 +3331,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                   </div>
 
                   {/* MONTHLY SUMMARY METRICS STRIP */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-center text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-2 text-center text-xs">
                     <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
                       <span className="text-[10px] font-bold uppercase text-emerald-700 block">Full Present</span>
                       <span className="text-base font-bold font-mono text-emerald-900">{drilldownData.summary.totalPresent}d</span>
@@ -3350,6 +3355,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                     <div className="p-2.5 bg-emerald-100 border border-emerald-300 rounded-lg shadow-2xs">
                       <span className="text-[10px] font-bold uppercase text-emerald-900 block">Total Work Days</span>
                       <span className="text-base font-black font-mono text-emerald-950">{drilldownData.summary.totalWorkingDays}</span>
+                    </div>
+                    <div className="p-2.5 bg-purple-100 border border-purple-300 rounded-lg shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase text-purple-900 block">Total OT Hours</span>
+                      <span className="text-base font-black font-mono text-purple-950">{drilldownData.summary.totalOtHours || 0} hrs</span>
                     </div>
                   </div>
 
