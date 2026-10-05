@@ -326,6 +326,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       esi,
       netBaseAmount,
       otHours,
+      otRate,
       otPayment,
       otAllowance,
       totalPayment,
