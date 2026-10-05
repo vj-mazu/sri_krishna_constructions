@@ -3889,9 +3889,10 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const newDesignation = designation !== undefined ? (designation ? designation.trim() : null) : existing[0].designation;
     const newDivisionId = divisionId || existing[0].divisionId;
     const newDailyWage = dailyWage !== undefined ? parseFloat(dailyWage) : existing[0].dailyWage;
-    const newAllowance = dailyAllowance !== undefined ? (parseFloat(dailyAllowance) || 0) : (existing[0].dailyAllowance || 0);
     const newAdvanceTaken = advanceTaken !== undefined ? (parseFloat(advanceTaken) || 0) : (existing[0].advanceTaken || 0);
-    const newAdvance = advanceBalance !== undefined ? (parseFloat(advanceBalance) || 0) : (existing[0].advanceBalance || 0);
+    const newAdvance = advanceBalance !== undefined && advanceBalance !== '' && parseFloat(advanceBalance) > 0 
+      ? parseFloat(advanceBalance) 
+      : (newAdvanceTaken > 0 ? newAdvanceTaken : (parseFloat(existing[0].advanceBalance) || 0));
     const newAdvDate = advanceTakenDate !== undefined ? (advanceTakenDate ? new Date(advanceTakenDate) : null) : existing[0].advanceTakenDate;
     const newAdvReason = advanceReason !== undefined ? (advanceReason ? advanceReason.trim() : null) : existing[0].advanceReason;
     const newAdvReturnDate = advanceReturnDate !== undefined ? (advanceReturnDate ? new Date(advanceReturnDate) : null) : existing[0].advanceReturnDate;
@@ -4820,8 +4821,10 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
             : (parseFloat(worker.dailyAllowance) || 0))
         : (parseFloat(worker.dailyAllowance) || 0);
 
-      const advanceTaken = parseFloat(worker.advanceTaken) || 0;
-      const advanceBalance = parseFloat(worker.advanceBalance) || 0;
+      const rawAdvTaken = parseFloat(worker.advanceTaken) || 0;
+      const rawAdvBal = parseFloat(worker.advanceBalance) || 0;
+      const advanceTaken = rawAdvTaken > 0 ? rawAdvTaken : rawAdvBal;
+      const currentAdvBal = rawAdvBal > 0 ? rawAdvBal : rawAdvTaken;
 
       const wagesAmount = Math.round(workingDays * dailyWage);
       const allowanceAmount = Math.round(workingDays * dailyAllowance);
@@ -4832,9 +4835,9 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const esiAmount = dbPayment ? (parseFloat(dbPayment.esiAmount) || 0) : 0;
       const netBaseAmount = Math.max(0, grossPayment - pfAmount - esiAmount);
 
-      const otRate = parseFloat(worker.otHourlyRate) > 0
-        ? parseFloat(worker.otHourlyRate)
-        : (dailyWage > 0 ? (dailyWage / 8) : 0);
+      const otRate = isApproved && dbPayment.otHourlyRate != null
+        ? parseFloat(dbPayment.otHourlyRate)
+        : (parseFloat(worker.otHourlyRate) > 0 ? parseFloat(worker.otHourlyRate) : (dailyWage > 0 ? (dailyWage / 8) : 0));
 
       const totalOtHours = totalOt;
       const otPayment = Math.round(totalOtHours * otRate);
@@ -4847,8 +4850,10 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const totalPayment = (netBaseAmount + otPayment + otAllowance);
 
       const advanceDeducted = dbPayment ? (parseFloat(dbPayment.advanceDeducted) || 0) : 0;
-      const initialAdvanceBalance = isApproved ? (advanceBalance + advanceDeducted) : advanceBalance;
-      const remainingAdvanceBalance = isApproved ? advanceBalance : Math.max(0, advanceBalance - advanceDeducted);
+      const initialAdvanceBalance = isApproved 
+        ? Math.max(currentAdvBal + advanceDeducted, advanceTaken) 
+        : Math.max(currentAdvBal, advanceTaken);
+      const remainingAdvanceBalance = Math.max(0, initialAdvanceBalance - advanceDeducted);
       const extraAmount = dbPayment ? (parseFloat(dbPayment.extraAmount) || 0) : 0;
       const finalNetAmount = Math.max(0, totalPayment - advanceDeducted + extraAmount);
 
