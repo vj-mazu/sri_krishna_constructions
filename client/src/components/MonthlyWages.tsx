@@ -296,7 +296,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       ? (parseFloat(otVal as string) || 0)
       : (parseFloat(w.totalOtHours) || 0);
     const otHourlyRate = parseFloat(w.otHourlyRate) || 0;
-    const otRate = otHourlyRate > 0 ? otHourlyRate : (dailyWage > 0 ? (dailyWage / 8) : 0);
+    const totalDailyRate = (dailyWage + dailyAllowance);
+    const otRate = otHourlyRate > 0 ? otHourlyRate : (totalDailyRate > 0 ? (totalDailyRate / 8) * 2 : 0);
     const otPayment = Math.round(otHours * otRate);
 
     // OT Allowance — use manual override if entered, else worker/payment otAllowance (applied when OT > 0 or overridden)
