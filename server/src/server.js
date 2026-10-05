@@ -4471,7 +4471,7 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const otHours = attendanceData.map(r => parseFloat(r.overtimeHours) || 0.0);
       const dailyWageOverrides = attendanceData.map(r => r.dailyWageOverride ? parseFloat(r.dailyWageOverride) : null);
       const divisionIds = attendanceData.map(r => r.divisionId || null);
-      const secondDivisionIds = attendanceData.map(r => r.secondDivisionId || null);
+      const secondDivisionIds = attendanceData.map(r => (r.status === 'HALF_DAY' && r.secondDivisionId) ? r.secondDivisionId : null);
       const notes = attendanceData.map(r => r.notes || null);
       const userIds = attendanceData.map(r => req.user.id);
 

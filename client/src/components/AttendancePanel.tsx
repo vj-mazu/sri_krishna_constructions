@@ -261,8 +261,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       selectedDivisionId !== 'ALL' && 
       currentRec.divisionId !== selectedDivisionId;
 
-    // SCENARIO 1: Worker has a Half-Day at Division 1, and now supervisor is in Division 2
+    // SCENARIO 1: Worker has a Half-Day at Division 1, and now user is in Division 2
     if (isAlreadyHalfDayAtOtherDiv) {
+      const selDivName = divisions.find(d => d.id === selectedDivisionId)?.name || 'This Division';
+
       // If already marked 2nd half-day at THIS second division, clicking 'HALF_DAY' again toggles/removes the 2nd division
       if (currentRec.secondDivisionId === selectedDivisionId && status === 'HALF_DAY') {
         setAttendanceRecords((prev) => ({
@@ -277,17 +279,42 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return;
       }
 
-      // Cannot mark full 'PRESENT' because worker already did 0.5d at another division
+      // If user marks full 'PRESENT' at THIS division, reassign full day to this division & clear 2nd division split
       if (status === 'PRESENT') {
-        const errAlert = `⚠️ Cannot mark full "Present" for ${workerName}. This worker already worked Half-Day at ${currentRec.divisionName || 'another site'} today. You can mark "Half Day" (0.5 day) here to complete 1.0 day!`;
-        setError(errAlert);
-        showToast(errAlert, 'error');
+        setAttendanceRecords((prev) => ({
+          ...prev,
+          [workerId]: {
+            ...currentRec,
+            status: 'PRESENT',
+            divisionId: selectedDivisionId,
+            divisionName: selDivName,
+            secondDivisionId: '',
+            secondDivisionName: '',
+          },
+        }));
+        showToast(`Reassigned ${workerName} to Full Day Present at ${selDivName}`, 'success');
+        return;
+      }
+
+      // If user marks 'ABSENT' or 'LEAVE' at THIS division, set status & reassign to this division
+      if (status === 'ABSENT' || status === 'LEAVE') {
+        setAttendanceRecords((prev) => ({
+          ...prev,
+          [workerId]: {
+            ...currentRec,
+            status,
+            divisionId: selectedDivisionId,
+            divisionName: selDivName,
+            secondDivisionId: '',
+            secondDivisionName: '',
+          },
+        }));
+        showToast(`Marked ${status.toLowerCase()} for ${workerName} at ${selDivName}`, 'info');
         return;
       }
 
       // Marking 'HALF_DAY' in second division -> Successfully link 2nd half-day!
       if (status === 'HALF_DAY') {
-        const selDivName = divisions.find(d => d.id === selectedDivisionId)?.name || 'Second Division';
         setAttendanceRecords((prev) => ({
           ...prev,
           [workerId]: {
@@ -382,6 +409,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             status: editForm.newStatus,
             overtimeHours: editForm.newOvertimeHours || '0',
             divisionId: editForm.newDivisionId,
+            secondDivisionId: editForm.newStatus === 'HALF_DAY' ? ((state as any).secondDivisionId || null) : null,
             notes: editForm.reason.trim() || undefined
           }]
         });
@@ -462,7 +490,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           overtimeHours: parseFloat(data.overtimeHours) || 0,
           dailyWageOverride: data.dailyWageOverride ? parseFloat(data.dailyWageOverride) : null,
           divisionId: divToAssign || null,
-          secondDivisionId: data.secondDivisionId || null,
+          secondDivisionId: data.status === 'HALF_DAY' ? (data.secondDivisionId || null) : null,
         };
       });
 
