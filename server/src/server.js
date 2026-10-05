@@ -5266,7 +5266,7 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
          RETURNING *`,
         [
           workerId, m, y, pDays, aDays, hDays, lDays, otH,
-          dWage, dAllow, otH > 0 ? (dWage > 0 ? dWage / 8 : 0) : 0,
+          dWage, dAllow, req.body.otHourlyRate ? parseFloat(req.body.otHourlyRate) : (dWage + dAllow > 0 ? (dWage + dAllow) / 4 : 0),
           wAmt, allAmt, gross, pf, esi, netBase,
           otPay, otAll, totPay, safeAdv, extra, safeFinalNet,
           safeFinalNet, divisionSummary ? JSON.stringify(divisionSummary) : '{}', req.user.id
