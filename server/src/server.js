@@ -3889,6 +3889,7 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const newDesignation = designation !== undefined ? (designation ? designation.trim() : null) : existing[0].designation;
     const newDivisionId = divisionId || existing[0].divisionId;
     const newDailyWage = dailyWage !== undefined ? parseFloat(dailyWage) : existing[0].dailyWage;
+    const newAllowance = dailyAllowance !== undefined ? parseFloat(dailyAllowance) : existing[0].dailyAllowance;
     const newAdvanceTaken = advanceTaken !== undefined ? (parseFloat(advanceTaken) || 0) : (existing[0].advanceTaken || 0);
     const newAdvance = advanceBalance !== undefined && advanceBalance !== '' && parseFloat(advanceBalance) > 0 
       ? parseFloat(advanceBalance) 
