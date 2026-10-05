@@ -4832,9 +4832,9 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const esiAmount = dbPayment ? (parseFloat(dbPayment.esiAmount) || 0) : 0;
       const netBaseAmount = Math.max(0, grossPayment - pfAmount - esiAmount);
 
-      const otRate = isApproved
-        ? (dbPayment.otHourlyRate != null ? parseFloat(dbPayment.otHourlyRate) : (parseFloat(worker.otHourlyRate) || (dailyWage > 0 ? dailyWage / 8 : 0)))
-        : (parseFloat(worker.otHourlyRate) || (dailyWage > 0 ? dailyWage / 8 : 0));
+      const otRate = parseFloat(worker.otHourlyRate) > 0
+        ? parseFloat(worker.otHourlyRate)
+        : (dailyWage > 0 ? (dailyWage / 8) : 0);
 
       const totalOtHours = totalOt;
       const otPayment = Math.round(totalOtHours * otRate);
