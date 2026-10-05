@@ -1064,10 +1064,18 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                       return (
                         <React.Fragment key={w.id}>
                           <tr className={`hover:bg-slate-50/50 transition-colors ${isEditing ? 'bg-amber-50/40 border-t-2 border-amber-300' : ''}`}>
-                            <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[140px] px-3 py-2">
+                            <td className="sticky left-0 z-10 bg-white border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.03)] min-w-[160px] px-3 py-2">
                               <div className="font-bold text-slate-800 text-[11px] leading-tight truncate">{w.fullName}</div>
-                              <div className="text-[9px] text-[#1e3a8a] font-mono font-bold mt-0.5">{w.workerId}</div>
-                              <div className="text-[9px] text-slate-400 mt-0.5">₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/day</div>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[9px] text-[#1e3a8a] font-mono font-bold">{w.workerId}</span>
+                                <span className="text-[9px] text-slate-600 font-bold uppercase truncate max-w-[120px]">
+                                  {w.designation || w.natureOfWork || 'Worker'}
+                                </span>
+                              </div>
+                              <div className="text-[9px] text-slate-400 mt-0.5">
+                                ₹{Number(w.dailyWage || 0).toLocaleString('en-IN')}/d
+                                {w.dailyAllowance ? ` + ₹${w.dailyAllowance} allw` : ''}
+                              </div>
                               {isMarkedAtOtherSiteOnly && (
                                 <div className="mt-1 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[9px] font-bold">
                                   📍 Worked at {state.divisionName || 'Other Division'}

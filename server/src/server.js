@@ -4837,12 +4837,20 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
       const netBaseAmount = Math.max(0, grossPayment - pfAmount - esiAmount);
 
       const totalDailyRate = (dailyWage + dailyAllowance);
-      const otRate = parseFloat(worker.otHourlyRate) > 0
+      const calculatedLiveOtRate = parseFloat(worker.otHourlyRate) > 0
         ? parseFloat(worker.otHourlyRate)
         : (totalDailyRate > 0 ? (totalDailyRate / 8) * 2 : 0);
 
+      // In approved months: lock onto the approved otHourlyRate so future master rate changes NEVER alter past approved OT payments!
+      const otRate = (isApproved && dbPayment.otHourlyRate != null && parseFloat(dbPayment.otHourlyRate) > 0)
+        ? parseFloat(dbPayment.otHourlyRate)
+        : calculatedLiveOtRate;
+
       const totalOtHours = totalOt;
-      const otPayment = Math.round(totalOtHours * otRate);
+      // In approved months: if attendance wasn't changed, retain exact approved otPayment
+      const otPayment = isApproved && dbPayment.otPayment != null && (liveWorkingDays === 0 || liveWorkingDays === approvedWorkingDays) && (totalOtHours === parseFloat(dbPayment.totalOtHours || 0))
+        ? Math.round(parseFloat(dbPayment.otPayment))
+        : Math.round(totalOtHours * otRate);
 
       const defaultOtAllowance = parseFloat(worker.otAllowance) || 0;
       const otAllowance = isApproved && dbPayment.otAllowance != null 
