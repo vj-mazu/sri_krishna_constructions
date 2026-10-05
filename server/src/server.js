@@ -5324,6 +5324,49 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/wages/unapprove - Unlock/Unapprove wages for an entire month or a worker (Admin only)
+app.post('/api/wages/unapprove', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'OWNER' && req.user.role !== 'MANAGER') {
+      return res.status(403).json({ error: 'Only OWNER and MANAGER can unlock or unapprove wages' });
+    }
+
+    const { month, year, workerId } = req.body;
+    if (!month || !year) {
+      return res.status(400).json({ error: 'Month and Year are required' });
+    }
+
+    const m = parseInt(month, 10);
+    const y = parseInt(year, 10);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      let query = `UPDATE "MonthlyPayment" SET "status" = 'PENDING', "updatedAt" = NOW() WHERE "month" = $1 AND "year" = $2`;
+      const params = [m, y];
+
+      if (workerId) {
+        query += ` AND "workerId" = $3`;
+        params.push(workerId);
+      }
+
+      await client.query(query, params);
+      await client.query('COMMIT');
+
+      res.json({ message: `Monthly wages for ${m}/${y} successfully unlocked to DRAFT mode!` });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('Unapprove error:', err);
+    res.status(500).json({ error: 'Failed to unlock monthly wages', details: err.message });
+  }
+});
+
 app.post('/api/wages/whatsapp-link', authenticateToken, async (req, res) => {
   try {
     const { workerName, mobileNumber, month, year, presentDays, halfDays, totalOtHours, extraAmount, calculatedAmount } = req.body;

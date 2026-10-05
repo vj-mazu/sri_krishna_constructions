@@ -22,7 +22,8 @@ import {
   ChevronsRight,
   ArrowUpDown,
   Landmark,
-  CreditCard
+  CreditCard,
+  Unlock
 } from 'lucide-react';
 import { showToast } from '../toast';
 import { showConfirm } from '../confirmDialog';
@@ -617,6 +618,32 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       await handleCalculateWages();
     } catch (err: any) {
       const errMsg = err.response?.data?.error || 'Failed to bulk-approve salaries.';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
+  const handleUnapproveAll = async () => {
+    const confirmed = await showConfirm({
+      title: 'Unlock Month for Editing',
+      message: `Are you sure you want to unlock wages for ${monthName} ${selectedYear}? This will switch the month back to DRAFT mode so you can re-edit attendance, advances, OT, and deduction values freely.`,
+      confirmText: 'Yes, Unlock Month',
+      cancelText: 'Cancel',
+      type: 'primary'
+    });
+    if (!confirmed) return;
+
+    try {
+      await api.post('/wages/unapprove', {
+        month: parseInt(selectedMonth, 10),
+        year: parseInt(selectedYear, 10),
+      });
+      const successMsg = `Wages for ${monthName} ${selectedYear} have been unlocked to DRAFT mode!`;
+      setSuccess(successMsg);
+      showToast(successMsg, 'success');
+      await handleCalculateWages();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to unlock wages.';
       setError(errMsg);
       showToast(errMsg, 'error');
     }
@@ -1919,13 +1946,24 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 <FileText className="w-3.5 h-3.5" /> All Slips PDF
               </button>
               {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                <button
-                  onClick={handleApproveAll}
-                  className="flex-1 py-1.5 sm:py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
-                  title="Approve All Salaries"
-                >
-                  <Check className="w-4 h-4" /> Approve All
-                </button>
+                <>
+                  {wagesReport.some(w => w.paymentStatus === 'APPROVED') && (
+                    <button
+                      onClick={handleUnapproveAll}
+                      className="flex-1 py-1.5 sm:py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                      title="Unlock this month to edit attendance, advances, and rates in DRAFT mode"
+                    >
+                      <Unlock className="w-3.5 h-3.5" /> Unlock Month
+                    </button>
+                  )}
+                  <button
+                    onClick={handleApproveAll}
+                    className="flex-1 py-1.5 sm:py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-md sm:rounded-lg text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow"
+                    title="Approve All Salaries"
+                  >
+                    <Check className="w-4 h-4" /> Approve All
+                  </button>
+                </>
               )}
             </>
           ) : activeWageTab === 'esipf' ? (
