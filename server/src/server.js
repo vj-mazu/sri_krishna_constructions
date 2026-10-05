@@ -4075,13 +4075,17 @@ app.get('/api/advance-ledger', authenticateToken, async (req, res) => {
     const formattedRows = rows.map(r => {
       const advTaken = parseFloat(r.advanceTaken) || 0;
       const advBal = parseFloat(r.advanceBalance) || 0;
-      let totDisb = parseFloat(r.totalDisbursed) || 0;
+      let txDisb = parseFloat(r.totalDisbursed) || 0;
       let totDed = parseFloat(r.totalDeducted) || 0;
 
-      // If no explicit transactions yet but master has advanceTaken recorded
-      if (totDisb === 0 && advTaken > 0) {
-        totDisb = advTaken;
-        totDed = Math.max(0, advTaken - advBal);
+      // Cumulative Total Advance Taken: sum of all DISBURSEMENTS or initial advanceTaken
+      // If transactions exist, totalDisbursed reflects transactions. If initial advanceTaken > transactions, combine or fallback.
+      let totDisb = Math.max(txDisb, advTaken);
+      if (totDisb === 0 && advBal > 0) {
+        totDisb = advBal;
+      }
+      if (totDed === 0 && totDisb > advBal) {
+        totDed = Math.max(0, totDisb - advBal);
       }
 
       grandTotalDisbursed += totDisb;
@@ -4155,6 +4159,20 @@ app.get('/api/advance-ledger/:workerId', authenticateToken, async (req, res) => 
       [workerId]
     );
 
+    const initialAdvTaken = parseFloat(worker.advanceTaken) || 0;
+    const currentAdvBal = parseFloat(worker.advanceBalance) || 0;
+
+    let txDisbursed = 0;
+    let txDeducted = 0;
+    txRows.forEach(tx => {
+      const amt = parseFloat(tx.amount) || 0;
+      if (tx.type === 'DISBURSEMENT') txDisbursed += amt;
+      else if (tx.type === 'DEDUCTION') txDeducted += amt;
+    });
+
+    const totalDisbursed = Math.max(txDisbursed, initialAdvTaken > 0 ? initialAdvTaken : currentAdvBal);
+    const totalDeducted = txDeducted > 0 ? txDeducted : Math.max(0, totalDisbursed - currentAdvBal);
+
     res.json({
       worker: {
         id: worker.id,
@@ -4164,8 +4182,10 @@ app.get('/api/advance-ledger/:workerId', authenticateToken, async (req, res) => 
         designation: worker.designation || 'Worker',
         mobileNumber: worker.mobileNumber,
         dailyWage: parseFloat(worker.dailyWage) || 0,
-        advanceTaken: parseFloat(worker.advanceTaken) || 0,
-        advanceBalance: parseFloat(worker.advanceBalance) || 0,
+        advanceTaken: initialAdvTaken,
+        advanceBalance: currentAdvBal,
+        totalDisbursed,
+        totalDeducted,
         advanceTakenDate: worker.advanceTakenDate,
         advanceReason: worker.advanceReason,
         advanceReturnDate: worker.advanceReturnDate,

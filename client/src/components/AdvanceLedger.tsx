@@ -16,8 +16,11 @@ import {
   ShieldCheck, 
   AlertCircle, 
   CheckCircle2, 
-  X, 
+  X,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   TrendingUp,
   Building2,
   Clock,
@@ -401,6 +404,9 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
     }
   };
 
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(30);
+
   // Filtered workers list
   const filteredWorkers = workers
     .filter(w => {
@@ -422,6 +428,9 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
       if (numA !== numB) return numA - numB;
       return idA.localeCompare(idB, undefined, { numeric: true, sensitivity: 'base' });
     });
+
+  const totalPages = Math.max(1, Math.ceil(filteredWorkers.length / pageSize));
+  const paginatedWorkers = filteredWorkers.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <div className="space-y-4 font-sans text-slate-800">
@@ -606,7 +615,8 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
                   </td>
                 </tr>
               ) : (
-                filteredWorkers.map((w, idx) => {
+                paginatedWorkers.map((w, idx) => {
+                  const globalIdx = (currentPage - 1) * pageSize + idx + 1;
                   const hasBal = w.advanceBalance > 0;
                   return (
                     <tr 
@@ -615,7 +625,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
                       onClick={() => openWorkerDrilldown(w.id)}
                     >
                       <td className="p-2.5 text-center font-mono font-bold text-slate-500 border-r border-slate-200">
-                        {idx + 1}
+                        {globalIdx}
                       </td>
                       <td className="p-2.5 border-r border-slate-200">
                         <div className="font-extrabold text-slate-900 group-hover:text-blue-900 transition-colors flex items-center gap-1.5">
@@ -717,6 +727,75 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
             </tbody>
           </table>
         </div>
+
+        {/* ADVANCE LEDGER PAGINATION TOOLBAR */}
+        <div className="bg-slate-50 border-t border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3 text-slate-600">
+            <span>
+              Showing <strong className="text-slate-900">{filteredWorkers.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredWorkers.length)}</strong> of <strong className="text-blue-900">{filteredWorkers.length}</strong> workers
+            </span>
+            <div className="flex items-center gap-1.5 ml-2">
+              <span className="text-slate-500">Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border border-slate-300 rounded-lg px-2 py-1 bg-white font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                <option value={10}>10</option>
+                <option value={30}>30</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1 || filteredWorkers.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="First Page"
+            >
+              <ChevronsLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1 || filteredWorkers.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Previous Page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            <span className="px-3 py-1 font-bold text-slate-800 bg-white border border-slate-300 rounded-lg shadow-2xs font-mono">
+              Page {filteredWorkers.length === 0 ? 0 : currentPage} of {totalPages}
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages || filteredWorkers.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Next Page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage >= totalPages || filteredWorkers.length === 0}
+              className="p-1.5 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              title="Last Page"
+            >
+              <ChevronsRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ========================================================================= */}
@@ -782,41 +861,20 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
                 </div>
               ) : (
                 <>
-                  {/* Worker Metadata & Advance Overview Card */}
-                  <div className="bg-white p-4 sm:p-5 rounded-xl border border-slate-200 shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Worker Identity</span>
-                      <div className="text-sm font-black text-slate-900">{workerLedger.worker.fullName}</div>
-                      <div className="text-xs text-slate-600 font-mono">Father: {workerLedger.worker.fatherName}</div>
-                      <div className="text-xs text-slate-600 font-mono">Mobile: {workerLedger.worker.mobileNumber}</div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Deployment & Wage</span>
-                      <div className="text-sm font-bold text-slate-800">{workerLedger.worker.divisionName}</div>
-                      <div className="text-xs text-slate-600">Designation: {workerLedger.worker.designation}</div>
-                      <div className="text-xs font-mono font-bold text-blue-900">Daily Wage: {formatCurrency(workerLedger.worker.dailyWage)}</div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Initial Advance Record</span>
-                      <div className="text-xs font-semibold text-slate-800">
-                        Date: {formatDate(workerLedger.worker.advanceTakenDate)}
+                  {/* Clean Structured Advance Summary Table & Action Bar */}
+                  <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <User className="w-4 h-4 text-blue-900" />
+                        <span className="font-black text-xs text-slate-800 uppercase tracking-wide">
+                          Worker Profile & Financial Status
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-900 font-bold text-[10px] font-mono">
+                          ID: {workerLedger.worker.workerId}
+                        </span>
                       </div>
-                      <div className="text-xs text-slate-600">
-                        Reason: {workerLedger.worker.advanceReason || 'Registration Entry'}
-                      </div>
-                      <div className="text-xs text-slate-600">
-                        Expected Return: {formatDate(workerLedger.worker.advanceReturnDate)}
-                      </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-amber-50 to-orange-100 p-3 rounded-xl border border-amber-300 flex flex-col justify-between">
-                      <span className="text-[10px] font-black text-amber-900 uppercase">Current Outstanding Balance</span>
-                      <div className="text-2xl font-black font-mono text-amber-950">
-                        {formatCurrency(workerLedger.worker.advanceBalance)}
-                      </div>
-                      <div className="flex items-center gap-1.5 mt-1">
+                      
+                      <div className="flex items-center gap-2">
                         {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
                           <>
                             <button
@@ -824,9 +882,9 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
                                 setTargetWorkerForAction(workerLedger.worker);
                                 setShowDisburseModal(true);
                               }}
-                              className="flex-1 py-1 bg-blue-900 hover:bg-blue-800 text-white rounded text-[10px] font-bold shadow-sm"
+                              className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1"
                             >
-                              + Disburse
+                              <Plus className="w-3.5 h-3.5" /> Give Advance
                             </button>
                             {workerLedger.worker.advanceBalance > 0 && (
                               <button
@@ -835,13 +893,65 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
                                   setRepayForm(prev => ({ ...prev, amount: workerLedger.worker.advanceBalance.toString() }));
                                   setShowRepayModal(true);
                                 }}
-                                className="flex-1 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-[10px] font-bold shadow-sm"
+                                className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-1"
                               >
-                                Repay Cash
+                                <ArrowDownLeft className="w-3.5 h-3.5" /> Repay Cash
                               </button>
                             )}
                           </>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-200 text-xs">
+                      {/* Column 1: Worker Info */}
+                      <div className="p-4 space-y-1.5 bg-slate-50/50">
+                        <div className="text-slate-400 font-bold text-[10px] uppercase">Employee Details</div>
+                        <div className="font-black text-slate-900 text-sm">{workerLedger.worker.fullName}</div>
+                        <div className="text-slate-600 font-medium">S/o: {workerLedger.worker.fatherName || '-'}</div>
+                        <div className="text-slate-600 font-mono text-[11px]">📱 {workerLedger.worker.mobileNumber || '-'}</div>
+                        <div className="text-slate-700 font-semibold mt-1">
+                          {workerLedger.worker.divisionName || 'General'} • <span className="uppercase text-slate-500">{workerLedger.worker.designation || 'Worker'}</span>
+                        </div>
+                      </div>
+
+                      {/* Column 2: Total Advance Taken (Cumulative) */}
+                      <div className="p-4 bg-blue-50/40 space-y-1 flex flex-col justify-center">
+                        <span className="text-[10px] font-bold text-blue-900 uppercase tracking-wider flex items-center gap-1">
+                          <ArrowUpRight className="w-3.5 h-3.5 text-blue-700" /> Total Advance Taken (Lifetime)
+                        </span>
+                        <div className="text-2xl font-black font-mono text-blue-950 mt-1">
+                          {formatCurrency(workerLedger.worker.totalDisbursed || workerLedger.worker.advanceTaken)}
+                        </div>
+                        <span className="text-[10px] text-blue-700 font-medium">
+                          Initial Record: {formatDate(workerLedger.worker.advanceTakenDate)}
+                        </span>
+                      </div>
+
+                      {/* Column 3: Total Deducted & Cleared */}
+                      <div className="p-4 bg-emerald-50/40 space-y-1 flex flex-col justify-center">
+                        <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1">
+                          <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-700" /> Total Recovered / Deducted
+                        </span>
+                        <div className="text-2xl font-black font-mono text-emerald-950 mt-1">
+                          {formatCurrency(workerLedger.worker.totalDeducted)}
+                        </div>
+                        <span className="text-[10px] text-emerald-700 font-medium">
+                          Via Payroll + Cash Repayments
+                        </span>
+                      </div>
+
+                      {/* Column 4: Current Outstanding Balance */}
+                      <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-100/70 space-y-1 flex flex-col justify-center border-l border-amber-200">
+                        <span className="text-[10px] font-black text-amber-900 uppercase tracking-wider flex items-center gap-1">
+                          <Wallet className="w-3.5 h-3.5 text-amber-700" /> Remaining Advance Balance
+                        </span>
+                        <div className="text-2xl font-black font-mono text-amber-950 mt-1">
+                          {formatCurrency(workerLedger.worker.advanceBalance)}
+                        </div>
+                        <span className="text-[10px] text-amber-800 font-bold">
+                          {workerLedger.worker.advanceBalance > 0 ? '⚠️ Active Balance Pending' : '✅ 100% Fully Settled'}
+                        </span>
                       </div>
                     </div>
                   </div>
