@@ -684,7 +684,25 @@ export const initializeDatabaseTables = async () => {
         COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
       )),
       "updatedAt" = NOW();
+
+      -- 13. Create WorkerWageHistory Table for Historical Salary Hike Matrix Tracking
+      CREATE TABLE IF NOT EXISTS "WorkerWageHistory" (
+        "id" TEXT PRIMARY KEY,
+        "workerId" TEXT NOT NULL REFERENCES "Worker"("id") ON DELETE CASCADE,
+        "effectiveDate" DATE NOT NULL,
+        "basePaid" DOUBLE PRECISION NOT NULL,
+        "hikeAmount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "totalAmount" DOUBLE PRECISION NOT NULL,
+        "notes" TEXT,
+        "recordedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WorkerWageHistory_workerId_effectiveDate_key" UNIQUE ("workerId", "effectiveDate")
+      );
+      CREATE INDEX IF NOT EXISTS "idx_workerwagehist_worker" ON "WorkerWageHistory"("workerId");
+      CREATE INDEX IF NOT EXISTS "idx_workerwagehist_date" ON "WorkerWageHistory"("effectiveDate");
     `);
+
 
     client.release();
     await pool.end();

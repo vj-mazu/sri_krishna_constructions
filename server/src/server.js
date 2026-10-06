@@ -4621,9 +4621,30 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
            "updatedAt" = NOW()`,
         [workerIds, dates, statuses, otHours, dailyWageOverrides, divisionIds, secondDivisionIds, notes, userIds]
       );
+
+      // Synchronize WorkerLeave table so leaves marked in attendance reflect in Leave Ledger
+      const year = new Date(date).getFullYear();
+      for (const rec of attendanceData) {
+        if (rec.status === 'LEAVE') {
+          await pool.query(
+            `INSERT INTO "WorkerLeave" ("id", "workerId", "date", "leaveType", "days", "reason", "year", "markedById", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2::timestamp, 'CASUAL', 1.0, COALESCE($3, 'Marked in daily attendance'), $4, $5, NOW(), NOW())
+             ON CONFLICT ("workerId", "date")
+             DO UPDATE SET "days" = 1.0, "reason" = COALESCE(EXCLUDED."reason", "WorkerLeave"."reason"), "updatedAt" = NOW()`,
+            [rec.workerId, date, rec.notes || null, year, req.user.id]
+          );
+        } else {
+          // If changed away from LEAVE, remove corresponding entry in WorkerLeave
+          await pool.query(
+            `DELETE FROM "WorkerLeave" WHERE "workerId" = $1 AND "date"::date = $2::date`,
+            [rec.workerId, date]
+          );
+        }
+      }
     }
 
     res.json({ message: 'Attendance records saved successfully!' });
+
   } catch (err) {
     console.error('Attendance submit error:', err);
     res.status(500).json({ error: 'Failed to record daily attendance' });
@@ -4713,9 +4734,27 @@ app.put('/api/attendance/correction-requests/:id/review', authenticateToken, req
            "updatedAt" = NOW()`,
         [corrReq.workerId, corrReq.date, corrReq.newStatus, corrReq.newOvertimeHours, corrReq.newDivisionId, `Corrected: ${corrReq.reason}`, req.user.id]
       );
+
+      // Sync WorkerLeave table
+      const corrYear = new Date(corrReq.date).getFullYear();
+      if (corrReq.newStatus === 'LEAVE') {
+        await client.query(
+          `INSERT INTO "WorkerLeave" ("id", "workerId", "date", "leaveType", "days", "reason", "year", "markedById", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, $2::timestamp, 'CASUAL', 1.0, COALESCE($3, 'Correction Request Approved'), $4, $5, NOW(), NOW())
+           ON CONFLICT ("workerId", "date")
+           DO UPDATE SET "days" = 1.0, "reason" = COALESCE(EXCLUDED."reason", "WorkerLeave"."reason"), "updatedAt" = NOW()`,
+          [corrReq.workerId, corrReq.date, corrReq.reason || null, corrYear, req.user.id]
+        );
+      } else {
+        await client.query(
+          `DELETE FROM "WorkerLeave" WHERE "workerId" = $1 AND "date"::date = $2::date`,
+          [corrReq.workerId, corrReq.date]
+        );
+      }
     }
 
     // 2. Update the correction request record status
+
     await client.query(
       `UPDATE "AttendanceCorrectionRequest"
        SET "status" = $1::text, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW()
@@ -5822,6 +5861,153 @@ app.get('/api/salary-ledger', authenticateToken, requireRoles(['OWNER', 'MANAGER
   }
 });
 
+// --- SALARY HIKE MATRIX LEDGER API (Worker-Wise Historical Increments) ---
+app.get('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { search, divisionId } = req.query;
+
+    let workerQuery = `
+      SELECT 
+        w.id,
+        w."workerId",
+        w."fullName",
+        w."fatherName",
+        w."designation",
+        w."dailyWage",
+        w."extraAmount",
+        w."wageRevisedDate",
+        d.id as "divisionId",
+        d.name as "divisionName"
+      FROM "Worker" w
+      LEFT JOIN "Division" d ON w."divisionId" = d.id
+    `;
+
+    const whereClauses = [];
+    const params = [];
+
+    if (divisionId && divisionId !== 'ALL') {
+      params.push(divisionId);
+      whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      whereClauses.push(`(
+        LOWER(w."fullName") LIKE $${params.length} OR
+        LOWER(w."workerId") LIKE $${params.length} OR
+        LOWER(COALESCE(w."designation", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(d.name, '')) LIKE $${params.length}
+      )`);
+    }
+
+    if (whereClauses.length > 0) {
+      workerQuery += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    workerQuery += ` ORDER BY 
+      CASE 
+        WHEN w."workerId" ~ '^SKC-E-[0-9]+$' THEN CAST(SUBSTRING(w."workerId" FROM 7) AS INTEGER)
+        WHEN w."workerId" ~ '^[0-9]+$' THEN CAST(w."workerId" AS INTEGER)
+        ELSE 999999
+      END ASC, w."fullName" ASC`;
+
+    const { rows: workers } = await pool.query(workerQuery, params);
+
+    // Fetch all hike records
+    const { rows: historyRows } = await pool.query(
+      `SELECT h.*, TO_CHAR(h."effectiveDate", 'YYYY-MM-DD') as "dateFormatted"
+       FROM "WorkerWageHistory" h
+       ORDER BY h."effectiveDate" ASC, h."createdAt" ASC`
+    );
+
+    // Group history by workerId
+    const historyMap = {};
+    historyRows.forEach(h => {
+      if (!historyMap[h.workerId]) historyMap[h.workerId] = [];
+      historyMap[h.workerId].push({
+        id: h.id,
+        effectiveDate: h.dateFormatted,
+        basePaid: parseFloat(h.basePaid) || 0,
+        hikeAmount: parseFloat(h.hikeAmount) || 0,
+        totalAmount: parseFloat(h.totalAmount) || 0,
+        notes: h.notes || ''
+      });
+    });
+
+    const result = workers.map(w => {
+      let workerHistory = historyMap[w.id] || [];
+      // If no history exists yet, provide default initial row from worker master
+      if (workerHistory.length === 0) {
+        const initialDate = w.wageRevisedDate ? new Date(w.wageRevisedDate).toISOString().split('T')[0] : '2024-08-01';
+        const base = parseFloat(w.dailyWage) || 0;
+        const hike = parseFloat(w.extraAmount) || 0;
+        workerHistory = [{
+          effectiveDate: initialDate,
+          basePaid: base,
+          hikeAmount: hike,
+          totalAmount: base + hike,
+          notes: 'Master Registration'
+        }];
+      }
+
+      return {
+        ...w,
+        hikeHistory: workerHistory
+      };
+    });
+
+    res.json({ workers: result });
+  } catch (err) {
+    console.error('Error fetching salary hike ledger:', err);
+    res.status(500).json({ error: 'Failed to fetch salary hike ledger' });
+  }
+});
+
+app.post('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { workerId, effectiveDate, basePaid, hikeAmount, notes } = req.body;
+    if (!workerId || !effectiveDate || basePaid === undefined) {
+      return res.status(400).json({ error: 'Worker, effective date, and base wage are required' });
+    }
+
+    const base = parseFloat(basePaid) || 0;
+    const hike = parseFloat(hikeAmount) || 0;
+    const total = base + hike;
+
+    const { rows } = await pool.query(
+      `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, $6, $7, NOW(), NOW())
+       ON CONFLICT ("workerId", "effectiveDate")
+       DO UPDATE SET
+         "basePaid" = EXCLUDED."basePaid",
+         "hikeAmount" = EXCLUDED."hikeAmount",
+         "totalAmount" = EXCLUDED."totalAmount",
+         "notes" = EXCLUDED."notes",
+         "recordedById" = EXCLUDED."recordedById",
+         "updatedAt" = NOW()
+       RETURNING *`,
+      [workerId, effectiveDate, base, hike, total, notes || null, req.user.id]
+    );
+
+    res.json({ message: 'Wage hike record saved successfully!', record: rows[0] });
+  } catch (err) {
+    console.error('Save wage hike record error:', err);
+    res.status(500).json({ error: 'Failed to save wage hike record' });
+  }
+});
+
+app.delete('/api/salary-hike-ledger/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM "WorkerWageHistory" WHERE "id" = $1`, [id]);
+    res.json({ message: 'Wage hike record removed successfully' });
+  } catch (err) {
+    console.error('Delete wage hike record error:', err);
+    res.status(500).json({ error: 'Failed to remove wage hike record' });
+  }
+});
+
+
 // --- BANK ADVICE PROFESSIONAL EXCEL EXPORT (EXCELJS WITH CLEAN BORDERS) ---
 app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, res) => {
   try {
@@ -5886,13 +6072,17 @@ app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, r
 
     worksheet.addRow([]); // Blank Row 12
 
-    const chequeDateRow = worksheet.addRow([`Cheque No: ${chequeNo || '-'}`, '', '', '', `Date: ${bankBranchDate || '-'}`]);
+    const chequeDateRow = worksheet.addRow([`Cheque No: ${chequeNo || '-'}`, '', '', `Date: ${bankBranchDate || '-'}`]);
+    worksheet.mergeCells('A13:C13');
+    worksheet.mergeCells('D13:E13');
+    worksheet.getCell('A13').alignment = { vertical: 'middle', horizontal: 'left' };
+    worksheet.getCell('D13').alignment = { vertical: 'middle', horizontal: 'right' };
     worksheet.getRow(13).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
-    worksheet.getCell('E13').alignment = { vertical: 'middle', horizontal: 'right' };
+    worksheet.getRow(13).height = 20;
 
-
-    // Table Header Row (Row 11)
+    // Table Header Row (Row 14)
     const headerRow = worksheet.addRow(['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)']);
+
     headerRow.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
     headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
     headerRow.height = 24;
