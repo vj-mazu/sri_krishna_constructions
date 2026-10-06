@@ -339,7 +339,11 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT "id", "username", "fullName", "mobileNumber", "role" FROM "User" WHERE "id" = $1 LIMIT 1`,
+      `SELECT u."id", u."username", u."fullName", u."mobileNumber", u."role", u."assignedDivisionId",
+              json_build_object('id', d.id, 'name', d.name) as "assignedDivision"
+       FROM "User" u
+       LEFT JOIN "Division" d ON u."assignedDivisionId" = d.id
+       WHERE u."id" = $1 LIMIT 1`,
       [req.user.id]
     );
     if (!rows[0]) {
@@ -352,7 +356,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-// --- DASHBOARD DAILY STATS API (TODAY'S PURCHASES, SALES & ATTENDANCE) ---
+// --- DASHBOARD DAILY STATS API (TODAY'S PURCHASES, SALES, ATTENDANCE, PENDING ORDERS & INACTIVE ADVANCES) ---
 app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
   try {
     // Use IST (UTC+5:30) for accurate "today" boundary
@@ -368,8 +372,8 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
         COALESCE(SUM("totalAmount"), 0)::float as "totalAmount",
         COUNT(*)::int as "count"
       FROM "Purchase"
-      WHERE "date" >= $1 AND "date" <= $2
-    `, [todayStart, todayEnd]);
+      WHERE ("date" >= $1 AND "date" <= $2) OR ("date"::date = CURRENT_DATE) OR ("date"::text LIKE $3)
+    `, [todayStart, todayEnd, `${todayStr}%`]);
 
     // 2. Today's Sales (Dispatched & Approved)
     const todaySales = await pool.query(`
@@ -378,37 +382,85 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
         COALESCE(SUM("totalAmount"), 0)::float as "totalAmount",
         COUNT(*)::int as "count"
       FROM "Sale"
-      WHERE "invoiceDate" >= $1 AND "invoiceDate" <= $2 AND status = 'APPROVED'
-    `, [todayStart, todayEnd]);
+      WHERE (("invoiceDate" >= $1 AND "invoiceDate" <= $2) OR ("invoiceDate"::date = CURRENT_DATE) OR ("invoiceDate"::text LIKE $3)) AND status = 'APPROVED'
+    `, [todayStart, todayEnd, `${todayStr}%`]);
 
-    // 3. Today's Attendance (supporting both overtimeHours and otHours column naming)
+    // 3. Today's Attendance (robust matching for date, timezone string, or CURRENT_DATE)
     const todayAttendance = await pool.query(`
       SELECT 
         COUNT(*)::int as "totalMarked",
         COUNT(*) FILTER (WHERE status = 'PRESENT')::int as "presentCount",
         COUNT(*) FILTER (WHERE status = 'ABSENT')::int as "absentCount",
         COUNT(*) FILTER (WHERE status = 'HALF_DAY')::int as "halfDayCount",
-        COALESCE(SUM("overtimeHours"), 0)::float as "totalOtHours"
+        COUNT(*) FILTER (WHERE status IN ('LEAVE', 'MEDICAL_LEAVE', 'CASUAL_LEAVE'))::int as "leaveCount",
+        COALESCE(SUM(COALESCE("overtimeHours", "otHours", 0)), 0)::float as "totalOtHours"
       FROM "Attendance"
-      WHERE "date" >= $1 AND "date" <= $2
-    `, [todayStart, todayEnd]);
+      WHERE ("date"::date = CURRENT_DATE)
+         OR ("date" >= $1 AND "date" <= $2)
+         OR ("date"::text LIKE $3)
+    `, [todayStart, todayEnd, `${todayStr}%`]);
 
     // 4. Total Active Workers Registered
     const totalWorkersRes = await pool.query(`SELECT COUNT(*)::int as count FROM "Worker" WHERE COALESCE("isActive", true) = true`);
 
+    // 5. Pending Purchase Orders (Items where Ordered Qty > Inward Received Qty)
+    const pendingOrdersRes = await pool.query(`
+      SELECT 
+        poi.id, 
+        poi."purchaseOrderId", 
+        poi."itemName", 
+        poi."partNumber", 
+        poi."kpclCode", 
+        poi.unit, 
+        poi.qty as "orderedQty",
+        po."poNumber", 
+        po.date as "poDate", 
+        d.name as "divisionName",
+        COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as "inwardQty",
+        (poi.qty - COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0))::float as "pendingQty"
+      FROM "PurchaseOrderItem" poi
+      JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "Division" d ON po."divisionId" = d.id
+      WHERE COALESCE(po."isActive", true) = true
+        AND poi.qty > COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)
+      ORDER BY (poi.qty - COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)) DESC
+      LIMIT 15
+    `);
+
+    // 6. Inactive Workers with Outstanding Advance Balance
+    const inactiveWorkersWithAdvanceRes = await pool.query(`
+      SELECT 
+        w.id, 
+        w."workerId", 
+        w."fullName", 
+        w."mobileNumber", 
+        w."advanceBalance", 
+        w."advanceTaken",
+        w."designation",
+        d.name as "divisionName"
+      FROM "Worker" w
+      LEFT JOIN "Division" d ON w."divisionId" = d.id
+      WHERE COALESCE(w."isActive", true) = false AND w."advanceBalance" > 0
+      ORDER BY w."advanceBalance" DESC
+    `);
+
     res.json({
       todayPurchases: todayPurchases.rows[0] || { totalQty: 0, totalAmount: 0, count: 0 },
       todaySales: todaySales.rows[0] || { totalQty: 0, totalAmount: 0, count: 0 },
-      todayAttendance: todayAttendance.rows[0] || { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, totalOtHours: 0 },
-      totalWorkers: totalWorkersRes.rows[0]?.count || 0
+      todayAttendance: todayAttendance.rows[0] || { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, leaveCount: 0, totalOtHours: 0 },
+      totalWorkers: totalWorkersRes.rows[0]?.count || 0,
+      pendingOrders: pendingOrdersRes.rows || [],
+      inactiveWorkersWithAdvance: inactiveWorkersWithAdvanceRes.rows || []
     });
   } catch (err) {
     console.error('Error fetching dashboard daily stats:', err);
     res.status(200).json({
       todayPurchases: { totalQty: 0, totalAmount: 0, count: 0 },
       todaySales: { totalQty: 0, totalAmount: 0, count: 0 },
-      todayAttendance: { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, totalOtHours: 0 },
-      totalWorkers: 0
+      todayAttendance: { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, leaveCount: 0, totalOtHours: 0 },
+      totalWorkers: 0,
+      pendingOrders: [],
+      inactiveWorkersWithAdvance: []
     });
   }
 });
@@ -3344,11 +3396,15 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
   }
 });
 
-// --- MASTER USER MANAGEMENT (WITH MANDATORY MOBILE & SMART DELETE) ---
+// --- MASTER USER MANAGEMENT (WITH MANDATORY MOBILE & SMART DELETE & ASSIGNED DIVISION RESTRICTION) ---
 app.get('/api/users', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { rows: users } = await pool.query(
-      `SELECT "id", "username", "fullName", "mobileNumber", "role", "createdAt" FROM "User" ORDER BY "createdAt" DESC`
+      `SELECT u."id", u."username", u."fullName", u."mobileNumber", u."role", u."assignedDivisionId", u."createdAt",
+              json_build_object('id', d.id, 'name', d.name) as "assignedDivision"
+       FROM "User" u
+       LEFT JOIN "Division" d ON u."assignedDivisionId" = d.id
+       ORDER BY u."createdAt" DESC`
     );
 
     const userList = users.map((u) => ({
@@ -3365,7 +3421,7 @@ app.get('/api/users', authenticateToken, requireRoles(['OWNER', 'MANAGER']), asy
 
 app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, res) => {
   try {
-    const { username, fullName, mobileNumber, password, role } = req.body;
+    const { username, fullName, mobileNumber, password, role, assignedDivisionId } = req.body;
 
     // MANDATORY MOBILE NUMBER CHECK
     if (!username || !fullName || !mobileNumber || !password || !role) {
@@ -3380,42 +3436,40 @@ app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, r
       return res.status(400).json({ error: 'Role must be OWNER, MANAGER, or SUPERVISOR' });
     }
 
-    // ROLE CAPACITY LIMITS: OWNER: max 2, MANAGER: max 2, SUPERVISOR: max 3
+    // ROLE CAPACITY LIMITS: OWNER: max 2, MANAGER: max 2, SUPERVISOR: max 5
     if (role === 'OWNER') {
-      const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
-      if (ownerCount >= 2) {
+      const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int as count FROM "User" WHERE role = 'OWNER'`);
+      if (countRows[0].count >= 2) {
         return res.status(400).json({ error: 'Cannot create more Owner accounts. Maximum limit of 2 Owners reached.' });
       }
     } else if (role === 'MANAGER') {
-      const managerCount = await prisma.user.count({ where: { role: 'MANAGER' } });
-      if (managerCount >= 2) {
+      const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int as count FROM "User" WHERE role = 'MANAGER'`);
+      if (countRows[0].count >= 2) {
         return res.status(400).json({ error: 'Cannot create more Manager accounts. Maximum limit of 2 Managers reached.' });
       }
     } else if (role === 'SUPERVISOR') {
-      const supervisorCount = await prisma.user.count({ where: { role: 'SUPERVISOR' } });
-      if (supervisorCount >= 3) {
-        return res.status(400).json({ error: 'Cannot create more Supervisor accounts. Maximum limit of 3 Supervisors reached.' });
+      const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int as count FROM "User" WHERE role = 'SUPERVISOR'`);
+      if (countRows[0].count >= 5) {
+        return res.status(400).json({ error: 'Cannot create more Supervisor accounts. Maximum limit of 5 Supervisors reached.' });
       }
     }
 
-    const existing = await prisma.user.findUnique({ where: { username } });
-    if (existing) {
+    const { rows: existingRows } = await pool.query(`SELECT id FROM "User" WHERE LOWER(username) = LOWER($1)`, [username.trim()]);
+    if (existingRows.length > 0) {
       return res.status(400).json({ error: `Username '${username}' is already taken` });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await prisma.user.create({
-      data: {
-        username: username.trim(),
-        fullName: fullName.trim(),
-        mobileNumber: mobileNumber.trim(),
-        password: hashedPassword,
-        role,
-      },
-      select: { id: true, username: true, fullName: true, mobileNumber: true, role: true, createdAt: true },
-    });
+    const assignedDiv = (role === 'SUPERVISOR' && assignedDivisionId && assignedDivisionId !== 'ALL') ? assignedDivisionId : null;
 
-    res.status(201).json({ user: newUser });
+    const { rows: newUserRows } = await pool.query(
+      `INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "assignedDivisionId", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5::"Role", $6, NOW(), NOW())
+       RETURNING "id", "username", "fullName", "mobileNumber", "role", "assignedDivisionId", "createdAt"`,
+      [username.trim(), fullName.trim(), mobileNumber.trim(), hashedPassword, role, assignedDiv]
+    );
+
+    res.status(201).json({ user: newUserRows[0] });
   } catch (err) {
     console.error('Create user error:', err);
     res.status(500).json({ error: 'Failed to create user' });
@@ -3425,30 +3479,36 @@ app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, r
 app.put('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, fullName, mobileNumber, password, role } = req.body;
+    const { username, fullName, mobileNumber, password, role, assignedDivisionId } = req.body;
 
     if (req.user.role !== 'OWNER' && req.user.id !== id) {
       return res.status(403).json({ error: 'Only Owner can edit other user accounts' });
     }
 
-    const data = {};
+    const { rows: currentRows } = await pool.query(`SELECT * FROM "User" WHERE id = $1`, [id]);
+    if (currentRows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const currentUser = currentRows[0];
+
+    let newUsername = currentUser.username;
     if (username && username.trim()) {
       const trimmedUser = username.trim();
-      const existing = await prisma.user.findFirst({
-        where: { username: trimmedUser, NOT: { id } }
-      });
-      if (existing) {
+      const { rows: dupCheck } = await pool.query(`SELECT id FROM "User" WHERE LOWER(username) = LOWER($1) AND id != $2`, [trimmedUser, id]);
+      if (dupCheck.length > 0) {
         return res.status(400).json({ error: `Username '${trimmedUser}' is already taken` });
       }
-      data.username = trimmedUser;
+      newUsername = trimmedUser;
     }
-    if (fullName) data.fullName = fullName.trim();
+
+    let newFullName = fullName !== undefined ? fullName.trim() : currentUser.fullName;
+    let newMobile = currentUser.mobileNumber;
     if (mobileNumber) {
       if (!/^\d{10}$/.test(mobileNumber.trim())) {
         return res.status(400).json({ error: 'Mobile number must be a valid 10-digit phone number' });
       }
-      data.mobileNumber = mobileNumber.trim();
+      newMobile = mobileNumber.trim();
     }
+
+    let newRole = currentUser.role;
     if (role) {
       if (req.user.role !== 'OWNER') {
         return res.status(403).json({ error: 'Only Owner can change roles' });
@@ -3457,40 +3517,45 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
         return res.status(400).json({ error: 'Role must be OWNER, MANAGER, or SUPERVISOR' });
       }
 
-      // Check capacity limit if role is changing
-      const currentUser = await prisma.user.findUnique({ where: { id } });
-      if (currentUser && currentUser.role !== role) {
+      if (currentUser.role !== role) {
         if (role === 'OWNER') {
-          const ownerCount = await prisma.user.count({ where: { role: 'OWNER' } });
-          if (ownerCount >= 2) {
+          const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int as count FROM "User" WHERE role = 'OWNER'`);
+          if (countRows[0].count >= 2) {
             return res.status(400).json({ error: 'Cannot assign Owner role. Maximum limit of 2 Owners reached.' });
           }
         } else if (role === 'MANAGER') {
-          const managerCount = await prisma.user.count({ where: { role: 'MANAGER' } });
-          if (managerCount >= 2) {
+          const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int as count FROM "User" WHERE role = 'MANAGER'`);
+          if (countRows[0].count >= 2) {
             return res.status(400).json({ error: 'Cannot assign Manager role. Maximum limit of 2 Managers reached.' });
           }
         } else if (role === 'SUPERVISOR') {
-          const supervisorCount = await prisma.user.count({ where: { role: 'SUPERVISOR' } });
-          if (supervisorCount >= 3) {
-            return res.status(400).json({ error: 'Cannot assign Supervisor role. Maximum limit of 3 Supervisors reached.' });
+          const { rows: countRows } = await pool.query(`SELECT COUNT(*)::int as count FROM "User" WHERE role = 'SUPERVISOR'`);
+          if (countRows[0].count >= 5) {
+            return res.status(400).json({ error: 'Cannot assign Supervisor role. Maximum limit of 5 Supervisors reached.' });
           }
         }
       }
-
-      data.role = role;
+      newRole = role;
     }
+
+    let newPassword = currentUser.password;
     if (password && password.trim() !== '') {
-      data.password = await bcrypt.hash(password.trim(), 10);
+      newPassword = await bcrypt.hash(password.trim(), 10);
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id },
-      data,
-      select: { id: true, username: true, fullName: true, mobileNumber: true, role: true }
-    });
+    const assignedDiv = (newRole === 'SUPERVISOR')
+      ? (assignedDivisionId === 'ALL' || assignedDivisionId === '' ? null : (assignedDivisionId || currentUser.assignedDivisionId || null))
+      : null;
 
-    res.json({ message: 'User updated successfully', user: updatedUser });
+    const { rows: updatedRows } = await pool.query(
+      `UPDATE "User"
+       SET "username" = $1, "fullName" = $2, "mobileNumber" = $3, "password" = $4, "role" = $5::"Role", "assignedDivisionId" = $6, "updatedAt" = NOW()
+       WHERE "id" = $7
+       RETURNING "id", "username", "fullName", "mobileNumber", "role", "assignedDivisionId"`,
+      [newUsername, newFullName, newMobile, newPassword, newRole, assignedDiv, id]
+    );
+
+    res.json({ message: 'User updated successfully', user: updatedRows[0] });
   } catch (err) {
     console.error('Update user error:', err);
     res.status(500).json({ error: 'Failed to update user account details' });
@@ -5339,6 +5404,28 @@ app.post('/api/wages/approve', authenticateToken, async (req, res) => {
         }
       }
 
+      // Log revision in SalaryAuditLog if updating an existing payment
+      const prevFinalNet = existingRows.length > 0 ? (parseFloat(existingRows[0].finalNetAmount || existingRows[0].calculatedAmount) || 0) : 0;
+      const prevGross = existingRows.length > 0 ? (parseFloat(existingRows[0].grossPayment) || 0) : 0;
+      if (existingRows.length > 0 && Math.abs(prevFinalNet - safeFinalNet) > 0.01) {
+        await client.query(
+          `INSERT INTO "SalaryAuditLog" (
+             "id", "workerId", "month", "year", "previousAmount", "newAmount", "difference",
+             "previousGross", "newGross", "previousAdvanceDeducted", "newAdvanceDeducted",
+             "action", "notes", "modifiedById", "createdAt"
+           )
+           VALUES (
+             gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'MODIFIED', $11, $12, NOW()
+           )`,
+          [
+            workerId, m, y, prevFinalNet, safeFinalNet, safeFinalNet - prevFinalNet,
+            prevGross, gross, prevAdvanceDeducted, safeAdv,
+            `Salary modified from ₹${prevFinalNet} to ₹${safeFinalNet}`,
+            req.user.id
+          ]
+        );
+      }
+
       await client.query('COMMIT');
       res.json({ message: 'Monthly wage payment successfully approved!', payment: rows[0] });
     } catch (err) {
@@ -5381,6 +5468,24 @@ app.post('/api/wages/unapprove', authenticateToken, async (req, res) => {
       }
 
       await client.query(query, params);
+
+      // Audit Log Entry for Unlocking
+      if (workerId) {
+        await client.query(
+          `INSERT INTO "SalaryAuditLog" ("id", "workerId", "month", "year", "previousAmount", "newAmount", "difference", "action", "notes", "modifiedById", "createdAt")
+           SELECT gen_random_uuid()::text, "workerId", "month", "year", COALESCE("finalNetAmount", "calculatedAmount", 0), COALESCE("finalNetAmount", "calculatedAmount", 0), 0, 'UNLOCKED', $3, $4, NOW()
+           FROM "MonthlyPayment" WHERE "workerId" = $1 AND "month" = $2 AND "year" = $5`,
+          [workerId, m, `Month unlocked by ${req.user.fullName || req.user.username}`, req.user.id, y]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO "SalaryAuditLog" ("id", "workerId", "month", "year", "previousAmount", "newAmount", "difference", "action", "notes", "modifiedById", "createdAt")
+           SELECT gen_random_uuid()::text, "workerId", "month", "year", COALESCE("finalNetAmount", "calculatedAmount", 0), COALESCE("finalNetAmount", "calculatedAmount", 0), 0, 'UNLOCKED', $3, $4, NOW()
+           FROM "MonthlyPayment" WHERE "month" = $1 AND "year" = $2`,
+          [m, y, `Entire month unlocked by ${req.user.fullName || req.user.username}`, req.user.id]
+        );
+      }
+
       await client.query('COMMIT');
 
       res.json({ message: `Monthly wages for ${m}/${y} successfully unlocked to DRAFT mode!` });
@@ -5393,6 +5498,413 @@ app.post('/api/wages/unapprove', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Unapprove error:', err);
     res.status(500).json({ error: 'Failed to unlock monthly wages', details: err.message });
+  }
+});
+
+// --- WORKER LEAVE LEDGER MODULE (18 LEAVES/YEAR: 10 MEDICAL + 8 CASUAL) ---
+app.get('/api/leave-ledger', authenticateToken, async (req, res) => {
+  try {
+    const { year, divisionId, search } = req.query;
+    const y = parseInt(year, 10) || new Date().getFullYear();
+
+    let query = `
+      SELECT 
+        w.id,
+        w."workerId",
+        w."fullName",
+        w."fatherName",
+        w."designation",
+        w."mobileNumber",
+        COALESCE(w."isActive", true) as "isActive",
+        d.id as "divisionId",
+        d.name as "divisionName",
+        COALESCE((
+          SELECT SUM(l.days)
+          FROM "WorkerLeave" l
+          WHERE l."workerId" = w.id AND l."year" = $1 AND l."leaveType" = 'MEDICAL'
+        ), 0)::float as "medicalLeavesTaken",
+        COALESCE((
+          SELECT SUM(l.days)
+          FROM "WorkerLeave" l
+          WHERE l."workerId" = w.id AND l."year" = $1 AND l."leaveType" = 'CASUAL'
+        ), 0)::float as "casualLeavesTaken",
+        COALESCE((
+          SELECT COUNT(*)
+          FROM "WorkerLeave" l
+          WHERE l."workerId" = w.id AND l."year" = $1
+        ), 0)::int as "totalLeaveRecords"
+      FROM "Worker" w
+      LEFT JOIN "Division" d ON w."divisionId" = d.id
+    `;
+
+    const whereClauses = [];
+    const params = [y];
+
+    if (divisionId && divisionId !== 'ALL') {
+      params.push(divisionId);
+      whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      whereClauses.push(`(
+        LOWER(w."fullName") LIKE $${params.length} OR
+        LOWER(w."workerId") LIKE $${params.length} OR
+        LOWER(COALESCE(w."designation", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(w."mobileNumber", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(d.name, '')) LIKE $${params.length}
+      )`);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    query += ` ORDER BY 
+      CASE 
+        WHEN w."workerId" ~ '^SKC-E-[0-9]+$' THEN CAST(SUBSTRING(w."workerId" FROM 7) AS INTEGER)
+        WHEN w."workerId" ~ '^[0-9]+$' THEN CAST(w."workerId" AS INTEGER)
+        ELSE 999999
+      END ASC, w."fullName" ASC`;
+
+    const { rows } = await pool.query(query, params);
+
+    const formattedRows = rows.map(r => {
+      const mlTaken = parseFloat(r.medicalLeavesTaken) || 0;
+      const clTaken = parseFloat(r.casualLeavesTaken) || 0;
+      const totalTaken = mlTaken + clTaken;
+      const mlAllowed = 10;
+      const clAllowed = 8;
+      const totalAllowed = 18;
+
+      return {
+        ...r,
+        medicalLeavesAllowed: mlAllowed,
+        casualLeavesAllowed: clAllowed,
+        totalLeavesAllowed: totalAllowed,
+        medicalLeavesTaken: mlTaken,
+        casualLeavesTaken: clTaken,
+        totalLeavesTaken: totalTaken,
+        medicalLeavesBalance: Math.max(0, mlAllowed - mlTaken),
+        casualLeavesBalance: Math.max(0, clAllowed - clTaken),
+        totalLeavesBalance: Math.max(0, totalAllowed - totalTaken)
+      };
+    });
+
+    const summary = {
+      totalWorkers: formattedRows.length,
+      totalAllowedLeaves: formattedRows.length * 18,
+      totalMedicalLeavesTaken: formattedRows.reduce((s, w) => s + w.medicalLeavesTaken, 0),
+      totalCasualLeavesTaken: formattedRows.reduce((s, w) => s + w.casualLeavesTaken, 0),
+      totalLeavesTaken: formattedRows.reduce((s, w) => s + w.totalLeavesTaken, 0),
+      totalLeavesBalance: formattedRows.reduce((s, w) => s + w.totalLeavesBalance, 0)
+    };
+
+    res.json({ workers: formattedRows, summary, year: y });
+  } catch (err) {
+    console.error('Error fetching leave ledger:', err);
+    res.status(500).json({ error: 'Failed to fetch leave ledger' });
+  }
+});
+
+// GET /api/leave-ledger/:workerId - Drilldown of worker leaves for a year
+app.get('/api/leave-ledger/:workerId', authenticateToken, async (req, res) => {
+  try {
+    const { workerId } = req.params;
+    const { year } = req.query;
+    const y = parseInt(year, 10) || new Date().getFullYear();
+
+    const { rows: workerRows } = await pool.query(
+      `SELECT w.*, d.name as "divisionName"
+       FROM "Worker" w
+       LEFT JOIN "Division" d ON w."divisionId" = d.id
+       WHERE w.id = $1`,
+      [workerId]
+    );
+    if (workerRows.length === 0) return res.status(404).json({ error: 'Worker not found' });
+    const worker = workerRows[0];
+
+    const { rows: leaves } = await pool.query(
+      `SELECT l.*, u."fullName" as "markedByName"
+       FROM "WorkerLeave" l
+       LEFT JOIN "User" u ON l."markedById" = u.id
+       WHERE l."workerId" = $1 AND l."year" = $2
+       ORDER BY l."date" DESC, l."createdAt" DESC`,
+      [workerId, y]
+    );
+
+    const mlTaken = leaves.filter(l => l.leaveType === 'MEDICAL').reduce((s, l) => s + (parseFloat(l.days) || 0), 0);
+    const clTaken = leaves.filter(l => l.leaveType === 'CASUAL').reduce((s, l) => s + (parseFloat(l.days) || 0), 0);
+
+    res.json({
+      worker: {
+        id: worker.id,
+        workerId: worker.workerId,
+        fullName: worker.fullName,
+        fatherName: worker.fatherName,
+        designation: worker.designation,
+        mobileNumber: worker.mobileNumber,
+        divisionName: worker.divisionName || 'General',
+        medicalLeavesAllowed: 10,
+        casualLeavesAllowed: 8,
+        totalLeavesAllowed: 18,
+        medicalLeavesTaken: mlTaken,
+        casualLeavesTaken: clTaken,
+        totalLeavesTaken: mlTaken + clTaken,
+        medicalLeavesBalance: Math.max(0, 10 - mlTaken),
+        casualLeavesBalance: Math.max(0, 8 - clTaken),
+        totalLeavesBalance: Math.max(0, 18 - (mlTaken + clTaken))
+      },
+      leaves,
+      year: y
+    });
+  } catch (err) {
+    console.error('Error fetching worker leave drilldown:', err);
+    res.status(500).json({ error: 'Failed to fetch leave history' });
+  }
+});
+
+// POST /api/leave-ledger - Record leave entry
+app.post('/api/leave-ledger', authenticateToken, requireRoles(['OWNER', 'MANAGER', 'SUPERVISOR']), async (req, res) => {
+  try {
+    const { workerId, date, leaveType, days, reason } = req.body;
+    if (!workerId || !date || !leaveType) {
+      return res.status(400).json({ error: 'Worker, date, and leave type (MEDICAL/CASUAL) are required' });
+    }
+
+    const lType = leaveType.toUpperCase() === 'CASUAL' ? 'CASUAL' : 'MEDICAL';
+    const numDays = parseFloat(days) || 1.0;
+    const leaveDate = new Date(date);
+    const year = leaveDate.getFullYear();
+
+    // Check existing leave balance for the year
+    const { rows: existingLeaves } = await pool.query(
+      `SELECT SUM(days)::float as "taken" FROM "WorkerLeave" WHERE "workerId" = $1 AND "year" = $2 AND "leaveType" = $3`,
+      [workerId, year, lType]
+    );
+    const currentTaken = existingLeaves[0]?.taken || 0;
+    const limit = lType === 'MEDICAL' ? 10 : 8;
+
+    if (currentTaken + numDays > limit) {
+      return res.status(400).json({
+        error: `Cannot grant leave. Worker has only ${(limit - currentTaken).toFixed(1)} ${lType} Leaves remaining out of ${limit} for year ${year}.`
+      });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO "WorkerLeave" ("id", "workerId", "date", "leaveType", "days", "reason", "year", "markedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5, $6, $7, NOW(), NOW())
+       ON CONFLICT ("workerId", "date")
+       DO UPDATE SET "leaveType" = EXCLUDED."leaveType", "days" = EXCLUDED."days", "reason" = EXCLUDED."reason", "markedById" = EXCLUDED."markedById", "updatedAt" = NOW()
+       RETURNING *`,
+      [workerId, date, lType, numDays, reason ? reason.trim() : null, year, req.user.id]
+    );
+
+    res.status(201).json({ message: `${lType} Leave recorded successfully!`, leave: rows[0] });
+  } catch (err) {
+    console.error('Error creating leave entry:', err);
+    res.status(500).json({ error: 'Failed to record leave' });
+  }
+});
+
+// DELETE /api/leave-ledger/:id - Cancel/Delete leave entry
+app.delete('/api/leave-ledger/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query(`DELETE FROM "WorkerLeave" WHERE "id" = $1`, [id]);
+    res.json({ message: 'Leave record removed successfully' });
+  } catch (err) {
+    console.error('Error deleting leave entry:', err);
+    res.status(500).json({ error: 'Failed to remove leave entry' });
+  }
+});
+
+// --- SALARY LEDGER & AUDIT TRAIL API ---
+app.get('/api/salary-ledger', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { month, year, workerId, search } = req.query;
+
+    let query = `
+      SELECT 
+        sal.*,
+        w."workerId" as "workerCode",
+        w."fullName" as "workerName",
+        w."mobileNumber",
+        w."designation",
+        d.name as "divisionName",
+        u."fullName" as "modifiedByName",
+        u.role as "modifiedByRole"
+      FROM "SalaryAuditLog" sal
+      JOIN "Worker" w ON sal."workerId" = w.id
+      LEFT JOIN "Division" d ON w."divisionId" = d.id
+      LEFT JOIN "User" u ON sal."modifiedById" = u.id
+    `;
+
+    const whereClauses = [];
+    const params = [];
+
+    if (month && month !== 'ALL') {
+      params.push(parseInt(month, 10));
+      whereClauses.push(`sal."month" = $${params.length}`);
+    }
+
+    if (year && year !== 'ALL') {
+      params.push(parseInt(year, 10));
+      whereClauses.push(`sal."year" = $${params.length}`);
+    }
+
+    if (workerId) {
+      params.push(workerId);
+      whereClauses.push(`sal."workerId" = $${params.length}`);
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      whereClauses.push(`(
+        LOWER(w."fullName") LIKE $${params.length} OR
+        LOWER(w."workerId") LIKE $${params.length} OR
+        LOWER(COALESCE(w."designation", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(d.name, '')) LIKE $${params.length}
+      )`);
+    }
+
+    if (whereClauses.length > 0) {
+      query += ` WHERE ` + whereClauses.join(' AND ');
+    }
+
+    query += ` ORDER BY sal."createdAt" DESC LIMIT 1000`;
+
+    const { rows } = await pool.query(query, params);
+    res.json({ auditLogs: rows });
+  } catch (err) {
+    console.error('Error fetching salary ledger audit logs:', err);
+    res.status(500).json({ error: 'Failed to fetch salary ledger' });
+  }
+});
+
+// --- BANK ADVICE PROFESSIONAL EXCEL EXPORT (EXCELJS WITH CLEAN BORDERS) ---
+app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, res) => {
+  try {
+    const { type, month, year, chequeNo, companyAccountNo, bankBranchDate, workers } = req.body;
+    const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthName = months[parseInt(month, 10) - 1] || 'Month';
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(bankTitle, {
+      views: [{ showGridLines: true }]
+    });
+
+    // Column widths
+    worksheet.columns = [
+      { key: 'col1', width: 10 },
+      { key: 'col2', width: 35 },
+      { key: 'col3', width: 28 },
+      { key: 'col4', width: 20 },
+      { key: 'col5', width: 18 }
+    ];
+
+    const thinBorder = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+
+    // Header Letterhead
+    worksheet.addRow(['SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170']);
+    worksheet.getRow(1).font = { bold: true, size: 12, color: { argb: 'FF1E3A8A' } };
+    
+    worksheet.addRow(['To']);
+    worksheet.addRow(['The Branch Manager,']);
+    worksheet.addRow(['Canara Bank,']);
+    worksheet.addRow(['Deosugur -584 170']);
+    worksheet.addRow(['SUB: SALARY DISTRIBUTION']);
+    worksheet.getRow(6).font = { bold: true, size: 10 };
+    worksheet.addRow([`ACCOUNT No. ${companyAccountNo || '18133070005349'}`]);
+    worksheet.getRow(7).font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
+
+    const totalAmount = (workers || []).reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
+    worksheet.addRow([`We are enclosed herewith a cheque for Rs.${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${year}, Please credit the amount to following accounts.`]);
+    worksheet.getRow(8).font = { bold: true, size: 9.5 };
+
+    worksheet.addRow([]);
+    worksheet.addRow([`Cheque No: ${chequeNo || '-'}`, '', '', '', `Date: ${bankBranchDate || '-'}`]);
+    worksheet.getRow(10).font = { bold: true, size: 9.5 };
+
+    // Table Header Row (Row 11)
+    const headerRow = worksheet.addRow(['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)']);
+    headerRow.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.height = 24;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1E3A8A' }
+      };
+      cell.border = thinBorder;
+    });
+
+    // Add Worker Rows
+    (workers || []).forEach((w, idx) => {
+      const amt = parseFloat(w.amount) || 0;
+      const r = worksheet.addRow([
+        idx + 1,
+        (w.fullName || '').toUpperCase(),
+        String(w.bankAccountNo || '-'),
+        (w.ifscCode || '').toUpperCase(),
+        amt
+      ]);
+      r.height = 20;
+      r.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      r.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+      r.getCell(2).font = { bold: true };
+      r.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
+      r.getCell(3).numFmt = '@'; // Store text string format for account number!
+      r.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+      r.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+      r.getCell(5).font = { bold: true };
+      r.getCell(5).numFmt = '₹#,##0.00';
+
+      r.eachCell((cell) => {
+        cell.border = thinBorder;
+      });
+    });
+
+    // Summary Total Row
+    const totalRow = worksheet.addRow(['', 'TOTAL AMOUNT', '', '', totalAmount]);
+    totalRow.height = 22;
+    totalRow.font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+    totalRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+    totalRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+    totalRow.getCell(5).numFmt = '₹#,##0.00';
+    totalRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFF1F5F9' }
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF0F172A' } },
+        bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+        right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+      };
+    });
+
+    worksheet.addRow([]);
+    worksheet.addRow(['sunilgouda1280@gmail.com', '', '', '', 'For SRI KRISHNA CONSTRUCTIONS']);
+    worksheet.addRow(['', '', '', '', 'Authorized Signatory']);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_ADVICE_${monthName.toUpperCase()}_${year}.xlsx"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error('Export bank advice excel error:', err);
+    res.status(500).json({ error: 'Failed to generate bank advice Excel' });
   }
 });
 

@@ -10,10 +10,40 @@ import {
   RefreshCw,
   FileSpreadsheet,
   Package,
-  ArrowRight
+  ArrowRight,
+  AlertTriangle,
+  Truck,
+  Wallet,
+  ArrowUpRight
 } from 'lucide-react';
 import api from '../api';
 import { showToast } from '../toast';
+
+interface PendingOrder {
+  id: string;
+  purchaseOrderId: string;
+  poNumber: string;
+  poDate: string;
+  divisionName?: string;
+  itemName: string;
+  partNumber?: string;
+  kpclCode?: string;
+  unit: string;
+  orderedQty: number;
+  inwardQty: number;
+  pendingQty: number;
+}
+
+interface InactiveWorkerWithAdvance {
+  id: string;
+  workerId: string;
+  fullName: string;
+  mobileNumber?: string;
+  advanceBalance: number;
+  advanceTaken: number;
+  designation?: string;
+  divisionName?: string;
+}
 
 interface DashboardProps {
   onSelectTab: (tabKey: string) => void;
@@ -23,8 +53,10 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
   const [stats, setStats] = useState({
     todayPurchases: { totalQty: 0, totalAmount: 0, count: 0 },
     todaySales: { totalQty: 0, totalAmount: 0, count: 0 },
-    todayAttendance: { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, totalOtHours: 0 },
-    totalWorkers: 0
+    todayAttendance: { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, leaveCount: 0, totalOtHours: 0 },
+    totalWorkers: 0,
+    pendingOrders: [] as PendingOrder[],
+    inactiveWorkersWithAdvance: [] as InactiveWorkerWithAdvance[]
   });
   const [loading, setLoading] = useState(true);
 
@@ -53,9 +85,12 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
             presentCount: Number(res.data.todayAttendance?.presentCount || 0),
             absentCount: Number(res.data.todayAttendance?.absentCount || 0),
             halfDayCount: Number(res.data.todayAttendance?.halfDayCount || 0),
+            leaveCount: Number(res.data.todayAttendance?.leaveCount || 0),
             totalOtHours: Number(res.data.todayAttendance?.totalOtHours || 0)
           },
-          totalWorkers: Number(res.data.totalWorkers || 0)
+          totalWorkers: Number(res.data.totalWorkers || 0),
+          pendingOrders: res.data.pendingOrders || [],
+          inactiveWorkersWithAdvance: res.data.inactiveWorkersWithAdvance || []
         });
       }
     } catch (err: any) {
@@ -269,6 +304,146 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
 
       </div>
 
+      {/* SECTION: INACTIVE WORKERS WITH OUTSTANDING ADVANCE BALANCE (ALERT) */}
+      {stats.inactiveWorkersWithAdvance && stats.inactiveWorkersWithAdvance.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 sm:p-5 shadow-xs animate-fadeIn">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-rose-200/80 pb-3 mb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
+                <AlertTriangle className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-rose-900">
+                  Inactive Workers with Outstanding Advance Balance
+                </h3>
+                <p className="text-[10px] sm:text-xs text-rose-700 font-medium">
+                  {stats.inactiveWorkersWithAdvance.length} deactivated worker(s) still have pending advance loans to be settled.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => onSelectTab('advance_ledger')}
+              className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-3 py-1.5 rounded-xl shadow-xs flex items-center gap-1.5 self-start sm:self-auto transition-colors"
+            >
+              <Wallet className="w-3.5 h-3.5" />
+              <span>View Advance Ledger</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {stats.inactiveWorkersWithAdvance.map((worker) => (
+              <div
+                key={worker.id}
+                className="bg-white border border-rose-200 rounded-xl p-3 shadow-xs hover:border-rose-400 transition-colors flex items-center justify-between gap-2"
+              >
+                <div>
+                  <div className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                    <span>{worker.fullName}</span>
+                    {worker.workerId && (
+                      <span className="font-mono text-[9px] bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded font-semibold">
+                        {worker.workerId}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-0.5">
+                    {worker.designation || 'Worker'} {worker.divisionName ? `• ${worker.divisionName}` : ''}
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-[9px] uppercase font-bold text-rose-600">Pending Advance</div>
+                  <div className="text-sm font-black text-rose-700 font-mono">
+                    {formatCurrency(worker.advanceBalance || 0)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* SECTION: PENDING PURCHASE ORDERS (ORDERED VS INWARD) */}
+      <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm p-4 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shadow-xs">
+              <Truck className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-800">
+                Pending Purchase Orders & Delivery Deficits
+              </h3>
+              <p className="text-[10px] sm:text-xs text-slate-400">
+                Items where ordered quantity exceeds inward received quantity (Partial deliveries)
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onSelectTab('purchase_orders')}
+            className="text-xs font-bold text-[#1e3a8a] hover:text-[#1e40af] flex items-center gap-1 group self-start sm:self-auto"
+          >
+            <span>Open Purchase Orders</span>
+            <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+          </button>
+        </div>
+
+        {stats.pendingOrders && stats.pendingOrders.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                  <th className="p-2.5">PO Number</th>
+                  <th className="p-2.5">Item & Specs</th>
+                  <th className="p-2.5 text-center">Unit</th>
+                  <th className="p-2.5 text-right">Ordered Qty</th>
+                  <th className="p-2.5 text-right">Inward Qty</th>
+                  <th className="p-2.5 text-right text-rose-700">Pending Deficit</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {stats.pendingOrders.map((item) => (
+                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                    <td className="p-2.5 font-bold text-[#1e3a8a] whitespace-nowrap">
+                      {item.poNumber || 'N/A'}
+                      {item.divisionName && (
+                        <div className="text-[10px] text-slate-400 font-normal">{item.divisionName}</div>
+                      )}
+                    </td>
+                    <td className="p-2.5 text-slate-800 font-semibold">
+                      <div>{item.itemName}</div>
+                      {(item.partNumber || item.kpclCode) && (
+                        <div className="text-[10px] text-slate-400 font-mono">
+                          {item.partNumber ? `Part: ${item.partNumber}` : ''}{' '}
+                          {item.kpclCode ? `KPCL: ${item.kpclCode}` : ''}
+                        </div>
+                      )}
+                    </td>
+                    <td className="p-2.5 text-center font-bold text-slate-500">{item.unit || 'NOS'}</td>
+                    <td className="p-2.5 text-right font-mono font-bold text-slate-700">
+                      {Number(item.orderedQty || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="p-2.5 text-right font-mono font-bold text-emerald-600">
+                      {Number(item.inwardQty || 0).toLocaleString('en-IN')}
+                    </td>
+                    <td className="p-2.5 text-right font-mono font-black text-rose-600">
+                      <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full">
+                        {Number(item.pendingQty || 0).toLocaleString('en-IN')} Pending
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-6 text-slate-400 text-xs">
+            🎉 All active purchase orders have been 100% fulfilled. No pending inward quantities.
+          </div>
+        )}
+      </div>
+
       {/* CLEAN QUICK MODULE ACCESS BAR */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-sm">
         <div className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
@@ -315,15 +490,15 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
           </button>
 
           <button
-            onClick={() => onSelectTab('master_creation')}
+            onClick={() => onSelectTab('leave_ledger')}
             className="flex items-center gap-3.5 p-3.5 rounded-2xl border border-slate-200 hover:border-blue-700 active:bg-blue-50/60 hover:bg-blue-50/30 transition-all text-left group"
           >
             <div className="p-2.5 rounded-xl bg-blue-50 text-[#1e3a8a] group-hover:bg-[#1e3a8a] group-hover:text-white transition-colors">
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-xs font-bold text-slate-800">Registered Workers</div>
-              <div className="text-[10px] text-slate-500">{totalWorkers || 0} active workers in registry</div>
+              <div className="text-xs font-bold text-slate-800">Worker Leave Ledger</div>
+              <div className="text-[10px] text-slate-500">18 Annual Leaves (10 ML + 8 CL)</div>
             </div>
           </button>
         </div>
@@ -331,3 +506,4 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
     </div>
   );
 };
+

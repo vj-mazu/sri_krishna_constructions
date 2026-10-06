@@ -102,6 +102,11 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   // Table Responsive View Mode: 'fit' (fits desktop/tablet without scroll) | 'scroll' (wide ledger)
   const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('scroll');
 
+  // Whether this month is approved & frozen
+  const isMonthApproved = useMemo(() => {
+    return wagesReport.length > 0 && wagesReport.some(w => w.paymentStatus === 'APPROVED');
+  }, [wagesReport]);
+
   // Global Escape key handler + scroll lock for modals
   useEffect(() => {
     const anyModalOpen = !!slipModalWorker || !!drilldownWorkerId;
@@ -1396,42 +1401,83 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       });
   };
 
-  const handleExportBankAdviceExcel = (type: 'canara' | 'non_canara') => {
+  const handleExportBankAdviceExcel = async (type: 'canara' | 'non_canara') => {
     const list = getBankAdviceList(type);
     const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
     const chequeNo = type === 'canara' ? canaraChequeNo : nonCanaraChequeNo;
     const totalAmount = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
     const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
 
-    const rows = [
-      ['SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170'],
-      ['To'],
-      ['The Branch Manager,'],
-      ['Canara Bank,'],
-      ['Deosugur -584 170'],
-      ['SUB:SALARY DISTRUBUTION'],
-      [`ACCOUNT No. ${companyAccountNo}`],
-      [`We are enclosed herewith a cheque for Rs${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear} ,Please credit the amount to following accounts.`],
-      [],
-      [`Cheque No :${chequeNo}`, '', '', `Date:- ${bankBranchDate}`],
-      ['SI NO', 'NAME', 'ACOUNT NUMBER', 'IFSC CODE', 'AMOUNT'],
-      ...list.map((w, idx) => [
-        idx + 1,
-        (w.fullName || '').toUpperCase(),
-        w.bankAccountNo || '-',
-        (w.ifscCode || '').toUpperCase(),
-        Number(w.amount) || 0
-      ]),
-      ['', 'Total Amount', '', '', totalAmount],
-      [],
-      ['sunilgouda1280@gmail.com']
-    ];
+    if (list.length === 0) {
+      showToast(`No approved workers found for ${bankTitle} advice. Please approve wages first.`, 'error');
+      return;
+    }
 
-    const worksheet = XLSX.utils.aoa_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, type === 'canara' ? 'CANARA BANK' : 'NON CANARA');
-    XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_SALARY_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
-    showToast(`${bankTitle} Salary Advice exported to Excel successfully!`, 'success');
+    try {
+      showToast(`Generating styled ${bankTitle} Excel advice sheet...`, 'info');
+      const res = await api.post(
+        '/wages/export-bank-advice-excel',
+        {
+          type,
+          month: selectedMonth,
+          year: selectedYear,
+          chequeNo,
+          companyAccountNo,
+          bankBranchDate,
+          workers: list.map(w => ({
+            fullName: w.fullName,
+            bankAccountNo: w.bankAccountNo,
+            ifscCode: w.ifscCode,
+            amount: w.amount
+          }))
+        },
+        { responseType: 'blob' }
+      );
+
+      const blob = new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast(`${bankTitle} Salary Advice exported to Excel with clean grid borders!`, 'success');
+    } catch (err) {
+      console.warn('Backend ExcelJS export failed, falling back to local XLSX:', err);
+      const rows = [
+        ['SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170'],
+        ['To'],
+        ['The Branch Manager,'],
+        ['Canara Bank,'],
+        ['Deosugur -584 170'],
+        ['SUB:SALARY DISTRUBUTION'],
+        [`ACCOUNT No. ${companyAccountNo}`],
+        [`We are enclosed herewith a cheque for Rs${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear} ,Please credit the amount to following accounts.`],
+        [],
+        [`Cheque No :${chequeNo}`, '', '', `Date:- ${bankBranchDate}`],
+        ['SI NO', 'NAME', 'ACOUNT NUMBER', 'IFSC CODE', 'AMOUNT'],
+        ...list.map((w, idx) => [
+          idx + 1,
+          (w.fullName || '').toUpperCase(),
+          w.bankAccountNo || '-',
+          (w.ifscCode || '').toUpperCase(),
+          Number(w.amount) || 0
+        ]),
+        ['', 'Total Amount', '', '', totalAmount],
+        [],
+        ['sunilgouda1280@gmail.com']
+      ];
+
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, type === 'canara' ? 'CANARA BANK' : 'NON CANARA');
+      XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_SALARY_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
+      showToast(`${bankTitle} Salary Advice exported to Excel!`, 'success');
+    }
   };
 
   const handleExportBankAdvicePdf = (type: 'canara' | 'non_canara') => {
@@ -2042,6 +2088,35 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         </div>
       )}
 
+      {/* FROZEN / LOCKED NOTICE BANNER */}
+      {isMonthApproved && (
+        <div className="p-3.5 bg-amber-50 text-amber-900 rounded-xl text-xs border border-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-xs animate-fadeIn">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-500 text-slate-950 flex items-center justify-center font-bold flex-shrink-0 shadow-2xs">
+              🔒
+            </div>
+            <div>
+              <div className="font-bold text-amber-950 uppercase tracking-wider text-[11px]">
+                Monthly Wages Approved & Frozen
+              </div>
+              <div className="text-[10px] sm:text-xs text-amber-800">
+                All wage rates, working days, OT hours, allowances, and deductions are locked in read-only mode to prevent unintended changes. Click <strong>"Unlock Month"</strong> to enable editing.
+              </div>
+            </div>
+          </div>
+          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+            <button
+              onClick={handleUnapproveAll}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl shadow-sm flex items-center gap-1.5 self-start sm:self-auto transition-colors flex-shrink-0"
+              title="Unlock this month to modify wage figures"
+            >
+              <Unlock className="w-3.5 h-3.5" />
+              <span>Unlock Month</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* TABLE CONDITIONAL RENDERING: ESI PF SALARY STATEMENT OR 22-COL WAGE REGISTER */}
       {loading ? (
         <div className="text-center py-12 text-slate-500 font-semibold flex items-center justify-center gap-2">
@@ -2113,6 +2188,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customBasicRate[w.workerId] !== undefined ? customBasicRate[w.workerId] : calc.basicMonthly}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2120,14 +2196,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomBasicRate(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-amber-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
-                        title="Edit monthly basic rate"
+                        className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-amber-300 focus:ring-amber-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit monthly basic rate'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-amber-50/30 text-right">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customVdaRate[w.workerId] !== undefined ? customVdaRate[w.workerId] : calc.vdaMonthly}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2135,14 +2214,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomVdaRate(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-amber-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
-                        title="Edit monthly VDA rate"
+                        className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-amber-300 focus:ring-amber-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit monthly VDA rate'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-amber-50/30 text-center">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customConRate[w.workerId] !== undefined ? customConRate[w.workerId] : (calc.conMonthly || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2150,8 +2232,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomConRate(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-12 text-right font-mono font-bold text-slate-800 bg-white border border-amber-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-2xs"
-                        title="Edit monthly conveyance rate"
+                        className={`w-12 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-amber-300 focus:ring-amber-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit monthly conveyance rate'}
                       />
                     </td>
                     <td className="border border-slate-300 text-right font-bold px-2 py-1 bg-amber-100/60 text-slate-900">{calc.totMonthly.toLocaleString('en-IN')}</td>
@@ -2161,6 +2245,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         step="0.5"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customWorkingDays[w.workerId] !== undefined ? customWorkingDays[w.workerId] : calc.wDays}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2168,8 +2253,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomWorkingDays(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-12 text-center font-mono font-bold text-emerald-800 bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                        title="Edit worked days"
+                        className={`w-12 text-center font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-emerald-800 border-blue-300 focus:ring-blue-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit worked days'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-blue-50/30 text-center">
@@ -2177,6 +2264,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         step="0.5"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customHolidayDays[w.workerId] !== undefined ? customHolidayDays[w.workerId] : (calc.hDays || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2184,8 +2272,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomHolidayDays(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-12 text-center font-mono font-bold text-slate-700 bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                        title="Edit holiday/leave days"
+                        className={`w-12 text-center font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-700 border-blue-300 focus:ring-blue-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit holiday/leave days'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-blue-50/30 text-center">
@@ -2193,6 +2283,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         step="0.5"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customAbsentDays[w.workerId] !== undefined ? customAbsentDays[w.workerId] : (calc.abDays || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2200,8 +2291,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomAbsentDays(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-12 text-center font-mono font-bold text-rose-700 bg-white border border-blue-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
-                        title="Edit absent days"
+                        className={`w-12 text-center font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-rose-700 border-blue-300 focus:ring-blue-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit absent days'}
                       />
                     </td>
                     <td className="border border-slate-300 text-center font-bold px-2 py-1 bg-blue-100/60 text-slate-900">{calc.totDays}</td>
@@ -2210,6 +2303,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customBasicVdaEarned[w.workerId] !== undefined ? customBasicVdaEarned[w.workerId] : calc.basicAndVdaEarned}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2217,14 +2311,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomBasicVdaEarned(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-                        title="Edit earned Basic & VDA"
+                        className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-emerald-300 focus:ring-emerald-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit earned Basic & VDA'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-center">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customConEarned[w.workerId] !== undefined ? customConEarned[w.workerId] : (calc.conEarned || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2232,14 +2329,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomConEarned(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-12 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-                        title="Edit earned conveyance"
+                        className={`w-12 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-emerald-300 focus:ring-emerald-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit earned conveyance'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-right">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customGrossEarned[w.workerId] !== undefined ? customGrossEarned[w.workerId] : calc.grossEarned}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2247,14 +2347,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomGrossEarned(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-                        title="Edit gross earnings"
+                        className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-emerald-300 focus:ring-emerald-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit gross earnings'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-emerald-50/30 text-right">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customEpfBase[w.workerId] !== undefined ? customEpfBase[w.workerId] : calc.epfBase}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2262,14 +2365,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomEpfBase(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-bold text-slate-800 bg-white border border-emerald-300 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-2xs"
-                        title="Edit EPF wage base"
+                        className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-emerald-300 focus:ring-emerald-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit EPF wage base'}
                       />
                     </td>
                     <td className="border border-slate-300 py-1 px-1 bg-emerald-100/50 text-right">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customGrossEarn[w.workerId] !== undefined ? customGrossEarn[w.workerId] : calc.grossEarn}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2277,8 +2383,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomGrossEarn(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-16 text-right font-mono font-black text-emerald-950 bg-white border border-emerald-400 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-emerald-600 shadow-2xs"
-                        title="Edit total gross earned"
+                        className={`w-16 text-right font-mono font-black rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-emerald-950 border-emerald-400 focus:ring-emerald-600'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit total gross earned'}
                       />
                     </td>
                     {/* DEDUCTIONS (MANUAL EDITABLE IN ESI/PF SHEET) */}
@@ -2286,6 +2394,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customPf[w.workerId] !== undefined ? customPf[w.workerId] : (calc.pf || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2293,14 +2402,17 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomPf(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
-                        title="Edit PF deduction for this worker"
+                        className={`w-14 text-right font-mono font-bold rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-rose-800 border-rose-300 focus:ring-rose-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit PF deduction for this worker'}
                       />
                     </td>
                     <td className="border border-slate-300 text-center py-1 px-1 bg-rose-50/30">
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (calc.esi || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2308,8 +2420,10 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomEsi(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-rose-800 bg-white border border-rose-300 rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-rose-500 shadow-2xs"
-                        title="Edit ESI deduction for this worker"
+                        className={`w-14 text-right font-mono font-bold rounded px-1.5 py-0.5 text-[11px] focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-rose-800 border-rose-300 focus:ring-rose-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit ESI deduction for this worker'}
                       />
                     </td>
                     {/* NET SALARY */}
@@ -2317,6 +2431,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customNetSalary[w.workerId] !== undefined ? customNetSalary[w.workerId] : calc.netSalary}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2324,22 +2439,27 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomNetSalary(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-20 text-right font-mono font-black text-emerald-950 bg-white border border-emerald-500 rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-700 shadow-2xs"
-                        title="Edit final Net Salary"
+                        className={`w-20 text-right font-mono font-black rounded px-1.5 py-0.5 text-xs focus:outline-none focus:ring-1 shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-emerald-950 border-emerald-500 focus:ring-emerald-700'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit final Net Salary'}
                       />
                     </td>
                     {/* DESIGNATION */}
                     <td className="border border-slate-300 py-1 px-1 text-left">
                       <input
                         type="text"
+                        disabled={isMonthApproved}
                         value={customDesignation[w.workerId] !== undefined ? customDesignation[w.workerId] : (calc.designation || 'HELPER')}
                         onChange={(e) => {
                           const val = e.target.value;
                           setCustomDesignation(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="HELPER"
-                        className="w-24 text-left font-sans font-bold text-slate-800 bg-white border border-slate-300 rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-500 uppercase shadow-2xs"
-                        title="Edit Designation"
+                        className={`w-24 text-left font-sans font-bold rounded px-1.5 py-0.5 text-[10px] focus:outline-none focus:ring-1 uppercase shadow-2xs ${
+                          isMonthApproved ? 'bg-slate-100 text-slate-500 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 border-slate-300 focus:ring-blue-500'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Edit Designation'}
                       />
                     </td>
                   </tr>
@@ -2877,6 +2997,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         min="0"
                         step="1"
+                        disabled={isMonthApproved}
                         value={customDailyWage[w.workerId] !== undefined ? customDailyWage[w.workerId] : (calc.dailyWage || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2884,8 +3005,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomDailyWage(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder={String(calc.dailyWage)}
-                        className="w-16 text-right font-mono font-semibold text-slate-700 bg-slate-50/40 border border-slate-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        title="Daily Wage (editable override)"
+                        className={`w-16 text-right font-mono font-semibold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-slate-700 bg-slate-50/40 border border-slate-200 focus:ring-blue-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Daily Wage (editable override)'}
                       />
                     </td>
 
@@ -2895,6 +3020,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         min="0"
                         step="0.5"
+                        disabled={isMonthApproved}
                         value={customWorkingDays[w.workerId] !== undefined ? customWorkingDays[w.workerId] : (calc.workingDays || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2902,8 +3028,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomWorkingDays(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder={String(calc.workingDays)}
-                        className="w-14 text-center font-mono font-bold text-emerald-800 bg-emerald-50/60 border border-emerald-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-emerald-400"
-                        title="Working Days (editable override)"
+                        className={`w-14 text-center font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-emerald-800 bg-emerald-50/60 border border-emerald-200 focus:ring-emerald-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Working Days (editable override)'}
                       />
                     </td>
 
@@ -2913,6 +3043,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         min="0"
                         step="1"
+                        disabled={isMonthApproved}
                         value={customDailyAllowance[w.workerId] !== undefined ? customDailyAllowance[w.workerId] : (calc.dailyAllowance || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2920,8 +3051,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomDailyAllowance(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder={String(calc.dailyAllowance)}
-                        className="w-14 text-right font-mono text-slate-600 bg-slate-50/40 border border-slate-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-blue-400"
-                        title="Daily Allowance (editable override)"
+                        className={`w-14 text-right font-mono rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-slate-600 bg-slate-50/40 border border-slate-200 focus:ring-blue-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Daily Allowance (editable override)'}
                       />
                     </td>
 
@@ -2939,6 +3074,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customPf[w.workerId] !== undefined ? customPf[w.workerId] : (calc.pf || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2946,8 +3082,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomPf(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-red-700 bg-red-50/40 border border-red-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-red-400"
-                        title="Enter P.F. deduction"
+                        className={`w-14 text-right font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-red-700 bg-red-50/40 border border-red-200 focus:ring-red-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Enter P.F. deduction'}
                       />
                     </td>
 
@@ -2956,6 +3096,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customEsi[w.workerId] !== undefined ? customEsi[w.workerId] : (calc.esi || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2963,8 +3104,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomEsi(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-red-700 bg-red-50/40 border border-red-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-red-400"
-                        title="Enter ESI deduction"
+                        className={`w-14 text-right font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-red-700 bg-red-50/40 border border-red-200 focus:ring-red-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Enter ESI deduction'}
                       />
                     </td>
 
@@ -2977,6 +3122,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         min="0"
                         step="0.5"
+                        disabled={isMonthApproved}
                         value={customOtHours[w.workerId] !== undefined ? customOtHours[w.workerId] : (calc.otHours || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -2984,8 +3130,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomOtHours(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder={String(calc.otHours)}
-                        className="w-14 text-center font-mono font-bold text-indigo-800 bg-indigo-50/40 border border-indigo-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        title="OT Hours (editable override)"
+                        className={`w-14 text-center font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-indigo-800 bg-indigo-50/40 border border-indigo-200 focus:ring-indigo-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'OT Hours (editable override)'}
                       />
                     </td>
 
@@ -2997,6 +3147,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customOtAllowance[w.workerId] !== undefined ? customOtAllowance[w.workerId] : (calc.otAllowance || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -3004,8 +3155,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomOtAllowance(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-center font-mono font-bold text-indigo-700 bg-indigo-50/40 border border-indigo-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        title="OT Allowance (editable override)"
+                        className={`w-14 text-center font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-indigo-700 bg-indigo-50/40 border border-indigo-200 focus:ring-indigo-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'OT Allowance (editable override)'}
                       />
                     </td>
 
@@ -3023,7 +3178,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         type="number"
                         min="0"
                         max={Math.min(calc.advanceBalance, calc.totalPayment)}
-                        disabled={calc.advanceBalance <= 0 || calc.workingDays <= 0}
+                        disabled={isMonthApproved || calc.advanceBalance <= 0 || calc.workingDays <= 0}
                         value={(calc.advanceBalance <= 0 || calc.workingDays <= 0) ? 0 : (customAdvance[w.workerId] !== undefined ? customAdvance[w.workerId] : (w.advanceDeducted || ''))}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -3033,14 +3188,16 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                         }}
                         placeholder="0"
                         className={`w-16 text-right font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
-                          (calc.advanceBalance <= 0 || calc.workingDays <= 0)
+                          (isMonthApproved || calc.advanceBalance <= 0 || calc.workingDays <= 0)
                             ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed' 
                             : 'text-amber-900 bg-amber-100/60 border border-amber-300 focus:ring-amber-500'
                         }`}
                         title={
-                          calc.advanceBalance <= 0 
-                            ? 'No outstanding advance taken by this worker' 
-                            : (calc.workingDays <= 0 ? 'Worker has no attendance/earnings this month' : `Max advance deduction: ₹${Math.min(calc.advanceBalance, calc.totalPayment)}`)
+                          isMonthApproved
+                            ? 'Locked: Month is approved'
+                            : (calc.advanceBalance <= 0 
+                              ? 'No outstanding advance taken by this worker' 
+                              : (calc.workingDays <= 0 ? 'Worker has no attendance/earnings this month' : `Max advance deduction: ₹${Math.min(calc.advanceBalance, calc.totalPayment)}`))
                         }
                       />
                     </td>
@@ -3055,6 +3212,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                       <input
                         type="number"
                         min="0"
+                        disabled={isMonthApproved}
                         value={customExtra[w.workerId] !== undefined ? customExtra[w.workerId] : (w.extraAmount || '')}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -3062,8 +3220,12 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                           setCustomExtra(prev => ({ ...prev, [w.workerId]: val }));
                         }}
                         placeholder="0"
-                        className="w-14 text-right font-mono font-bold text-indigo-700 bg-indigo-50/40 border border-indigo-200 rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                        title="Enter Extra payment (e.g. bonus, adjustment)"
+                        className={`w-14 text-right font-mono font-bold rounded px-1 py-0.5 text-[10px] focus:outline-none focus:ring-1 ${
+                          isMonthApproved 
+                            ? 'bg-slate-100 text-slate-500 border border-slate-200 cursor-not-allowed' 
+                            : 'text-indigo-700 bg-indigo-50/40 border border-indigo-200 focus:ring-indigo-400'
+                        }`}
+                        title={isMonthApproved ? 'Locked: Month is approved' : 'Enter Extra payment (e.g. bonus, adjustment)'}
                       />
                     </td>
 

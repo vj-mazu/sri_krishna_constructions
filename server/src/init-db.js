@@ -531,7 +531,59 @@ export const initializeDatabaseTables = async () => {
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 11d. Create WorkerLeave Table (18 Yearly Leaves: 10 Medical + 8 Casual)
+      CREATE TABLE IF NOT EXISTS "WorkerLeave" (
+        "id" TEXT PRIMARY KEY,
+        "workerId" TEXT NOT NULL REFERENCES "Worker"("id") ON DELETE CASCADE,
+        "date" TIMESTAMP(3) NOT NULL,
+        "leaveType" TEXT NOT NULL DEFAULT 'MEDICAL', -- 'MEDICAL' (ML) or 'CASUAL' (CL)
+        "days" DOUBLE PRECISION NOT NULL DEFAULT 1.0, -- 1.0 (Full day) or 0.5 (Half day)
+        "reason" TEXT,
+        "year" INTEGER NOT NULL,
+        "markedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "WorkerLeave_workerId_date_key" UNIQUE ("workerId", "date")
+      );
+
+      -- 11e. Create SalaryAuditLog Table (Historical salary adjustment tracking when wages are unlocked/recalculated)
+      CREATE TABLE IF NOT EXISTS "SalaryAuditLog" (
+        "id" TEXT PRIMARY KEY,
+        "workerId" TEXT NOT NULL REFERENCES "Worker"("id") ON DELETE CASCADE,
+        "month" INTEGER NOT NULL,
+        "year" INTEGER NOT NULL,
+        "previousAmount" DOUBLE PRECISION NOT NULL,
+        "newAmount" DOUBLE PRECISION NOT NULL,
+        "difference" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "previousGross" DOUBLE PRECISION,
+        "newGross" DOUBLE PRECISION,
+        "previousAdvanceDeducted" DOUBLE PRECISION,
+        "newAdvanceDeducted" DOUBLE PRECISION,
+        "action" TEXT NOT NULL DEFAULT 'MODIFIED', -- 'APPROVED', 'UNLOCKED', 'MODIFIED'
+        "notes" TEXT,
+        "modifiedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- Supervisor Single Division Restriction Column
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "assignedDivisionId" TEXT REFERENCES "Division"("id");
+
+      -- Add MEDICAL_LEAVE and CASUAL_LEAVE to AttendanceStatus enum if possible
+      DO $$ BEGIN
+        ALTER TYPE "AttendanceStatus" ADD VALUE IF NOT EXISTS 'MEDICAL_LEAVE';
+        ALTER TYPE "AttendanceStatus" ADD VALUE IF NOT EXISTS 'CASUAL_LEAVE';
+      EXCEPTION
+        WHEN duplicate_object THEN null;
+      END $$;
+
       -- 12. Create Performance Indexes
+      CREATE INDEX IF NOT EXISTS "idx_workerleave_worker_year" ON "WorkerLeave"("workerId", "year");
+      CREATE INDEX IF NOT EXISTS "idx_workerleave_type" ON "WorkerLeave"("leaveType");
+      CREATE INDEX IF NOT EXISTS "idx_workerleave_date" ON "WorkerLeave"("date");
+      CREATE INDEX IF NOT EXISTS "idx_salaryaudit_worker_my" ON "SalaryAuditLog"("workerId", "month", "year");
+      CREATE INDEX IF NOT EXISTS "idx_salaryaudit_my" ON "SalaryAuditLog"("month", "year");
+      CREATE INDEX IF NOT EXISTS "idx_salaryaudit_created" ON "SalaryAuditLog"("createdAt" DESC);
+      CREATE INDEX IF NOT EXISTS "idx_user_assigned_div" ON "User"("assignedDivisionId");
       CREATE INDEX IF NOT EXISTS "idx_advtx_worker_date" ON "AdvanceTransaction"("workerId", "date");
       CREATE INDEX IF NOT EXISTS "idx_advtx_type" ON "AdvanceTransaction"("type");
       CREATE INDEX IF NOT EXISTS "idx_po_number" ON "PurchaseOrder"("poNumber");

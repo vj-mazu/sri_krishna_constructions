@@ -24,6 +24,8 @@ interface AttendancePanelProps {
 
 export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRole }) => {
   const isPrivileged = currentUserRole === 'OWNER' || currentUserRole === 'MANAGER';
+  const [assignedDivisionId, setAssignedDivisionId] = useState<string | null>(null);
+  const [assignedDivisionName, setAssignedDivisionName] = useState<string>('');
   const [divisions, setDivisions] = useState<any[]>([]);
   const [selectedDivisionId, setSelectedDivisionId] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
@@ -58,29 +60,25 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [success, setSuccess] = useState('');
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
 
-  // Check offline queue on mount
+  // Fetch current user details to check for single supervisor division restriction
   useEffect(() => {
-    const updateOnlineStatus = () => {
-      setIsOnline(navigator.onLine);
-      if (navigator.onLine) {
-        syncOfflineQueue();
+    api.get('/auth/me').then(res => {
+      const u = res.data.user;
+      if (u && u.role === 'SUPERVISOR' && u.assignedDivisionId) {
+        setAssignedDivisionId(u.assignedDivisionId);
+        setSelectedDivisionId(u.assignedDivisionId);
+        if (u.assignedDivision?.name) {
+          setAssignedDivisionName(u.assignedDivision.name);
+        }
       }
-    };
-
-    window.addEventListener('online', updateOnlineStatus);
-    window.addEventListener('offline', updateOnlineStatus);
+    }).catch(() => {});
     checkOfflineQueueCount();
-
-    return () => {
-      window.removeEventListener('online', updateOnlineStatus);
-      window.removeEventListener('offline', updateOnlineStatus);
-    };
   }, []);
 
   const checkOfflineQueueCount = () => {
     try {
-      const queue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
-      setOfflinePendingCount(queue.length);
+      const q = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
+      setOfflinePendingCount(q.length);
     } catch {
       setOfflinePendingCount(0);
     }
@@ -88,24 +86,23 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   const syncOfflineQueue = async () => {
     try {
-      const queue = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
-      if (queue.length === 0) return;
-
-      showToast(`Syncing ${queue.length} offline attendance submissions...`, 'info');
-      
-      for (const item of queue) {
-        await api.post('/attendance', {
+      const q = JSON.parse(localStorage.getItem('skc_offline_attendance_queue') || '[]');
+      if (!q.length) return;
+      showToast(`Syncing ${q.length} offline attendance records...`, 'info');
+      for (const item of q) {
+        await api.post('/attendance/bulk', {
           date: item.date,
           attendanceData: item.attendanceData,
+          clearedWorkerIds: item.clearedWorkerIds || []
         });
       }
-
       localStorage.removeItem('skc_offline_attendance_queue');
-      setOfflinePendingCount(0);
-      showToast('All offline attendance records synced successfully to cloud!', 'success');
+      checkOfflineQueueCount();
+      showToast('All offline records synchronized successfully!', 'success');
       fetchWorkersAndAttendance();
     } catch (err: any) {
-      console.error('Offline sync error:', err);
+      console.warn('Error syncing offline queue:', err);
+      showToast('Failed to sync some offline records', 'error');
     }
   };
 
@@ -114,8 +111,10 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       const res = await api.get('/divisions', { params: { type: 'ATTENDANCE', activeOnly: 'true' } });
       const divList = res.data.divisions || [];
       setDivisions(divList);
-      // Default to ALL divisions
-      setSelectedDivisionId('ALL');
+      // Default to assigned division if supervisor is restricted, else ALL
+      if (!assignedDivisionId) {
+        setSelectedDivisionId('ALL');
+      }
     } catch (err: any) {
       showToast(err.response?.data?.error || 'Failed to load divisions', 'error');
     }
@@ -695,13 +694,18 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       <div className="bg-slate-50 p-2.5 sm:p-3 rounded-xl border border-slate-300 shadow-2xs">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
           <div>
-            <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider mb-1">🏢 Division / Site</label>
+            <label className="block font-bold text-slate-700 text-[10px] uppercase tracking-wider mb-1">
+              🏢 Division / Site {assignedDivisionId && <span className="text-indigo-600 font-mono font-bold">🔒 (Locked)</span>}
+            </label>
             <select
               value={selectedDivisionId}
+              disabled={Boolean(assignedDivisionId)}
               onChange={(e) => setSelectedDivisionId(e.target.value)}
-              className="w-full py-1.5 px-2.5 border border-slate-300 rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white text-xs text-slate-900 shadow-2xs"
+              className={`w-full py-1.5 px-2.5 border border-slate-300 rounded-lg focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold text-xs text-slate-900 shadow-2xs ${
+                assignedDivisionId ? 'bg-indigo-50/70 border-indigo-300 text-indigo-900 cursor-not-allowed' : 'bg-white'
+              }`}
             >
-              <option value="ALL">🏢 All Divisions</option>
+              {!assignedDivisionId && <option value="ALL">🏢 All Divisions</option>}
               {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}

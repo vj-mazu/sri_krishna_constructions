@@ -13,6 +13,8 @@ import { SalesLedger } from './components/SalesLedger';
 import { WorkOrders } from './components/WorkOrders';
 import { AdvanceLedger } from './components/AdvanceLedger';
 import { IndividualStock } from './components/IndividualStock';
+import { LeaveLedger } from './components/LeaveLedger';
+import { SalaryLedger } from './components/SalaryLedger';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SKC_LOGO_BASE64 } from './logoBase64';
 
@@ -31,7 +33,9 @@ import {
   ChevronDown,
   BookOpen,
   Layers,
-  X
+  X,
+  CalendarCheck,
+  History
 } from 'lucide-react';
 
 export function App() {
@@ -94,8 +98,27 @@ export function App() {
       return () => clearTimeout(timer);
     }
   }, [toast]);
-  
 
+  // Click outside & Escape listener for navigation dropdown menus
+  useEffect(() => {
+    const handleDocumentClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.nav-dropdown-container')) {
+        setOpenDropdown(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -309,8 +332,8 @@ export function App() {
             {user.role !== 'SUPERVISOR' && (
               <>
                 <button
-                  onClick={() => setActiveTab('dashboard')}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                  onClick={() => { setActiveTab('dashboard'); setOpenDropdown(null); }}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                     activeTab === 'dashboard'
                       ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                       : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -320,103 +343,127 @@ export function App() {
                 </button>
 
                 {/* 1. ORDERS & BILLING DROPDOWN (PO & WORK ORDERS) */}
-                <div 
-                  className="relative"
-                  onMouseEnter={() => setOpenDropdown('orders')}
-                  onMouseLeave={() => setOpenDropdown(null)}
-                >
+                <div className="relative nav-dropdown-container">
                   <button
-                    onClick={() => setActiveTab('purchase_orders')}
-                    className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenDropdown(prev => prev === 'orders' ? null : 'orders');
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer select-none ${
                       activeTab === 'purchase_orders' || activeTab === 'work_orders' || activeTab === 'individual_stock'
                         ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                         : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                     }`}
                   >
                     <span>Orders &amp; Billing</span>
-                    <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                    <ChevronDown className={`w-3.5 h-3.5 opacity-80 transition-transform duration-200 ${openDropdown === 'orders' ? 'rotate-180' : ''}`} />
                   </button>
 
                   {openDropdown === 'orders' && (
-                    <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800">
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full left-0 mt-1.5 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800"
+                    >
                       <button
                         onClick={() => { setActiveTab('purchase_orders'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
                           activeTab === 'purchase_orders' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                         }`}
                       >
-                        <FileSpreadsheet className="w-4 h-4 text-blue-700" />
+                        <FileSpreadsheet className="w-4 h-4 text-blue-700 shrink-0" />
                         <span>Purchase Orders</span>
                       </button>
                       <button
                         onClick={() => { setActiveTab('work_orders'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
                           activeTab === 'work_orders' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                         }`}
                       >
-                        <Receipt className="w-4 h-4 text-emerald-700" />
+                        <Receipt className="w-4 h-4 text-emerald-700 shrink-0" />
                         <span>Work Orders</span>
                       </button>
                       <button
                         onClick={() => { setActiveTab('individual_stock'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
                           activeTab === 'individual_stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                         }`}
                       >
-                        <Layers className="w-4 h-4 text-amber-600" />
+                        <Layers className="w-4 h-4 text-amber-600 shrink-0" />
                         <span>Individual Stocks (Non-PO)</span>
                       </button>
                     </div>
                   )}
                 </div>
 
-                {/* 2. STOCKS & LEDGERS DROPDOWN (STOCK SUMMARY, SALES LEDGER, ADVANCE LEDGER) */}
-                <div 
-                  className="relative"
-                  onMouseEnter={() => setOpenDropdown('stocks')}
-                  onMouseLeave={() => setOpenDropdown(null)}
-                >
+                {/* 2. STOCKS & LEDGERS DROPDOWN (STOCK SUMMARY, SALES LEDGER, ADVANCE LEDGER, LEAVE LEDGER, SALARY LEDGER) */}
+                <div className="relative nav-dropdown-container">
                   <button
-                    onClick={() => setActiveTab('stock')}
-                    className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1 ${
-                      activeTab === 'stock' || activeTab === 'sales_ledger' || activeTab === 'advance_ledger'
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenDropdown(prev => prev === 'stocks' ? null : 'stocks');
+                    }}
+                    className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer select-none ${
+                      activeTab === 'stock' || activeTab === 'sales_ledger' || activeTab === 'advance_ledger' || activeTab === 'leave_ledger' || activeTab === 'salary_ledger'
                         ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                         : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                     }`}
                   >
                     <span>Stocks &amp; Ledgers</span>
-                    <ChevronDown className="w-3.5 h-3.5 opacity-80" />
+                    <ChevronDown className={`w-3.5 h-3.5 opacity-80 transition-transform duration-200 ${openDropdown === 'stocks' ? 'rotate-180' : ''}`} />
                   </button>
 
                   {openDropdown === 'stocks' && (
-                    <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800">
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute top-full left-0 mt-1.5 w-60 bg-white rounded-xl shadow-2xl border border-slate-200 py-1.5 z-50 animate-fadeIn text-slate-800"
+                    >
                       <button
                         onClick={() => { setActiveTab('stock'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
                           activeTab === 'stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                         }`}
                       >
-                        <Package className="w-4 h-4 text-indigo-700" />
+                        <Package className="w-4 h-4 text-indigo-700 shrink-0" />
                         <span>Stock Summary</span>
                       </button>
                       <button
                         onClick={() => { setActiveTab('sales_ledger'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
                           activeTab === 'sales_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                         }`}
                       >
-                        <BookOpen className="w-4 h-4 text-emerald-700" />
+                        <BookOpen className="w-4 h-4 text-emerald-700 shrink-0" />
                         <span>Sales Ledger</span>
                       </button>
                       <button
                         onClick={() => { setActiveTab('advance_ledger'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2 hover:bg-blue-50 transition-colors ${
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
                           activeTab === 'advance_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                         }`}
                       >
-                        <Wallet className="w-4 h-4 text-amber-700" />
+                        <Wallet className="w-4 h-4 text-amber-700 shrink-0" />
                         <span>Advance Ledger</span>
                       </button>
+                      <button
+                        onClick={() => { setActiveTab('leave_ledger'); setOpenDropdown(null); }}
+                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
+                          activeTab === 'leave_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                        }`}
+                      >
+                        <CalendarCheck className="w-4 h-4 text-purple-700 shrink-0" />
+                        <span>Worker Leave Ledger</span>
+                      </button>
+                      {(user.role === 'OWNER' || user.role === 'MANAGER') && (
+                        <button
+                          onClick={() => { setActiveTab('salary_ledger'); setOpenDropdown(null); }}
+                          className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
+                            activeTab === 'salary_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
+                          }`}
+                        >
+                          <History className="w-4 h-4 text-blue-700 shrink-0" />
+                          <span>Salary Audit Ledger</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -426,8 +473,8 @@ export function App() {
             {/* DAILY ATTENDANCE (Owner, Manager, Supervisor) */}
             {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
               <button
-                onClick={() => setActiveTab('attendance')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                onClick={() => { setActiveTab('attendance'); setOpenDropdown(null); }}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === 'attendance'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -440,8 +487,8 @@ export function App() {
             {/* MONTHLY WAGES (Owner, Manager) */}
             {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
-                onClick={() => setActiveTab('wages')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                onClick={() => { setActiveTab('wages'); setOpenDropdown(null); }}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === 'wages'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -454,8 +501,8 @@ export function App() {
             {/* APPROVALS */}
             {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
-                onClick={() => setActiveTab('approvals')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                onClick={() => { setActiveTab('approvals'); setOpenDropdown(null); }}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                   activeTab === 'approvals'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -473,8 +520,8 @@ export function App() {
             {/* MASTER CREATION / USER MGMT (Owner, Manager, Supervisor) */}
             {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
               <button
-                onClick={() => setActiveTab('master_creation')}
-                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap ${
+                onClick={() => { setActiveTab('master_creation'); setOpenDropdown(null); }}
+                className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap cursor-pointer ${
                   activeTab === 'master_creation'
                     ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                     : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
@@ -512,6 +559,8 @@ export function App() {
         {activeTab === 'individual_stock' && user.role !== 'SUPERVISOR' && <IndividualStock currentUserRole={user.role} />}
         {activeTab === 'sales_ledger' && user.role !== 'SUPERVISOR' && <SalesLedger />}
         {activeTab === 'advance_ledger' && user.role !== 'SUPERVISOR' && <AdvanceLedger currentUserRole={user.role} />}
+        {activeTab === 'leave_ledger' && <LeaveLedger />}
+        {activeTab === 'salary_ledger' && (user.role === 'OWNER' || user.role === 'MANAGER') && <SalaryLedger />}
         {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
         {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
         {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}

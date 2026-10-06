@@ -30,6 +30,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [userMobile, setUserMobile] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'OWNER' | 'MANAGER' | 'SUPERVISOR'>('SUPERVISOR');
+  const [userAssignedDivisionId, setUserAssignedDivisionId] = useState<string>('ALL');
 
   // Edit user state
   const [editingAccount, setEditingAccount] = useState<any>(null);
@@ -38,6 +39,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editAccountMobile, setEditAccountMobile] = useState('');
   const [editAccountRole, setEditAccountRole] = useState<'OWNER' | 'MANAGER' | 'SUPERVISOR'>('SUPERVISOR');
   const [editAccountPassword, setEditAccountPassword] = useState('');
+  const [editAccountAssignedDivisionId, setEditAccountAssignedDivisionId] = useState<string>('ALL');
 
   // --- DIVISIONS STATE ---
   const [divisionCategoryTab, setDivisionCategoryTab] = useState<'ATTENDANCE' | 'PO_CLIENT'>('ATTENDANCE');
@@ -525,6 +527,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         mobileNumber: userMobile.trim(),
         password,
         role,
+        assignedDivisionId: role === 'SUPERVISOR' && userAssignedDivisionId !== 'ALL' ? userAssignedDivisionId : null,
       });
 
       const msg = `User Account '${username}' created successfully!`;
@@ -534,6 +537,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       setFullName('');
       setUserMobile('');
       setPassword('');
+      setUserAssignedDivisionId('ALL');
       setShowAddUserForm(false);
       fetchUsers();
     } catch (err: any) {
@@ -572,6 +576,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         mobileNumber: editAccountMobile.trim(),
         role: editAccountRole,
         password: editAccountPassword.trim() || undefined,
+        assignedDivisionId: editAccountRole === 'SUPERVISOR' ? (editAccountAssignedDivisionId !== 'ALL' ? editAccountAssignedDivisionId : null) : null,
       });
 
       const msg = `User Account '${editAccountUsername}' updated successfully!`;
@@ -1113,7 +1118,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-800">Operational System Accounts</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Role Limits: Owner (Max 2), Manager (Max 2), Supervisor (Max 3)</p>
+              <p className="text-xs text-slate-500 mt-0.5">Role Limits: Owner (Max 2), Manager (Max 2), Supervisor (Max 5)</p>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5 flex-wrap">
@@ -1123,8 +1128,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${managerCount >= 2 ? 'bg-blue-100 text-blue-900 border-blue-300' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
                   👔 Manager: <strong>{managerCount}/2</strong>
                 </span>
-                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${supervisorCount >= 3 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
-                  👷 Supervisor: <strong>{supervisorCount}/3</strong>
+                <span className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono border ${supervisorCount >= 5 ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                  👷 Supervisor: <strong>{supervisorCount}/5</strong>
                 </span>
               </div>
               {currentUserRole === 'OWNER' && (
@@ -1194,8 +1199,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     onChange={(e: any) => setRole(e.target.value)}
                     className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
                   >
-                    <option value="SUPERVISOR" disabled={supervisorCount >= 3}>
-                      SUPERVISOR {supervisorCount >= 3 ? '(Limit of 3 reached)' : `(${supervisorCount}/3)`}
+                    <option value="SUPERVISOR" disabled={supervisorCount >= 5}>
+                      SUPERVISOR {supervisorCount >= 5 ? '(Limit of 5 reached)' : `(${supervisorCount}/5)`}
                     </option>
                     <option value="MANAGER" disabled={managerCount >= 2}>
                       MANAGER {managerCount >= 2 ? '(Limit of 2 reached)' : `(${managerCount}/2)`}
@@ -1205,6 +1210,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     </option>
                   </select>
                 </div>
+                {role === 'SUPERVISOR' && (
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Assigned Division <span className="text-[10px] text-slate-500 font-normal">(Optional Restriction)</span>
+                    </label>
+                    <select
+                      value={userAssignedDivisionId}
+                      onChange={(e) => setUserAssignedDivisionId(e.target.value)}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white"
+                    >
+                      <option value="ALL">🌐 All Divisions (Full Access)</option>
+                      {divisions.filter(d => d.type === 'ATTENDANCE' || !d.type).map(d => (
+                        <option key={d.id} value={d.id}>🔒 {d.name} Only</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
               <div className="flex justify-end">
                 <button
@@ -1227,6 +1249,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   <th>Full Name</th>
                   <th>Mobile Number</th>
                   <th>Role</th>
+                  <th>Assigned Site / Division</th>
                   <th>Created Date</th>
                   <th>Actions</th>
                 </tr>
@@ -1251,6 +1274,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         {u.role}
                       </span>
                     </td>
+                    <td>
+                      {u.role === 'SUPERVISOR' ? (
+                        u.assignedDivisionId && (u.assignedDivision?.name || divisions.find(d => d.id === u.assignedDivisionId)?.name) ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            🔒 {u.assignedDivision?.name || divisions.find(d => d.id === u.assignedDivisionId)?.name} Only
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 font-medium">🌐 All Sites</span>
+                        )
+                      ) : (
+                        <span className="text-[10px] text-slate-400">-</span>
+                      )}
+                    </td>
                     <td>{new Date(u.createdAt).toLocaleDateString('en-GB')}</td>
                     <td>
                       <div className="flex items-center">
@@ -1264,6 +1300,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                                 setEditAccountMobile(u.mobileNumber);
                                 setEditAccountPassword('');
                                 setEditAccountRole(u.role);
+                                setEditAccountAssignedDivisionId(u.assignedDivisionId || 'ALL');
                                 clearMessages();
                               }}
                               className="p-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded mr-1.5"
@@ -1352,8 +1389,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       onChange={(e: any) => setEditAccountRole(e.target.value)}
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
                     >
-                      <option value="SUPERVISOR" disabled={editAccountRole !== 'SUPERVISOR' && supervisorCount >= 3}>
-                        SUPERVISOR {editAccountRole !== 'SUPERVISOR' && supervisorCount >= 3 ? '(Limit of 3 reached)' : ''}
+                      <option value="SUPERVISOR" disabled={editAccountRole !== 'SUPERVISOR' && supervisorCount >= 5}>
+                        SUPERVISOR {editAccountRole !== 'SUPERVISOR' && supervisorCount >= 5 ? '(Limit of 5 reached)' : ''}
                       </option>
                       <option value="MANAGER" disabled={editAccountRole !== 'MANAGER' && managerCount >= 2}>
                         MANAGER {editAccountRole !== 'MANAGER' && managerCount >= 2 ? '(Limit of 2 reached)' : ''}
@@ -1363,6 +1400,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       </option>
                     </select>
                   </div>
+                  {editAccountRole === 'SUPERVISOR' && (
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">
+                        Assigned Division <span className="text-[10px] text-slate-500 font-normal">(Single Division Restriction)</span>
+                      </label>
+                      <select
+                        value={editAccountAssignedDivisionId}
+                        onChange={(e) => setEditAccountAssignedDivisionId(e.target.value)}
+                        className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-medium bg-white"
+                      >
+                        <option value="ALL">🌐 All Divisions (Full Access)</option>
+                        {divisions.filter(d => d.type === 'ATTENDANCE' || !d.type).map(d => (
+                          <option key={d.id} value={d.id}>🔒 {d.name} Only</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="flex justify-end gap-2 pt-4">
                     <button
                       type="button"
