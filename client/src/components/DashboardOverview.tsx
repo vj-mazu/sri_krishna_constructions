@@ -258,15 +258,16 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
 
             <div className="mt-4 space-y-3">
               <div>
-                <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Present Workers:</span>
-                <div className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono mt-0.5 flex items-baseline gap-2">
+                <span className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Present Today:</span>
+                <div className="text-2xl sm:text-3xl font-black text-emerald-600 font-mono mt-0.5 flex items-baseline flex-wrap gap-2">
                   <span>{attendance.presentCount}</span>
                   <button
                     onClick={() => onSelectTab('master_creation')}
-                    className="text-xs font-bold text-slate-500 hover:text-[#1e3a8a] hover:underline bg-slate-100 hover:bg-blue-50 px-2 py-0.5 rounded-lg transition-colors"
+                    className="text-xs font-bold text-slate-600 hover:text-[#1e3a8a] bg-blue-50/80 hover:bg-blue-100/80 border border-blue-200/60 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1.5"
                     title="Click to view all Registered Workers in Master Registry"
                   >
-                    / {totalWorkers || 0} Registered Workers
+                    <span>/ {totalWorkers || 0} Registered Workers</span>
+                    <ArrowUpRight className="w-3.5 h-3.5 text-[#1e3a8a]" />
                   </button>
                 </div>
               </div>

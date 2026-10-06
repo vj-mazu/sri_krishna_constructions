@@ -1449,17 +1449,20 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     } catch (err) {
       console.warn('Backend ExcelJS export failed, falling back to local XLSX:', err);
       const rows = [
-        ['SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170'],
-        ['To'],
+        ['SRI KRISHNA CONSTRUCTIONS'],
+        ['SHAKTHINAGAR - 584170'],
+        [],
+        ['To,'],
         ['The Branch Manager,'],
         ['Canara Bank,'],
-        ['Deosugur -584 170'],
-        ['SUB:SALARY DISTRUBUTION'],
-        [`ACCOUNT No. ${companyAccountNo}`],
-        [`We are enclosed herewith a cheque for Rs${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear} ,Please credit the amount to following accounts.`],
+        ['Deosugur - 584 170'],
         [],
-        [`Cheque No :${chequeNo}`, '', '', `Date:- ${bankBranchDate}`],
-        ['SI NO', 'NAME', 'ACOUNT NUMBER', 'IFSC CODE', 'AMOUNT'],
+        ['SUB: SALARY DISTRIBUTION'],
+        [`ACCOUNT No. ${companyAccountNo || '18133070005349'}`],
+        [`We are enclosed herewith a cheque for Rs. ${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear}. Please credit the amount to the following accounts:`],
+        [],
+        [`Cheque No: ${chequeNo || '-'}`, '', '', '', `Date: ${bankBranchDate || '-'}`],
+        ['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)'],
         ...list.map((w, idx) => [
           idx + 1,
           (w.fullName || '').toUpperCase(),
@@ -1467,17 +1470,26 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
           (w.ifscCode || '').toUpperCase(),
           Number(w.amount) || 0
         ]),
-        ['', 'Total Amount', '', '', totalAmount],
+        ['', 'TOTAL AMOUNT', '', '', totalAmount],
         [],
-        ['sunilgouda1280@gmail.com']
+        ['sunilgouda1280@gmail.com', '', '', '', 'For SRI KRISHNA CONSTRUCTIONS'],
+        ['', '', '', '', 'Authorized Signatory']
       ];
 
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      worksheet['!cols'] = [
+        { wch: 10 },
+        { wch: 35 },
+        { wch: 28 },
+        { wch: 20 },
+        { wch: 18 }
+      ];
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, type === 'canara' ? 'CANARA BANK' : 'NON CANARA');
       XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_SALARY_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
       showToast(`${bankTitle} Salary Advice exported to Excel!`, 'success');
     }
+
   };
 
   const handleExportBankAdvicePdf = (type: 'canara' | 'non_canara') => {

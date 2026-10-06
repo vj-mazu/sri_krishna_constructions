@@ -424,35 +424,35 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs excel-table">
-            <thead>
-              <tr>
-                <th className="w-12 text-center">Sl No</th>
-                <th>
+            <thead className="bg-[#1e3a8a] text-white">
+              <tr className="border-b border-blue-900">
+                <th className="w-12 text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Sl No</th>
+                <th className="py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">
                   <button 
                     onClick={() => setSortOrder(prev => prev === 'ASC' ? 'DESC' : 'ASC')}
-                    className="flex items-center gap-1 font-bold text-slate-800 hover:text-[#1e3a8a]"
+                    className="flex items-center gap-1.5 font-bold text-white hover:text-blue-200 transition-colors"
                   >
                     <span>Worker ID</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                    <ArrowUpDown className="w-3.5 h-3.5 text-blue-200" />
                   </button>
                 </th>
-                <th>Worker Name &amp; Designation</th>
-                <th>Division</th>
-                <th className="text-center bg-indigo-50/50">
-                  <span className="flex items-center justify-center gap-1 text-indigo-900">
-                    <Stethoscope className="w-3 h-3 text-indigo-600" /> Medical (10 ML)
+                <th className="py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Worker Name &amp; Designation</th>
+                <th className="py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Division</th>
+                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px] bg-indigo-950/40">
+                  <span className="flex items-center justify-center gap-1.5 text-indigo-100 font-bold">
+                    <Stethoscope className="w-3.5 h-3.5 text-indigo-300" /> Medical (10 ML)
                   </span>
                 </th>
-                <th className="text-center bg-amber-50/50">
-                  <span className="flex items-center justify-center gap-1 text-amber-900">
-                    <Coffee className="w-3 h-3 text-amber-600" /> Casual (8 CL)
+                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px] bg-amber-950/40">
+                  <span className="flex items-center justify-center gap-1.5 text-amber-100 font-bold">
+                    <Coffee className="w-3.5 h-3.5 text-amber-300" /> Casual (8 CL)
                   </span>
                 </th>
-                <th className="text-center bg-blue-50/40">
-                  <span className="text-blue-950 font-bold">Total (18 Allowed)</span>
+                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px] bg-blue-900/60">
+                  <span className="text-blue-100 font-black">Total (18 Allowed)</span>
                 </th>
-                <th className="text-center bg-emerald-50/50">Balance Left</th>
-                <th className="text-center">Actions</th>
+                <th className="text-center py-3.5 px-3 font-bold text-emerald-200 uppercase tracking-wider text-[11px] bg-emerald-950/40">Balance Left</th>
+                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Actions</th>
               </tr>
             </thead>
             <tbody>

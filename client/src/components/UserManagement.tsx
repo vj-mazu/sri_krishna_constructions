@@ -63,6 +63,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [workerMobile, setWorkerMobile] = useState('');
   const [dailyWage, setDailyWage] = useState('');
   const [dailyAllowance, setDailyAllowance] = useState('');
+  const [workerExtra, setWorkerExtra] = useState('');
   const [advanceTaken, setAdvanceTaken] = useState('');
   const [advanceTakenDate, setAdvanceTakenDate] = useState('');
   const [advanceReason, setAdvanceReason] = useState('');
@@ -89,6 +90,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editWorkerMobile, setEditWorkerMobile] = useState('');
   const [editWage, setEditWage] = useState('');
   const [editDailyAllowance, setEditDailyAllowance] = useState('');
+  const [editWorkerExtra, setEditWorkerExtra] = useState('');
   const [editAdvanceTaken, setEditAdvanceTaken] = useState('');
   const [editAdvanceTakenDate, setEditAdvanceTakenDate] = useState('');
   const [editAdvanceReason, setEditAdvanceReason] = useState('');
@@ -738,6 +740,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         mobileNumber: workerMobile.trim(),
         dailyWage: parseFloat(dailyWage),
         dailyAllowance: dailyAllowance ? parseFloat(dailyAllowance) : 0,
+        extraAmount: workerExtra ? parseFloat(workerExtra) : 0,
         advanceTaken: advanceTaken ? parseFloat(advanceTaken) : (advanceBalance ? parseFloat(advanceBalance) : 0),
         advanceTakenDate: advanceTakenDate || undefined,
         advanceReason: advanceReason.trim() || undefined,
@@ -766,6 +769,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
       setWorkerMobile('');
       setDailyWage('');
       setDailyAllowance('');
+      setWorkerExtra('');
       setAdvanceTaken('');
       setAdvanceTakenDate('');
       setAdvanceReason('');
@@ -853,6 +857,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         mobileNumber: editWorkerMobile.trim(),
         dailyWage: parseFloat(editWage),
         dailyAllowance: editDailyAllowance ? parseFloat(editDailyAllowance) : 0,
+        extraAmount: editWorkerExtra ? parseFloat(editWorkerExtra) : 0,
         advanceTaken: editAdvanceTaken ? parseFloat(editAdvanceTaken) : 0,
         advanceTakenDate: editAdvanceTakenDate || undefined,
         advanceReason: editAdvanceReason.trim() || undefined,
@@ -1823,6 +1828,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   />
                 </div>
                 <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Extra Amount (Rs)</label>
+                  <input
+                    type="number"
+                    value={workerExtra}
+                    onChange={(e) => setWorkerExtra(e.target.value)}
+                    placeholder="e.g. 3000 (Added to Monthly Wage)"
+                    className="w-full p-2 border border-indigo-300 bg-indigo-50/30 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none font-mono font-bold"
+                  />
+                </div>
+                <div>
                   <label className="block font-semibold text-slate-700 mb-1">Advance Taken (Rs)</label>
                   <input
                     type="number"
@@ -2161,6 +2176,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           />
                         </div>
                         <div>
+                          <label className="block font-semibold text-indigo-950 mb-1">Extra (₹)</label>
+                          <input
+                            type="number"
+                            value={editWorkerExtra}
+                            onChange={(e) => setEditWorkerExtra(e.target.value)}
+                            placeholder="e.g. 3000"
+                            className="w-full p-2 border border-indigo-300 bg-indigo-50/40 rounded focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none font-mono font-bold text-indigo-950"
+                            title="Extra monthly bonus/addition (e.g. 3000)"
+                          />
+                        </div>
+                        <div>
                           <label className="block font-semibold text-slate-700 mb-1">OT Allowance</label>
                           <input
                             type="number"
@@ -2383,10 +2409,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] bg-slate-50/60 p-2 rounded-lg border border-slate-100 font-mono">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] bg-slate-50/60 p-2 rounded-lg border border-slate-100 font-mono">
                       <div>
                         <span className="text-slate-400 text-[9px] block uppercase">Daily Wage</span>
                         <span className="font-bold text-slate-800">{formatIndianCurrency(w.dailyWage)}/d</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 text-[9px] block uppercase">Extra</span>
+                        <span className="font-bold text-indigo-800">+{formatIndianCurrency(w.extraAmount || 0)}</span>
                       </div>
                       <div>
                         <span className="text-slate-400 text-[9px] block uppercase">Allowance</span>
@@ -2433,6 +2463,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             setEditWorkerMobile(w.mobileNumber.startsWith('+91') ? w.mobileNumber.slice(3) : w.mobileNumber);
                             setEditWage(w.dailyWage.toString());
                             setEditDailyAllowance((w.dailyAllowance || 0).toString());
+                            setEditWorkerExtra((w.extraAmount || 0).toString());
                             setEditAdvanceTaken((w.advanceTaken || w.advanceBalance || 0).toString());
                             setEditAdvanceTakenDate(w.advanceTakenDate ? w.advanceTakenDate.split('T')[0] : '');
                             setEditAdvanceReason(w.advanceReason || '');
@@ -2617,7 +2648,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                             {/* SECTION 2: WAGES & OVERTIME RATES */}
                             <div className="space-y-2 bg-white p-2.5 rounded-lg border border-slate-200">
                               <div className="font-bold text-[11px] text-emerald-800 border-b border-slate-100 pb-1">2. Wage, Allowance & OT Rates</div>
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-3 gap-2">
                                 <div>
                                   <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Daily Wage (₹) *</label>
                                   <input
@@ -2641,6 +2672,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                                     value={editDailyAllowance}
                                     onChange={(e) => setEditDailyAllowance(e.target.value)}
                                     className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block font-semibold text-indigo-950 text-[11px] mb-0.5">Extra (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={editWorkerExtra}
+                                    onChange={(e) => setEditWorkerExtra(e.target.value)}
+                                    placeholder="e.g. 3000"
+                                    className="w-full p-1.5 border border-indigo-300 bg-indigo-50/40 rounded font-mono font-bold text-indigo-900 text-xs"
+                                    title="Extra bonus/addition to monthly wage"
                                   />
                                 </div>
                               </div>
@@ -2823,6 +2865,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   {currentUserRole !== 'SUPERVISOR' && (
                     <>
                       <th>Daily Wage</th>
+                      <th className="bg-indigo-50 text-indigo-900 font-bold">Extra (₹)</th>
                       <th>Daily Allowance</th>
                       <th>OT Allowance</th>
                       <th className="bg-amber-50 text-amber-900">Advance Taken</th>
@@ -2890,6 +2933,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     {currentUserRole !== 'SUPERVISOR' && (
                       <>
                         <td className="font-mono font-bold text-slate-700">{formatIndianCurrency(w.dailyWage)}</td>
+                        <td className="font-mono text-xs bg-indigo-50/40 font-bold text-indigo-900">
+                          {Number(w.extraAmount) > 0 ? (
+                            <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-900 border border-indigo-200">
+                              +{formatIndianCurrency(w.extraAmount)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">₹0</span>
+                          )}
+                        </td>
                         <td className="font-mono font-bold text-emerald-700">{formatIndianCurrency(w.dailyAllowance || 0)}</td>
                         <td className="font-mono text-indigo-700">{formatIndianCurrency(w.otAllowance || 0)}</td>
                         <td className="font-mono font-semibold text-slate-800 bg-amber-50/30">

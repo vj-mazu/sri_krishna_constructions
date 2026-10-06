@@ -1,22 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import api from './api';
 import { showToast } from './toast';
 import { LoginModal } from './components/LoginModal';
-import { PurchaseRecords } from './components/PurchaseRecords';
-import { StockGrid } from './components/StockGrid';
-import { UserManagement } from './components/UserManagement';
-import { ApprovalsPanel } from './components/ApprovalsPanel';
-import { DashboardOverview } from './components/DashboardOverview';
-import { AttendancePanel } from './components/AttendancePanel';
-import { MonthlyWages } from './components/MonthlyWages';
-import { SalesLedger } from './components/SalesLedger';
-import { WorkOrders } from './components/WorkOrders';
-import { AdvanceLedger } from './components/AdvanceLedger';
-import { IndividualStock } from './components/IndividualStock';
-import { LeaveLedger } from './components/LeaveLedger';
-import { SalaryLedger } from './components/SalaryLedger';
 import { ConfirmModal } from './components/ConfirmModal';
 import { SKC_LOGO_BASE64 } from './logoBase64';
+
+// Lazy loaded heavy components for lightning fast initial load
+const PurchaseRecords = lazy(() => import('./components/PurchaseRecords').then(m => ({ default: m.PurchaseRecords })));
+const StockGrid = lazy(() => import('./components/StockGrid').then(m => ({ default: m.StockGrid })));
+const UserManagement = lazy(() => import('./components/UserManagement').then(m => ({ default: m.UserManagement })));
+const ApprovalsPanel = lazy(() => import('./components/ApprovalsPanel').then(m => ({ default: m.ApprovalsPanel })));
+const DashboardOverview = lazy(() => import('./components/DashboardOverview').then(m => ({ default: m.DashboardOverview })));
+const AttendancePanel = lazy(() => import('./components/AttendancePanel').then(m => ({ default: m.AttendancePanel })));
+const MonthlyWages = lazy(() => import('./components/MonthlyWages').then(m => ({ default: m.MonthlyWages })));
+const SalesLedger = lazy(() => import('./components/SalesLedger').then(m => ({ default: m.SalesLedger })));
+const WorkOrders = lazy(() => import('./components/WorkOrders').then(m => ({ default: m.WorkOrders })));
+const AdvanceLedger = lazy(() => import('./components/AdvanceLedger').then(m => ({ default: m.AdvanceLedger })));
+const IndividualStock = lazy(() => import('./components/IndividualStock').then(m => ({ default: m.IndividualStock })));
+const LeaveLedger = lazy(() => import('./components/LeaveLedger').then(m => ({ default: m.LeaveLedger })));
+const SalaryLedger = lazy(() => import('./components/SalaryLedger').then(m => ({ default: m.SalaryLedger })));
 
 import { 
   Building2, 
@@ -552,19 +554,26 @@ export function App() {
 
       {/* MAIN CONTAINER (FULL-SCREEN RESPONSIVE LAYOUT) */}
       <main className="flex-1 max-w-[1700px] w-full mx-auto p-2 sm:p-6 md:p-8 pb-20 md:pb-8 animate-fadeIn">
-        {activeTab === 'dashboard' && user.role !== 'SUPERVISOR' && <DashboardOverview onSelectTab={(t) => setActiveTab(t)} />}
-        {activeTab === 'purchase_orders' && user.role !== 'SUPERVISOR' && <PurchaseRecords currentUserRole={user.role} />}
-        {activeTab === 'work_orders' && user.role !== 'SUPERVISOR' && <WorkOrders currentUserRole={user.role} />}
-        {activeTab === 'stock' && user.role !== 'SUPERVISOR' && <StockGrid />}
-        {activeTab === 'individual_stock' && user.role !== 'SUPERVISOR' && <IndividualStock currentUserRole={user.role} />}
-        {activeTab === 'sales_ledger' && user.role !== 'SUPERVISOR' && <SalesLedger />}
-        {activeTab === 'advance_ledger' && user.role !== 'SUPERVISOR' && <AdvanceLedger currentUserRole={user.role} />}
-        {activeTab === 'leave_ledger' && <LeaveLedger />}
-        {activeTab === 'salary_ledger' && (user.role === 'OWNER' || user.role === 'MANAGER') && <SalaryLedger />}
-        {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
-        {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
-        {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}
-        {activeTab === 'wages' && (user.role === 'OWNER' || user.role === 'MANAGER') && <MonthlyWages currentUserRole={user.role} />}
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-slate-400 text-sm font-semibold animate-pulse">Loading panel...</p>
+          </div>
+        }>
+          {activeTab === 'dashboard' && user.role !== 'SUPERVISOR' && <DashboardOverview onSelectTab={(t) => setActiveTab(t)} />}
+          {activeTab === 'purchase_orders' && user.role !== 'SUPERVISOR' && <PurchaseRecords currentUserRole={user.role} />}
+          {activeTab === 'work_orders' && user.role !== 'SUPERVISOR' && <WorkOrders currentUserRole={user.role} />}
+          {activeTab === 'stock' && user.role !== 'SUPERVISOR' && <StockGrid />}
+          {activeTab === 'individual_stock' && user.role !== 'SUPERVISOR' && <IndividualStock currentUserRole={user.role} />}
+          {activeTab === 'sales_ledger' && user.role !== 'SUPERVISOR' && <SalesLedger />}
+          {activeTab === 'advance_ledger' && user.role !== 'SUPERVISOR' && <AdvanceLedger currentUserRole={user.role} />}
+          {activeTab === 'leave_ledger' && <LeaveLedger />}
+          {activeTab === 'salary_ledger' && (user.role === 'OWNER' || user.role === 'MANAGER') && <SalaryLedger />}
+          {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
+          {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
+          {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}
+          {activeTab === 'wages' && (user.role === 'OWNER' || user.role === 'MANAGER') && <MonthlyWages currentUserRole={user.role} />}
+        </Suspense>
       </main>
 
       {/* NATIVE MOBILE APP BOTTOM FLOATING DOCK (High-End iOS/Android Bar) */}

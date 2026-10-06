@@ -15,7 +15,8 @@ import {
   Building2,
   DollarSign,
   User,
-  AlertCircle
+  AlertCircle,
+  TrendingUp
 } from 'lucide-react';
 import api from '../api';
 import { showToast } from '../toast';
@@ -112,6 +113,12 @@ export const SalaryLedger: React.FC = () => {
 
   const getActionBadge = (action: string) => {
     switch (action?.toUpperCase()) {
+      case 'WAGE_HIKE':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
+            <TrendingUp className="w-3.5 h-3.5 text-purple-600" /> Wage Hike
+          </span>
+        );
       case 'APPROVED':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">

@@ -400,8 +400,9 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
          OR ("date"::text LIKE $3)
     `, [todayStart, todayEnd, `${todayStr}%`]);
 
-    // 4. Total Active Workers Registered
+    // 4. Total Active Workers Registered (exact count)
     const totalWorkersRes = await pool.query(`SELECT COUNT(*)::int as count FROM "Worker" WHERE COALESCE("isActive", true) = true`);
+    const totalAllWorkersRes = await pool.query(`SELECT COUNT(*)::int as count FROM "Worker"`);
 
     // 5. Pending Purchase Orders (Items where Ordered Qty > Inward Received Qty)
     const pendingOrdersRes = await pool.query(`
@@ -449,6 +450,7 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
       todaySales: todaySales.rows[0] || { totalQty: 0, totalAmount: 0, count: 0 },
       todayAttendance: todayAttendance.rows[0] || { totalMarked: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, leaveCount: 0, totalOtHours: 0 },
       totalWorkers: totalWorkersRes.rows[0]?.count || 0,
+      totalRegisteredWorkers: totalAllWorkersRes.rows[0]?.count || 0,
       pendingOrders: pendingOrdersRes.rows || [],
       inactiveWorkersWithAdvance: inactiveWorkersWithAdvanceRes.rows || []
     });
@@ -3731,10 +3733,12 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
     let query = `
       SELECT w."id", w."workerId", w."fullName", w."fatherName", w."designation", w."mobileNumber",
              w."dailyWage", COALESCE(w."dailyAllowance", 0) as "dailyAllowance",
+             COALESCE(w."extraAmount", 0) as "extraAmount",
              COALESCE(w."advanceTaken", 0) as "advanceTaken",
              COALESCE(w."advanceBalance", 0) as "advanceBalance",
              COALESCE(w."otAllowance", 0) as "otAllowance",
              w."otHourlyRate", w."divisionId",
+             w."previousDailyWage", w."wageRevisedDate",
              COALESCE(w."isActive", true) as "isActive",
              COALESCE(w."pfNumber", '') as "pfNumber",
              COALESCE(w."esiNumber", '') as "esiNumber",
@@ -3801,7 +3805,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Worker registration is restricted to Owners or Managers only!' });
     }
 
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, isActive, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, extraAmount, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, isActive, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
     if (!workerId || !fullName || !mobileNumber || !dailyWage || !divisionId) {
       return res.status(400).json({ error: 'Worker ID, Full Name, Mobile Number, Daily Wage, and Division are mandatory!' });
     }
@@ -3828,6 +3832,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
 
     const numDailyWage = parseFloat(dailyWage) || 0;
     const numAllowance = dailyAllowance !== undefined && dailyAllowance !== '' ? parseFloat(dailyAllowance) : 0;
+    const numExtra = extraAmount !== undefined && extraAmount !== '' ? parseFloat(extraAmount) : 0;
     const numAdvTaken = advanceTaken !== undefined && advanceTaken !== '' ? parseFloat(advanceTaken) : (advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : 0);
     const numAdvBal = advanceBalance !== undefined && advanceBalance !== '' ? parseFloat(advanceBalance) : numAdvTaken;
     const numOtAllowance = otAllowance !== undefined && otAllowance !== '' ? (parseFloat(otAllowance) || 0) : 0;
@@ -3839,8 +3844,8 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
     const advProofReason = advanceReason ? advanceReason.trim() : null;
 
     const { rows } = await pool.query(
-      `INSERT INTO "Worker" ("id", "workerId", "fullName", "fatherName", "designation", "mobileNumber", "dailyWage", "dailyAllowance", "advanceTaken", "advanceBalance", "advanceTakenDate", "advanceReason", "advanceReturnDate", "otAllowance", "otHourlyRate", "divisionId", "isActive", "pfNumber", "esiNumber", "uanNumber", "bankAccountNo", "ifscCode", "placeOfWork", "natureOfWork", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW(), NOW())
+      `INSERT INTO "Worker" ("id", "workerId", "fullName", "fatherName", "designation", "mobileNumber", "dailyWage", "dailyAllowance", "extraAmount", "advanceTaken", "advanceBalance", "advanceTakenDate", "advanceReason", "advanceReturnDate", "otAllowance", "otHourlyRate", "divisionId", "isActive", "pfNumber", "esiNumber", "uanNumber", "bankAccountNo", "ifscCode", "placeOfWork", "natureOfWork", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW())
        RETURNING *`,
       [
         workerId.trim(),
@@ -3850,6 +3855,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
         cleanedPhone,
         numDailyWage,
         numAllowance,
+        numExtra,
         numAdvTaken,
         numAdvBal,
         advGivenDate,
@@ -3901,7 +3907,7 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
 app.put('/api/workers/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, isActive, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
+    const { workerId, fullName, fatherName, designation, mobileNumber, dailyWage, dailyAllowance, extraAmount, advanceTaken, advanceBalance, advanceTakenDate, advanceReason, advanceReturnDate, otAllowance, otHourlyRate, divisionId, isActive, pfNumber, esiNumber, uanNumber, bankAccountNo, ifscCode, placeOfWork, natureOfWork } = req.body;
 
     const { rows: existing } = await pool.query(`SELECT * FROM "Worker" WHERE "id" = $1`, [id]);
     if (existing.length === 0) return res.status(404).json({ error: 'Worker not found' });
@@ -3923,7 +3929,7 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
       return res.json({ worker });
     }
 
-    if (dailyWage !== undefined || dailyAllowance !== undefined || advanceTaken !== undefined || advanceBalance !== undefined || otHourlyRate !== undefined) {
+    if (dailyWage !== undefined || dailyAllowance !== undefined || extraAmount !== undefined || advanceTaken !== undefined || advanceBalance !== undefined || otHourlyRate !== undefined) {
       if (req.user.role !== 'OWNER' && req.user.role !== 'MANAGER') {
         return res.status(403).json({ error: 'Wage rates and advance modifications are restricted to Owners or Managers only!' });
       }
@@ -3949,12 +3955,18 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
       newWorkerId = trimmedWorkerId;
     }
 
+    const oldDailyWage = parseFloat(existing[0].dailyWage) || 0;
+    const newDailyWage = dailyWage !== undefined ? parseFloat(dailyWage) : oldDailyWage;
+    const isWageHiked = newDailyWage !== oldDailyWage;
+    const previousDailyWage = isWageHiked ? oldDailyWage : (existing[0].previousDailyWage !== null && existing[0].previousDailyWage !== undefined ? existing[0].previousDailyWage : oldDailyWage);
+    const wageRevisedDate = isWageHiked ? new Date() : (existing[0].wageRevisedDate || new Date());
+
     const newFullName = fullName !== undefined ? fullName.trim() : existing[0].fullName;
     const newFatherName = fatherName !== undefined ? (fatherName ? fatherName.trim() : null) : existing[0].fatherName;
     const newDesignation = designation !== undefined ? (designation ? designation.trim() : null) : existing[0].designation;
     const newDivisionId = divisionId || existing[0].divisionId;
-    const newDailyWage = dailyWage !== undefined ? parseFloat(dailyWage) : existing[0].dailyWage;
     const newAllowance = dailyAllowance !== undefined ? parseFloat(dailyAllowance) : existing[0].dailyAllowance;
+    const newExtra = extraAmount !== undefined ? (parseFloat(extraAmount) || 0) : (parseFloat(existing[0].extraAmount) || 0);
     const newAdvanceTaken = advanceTaken !== undefined ? (parseFloat(advanceTaken) || 0) : (existing[0].advanceTaken || 0);
     const newAdvance = advanceBalance !== undefined && advanceBalance !== '' && parseFloat(advanceBalance) > 0 
       ? parseFloat(advanceBalance) 
@@ -3976,15 +3988,43 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
     const { rows } = await pool.query(
       `UPDATE "Worker"
        SET "workerId" = $1, "fullName" = $2, "fatherName" = $3, "designation" = $4, "mobileNumber" = $5,
-           "dailyWage" = $6, "dailyAllowance" = $7, "advanceTaken" = $8, "advanceBalance" = $9,
-           "advanceTakenDate" = $10, "advanceReason" = $11, "advanceReturnDate" = $12,
-           "otAllowance" = $13, "otHourlyRate" = $14, "divisionId" = $15, "isActive" = $16,
-           "pfNumber" = $17, "esiNumber" = $18, "uanNumber" = $19, "bankAccountNo" = $20, "ifscCode" = $21, "placeOfWork" = $22, "natureOfWork" = $23,
+           "dailyWage" = $6, "previousDailyWage" = $7, "wageRevisedDate" = $8,
+           "dailyAllowance" = $9, "extraAmount" = $10, "advanceTaken" = $11, "advanceBalance" = $12,
+           "advanceTakenDate" = $13, "advanceReason" = $14, "advanceReturnDate" = $15,
+           "otAllowance" = $16, "otHourlyRate" = $17, "divisionId" = $18, "isActive" = $19,
+           "pfNumber" = $20, "esiNumber" = $21, "uanNumber" = $22, "bankAccountNo" = $23, "ifscCode" = $24, "placeOfWork" = $25, "natureOfWork" = $26,
            "updatedAt" = NOW()
-       WHERE "id" = $24
+       WHERE "id" = $27
        RETURNING *`,
-      [newWorkerId, newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, newAllowance, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newIsActive, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
+      [newWorkerId, newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, previousDailyWage, wageRevisedDate, newAllowance, newExtra, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newIsActive, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
     );
+
+    // If salary/wage was revised or hiked, automatically record an entry in SalaryAuditLog
+    if (isWageHiked) {
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+      await pool.query(
+        `INSERT INTO "SalaryAuditLog" (
+           "id", "workerId", "month", "year", "previousAmount", "newAmount", "difference",
+           "action", "notes", "modifiedById", "createdAt"
+         )
+         VALUES (
+           gen_random_uuid()::text, $1, $2, $3, $4, $5, $6,
+           'WAGE_HIKE', $7, $8, NOW()
+         )`,
+        [
+          id,
+          currentMonth,
+          currentYear,
+          oldDailyWage,
+          newDailyWage,
+          newDailyWage - oldDailyWage,
+          `Master Wage Revision: Base rate changed from ₹${oldDailyWage} to ₹${newDailyWage}`,
+          req.user.id
+        ]
+      );
+    }
 
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [newDivisionId]);
     const worker = { ...rows[0], division: divRows[0] || null };
@@ -5812,25 +5852,44 @@ app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, r
     };
 
     // Header Letterhead
-    worksheet.addRow(['SRI KRISHNA CONSTRUCTIONS SHAKTHINAGAR -584170']);
-    worksheet.getRow(1).font = { bold: true, size: 12, color: { argb: 'FF1E3A8A' } };
-    
-    worksheet.addRow(['To']);
+    worksheet.addRow(['SRI KRISHNA CONSTRUCTIONS']);
+    worksheet.getRow(1).font = { bold: true, size: 14, color: { argb: 'FF1E3A8A' } };
+    worksheet.mergeCells('A1:E1');
+    worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+
+    worksheet.addRow(['SHAKTHINAGAR - 584170']);
+    worksheet.getRow(2).font = { bold: true, size: 10, color: { argb: 'FF64748B' } };
+    worksheet.mergeCells('A2:E2');
+    worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' };
+
+    worksheet.addRow([]); // Blank Row 3
+
+    worksheet.addRow(['To,']);
     worksheet.addRow(['The Branch Manager,']);
     worksheet.addRow(['Canara Bank,']);
-    worksheet.addRow(['Deosugur -584 170']);
+    worksheet.addRow(['Deosugur - 584 170']);
+    
+    worksheet.addRow([]); // Blank Row 8
+
     worksheet.addRow(['SUB: SALARY DISTRIBUTION']);
-    worksheet.getRow(6).font = { bold: true, size: 10 };
+    worksheet.getRow(9).font = { bold: true, size: 11, color: { argb: 'FF1E3A8A' } };
+
     worksheet.addRow([`ACCOUNT No. ${companyAccountNo || '18133070005349'}`]);
-    worksheet.getRow(7).font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
+    worksheet.getRow(10).font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
 
     const totalAmount = (workers || []).reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
-    worksheet.addRow([`We are enclosed herewith a cheque for Rs.${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${year}, Please credit the amount to following accounts.`]);
-    worksheet.getRow(8).font = { bold: true, size: 9.5 };
+    const descRow = worksheet.addRow([`We are enclosed herewith a cheque for Rs. ${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${year}. Please credit the amount to the following accounts:`]);
+    worksheet.mergeCells(`A11:E11`);
+    worksheet.getRow(11).font = { bold: true, size: 9.5, color: { argb: 'FF334155' } };
+    worksheet.getRow(11).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    worksheet.getRow(11).height = 28;
 
-    worksheet.addRow([]);
-    worksheet.addRow([`Cheque No: ${chequeNo || '-'}`, '', '', '', `Date: ${bankBranchDate || '-'}`]);
-    worksheet.getRow(10).font = { bold: true, size: 9.5 };
+    worksheet.addRow([]); // Blank Row 12
+
+    const chequeDateRow = worksheet.addRow([`Cheque No: ${chequeNo || '-'}`, '', '', '', `Date: ${bankBranchDate || '-'}`]);
+    worksheet.getRow(13).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+    worksheet.getCell('E13').alignment = { vertical: 'middle', horizontal: 'right' };
+
 
     // Table Header Row (Row 11)
     const headerRow = worksheet.addRow(['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)']);
