@@ -519,8 +519,8 @@ export function App() {
               </button>
             )}
 
-            {/* MASTER CREATION / USER MGMT (Owner, Manager, Supervisor) */}
-            {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
+            {/* MASTER CREATION / USER MGMT (Owner and Manager only) */}
+            {(user.role === 'OWNER' || user.role === 'MANAGER') && (
               <button
                 onClick={() => { setActiveTab('master_creation'); setOpenDropdown(null); }}
                 className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap cursor-pointer ${
@@ -570,7 +570,7 @@ export function App() {
           {activeTab === 'leave_ledger' && <LeaveLedger />}
           {activeTab === 'salary_ledger' && (user.role === 'OWNER' || user.role === 'MANAGER') && <SalaryLedger />}
           {activeTab === 'approvals' && (user.role === 'OWNER' || user.role === 'MANAGER') && <ApprovalsPanel />}
-          {activeTab === 'master_creation' && <UserManagement currentUserRole={user.role} />}
+          {activeTab === 'master_creation' && (user.role === 'OWNER' || user.role === 'MANAGER') && <UserManagement currentUserRole={user.role} />}
           {activeTab === 'attendance' && <AttendancePanel currentUserRole={user.role} />}
           {activeTab === 'wages' && (user.role === 'OWNER' || user.role === 'MANAGER') && <MonthlyWages currentUserRole={user.role} />}
         </Suspense>
@@ -660,7 +660,7 @@ export function App() {
           </button>
         )}
 
-        {(user.role === 'OWNER' || user.role === 'MANAGER' || user.role === 'SUPERVISOR') && (
+        {(user.role === 'OWNER' || user.role === 'MANAGER') && (
           <button
             onClick={() => setActiveTab('master_creation')}
             className={`flex flex-col items-center justify-center flex-1 py-1 rounded-xl transition-all active:scale-90 ${
