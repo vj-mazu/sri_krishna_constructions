@@ -345,7 +345,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   const [saleForm, setSaleForm] = useState({
     itemId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().split('T')[0], qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
-    partyName: 'KPCL / RTPS', supplierAddress: 'Raichur Thermal Power Station (RTPS), KPCL Plant Premises, Shaktinagara, PIN-584170', gstNumber: '29AAACK8032D1ZQ', companyGstNumber: '29DWKPP3582H1ZV', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: 'KA 36C 2722', eWayBillNumber: '', remarks: ''
+    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '29DWKPP3582H1ZV', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
   });
 
   // Multi-Item Sales Selection & Inward Table State
@@ -757,13 +757,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         items: chosenItems.map(({ maxAvail, itemName, partNumber, ...rest }) => rest),
         invoiceNumber: saleForm.invoiceNumber,
         invoiceDate: saleForm.invoiceDate || new Date().toISOString().split('T')[0],
-        partyName: saleForm.partyName || 'KPCL / RTPS',
-        supplierAddress: saleForm.supplierAddress || 'Raichur Thermal Power Station (RTPS), KPCL Plant Premises, Shaktinagara, PIN-584170',
+        partyName: saleForm.partyName || '',
+        supplierAddress: saleForm.supplierAddress || '',
         companyGstNumber: saleForm.companyGstNumber || '29DWKPP3582H1ZV',
-        gstNumber: saleForm.gstNumber || '29AAACK8032D1ZQ',
+        gstNumber: saleForm.gstNumber || '',
         partyInvoiceNumber: saleForm.partyInvoiceNumber || '',
         supplierInvoiceDate: saleForm.supplierInvoiceDate || '',
-        vehicleNumber: saleForm.vehicleNumber || 'KA 36C 2722',
+        vehicleNumber: saleForm.vehicleNumber || '',
         eWayBillNumber: saleForm.eWayBillNumber || '',
         remarks: saleForm.remarks || '',
         shippingCharges: Number(saleForm.shippingCharges || 0)
@@ -3323,11 +3323,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             setSaleForm(prev => ({
                               ...prev,
                               invoiceDate: prev.invoiceDate || new Date().toISOString().split('T')[0],
-                              partyName: prev.partyName || 'KPCL / RTPS',
-                              supplierAddress: prev.supplierAddress || 'Raichur Thermal Power Station (RTPS), KPCL Plant Premises, Shaktinagara, PIN-584170',
+                              partyName: prev.partyName || '',
+                              supplierAddress: prev.supplierAddress || '',
                               companyGstNumber: prev.companyGstNumber || '29DWKPP3582H1ZV',
-                              gstNumber: prev.gstNumber || '29AAACK8032D1ZQ',
-                              vehicleNumber: prev.vehicleNumber || 'KA 36C 2722'
+                              gstNumber: prev.gstNumber || '',
+                              vehicleNumber: prev.vehicleNumber || ''
                             }));
                           }
                         }}

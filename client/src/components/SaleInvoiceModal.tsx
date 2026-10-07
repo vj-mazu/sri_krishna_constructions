@@ -249,26 +249,24 @@ export const SaleInvoiceModal: React.FC<{
       doc.line(margin, ly + 2, margin + colHalf, ly + 2);
 
       ly += 5.5;
-      doc.text(`SUPPLY To : ${primarySale.placeOfWork || 'SHAKTINAGAR'}`, margin + 2, ly);
+      const supplyToText = primarySale.placeOfWork || partyName || '-';
+      doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, ly);
       doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
       
       if (partyAddress) {
         const addressLines = doc.splitTextToSize(partyAddress, colHalf - 4);
         doc.text(addressLines.slice(0, 4), margin + 2, ly + 4.5);
-      } else if (isKpclParty || !partyAddress) {
-        doc.text(`TO Paying Authority:Deputy General Manager(F)RTPS`, margin + 2, ly + 4);
-        doc.text(`Raichur Thermal Power Station (RTPS),KPCL`, margin + 2, ly + 7.8);
-        doc.text(`Plant Premises, Shaktinagara, PIN-584170`, margin + 2, ly + 11.6);
-        doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 15.4);
+      } else if (partyName && partyName !== '-' && partyName !== 'Customer' && partyName !== 'Supplier') {
+        doc.text(`Party: ${partyName}`, margin + 2, ly + 4.5);
       }
       
       doc.setFont('times', 'bold');
       doc.setFontSize(8);
-      doc.text(`GST NO: ${partyGst || '29AAACK8032D1ZQ'}`, margin + 2, ly + 20);
+      doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, ly + 20);
       doc.line(margin, ly + 22, margin + colHalf, ly + 22);
 
-      const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || 'EE(TM-2)';
+      const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
       doc.text(`Division: ${divLabel}`, margin + 2, ly + 27);
 
       // Right Column items
@@ -283,26 +281,20 @@ export const SaleInvoiceModal: React.FC<{
       doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
 
       ry += 5.5;
-      doc.text(`State of Supply: KARNATAKA`, margin + colHalf + 2, ry);
+      doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, ry);
       doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
 
-      if (isKpclParty || !partyAddress) {
-        doc.text(`Shipped To: Executive`, margin + colHalf + 2, ry + 4);
-        doc.text(`Engineer(Stores) Raichur Thermal`, margin + colHalf + 2, ry + 7.8);
-        doc.text(`Power Station (RTPS),KPCL Plant`, margin + colHalf + 2, ry + 11.6);
-        doc.text(`Premises, Shaktinagara, PIN-584170`, margin + colHalf + 2, ry + 15.4);
-      } else {
-        const shipLines = doc.splitTextToSize(partyAddress, colHalf - 4);
-        doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4);
-      }
+      const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
+      const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
+      doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
       
       doc.setFont('times', 'bold');
       doc.setFontSize(8);
-      doc.text(`GST NO: ${partyGst || '29AAACK8032D1ZQ'}`, margin + colHalf + 2, ry + 20);
+      doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, ry + 20);
       doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
 
-      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || 'KA 36C 2722'}`;
+      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}`;
       doc.text(vehicleLine, margin + colHalf + 2, ry + 27);
 
       y += boxHeight;
@@ -552,20 +544,14 @@ export const SaleInvoiceModal: React.FC<{
                   {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-mono">{invoiceDate}</span>
                 </div>
                 <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">{isInward ? 'SUPPLIER / PARTY' : 'SUPPLY To'} : {partyName}</div>
+                  <div className="font-bold">{isInward ? 'SUPPLIER / PARTY' : 'SUPPLY To'} : {primarySale.placeOfWork || partyName}</div>
                   {partyAddress ? (
                     <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
-                  ) : isKpclParty ? (
-                    <>
-                      <div className="text-[10px] text-slate-700">TO Paying Authority: Deputy General Manager(F)RTPS</div>
-                      <div className="text-[10px] text-slate-700">Raichur Thermal Power Station (RTPS),KPCL</div>
-                      <div className="text-[10px] text-slate-700">Plant Premises, Shaktinagara, PIN-584170</div>
-                      <div className="text-[10px] text-slate-700">Phone 9449596504 Fax 8532247846</div>
-                    </>
                   ) : (
-                    <div className="text-[10px] text-slate-700">{isInward ? 'Supplier Location: Verified Vendor' : 'Customer Location: Shaktinagar / Raichur Region'}</div>
+                    <div className="text-[10px] text-slate-700">{partyName || '-'}</div>
                   )}
-                  <div className="font-bold mt-1">GST NO: {partyGst || 'URP (Unregistered)'}</div>
+                  <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
+                  <div className="font-bold mt-1">Division: {primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-'}</div>
                 </div>
                 <div className="p-1.5 font-bold flex flex-wrap items-center justify-between gap-2">
                   <span>Vehicle No : <span className="font-mono uppercase">{primarySale.vehicleNumber || '-'}</span></span>
@@ -586,7 +572,7 @@ export const SaleInvoiceModal: React.FC<{
                   {dateLabel}: <span className="font-mono">{refDate}</span>
                 </div>
                 <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">{isInward ? 'DELIVERED TO (RECEIVER):' : 'State of Supply: KARNATAKA (29)'}</div>
+                  <div className="font-bold">{isInward ? 'DELIVERED TO (RECEIVER):' : 'State of Supply: KARNATAKA'}</div>
                   {isInward ? (
                     <>
                       <div className="text-[10px] text-slate-700 font-bold">SRI KRISHNA CONSTRUCTIONS</div>
@@ -594,24 +580,11 @@ export const SaleInvoiceModal: React.FC<{
                       <div className="text-[10px] text-slate-700">Raichur Dist, Karnataka</div>
                       <div className="font-bold mt-1">GST NO: 29DWKPP3582H1ZV</div>
                     </>
-                  ) : isKpclParty ? (
-                    <>
-                      <div className="text-[10px] text-slate-700">Shipped To: Executive Engineer(Stores) Raichur Thermal</div>
-                      <div className="text-[10px] text-slate-700">Power Station (RTPS),KPCL Plant Premises,</div>
-                      <div className="text-[10px] text-slate-700">Shaktinagara, PIN-584170</div>
-                      <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
-                    </>
-                  ) : partyAddress ? (
-                    <>
-                      <div className="text-[10px] text-slate-700 font-bold">Shipped To: {partyName}</div>
-                      <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
-                      <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
-                    </>
                   ) : (
                     <>
-                      <div className="text-[10px] text-slate-700 font-bold">Shipped To: {partyName}</div>
-                      <div className="text-[10px] text-slate-700">Delivery as per Order Instruction</div>
-                      <div className="font-bold mt-2">GST NO: {partyGst || 'URP (Unregistered)'}</div>
+                      <div className="text-[10px] text-slate-700 font-bold">Shipped To: {primarySale.shippedTo || partyName || '-'}</div>
+                      {partyAddress && <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>}
+                      <div className="font-bold mt-2">GST NO: {partyGst || '-'}</div>
                     </>
                   )}
                 </div>
