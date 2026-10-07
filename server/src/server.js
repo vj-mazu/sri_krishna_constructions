@@ -235,6 +235,36 @@ const requireRoles = (roles) => {
   };
 };
 
+// Helper: Get supervisor division access filter
+// Returns { isRestrictedSupervisor, assignedDivisionId, restrictedDivisionIds }
+const getSupervisorDivisionFilter = async (user) => {
+  if (!user || user.role !== 'SUPERVISOR') {
+    return { isSupervisor: false, isRestricted: false, assignedDivisionId: null, restrictedDivisionIds: [] };
+  }
+
+  // Fetch all restricted division IDs that are assigned to any dedicated supervisor
+  const { rows: supRows } = await pool.query(
+    `SELECT DISTINCT "assignedDivisionId" FROM "User" 
+     WHERE "role" = 'SUPERVISOR' AND "assignedDivisionId" IS NOT NULL AND "assignedDivisionId" != 'ALL'`
+  );
+  const restrictedDivisionIds = supRows.map(r => r.assignedDivisionId).filter(Boolean);
+
+  // Check if current user is assigned to a specific division
+  let userAssignedDiv = user.assignedDivisionId;
+  if (!userAssignedDiv) {
+    const { rows: meRows } = await pool.query(`SELECT "assignedDivisionId" FROM "User" WHERE "id" = $1 LIMIT 1`, [user.id]);
+    userAssignedDiv = meRows[0]?.assignedDivisionId;
+  }
+
+  const isRestricted = Boolean(userAssignedDiv && userAssignedDiv !== 'ALL');
+  return {
+    isSupervisor: true,
+    isRestricted,
+    assignedDivisionId: isRestricted ? userAssignedDiv : null,
+    restrictedDivisionIds
+  };
+};
+
 // Serve extracted HD SKC Logo directly
 app.get('/api/logo/skc-logo', async (req, res) => {
   try {
@@ -3590,6 +3620,8 @@ app.delete('/api/users/:id', authenticateToken, requireRoles(['OWNER']), async (
 app.get('/api/divisions', authenticateToken, async (req, res) => {
   try {
     const { type, activeOnly } = req.query;
+    const supFilter = await getSupervisorDivisionFilter(req.user);
+
     let whereClauses = [];
     const params = [];
     if (type) {
@@ -3599,6 +3631,20 @@ app.get('/api/divisions', authenticateToken, async (req, res) => {
     if (activeOnly === 'true') {
       whereClauses.push(`COALESCE(d."isActive", true) = true`);
     }
+
+    // Role-based supervisor division filtering
+    if (supFilter.isSupervisor) {
+      if (supFilter.isRestricted && supFilter.assignedDivisionId) {
+        // Restricted supervisor only sees their assigned division
+        params.push(supFilter.assignedDivisionId);
+        whereClauses.push(`d."id" = $${params.length}`);
+      } else if (!supFilter.isRestricted && supFilter.restrictedDivisionIds.length > 0) {
+        // General supervisor sees all divisions EXCEPT restricted divisions
+        params.push(supFilter.restrictedDivisionIds);
+        whereClauses.push(`NOT (d."id" = ANY($${params.length}::text[]))`);
+      }
+    }
+
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
 
     const { rows: divisions } = await pool.query(`
@@ -3729,6 +3775,7 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
   try {
     const { divisionId, limit = 50, cursor, status, isActive } = req.query;
     const limitNum = parseInt(limit, 10) || 50;
+    const supFilter = await getSupervisorDivisionFilter(req.user);
 
     let query = `
       SELECT w."id", w."workerId", w."fullName", w."fatherName", w."designation", w."mobileNumber",
@@ -3758,6 +3805,19 @@ app.get('/api/workers', authenticateToken, async (req, res) => {
     if (divisionId) {
       params.push(divisionId);
       whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    // Role-based supervisor division filtering
+    if (supFilter.isSupervisor) {
+      if (supFilter.isRestricted && supFilter.assignedDivisionId) {
+        // Restricted supervisor only sees workers belonging to their assigned division
+        params.push(supFilter.assignedDivisionId);
+        whereClauses.push(`w."divisionId" = $${params.length}`);
+      } else if (!supFilter.isRestricted && supFilter.restrictedDivisionIds.length > 0) {
+        // General supervisor sees all workers EXCEPT those in restricted divisions
+        params.push(supFilter.restrictedDivisionIds);
+        whereClauses.push(`NOT (w."divisionId" = ANY($${params.length}::text[]))`);
+      }
     }
 
     if (status === 'ACTIVE' || status === 'active' || isActive === 'true') {
@@ -4178,10 +4238,24 @@ app.get('/api/advance-ledger', authenticateToken, async (req, res) => {
 
     const whereClauses = [];
     const params = [];
+    const supFilter = await getSupervisorDivisionFilter(req.user);
 
     if (divisionId) {
       params.push(divisionId);
       whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    // Role-based supervisor division filtering
+    if (supFilter.isSupervisor) {
+      if (supFilter.isRestricted && supFilter.assignedDivisionId) {
+        // Restricted supervisor only sees workers belonging to their assigned division
+        params.push(supFilter.assignedDivisionId);
+        whereClauses.push(`w."divisionId" = $${params.length}`);
+      } else if (!supFilter.isRestricted && supFilter.restrictedDivisionIds.length > 0) {
+        // General supervisor sees all workers EXCEPT those in restricted divisions
+        params.push(supFilter.restrictedDivisionIds);
+        whereClauses.push(`NOT (w."divisionId" = ANY($${params.length}::text[]))`);
+      }
     }
 
     if (search && search.trim()) {
@@ -4482,6 +4556,8 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Date (YYYY-MM-DD) is required' });
     }
 
+    const supFilter = await getSupervisorDivisionFilter(req.user);
+
     let query = `
       SELECT a."id", a."workerId", a."date", a."status", a."divisionId", a."secondDivisionId",
              COALESCE(a."overtimeHours", 0)::float as "overtimeHours", 
@@ -4498,6 +4574,19 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
       WHERE a."date"::date = $1::date
     `;
     const params = [date];
+
+    // Role-based supervisor division filtering
+    if (supFilter.isSupervisor) {
+      if (supFilter.isRestricted && supFilter.assignedDivisionId) {
+        // Restricted supervisor only sees attendance for workers of their assigned division
+        params.push(supFilter.assignedDivisionId);
+        query += ` AND w."divisionId" = $${params.length}`;
+      } else if (!supFilter.isRestricted && supFilter.restrictedDivisionIds.length > 0) {
+        // General supervisor sees attendance for all workers EXCEPT restricted workers
+        params.push(supFilter.restrictedDivisionIds);
+        query += ` AND NOT (w."divisionId" = ANY($${params.length}::text[]))`;
+      }
+    }
 
     if (divisionId && divisionId !== 'ALL' && divisionId !== 'all') {
       params.push(divisionId);
@@ -5656,10 +5745,24 @@ app.get('/api/leave-ledger', authenticateToken, async (req, res) => {
 
     const whereClauses = [];
     const params = [y];
+    const supFilter = await getSupervisorDivisionFilter(req.user);
 
     if (divisionId && divisionId !== 'ALL') {
       params.push(divisionId);
       whereClauses.push(`w."divisionId" = $${params.length}`);
+    }
+
+    // Role-based supervisor division filtering
+    if (supFilter.isSupervisor) {
+      if (supFilter.isRestricted && supFilter.assignedDivisionId) {
+        // Restricted supervisor only sees workers belonging to their assigned division
+        params.push(supFilter.assignedDivisionId);
+        whereClauses.push(`w."divisionId" = $${params.length}`);
+      } else if (!supFilter.isRestricted && supFilter.restrictedDivisionIds.length > 0) {
+        // General supervisor sees all workers EXCEPT those in restricted divisions
+        params.push(supFilter.restrictedDivisionIds);
+        whereClauses.push(`NOT (w."divisionId" = ANY($${params.length}::text[]))`);
+      }
     }
 
     if (search && search.trim()) {
