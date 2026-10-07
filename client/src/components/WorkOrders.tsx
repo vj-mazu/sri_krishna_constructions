@@ -24,6 +24,7 @@ import {
   ChevronsRight
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
+import { DatePickerDMY } from './DatePickerDMY';
 
 interface WorkOrderItem {
   id: string;
@@ -556,12 +557,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             </div>
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order Date *</label>
-              <input
-                type="date"
+              <DatePickerDMY
                 required
                 value={formData.workOrderDate}
-                onChange={(e) => setFormData({ ...formData, workOrderDate: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                onChange={(val) => setFormData({ ...formData, workOrderDate: val })}
               />
             </div>
             <div>
@@ -577,12 +576,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             </div>
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
-              <input
-                type="date"
+              <DatePickerDMY
                 required
                 value={formData.invoiceDate}
-                onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                onChange={(val) => setFormData({ ...formData, invoiceDate: val })}
               />
             </div>
 
@@ -1146,12 +1143,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Work Order Date *</label>
-                    <input
-                      type="date"
+                    <DatePickerDMY
                       required
                       value={formData.workOrderDate}
-                      onChange={(e) => setFormData({ ...formData, workOrderDate: e.target.value })}
-                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                      onChange={(val) => setFormData({ ...formData, workOrderDate: val })}
                     />
                   </div>
                   <div>
@@ -1167,12 +1162,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Invoice Date *</label>
-                    <input
-                      type="date"
+                    <DatePickerDMY
                       required
                       value={formData.invoiceDate}
-                      onChange={(e) => setFormData({ ...formData, invoiceDate: e.target.value })}
-                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                      onChange={(val) => setFormData({ ...formData, invoiceDate: val })}
                     />
                   </div>
                 </div>

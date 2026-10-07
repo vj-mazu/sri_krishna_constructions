@@ -10,6 +10,7 @@ import { showToast } from '../toast';
 import { showConfirm } from '../confirmDialog';
 import * as XLSX from 'xlsx';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
+import { DatePickerDMY } from './DatePickerDMY';
 
 interface PurchaseRecordsProps {
   currentUserRole: string;
@@ -1281,13 +1282,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </select>
                     </div>
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Date *</label>
-                      <input
-                        type="date"
+                      <label className="block font-semibold text-slate-700 mb-1">PO Date *</label>
+                      <DatePickerDMY
                         required
                         value={editPoForm.date}
-                        onChange={(e) => setEditPoForm(prev => ({ ...prev, date: e.target.value }))}
-                        className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                        onChange={(val) => setEditPoForm(prev => ({ ...prev, date: val }))}
                       />
                     </div>
                     <div>
@@ -1695,12 +1694,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Inward Date *</label>
-                        <input
-                          type="date"
+                        <DatePickerDMY
                           required
                           value={editPurchaseForm.date || ''}
-                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, date: e.target.value }))}
-                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                          onChange={val => setEditPurchaseForm(prev => ({ ...prev, date: val }))}
                         />
                       </div>
                       <div>
@@ -1777,11 +1774,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Supplier Invoice Date</label>
-                        <input
-                          type="date"
+                        <DatePickerDMY
                           value={editPurchaseForm.supplierInvoiceDate || ''}
-                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, supplierInvoiceDate: e.target.value }))}
-                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                          onChange={val => setEditPurchaseForm(prev => ({ ...prev, supplierInvoiceDate: val }))}
                         />
                       </div>
                       <div>
@@ -1935,12 +1930,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </div>
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Invoice Date *</label>
-                        <input
-                          type="date"
+                        <DatePickerDMY
                           required
                           value={editSaleForm.invoiceDate || ''}
-                          onChange={e => setEditSaleForm(prev => ({ ...prev, invoiceDate: e.target.value }))}
-                          className="w-full p-2 border border-slate-300 rounded text-xs"
+                          onChange={val => setEditSaleForm(prev => ({ ...prev, invoiceDate: val }))}
                         />
                       </div>
                     </div>
@@ -2760,7 +2753,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Inward Date *</label>
-                      <input required type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.date} onChange={e => handlePurchaseChange('date', e.target.value)} />
+                      <DatePickerDMY
+                        required
+                        value={purchaseForm.date}
+                        onChange={val => handlePurchaseChange('date', val)}
+                      />
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Received *</label>
@@ -2817,7 +2814,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
-                      <input type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.supplierInvoiceDate || ''} onChange={e => handlePurchaseChange('supplierInvoiceDate', e.target.value)} />
+                      <DatePickerDMY
+                        value={purchaseForm.supplierInvoiceDate || ''}
+                        onChange={val => handlePurchaseChange('supplierInvoiceDate', val)}
+                      />
                     </div>
 
                     <div>
@@ -3369,12 +3369,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </div>
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
-                        <input 
-                          required 
-                          type="date" 
-                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-amber-500" 
-                          value={saleForm.invoiceDate} 
-                          onChange={e => handleSaleChange('invoiceDate', e.target.value)} 
+                        <DatePickerDMY
+                          required
+                          value={saleForm.invoiceDate}
+                          onChange={val => handleSaleChange('invoiceDate', val)}
                         />
                       </div>
 
@@ -4425,13 +4423,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                 </select>
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Date *</label>
-                <input
-                  type="date"
+                <label className="block font-semibold text-slate-700 mb-1">PO Date *</label>
+                <DatePickerDMY
                   required
                   value={editPoForm.date}
-                  onChange={(e) => setEditPoForm(prev => ({ ...prev, date: e.target.value }))}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                  onChange={(val) => setEditPoForm(prev => ({ ...prev, date: val }))}
                 />
               </div>
               <div>

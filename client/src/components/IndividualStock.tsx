@@ -14,6 +14,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
+import { DatePickerDMY } from './DatePickerDMY';
 
 interface IndividualStockProps {
   currentUserRole: string;
@@ -2075,12 +2076,10 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Inward Date *</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     required
                     value={purchaseForm.date}
-                    onChange={(e) => setPurchaseForm(prev => ({ ...prev, date: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+                    onChange={(val) => setPurchaseForm(prev => ({ ...prev, date: val }))}
                   />
                 </div>
 
@@ -2275,12 +2274,10 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Inward Date *</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     required
                     value={editingPurchase.date ? new Date(editingPurchase.date).toISOString().slice(0, 10) : ''}
-                    onChange={(e) => setEditingPurchase((prev: any) => ({ ...prev, date: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+                    onChange={(val) => setEditingPurchase((prev: any) => ({ ...prev, date: val }))}
                   />
                 </div>
 
@@ -2505,12 +2502,10 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Sale Date *</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     required
                     value={saleForm.invoiceDate}
-                    onChange={(e) => setSaleForm(prev => ({ ...prev, invoiceDate: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+                    onChange={(val) => setSaleForm(prev => ({ ...prev, invoiceDate: val }))}
                   />
                 </div>
 
@@ -2728,12 +2723,10 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
 
                 <div>
                   <label className="text-xs font-bold text-slate-700 block mb-1">Sale Date *</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     required
                     value={editingSale.invoiceDate ? new Date(editingSale.invoiceDate).toISOString().slice(0, 10) : (editingSale.date ? new Date(editingSale.date).toISOString().slice(0, 10) : '')}
-                    onChange={(e) => setEditingSale((prev: any) => ({ ...prev, invoiceDate: e.target.value, date: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold"
+                    onChange={(val) => setEditingSale((prev: any) => ({ ...prev, invoiceDate: val, date: val }))}
                   />
                 </div>
 

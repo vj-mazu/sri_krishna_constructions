@@ -555,10 +555,10 @@ export const SaleInvoiceModal: React.FC<{
               {/* Left Column */}
               <div className="border-r border-black divide-y divide-black">
                 <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-mono font-bold">{invoiceNo}</span>
+                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-bold">{invoiceNo}</span>
                 </div>
                 <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-mono font-bold">{invoiceDate}</span>
+                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-bold">{invoiceDate}</span>
                 </div>
                 <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
                   <div>
@@ -579,10 +579,10 @@ export const SaleInvoiceModal: React.FC<{
               {/* Right Column */}
               <div className="divide-y divide-black">
                 <div className="p-1.5 font-bold">
-                  {refLabel}: <span className="font-mono font-bold">{refNumber}</span>
+                  {refLabel}: <span className="font-bold">{refNumber}</span>
                 </div>
                 <div className="p-1.5 font-bold">
-                  {dateLabel}: <span className="font-mono font-bold">{refDate}</span>
+                  {dateLabel}: <span className="font-bold">{refDate}</span>
                 </div>
                 <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
                   <div>
@@ -592,7 +592,7 @@ export const SaleInvoiceModal: React.FC<{
                   <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
                 </div>
                 <div className="p-1.5 font-bold">
-                  Vehicle No : <span className="font-mono uppercase font-bold">{primarySale.vehicleNumber || '-'}</span>
+                  Vehicle No : <span className="uppercase font-bold">{primarySale.vehicleNumber || '-'}</span>
                 </div>
               </div>
             </div>
@@ -649,8 +649,8 @@ export const SaleInvoiceModal: React.FC<{
                   <div className="text-[10.5px] text-black space-y-0.5 mt-0.5">
                     <div>Account Holder Name : <strong>Sri Krishna Constructions</strong></div>
                     <div>Bank Name : <strong>Canara Bank Deosugur Branch</strong></div>
-                    <div>Bank Account No: <strong className="font-mono">18133070005349</strong></div>
-                    <div>IFSC Code: <strong className="font-mono">CNRB0011813</strong></div>
+                    <div>Bank Account No: <strong className="font-bold">18133070005349</strong></div>
+                    <div>IFSC Code: <strong className="font-bold">CNRB0011813</strong></div>
                   </div>
                 </div>
               </div>
