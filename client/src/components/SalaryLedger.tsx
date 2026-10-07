@@ -235,6 +235,14 @@ export const SalaryLedger: React.FC = () => {
     showToast('Salary Hike Matrix exported to Excel successfully!', 'success');
   };
 
+  // Live search filtering
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchHikeMatrix();
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [hikeSearch, selectedDivisionId]);
+
   return (
     <div className="space-y-4 sm:space-y-6 pb-12 animate-fadeIn w-full">
       {/* HEADER BANNER */}
@@ -250,17 +258,17 @@ export const SalaryLedger: React.FC = () => {
             <h1 className="text-lg sm:text-2xl font-black tracking-tight text-white uppercase">
               Worker Salary Hike Ledger
             </h1>
-            <p className="text-xs sm:text-sm text-blue-100 font-medium">
+            <p className="text-blue-100 text-xs sm:text-sm font-medium mt-0.5 max-w-2xl">
               Clean milestone matrix tracking base wage, hike revisions (+₹), and total remuneration by effective date.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
           <button
             onClick={fetchHikeMatrix}
-            disabled={loadingHikes}
-            className="bg-white/10 hover:bg-white/20 active:scale-95 text-white px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm border border-white/20 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+            className="bg-white/15 hover:bg-white/25 active:scale-95 text-white px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm backdrop-blur-sm border border-white/20 shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+            title="Refresh Ledger"
           >
             <RefreshCw className={`w-4 h-4 ${loadingHikes ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -275,40 +283,44 @@ export const SalaryLedger: React.FC = () => {
         </div>
       </div>
 
-      {/* SEARCH & SITE FILTERS */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+      {/* SEARCH & SITE FILTERS (UNIFORM DESIGN WITHOUT NEED FOR MANUAL SEARCH BUTTON) */}
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
         <div className="flex flex-1 flex-col sm:flex-row gap-3 w-full">
           <div className="relative flex-1">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-blue-600 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search worker by name, employee code, designation..."
               value={hikeSearch}
               onChange={(e) => setHikeSearch(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') fetchHikeMatrix(); }}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-2xs"
             />
+            {hikeSearch && (
+              <button
+                onClick={() => setHikeSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 font-bold text-xs"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
-          <div className="w-full sm:w-64">
+          <div className="w-full sm:w-72">
             <select
               value={selectedDivisionId}
               onChange={(e) => setSelectedDivisionId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs sm:text-sm font-bold text-slate-800 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-2xs cursor-pointer"
             >
-              <option value="ALL">All Divisions / Sites</option>
+              <option value="ALL">🏢 All Divisions / Sites</option>
               {divisions.map((d) => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
           </div>
+        </div>
 
-          <button
-            onClick={fetchHikeMatrix}
-            className="bg-[#1e3a8a] hover:bg-[#1e40af] text-white px-5 py-2 rounded-xl text-sm font-bold shadow-sm transition-colors cursor-pointer"
-          >
-            Search
-          </button>
+        <div className="text-xs font-bold text-slate-600 bg-blue-50/80 px-3 py-1.5 rounded-lg border border-blue-200 shrink-0">
+          Showing <span className="text-[#1e3a8a] font-extrabold">{workers.length}</span> Workers
         </div>
       </div>
 
