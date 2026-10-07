@@ -186,10 +186,14 @@ export const SaleInvoiceModal: React.FC<{
 
       let y = 8;
 
-      // 1. TOP HEADER WITH ORIGINAL RED LOGO & COMPANY INFO
+      // 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.4);
+      doc.rect(margin, y, contentWidth, 24);
+
       if (SKC_LOGO_BASE64) {
         try {
-          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, y, 20, 20);
+          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, y + 2, 20, 20);
         } catch (e) {
           console.warn('Logo render fallback:', e);
         }
@@ -199,7 +203,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.setTextColor(218, 18, 18);
       doc.setFont('times', 'bold');
       doc.setFontSize(18);
-      doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, y + 6, { align: 'center' });
+      doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, y + 6.5, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
@@ -217,13 +221,9 @@ export const SaleInvoiceModal: React.FC<{
       doc.text('GST NO: 29DWKPP3582H1ZV', margin + 2, y + 21.5);
       doc.text('Mobile No: 8496841904', pageWidth - margin - 2, y + 21.5, { align: 'right' });
 
-      y += 23;
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.4);
-      doc.line(margin, y, margin + contentWidth, y);
+      y += 24;
 
       // 2. BOXED TAX INVOICE TITLE
-      y += 1.5;
       doc.rect(margin, y, contentWidth, 7);
       doc.setFontSize(13);
       doc.setFont('times', 'bold');
