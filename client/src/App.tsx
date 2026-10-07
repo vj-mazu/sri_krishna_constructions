@@ -37,7 +37,8 @@ import {
   Layers,
   X,
   CalendarCheck,
-  History
+  History,
+  TrendingUp
 } from 'lucide-react';
 
 export function App() {
@@ -462,8 +463,8 @@ export function App() {
                             activeTab === 'salary_ledger' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
                           }`}
                         >
-                          <History className="w-4 h-4 text-blue-700 shrink-0" />
-                          <span>Salary Audit Ledger</span>
+                          <TrendingUp className="w-4 h-4 text-purple-700 shrink-0" />
+                          <span>Salary Hike Ledger</span>
                         </button>
                       )}
                     </div>
