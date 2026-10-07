@@ -60,6 +60,17 @@ interface WorkOrderItem {
   createdAt: string;
 }
 
+interface InvoiceItemRow {
+  id: string;
+  kpclCode: string;
+  itemName: string;
+  description: string;
+  partNumber: string;
+  unit: string;
+  qty: string;
+  rate: string;
+}
+
 interface WorkOrdersProps {
   currentUserRole?: string;
 }
@@ -83,9 +94,44 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const [selectedForInvoice, setSelectedForInvoice] = useState<any | null>(null);
   const [selectedWorkOrderIds, setSelectedWorkOrderIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [nextInvoiceLoading, setNextInvoiceLoading] = useState(false);
 
-  // Form State
-  const initialFormState = {
+  // Direct Interactive Invoice Form State
+  const initialInvoiceHeader = {
+    workOrderNumber: '',
+    workOrderDate: new Date().toISOString().slice(0, 10),
+    invoiceNumber: '',
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    partyName: '',
+    partyAddress: '',
+    partyGstNumber: '',
+    companyName: 'Sri Krishna Constructions',
+    companyGstNumber: '29DWKPP3582H1ZV',
+    vehicleNumber: '',
+    eWayBillNumber: '',
+    remarks: '',
+    cgstPercent: '9',
+    sgstPercent: '9',
+    igstPercent: '0',
+    shippingCharges: ''
+  };
+
+  const [invoiceHeader, setInvoiceHeader] = useState(initialInvoiceHeader);
+  const [invoiceItems, setInvoiceItems] = useState<InvoiceItemRow[]>([
+    {
+      id: '1',
+      kpclCode: '-',
+      itemName: '',
+      description: '',
+      partNumber: '',
+      unit: 'NOS',
+      qty: '1',
+      rate: ''
+    }
+  ]);
+
+  // Edit single item form state
+  const [editFormData, setEditFormData] = useState({
     workOrderNumber: '',
     workOrderDate: new Date().toISOString().slice(0, 10),
     invoiceNumber: '',
@@ -108,9 +154,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     vehicleNumber: '',
     eWayBillNumber: '',
     remarks: ''
-  };
-
-  const [formData, setFormData] = useState(initialFormState);
+  });
 
   const fetchWorkOrders = useCallback(async () => {
     setLoading(true);
@@ -209,28 +253,154 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     return `${day}-${month}-${year}`;
   }
 
-  // Calculations for Form
-  const formQty = parseFloat(formData.qty) || 0;
-  const formRate = parseFloat(formData.rate) || 0;
-  const formBasic = Math.round((formQty * formRate + Number.EPSILON) * 100) / 100;
-  const formCgstP = parseFloat(formData.cgstPercent) || 0;
-  const formSgstP = parseFloat(formData.sgstPercent) || 0;
-  const formIgstP = parseFloat(formData.igstPercent) || 0;
-  const formShip = parseFloat(formData.shippingCharges) || 0;
-  const formCgstAmt = Math.round((formBasic * (formCgstP / 100) + Number.EPSILON) * 100) / 100;
-  const formSgstAmt = Math.round((formBasic * (formSgstP / 100) + Number.EPSILON) * 100) / 100;
-  const formIgstAmt = Math.round((formBasic * (formIgstP / 100) + Number.EPSILON) * 100) / 100;
-  const formTotalAmt = Math.round((formBasic + formCgstAmt + formSgstAmt + formIgstAmt + formShip + Number.EPSILON) * 100) / 100;
+  // Number to Indian Rupees words converter
+  const numberToWords = (num: number): string => {
+    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-  const handleOpenAdd = () => {
+    const inWords = (n: number): string => {
+      let str = '';
+      if (n > 9999999) {
+        str += inWords(Math.floor(n / 10000000)) + 'Crore ';
+        n %= 10000000;
+      }
+      if (n > 99999) {
+        str += inWords(Math.floor(n / 100000)) + 'Lakh ';
+        n %= 100000;
+      }
+      if (n > 999) {
+        str += inWords(Math.floor(n / 1000)) + 'Thousand ';
+        n %= 1000;
+      }
+      if (n > 99) {
+        str += inWords(Math.floor(n / 100)) + 'Hundred ';
+        n %= 100;
+      }
+      if (n > 0) {
+        if (n < 20) {
+          str += a[n];
+        } else {
+          str += b[Math.floor(n / 10)] + (n % 10 > 0 ? ' ' + a[n % 10] : ' ');
+        }
+      }
+      return str;
+    };
+
+    const whole = Math.floor(num);
+    const fraction = Math.round((num - whole) * 100);
+    let result = inWords(whole) || 'Zero ';
+    result = 'INR ' + result.trim() + ' Rupees';
+    if (fraction > 0) {
+      result += ' and ' + inWords(fraction).trim() + ' Paise';
+    }
+    return result + ' Only';
+  };
+
+  // Calculations for Direct Invoice Creator
+  const invoiceCalculations = React.useMemo(() => {
+    let basicTotal = 0;
+    const computedRows = invoiceItems.map(item => {
+      const q = parseFloat(item.qty) || 0;
+      const r = parseFloat(item.rate) || 0;
+      const amt = Math.round((q * r + Number.EPSILON) * 100) / 100;
+      basicTotal += amt;
+      return { ...item, computedAmount: amt };
+    });
+
+    basicTotal = Math.round((basicTotal + Number.EPSILON) * 100) / 100;
+    const cgstP = parseFloat(invoiceHeader.cgstPercent) || 0;
+    const sgstP = parseFloat(invoiceHeader.sgstPercent) || 0;
+    const igstP = parseFloat(invoiceHeader.igstPercent) || 0;
+    const ship = parseFloat(invoiceHeader.shippingCharges) || 0;
+
+    const cgstAmt = Math.round((basicTotal * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmt = Math.round((basicTotal * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmt = Math.round((basicTotal * (igstP / 100) + Number.EPSILON) * 100) / 100;
+    const totalTax = Math.round((cgstAmt + sgstAmt + igstAmt + Number.EPSILON) * 100) / 100;
+    const grandTotal = Math.round((basicTotal + totalTax + ship + Number.EPSILON) * 100) / 100;
+
+    return {
+      computedRows,
+      basicTotal,
+      cgstP,
+      sgstP,
+      igstP,
+      cgstAmt,
+      sgstAmt,
+      igstAmt,
+      totalTax,
+      ship,
+      grandTotal,
+      amountInWords: numberToWords(grandTotal)
+    };
+  }, [invoiceItems, invoiceHeader]);
+
+  const handleOpenAdd = async () => {
     setEditItem(null);
-    setFormData(initialFormState);
+    setNextInvoiceLoading(true);
+    let nextInv = '';
+    try {
+      const res = await api.get('/sales/next-invoice-number');
+      if (res.data && res.data.nextInvoiceNumber) {
+        nextInv = res.data.nextInvoiceNumber;
+      }
+    } catch (err) {
+      console.error('Failed to get next invoice number', err);
+    } finally {
+      setNextInvoiceLoading(false);
+    }
+
+    setInvoiceHeader({
+      ...initialInvoiceHeader,
+      invoiceNumber: nextInv || ''
+    });
+
+    setInvoiceItems([
+      {
+        id: '1',
+        kpclCode: '-',
+        itemName: '',
+        description: '',
+        partNumber: '',
+        unit: 'NOS',
+        qty: '1',
+        rate: ''
+      }
+    ]);
     setShowAddModal(true);
+  };
+
+  const handleAddItemRow = () => {
+    setInvoiceItems(prev => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        kpclCode: '-',
+        itemName: '',
+        description: '',
+        partNumber: '',
+        unit: 'NOS',
+        qty: '1',
+        rate: ''
+      }
+    ]);
+  };
+
+  const handleRemoveItemRow = (id: string) => {
+    if (invoiceItems.length <= 1) {
+      showToast('At least one item is required in the invoice', 'info');
+      return;
+    }
+    setInvoiceItems(prev => prev.filter(it => it.id !== id));
+  };
+
+  const handleItemRowChange = (id: string, field: keyof InvoiceItemRow, value: string) => {
+    setInvoiceItems(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it));
   };
 
   const handleOpenEdit = (item: WorkOrderItem) => {
     setEditItem(item);
-    setFormData({
+    setEditFormData({
       workOrderNumber: item.workOrderNumber,
       workOrderDate: item.workOrderDate ? new Date(item.workOrderDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
       invoiceNumber: item.invoiceNumber,
@@ -274,43 +444,183 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Open invoice view with all matching rows for that invoice number
+  const openInvoiceForWorkOrder = (targetWo: WorkOrderItem) => {
+    const matching = workOrders.filter(w => 
+      (targetWo.invoiceNumber && w.invoiceNumber === targetWo.invoiceNumber) || 
+      w.id === targetWo.id
+    );
+
+    const invoicePayload = matching.map(wo => ({
+      ...wo,
+      sourceType: 'WORK_ORDER',
+      workOrderNumber: wo.workOrderNumber,
+      workOrderDate: wo.workOrderDate,
+      poNumber: wo.workOrderNumber,
+      poDate: wo.workOrderDate,
+      partyName: wo.partyName,
+      partyAddress: wo.partyAddress,
+      gstNumber: wo.partyGstNumber,
+      companyName: wo.companyName,
+      companyGstNumber: wo.companyGstNumber,
+      quantity: wo.qty,
+      unitPrice: wo.rate,
+      cgstPercent: wo.cgstPercent,
+      sgstPercent: wo.sgstPercent,
+      igstPercent: wo.igstPercent,
+      shippingCharges: wo.shippingCharges || 0,
+      item: {
+        itemName: wo.itemName,
+        specifications: wo.description || 'Work Order Direct Sale',
+        partNumber: wo.partNumber || '',
+        kpclCode: '-',
+        unit: wo.unit || 'NOS'
+      }
+    }));
+
+    setSelectedForInvoice(invoicePayload);
+  };
+
+  // Save Direct Interactive Invoice (or Edit Single Item)
+  const handleSaveInvoice = async (e: React.FormEvent, openPdfDirectly = false) => {
     e.preventDefault();
-    if (!formData.workOrderNumber.trim()) {
-      showToast('Work Order Number is required', 'error');
-      return;
-    }
-    if (!formData.invoiceNumber.trim()) {
-      showToast('Invoice Number is required', 'error');
-      return;
-    }
-    if (!formData.partyName.trim()) {
-      showToast('Party Name is required', 'error');
-      return;
-    }
-    if (!formData.itemName.trim()) {
-      showToast('Item Name is required', 'error');
-      return;
-    }
-    if (formQty <= 0) {
-      showToast('Quantity must be greater than 0', 'error');
+
+    if (editItem) {
+      // Edit mode
+      if (!editFormData.workOrderNumber.trim()) {
+        showToast('Work Order Number is required', 'error');
+        return;
+      }
+      if (!editFormData.invoiceNumber.trim()) {
+        showToast('Invoice Number is required', 'error');
+        return;
+      }
+      if (!editFormData.partyName.trim()) {
+        showToast('Party Name is required', 'error');
+        return;
+      }
+      if (!editFormData.itemName.trim()) {
+        showToast('Item Name is required', 'error');
+        return;
+      }
+      if (parseFloat(editFormData.qty) <= 0) {
+        showToast('Quantity must be greater than 0', 'error');
+        return;
+      }
+
+      try {
+        setSubmitting(true);
+        await api.put(`/work-orders/${editItem.id}`, editFormData);
+        showToast('Work Order updated successfully!', 'success');
+        setShowAddModal(false);
+        setEditItem(null);
+        fetchWorkOrders();
+      } catch (err: any) {
+        showToast(err.response?.data?.error || 'Failed to update work order', 'error');
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
+    // Direct Invoice Creation Mode
+    if (!invoiceHeader.workOrderNumber.trim()) {
+      showToast('Work Order Number is required', 'error');
+      return;
+    }
+    if (!invoiceHeader.invoiceNumber.trim()) {
+      showToast('Invoice Number is required', 'error');
+      return;
+    }
+    if (!invoiceHeader.partyName.trim()) {
+      showToast('Party / Client Name is required', 'error');
+      return;
+    }
+
+    const validItems = invoiceItems.filter(it => it.itemName.trim() !== '');
+    if (validItems.length === 0) {
+      showToast('Please add at least one item description / name', 'error');
+      return;
+    }
+
+    for (const it of validItems) {
+      if ((parseFloat(it.qty) || 0) <= 0) {
+        showToast(`Quantity for "${it.itemName}" must be greater than 0`, 'error');
+        return;
+      }
+      if ((parseFloat(it.rate) || 0) < 0) {
+        showToast(`Rate for "${it.itemName}" cannot be negative`, 'error');
+        return;
+      }
+    }
+
+    const payload = {
+      workOrderNumber: invoiceHeader.workOrderNumber.trim().toUpperCase(),
+      workOrderDate: invoiceHeader.workOrderDate,
+      invoiceNumber: invoiceHeader.invoiceNumber.trim().toUpperCase(),
+      invoiceDate: invoiceHeader.invoiceDate,
+      partyName: invoiceHeader.partyName.trim(),
+      partyAddress: invoiceHeader.partyAddress.trim(),
+      partyGstNumber: invoiceHeader.partyGstNumber.trim().toUpperCase(),
+      companyName: invoiceHeader.companyName,
+      companyGstNumber: invoiceHeader.companyGstNumber,
+      vehicleNumber: invoiceHeader.vehicleNumber.trim().toUpperCase(),
+      eWayBillNumber: invoiceHeader.eWayBillNumber.trim().toUpperCase(),
+      remarks: invoiceHeader.remarks.trim(),
+      cgstPercent: parseFloat(invoiceHeader.cgstPercent) || 0,
+      sgstPercent: parseFloat(invoiceHeader.sgstPercent) || 0,
+      igstPercent: parseFloat(invoiceHeader.igstPercent) || 0,
+      shippingCharges: parseFloat(invoiceHeader.shippingCharges) || 0,
+      items: validItems.map(it => ({
+        kpclCode: it.kpclCode || '-',
+        itemName: it.itemName.trim(),
+        description: it.description.trim(),
+        partNumber: it.partNumber.trim().toUpperCase(),
+        unit: it.unit || 'NOS',
+        qty: parseFloat(it.qty) || 0,
+        rate: parseFloat(it.rate) || 0
+      }))
+    };
+
     try {
       setSubmitting(true);
-      if (editItem) {
-        await api.put(`/work-orders/${editItem.id}`, formData);
-        showToast('Work Order updated successfully!', 'success');
-      } else {
-        await api.post('/work-orders', formData);
-        showToast('Work Order direct sale created successfully!', 'success');
-      }
+      const res = await api.post('/work-orders', payload);
+      showToast(`Tax Invoice ${invoiceHeader.invoiceNumber} with ${validItems.length} items saved successfully!`, 'success');
       setShowAddModal(false);
-      setEditItem(null);
       fetchWorkOrders();
+
+      if (openPdfDirectly) {
+        const createdOrders = res.data.workOrders || [res.data.workOrder];
+        const formatted = createdOrders.map((wo: any) => ({
+          ...wo,
+          sourceType: 'WORK_ORDER',
+          workOrderNumber: wo.workOrderNumber,
+          workOrderDate: wo.workOrderDate,
+          poNumber: wo.workOrderNumber,
+          poDate: wo.workOrderDate,
+          partyName: wo.partyName,
+          partyAddress: wo.partyAddress,
+          gstNumber: wo.partyGstNumber,
+          companyName: wo.companyName,
+          companyGstNumber: wo.companyGstNumber,
+          quantity: wo.qty,
+          unitPrice: wo.rate,
+          cgstPercent: wo.cgstPercent,
+          sgstPercent: wo.sgstPercent,
+          igstPercent: wo.igstPercent,
+          shippingCharges: wo.shippingCharges || 0,
+          item: {
+            itemName: wo.itemName,
+            specifications: wo.description || 'Work Order Direct Sale',
+            partNumber: wo.partNumber || '',
+            kpclCode: '-',
+            unit: wo.unit || 'NOS'
+          }
+        }));
+        setSelectedForInvoice(formatted);
+      }
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to save work order', 'error');
+      showToast(err.response?.data?.error || 'Failed to save work order invoice', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -526,285 +836,454 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       </div>
 
-      {/* 4. INLINE WORK ORDER ENTRY FORM (Clean flat grid matching PO Inward style) */}
+      {/* 4. DIRECT INTERACTIVE TAX INVOICE CREATOR MODAL */}
       {showAddModal && !editItem && (
-        <form onSubmit={handleSubmit} className="bg-sky-50/40 rounded-2xl border border-sky-200 animate-fadeIn shadow-lg overflow-visible">
-          <div className="font-bold text-sm text-[#1e3a8a] border-b border-sky-200 p-4 bg-sky-100/60 rounded-t-2xl flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Receipt className="w-5 h-5 text-[#1e3a8a]" />
-              <span>Record New Work Order Direct Sale</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowAddModal(false)}
-              className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-white/50 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order No *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. WO/2026/001"
-                value={formData.workOrderNumber}
-                onChange={(e) => setFormData({ ...formData, workOrderNumber: e.target.value.toUpperCase() })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order Date *</label>
-              <DatePickerDMY
-                required
-                value={formData.workOrderDate}
-                onChange={(val) => setFormData({ ...formData, workOrderDate: val })}
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Tax Invoice No *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. INV-2026-089"
-                value={formData.invoiceNumber}
-                onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value.toUpperCase() })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase text-blue-900 focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
-              <DatePickerDMY
-                required
-                value={formData.invoiceDate}
-                onChange={(val) => setFormData({ ...formData, invoiceDate: val })}
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Client Name *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. JSW Energy Limited"
-                value={formData.partyName}
-                onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GSTIN Number</label>
-              <input
-                type="text"
-                placeholder="e.g. 29AAAAA0000A1Z5"
-                value={formData.partyGstNumber}
-                onChange={(e) => setFormData({ ...formData, partyGstNumber: e.target.value.toUpperCase() })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Billing Address</label>
-              <input
-                type="text"
-                placeholder="e.g. Toranagallu, Sandur Taluk, Ballari..."
-                value={formData.partyAddress}
-                onChange={(e) => setFormData({ ...formData, partyAddress: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Name *</label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Fabrication and Erection Structure Work"
-                value={formData.itemName}
-                onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Part No / Model</label>
-              <input
-                type="text"
-                placeholder="e.g. WO-STR-01"
-                value={formData.partNumber}
-                onChange={(e) => setFormData({ ...formData, partNumber: e.target.value.toUpperCase() })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit *</label>
-              <select
-                value={formData.unit}
-                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                className="w-full p-2 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              >
-                <option value="NOS">NOS</option>
-                <option value="SET">SET</option>
-                <option value="MTR">MTR</option>
-                <option value="KG">KG</option>
-                <option value="LOT">LOT</option>
-                <option value="JOB">JOB</option>
-                <option value="HRS">HRS</option>
-              </select>
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Item Description / Work Scope</label>
-              <input
-                type="text"
-                placeholder="Detailed specifications, scope of work, technical remarks..."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle / Lorry No</label>
-              <input
-                type="text"
-                placeholder="e.g. KA-34-A-1234"
-                value={formData.vehicleNumber}
-                onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value.toUpperCase() })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number</label>
-              <input
-                type="text"
-                placeholder="e.g. 541289654123"
-                value={formData.eWayBillNumber}
-                onChange={(e) => setFormData({ ...formData, eWayBillNumber: e.target.value.toUpperCase() })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note</label>
-              <input
-                type="text"
-                placeholder="Special instructions, gate pass ref..."
-                value={formData.remarks}
-                onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity *</label>
-              <input
-                type="number"
-                step="any"
-                min="0.01"
-                required
-                placeholder="1.00"
-                value={formData.qty}
-                onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Unit Rate (₹) *</label>
-              <input
-                type="number"
-                step="any"
-                min="0"
-                required
-                placeholder="0.00"
-                value={formData.rate}
-                onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST %</label>
-              <input
-                type="number"
-                step="any"
-                value={formData.cgstPercent}
-                onChange={(e) => setFormData({ ...formData, cgstPercent: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST %</label>
-              <input
-                type="number"
-                step="any"
-                value={formData.sgstPercent}
-                onChange={(e) => setFormData({ ...formData, sgstPercent: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST %</label>
-              <input
-                type="number"
-                step="any"
-                value={formData.igstPercent}
-                onChange={(e) => setFormData({ ...formData, igstPercent: e.target.value })}
-                className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping Charges (₹)</label>
-              <input
-                type="number"
-                step="any"
-                placeholder="0.00"
-                value={formData.shippingCharges}
-                onChange={(e) => setFormData({ ...formData, shippingCharges: e.target.value })}
-                className="w-full p-2 border border-blue-300 bg-blue-50/40 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-              />
-            </div>
-          </div>
-
-          {/* ACTION & CALCULATION FOOTER */}
-          <div className="bg-white p-4 border-t border-sky-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-              <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(formBasic)}</strong></span>
-              <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">CGST {formCgstP}%: +{formatCurrency(formCgstAmt)}</span>
-              <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SGST {formSgstP}%: +{formatCurrency(formSgstAmt)}</span>
-              {formIgstP > 0 && <span className="text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST {formIgstP}%: +{formatCurrency(formIgstAmt)}</span>}
-              {formShip > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(formShip)}</span>}
-              <span className="text-sm font-black text-blue-950 ml-2 bg-blue-100/60 px-3 py-1 rounded-lg border border-blue-300">
-                Total Work Order: {formatCurrency(formTotalAmt)}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 self-end md:self-auto">
+        <div 
+          className="fixed inset-0 z-[99998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-fadeIn">
+            {/* INVOICE MODAL HEADER */}
+            <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0369a1] text-white px-6 py-4 flex justify-between items-center shrink-0 border-b border-white/15">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white text-[#1e3a8a] font-black flex items-center justify-center shadow-md">
+                  <Receipt className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base sm:text-lg font-black tracking-tight uppercase text-white">
+                      Direct Tax Invoice &amp; Work Order Sale
+                    </h2>
+                    <span className="bg-emerald-400 text-emerald-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                      Continuous Unified Ledger
+                    </span>
+                  </div>
+                  <p className="text-xs text-blue-100">
+                    Create direct sales contracts with real-time multi-item tax calculation &amp; continuous invoice sequencing
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                className="text-white/80 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors"
+                title="Close"
               >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="bg-[#1e3a8a] hover:bg-[#1e40af] text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5 disabled:opacity-50"
-              >
-                {submitting ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Save Work Order</span>
-                  </>
-                )}
+                <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* INVOICE SHEET CONTAINER */}
+            <form onSubmit={(e) => handleSaveInvoice(e, false)} className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+              {/* SECTION 1: INVOICE IDENTIFIERS & METADATA */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                    <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" /> Tax Invoice &amp; Order Details
+                  </span>
+                  <div className="text-[11px] text-slate-500 font-mono">
+                    Company GSTIN: <strong className="text-slate-800">29DWKPP3582H1ZV</strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Tax Invoice No * {nextInvoiceLoading && <span className="text-blue-600 animate-pulse">(Auto...)</span>}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 2026-27/02"
+                        value={invoiceHeader.invoiceNumber}
+                        onChange={(e) => setInvoiceHeader({ ...invoiceHeader, invoiceNumber: e.target.value.toUpperCase() })}
+                        className="w-full p-2 bg-blue-50/50 border border-blue-300 text-blue-900 rounded-lg font-mono font-black uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
+                    <DatePickerDMY
+                      required
+                      value={invoiceHeader.invoiceDate}
+                      onChange={(val) => setInvoiceHeader({ ...invoiceHeader, invoiceDate: val })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order No *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. WO/2026/001"
+                      value={invoiceHeader.workOrderNumber}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, workOrderNumber: e.target.value.toUpperCase() })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order Date *</label>
+                    <DatePickerDMY
+                      required
+                      value={invoiceHeader.workOrderDate}
+                      onChange={(val) => setInvoiceHeader({ ...invoiceHeader, workOrderDate: val })}
+                    />
+                  </div>
+                </div>
+
+                {/* Logistics & Dispatch Row */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle / Lorry No</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. KA-34-A-1234"
+                      value={invoiceHeader.vehicleNumber}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, vehicleNumber: e.target.value.toUpperCase() })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 541289654123"
+                      value={invoiceHeader.eWayBillNumber}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, eWayBillNumber: e.target.value.toUpperCase() })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note</label>
+                    <input
+                      type="text"
+                      placeholder="Special instructions or gate pass ref..."
+                      value={invoiceHeader.remarks}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, remarks: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 2: BILLED TO (PARTY / CLIENT DETAILS) */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Details of Receiver (Billed To)
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Client Name *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. THE CHIEF ENGINEER (TPC) RTPS"
+                      value={invoiceHeader.partyName}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, partyName: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GSTIN Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 29AAAAA0000A1Z5"
+                      value={invoiceHeader.partyGstNumber}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, partyGstNumber: e.target.value.toUpperCase() })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Billing Address</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. KPCL, RTPS, Shaktinagar - 584170..."
+                      value={invoiceHeader.partyAddress}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, partyAddress: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 3: MULTI-ITEM TAX INVOICE TABLE */}
+              <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Package className="w-4 h-4 text-[#1e3a8a]" />
+                    <span className="font-bold text-slate-800 text-xs">
+                      Invoice Line Items ({invoiceItems.length} {invoiceItems.length === 1 ? 'Item' : 'Items'})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddItemRow}
+                    className="bg-[#1e3a8a] hover:bg-[#1e40af] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add Line Item Row
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="bg-slate-800 text-slate-200 font-bold">
+                        <th className="p-2 w-10 text-center">#</th>
+                        <th className="p-2 w-28">KPCL Code</th>
+                        <th className="p-2 min-w-[200px]">Item Name &amp; Specification *</th>
+                        <th className="p-2 min-w-[150px]">Description / Scope</th>
+                        <th className="p-2 w-28">Part No</th>
+                        <th className="p-2 w-20">Unit</th>
+                        <th className="p-2 w-20 text-right">Qty *</th>
+                        <th className="p-2 w-28 text-right">Unit Rate (₹) *</th>
+                        <th className="p-2 w-32 text-right">Amount (₹)</th>
+                        <th className="p-2 w-12 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {invoiceCalculations.computedRows.map((row, idx) => (
+                        <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">
+                            {idx + 1}
+                          </td>
+                          <td className="p-1.5">
+                            <input
+                              type="text"
+                              placeholder="-"
+                              value={row.kpclCode}
+                              onChange={(e) => handleItemRowChange(row.id, 'kpclCode', e.target.value.toUpperCase())}
+                              className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs uppercase outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="p-1.5">
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. Fabrication and Erection Structure Work"
+                              value={row.itemName}
+                              onChange={(e) => handleItemRowChange(row.id, 'itemName', e.target.value)}
+                              className="w-full p-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="p-1.5">
+                            <input
+                              type="text"
+                              placeholder="Scope or technical clause..."
+                              value={row.description}
+                              onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
+                              className="w-full p-1.5 border border-slate-300 rounded text-xs outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="p-1.5">
+                            <input
+                              type="text"
+                              placeholder="e.g. STR-01"
+                              value={row.partNumber}
+                              onChange={(e) => handleItemRowChange(row.id, 'partNumber', e.target.value.toUpperCase())}
+                              className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs uppercase outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="p-1.5">
+                            <select
+                              value={row.unit}
+                              onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value)}
+                              className="w-full p-1.5 border border-slate-300 rounded font-medium text-xs bg-white outline-none focus:border-blue-500"
+                            >
+                              <option value="NOS">NOS</option>
+                              <option value="SET">SET</option>
+                              <option value="MTR">MTR</option>
+                              <option value="KG">KG</option>
+                              <option value="LOT">LOT</option>
+                              <option value="JOB">JOB</option>
+                              <option value="HRS">HRS</option>
+                            </select>
+                          </td>
+                          <td className="p-1.5">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0.01"
+                              required
+                              placeholder="1"
+                              value={row.qty}
+                              onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
+                              className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="p-1.5">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              required
+                              placeholder="0.00"
+                              value={row.rate}
+                              onChange={(e) => handleItemRowChange(row.id, 'rate', e.target.value)}
+                              className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
+                            />
+                          </td>
+                          <td className="p-2 text-right font-mono font-bold text-slate-900 bg-slate-50">
+                            {formatCurrency(row.computedAmount)}
+                          </td>
+                          <td className="p-1.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItemRow(row.id)}
+                              disabled={invoiceItems.length <= 1}
+                              className="p-1 text-slate-400 hover:text-rose-600 rounded disabled:opacity-30 disabled:hover:text-slate-400 transition-colors"
+                              title="Delete Row"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                  <button
+                    type="button"
+                    onClick={handleAddItemRow}
+                    className="text-xs font-bold text-[#1e3a8a] hover:text-[#1e40af] flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> + Add Another Item Row
+                  </button>
+                  <div className="text-xs font-mono font-bold text-slate-700">
+                    Total Basic: <strong className="text-slate-900 text-sm">{formatCurrency(invoiceCalculations.basicTotal)}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECTION 4: REAL-TIME GST & SUMMARY PANEL */}
+              <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50/70 border border-blue-200 rounded-xl p-4 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-blue-200 pb-2">
+                  <Receipt className="w-4 h-4 text-[#1e3a8a]" /> Tax Calculation &amp; Total Value Breakdown
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST Rate (%)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={invoiceHeader.cgstPercent}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, cgstPercent: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST Rate (%)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={invoiceHeader.sgstPercent}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, sgstPercent: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST Rate (%)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={invoiceHeader.igstPercent}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, igstPercent: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping / Freight (₹)</label>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="0.00"
+                      value={invoiceHeader.shippingCharges}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, shippingCharges: e.target.value })}
+                      className="w-full p-2 bg-white border border-blue-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                    />
+                  </div>
+                </div>
+
+                {/* Calculation Summary Strip */}
+                <div className="bg-white p-3 rounded-lg border border-blue-200 text-xs font-mono space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-slate-700">
+                    <span>Total Basic Cost: <strong>{formatCurrency(invoiceCalculations.basicTotal)}</strong></span>
+                    <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      CGST ({invoiceCalculations.cgstP}%): +{formatCurrency(invoiceCalculations.cgstAmt)}
+                    </span>
+                    <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                      SGST ({invoiceCalculations.sgstP}%): +{formatCurrency(invoiceCalculations.sgstAmt)}
+                    </span>
+                    {invoiceCalculations.igstP > 0 && (
+                      <span className="text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                        IGST ({invoiceCalculations.igstP}%): +{formatCurrency(invoiceCalculations.igstAmt)}
+                      </span>
+                    )}
+                    {invoiceCalculations.ship > 0 && (
+                      <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">
+                        Shipping: +{formatCurrency(invoiceCalculations.ship)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200">
+                    <div className="text-[11px] text-slate-600 italic">
+                      Amount in words: <strong className="text-slate-900 not-italic">{invoiceCalculations.amountInWords}</strong>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-slate-800">Grand Total Invoice:</span>
+                      <span className="text-base font-black text-[#1e3a8a] bg-blue-50 px-3 py-1 rounded-lg border border-blue-300 shadow-2xs font-mono">
+                        {formatCurrency(invoiceCalculations.grandTotal)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* FOOTER ACTIONS */}
+              <div className="pt-3 flex flex-wrap justify-end items-center gap-2.5 shrink-0 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2.5 bg-slate-800 hover:bg-slate-900 active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Save &amp; Add to Sales Ledger</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={(e) => handleSaveInvoice(e, true)}
+                  className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-95 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-blue-900/20 transition-all disabled:opacity-50"
+                >
+                  <Receipt className="w-4 h-4" />
+                  <span>Save &amp; Open Tax Invoice</span>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       )}
 
       {/* 5. WORK ORDERS DATA TABLE */}
@@ -839,11 +1318,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     # <ArrowUpDown className="w-3 h-3 text-sky-300" />
                   </button>
                 </th>
-                <th className="p-2.5 whitespace-nowrap">WO No & Date</th>
-                <th className="p-2.5 whitespace-nowrap">Invoice No & Date</th>
+                <th className="p-2.5 whitespace-nowrap">WO No &amp; Date</th>
+                <th className="p-2.5 whitespace-nowrap">Invoice No &amp; Date</th>
                 <th className="p-2.5 min-w-[200px]">Client / Party Name</th>
                 <th className="p-2.5 whitespace-nowrap">Party GSTIN</th>
-                <th className="p-2.5 min-w-[160px]">Item & Description</th>
+                <th className="p-2.5 min-w-[160px]">Item &amp; Description</th>
                 <th className="p-2.5 whitespace-nowrap">Part No</th>
                 <th className="p-2.5 text-center whitespace-nowrap">Qty</th>
                 <th className="p-2.5 text-right whitespace-nowrap">Rate (₹)</th>
@@ -873,34 +1352,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   return (
                     <tr 
                       key={wo.id} 
-                      onClick={() => {
-                        setSelectedForInvoice({
-                          ...wo,
-                          sourceType: 'WORK_ORDER',
-                          workOrderNumber: wo.workOrderNumber,
-                          workOrderDate: wo.workOrderDate,
-                          poNumber: wo.workOrderNumber,
-                          poDate: wo.workOrderDate,
-                          partyName: wo.partyName,
-                          partyAddress: wo.partyAddress,
-                          gstNumber: wo.partyGstNumber,
-                          companyName: wo.companyName,
-                          companyGstNumber: wo.companyGstNumber,
-                          quantity: wo.qty,
-                          unitPrice: wo.rate,
-                          cgstPercent: wo.cgstPercent,
-                          sgstPercent: wo.sgstPercent,
-                          igstPercent: wo.igstPercent,
-                          shippingCharges: wo.shippingCharges || 0,
-                          item: {
-                            itemName: wo.itemName,
-                            specifications: wo.description || 'Work Order Direct Sale',
-                            partNumber: wo.partNumber || '',
-                            kpclCode: '-',
-                            unit: wo.unit || 'NOS'
-                          }
-                        });
-                      }}
+                      onClick={() => openInvoiceForWorkOrder(wo)}
                       className={`cursor-pointer border-b border-slate-200 transition-colors ${isSelected ? 'bg-blue-50/80 font-medium' : 'hover:bg-blue-50/40'}`}
                     >
                       <td className="text-center border-r border-slate-200 p-2.5" onClick={(e) => e.stopPropagation()}>
@@ -964,34 +1416,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       >
                         <div className="flex items-center justify-center gap-1.5">
                           <button
-                            onClick={() => {
-                              setSelectedForInvoice({
-                                ...wo,
-                                sourceType: 'WORK_ORDER',
-                                workOrderNumber: wo.workOrderNumber,
-                                workOrderDate: wo.workOrderDate,
-                                poNumber: wo.workOrderNumber,
-                                poDate: wo.workOrderDate,
-                                partyName: wo.partyName,
-                                partyAddress: wo.partyAddress,
-                                gstNumber: wo.partyGstNumber,
-                                companyName: wo.companyName,
-                                companyGstNumber: wo.companyGstNumber,
-                                quantity: wo.qty,
-                                unitPrice: wo.rate,
-                                cgstPercent: wo.cgstPercent,
-                                sgstPercent: wo.sgstPercent,
-                                igstPercent: wo.igstPercent,
-                                shippingCharges: wo.shippingCharges || 0,
-                                item: {
-                                  itemName: wo.itemName,
-                                  specifications: wo.description || 'Work Order Direct Sale',
-                                  partNumber: wo.partNumber || '',
-                                  kpclCode: '-',
-                                  unit: wo.unit || 'NOS'
-                                }
-                              });
-                            }}
+                            onClick={() => openInvoiceForWorkOrder(wo)}
                             className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm"
                             title="Print / Download Official Tax Invoice (GST)"
                           >
@@ -1109,7 +1534,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     Edit Work Order: {editItem.workOrderNumber}
                   </h3>
                   <p className="text-[11px] text-sky-200/90 font-medium">
-                    Update work order details, taxes, freight & logistics
+                    Update work order details, taxes, freight &amp; logistics
                   </p>
                 </div>
               </div>
@@ -1123,11 +1548,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
+            <form onSubmit={(e) => handleSaveInvoice(e, false)} className="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1 text-xs">
               {/* SECTION 1: WORK ORDER & INVOICE DETAILS */}
               <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
-                  <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" /> Work Order & Tax Invoice Identifiers
+                  <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" /> Work Order &amp; Tax Invoice Identifiers
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div>
@@ -1136,8 +1561,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="text"
                       required
                       placeholder="e.g. WO/2026/001"
-                      value={formData.workOrderNumber}
-                      onChange={(e) => setFormData({ ...formData, workOrderNumber: e.target.value.toUpperCase() })}
+                      value={editFormData.workOrderNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, workOrderNumber: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1145,8 +1570,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <label className="block font-bold text-slate-700 mb-1">Work Order Date *</label>
                     <DatePickerDMY
                       required
-                      value={formData.workOrderDate}
-                      onChange={(val) => setFormData({ ...formData, workOrderDate: val })}
+                      value={editFormData.workOrderDate}
+                      onChange={(val) => setEditFormData({ ...editFormData, workOrderDate: val })}
                     />
                   </div>
                   <div>
@@ -1155,8 +1580,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="text"
                       required
                       placeholder="e.g. INV-2026-089"
-                      value={formData.invoiceNumber}
-                      onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value.toUpperCase() })}
+                      value={editFormData.invoiceNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, invoiceNumber: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1164,8 +1589,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <label className="block font-bold text-slate-700 mb-1">Invoice Date *</label>
                     <DatePickerDMY
                       required
-                      value={formData.invoiceDate}
-                      onChange={(val) => setFormData({ ...formData, invoiceDate: val })}
+                      value={editFormData.invoiceDate}
+                      onChange={(val) => setEditFormData({ ...editFormData, invoiceDate: val })}
                     />
                   </div>
                 </div>
@@ -1174,7 +1599,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               {/* SECTION 2: PARTY & COMPANY DETAILS */}
               <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
-                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Party (Client) & Billing Company Details
+                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Party (Client) &amp; Billing Company Details
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                   <div>
@@ -1183,8 +1608,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="text"
                       required
                       placeholder="e.g. JSW Energy Limited"
-                      value={formData.partyName}
-                      onChange={(e) => setFormData({ ...formData, partyName: e.target.value })}
+                      value={editFormData.partyName}
+                      onChange={(e) => setEditFormData({ ...editFormData, partyName: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1193,8 +1618,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       placeholder="e.g. 29AAAAA0000A1Z5"
-                      value={formData.partyGstNumber}
-                      onChange={(e) => setFormData({ ...formData, partyGstNumber: e.target.value.toUpperCase() })}
+                      value={editFormData.partyGstNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, partyGstNumber: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1203,7 +1628,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       disabled
-                      value={formData.companyGstNumber}
+                      value={editFormData.companyGstNumber}
                       className="w-full p-2.5 border border-slate-200 rounded-lg font-mono font-bold bg-slate-100 text-slate-600 outline-none text-xs"
                     />
                   </div>
@@ -1212,8 +1637,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       placeholder="e.g. Toranagallu, Sandur Taluk, Ballari District, Karnataka - 583123"
-                      value={formData.partyAddress}
-                      onChange={(e) => setFormData({ ...formData, partyAddress: e.target.value })}
+                      value={editFormData.partyAddress}
+                      onChange={(e) => setEditFormData({ ...editFormData, partyAddress: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1223,7 +1648,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               {/* SECTION 3: ITEMS, DESCRIPTION, QTY, RATE & TAXES */}
               <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
-                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Item Specifications, Pricing & Tax Breakdown
+                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Item Specifications, Pricing &amp; Tax Breakdown
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="sm:col-span-2">
@@ -1232,8 +1657,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="text"
                       required
                       placeholder="e.g. Fabrication and Erection Structure Work"
-                      value={formData.itemName}
-                      onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
+                      value={editFormData.itemName}
+                      onChange={(e) => setEditFormData({ ...editFormData, itemName: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1242,16 +1667,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       placeholder="e.g. WO-STR-01"
-                      value={formData.partNumber}
-                      onChange={(e) => setFormData({ ...formData, partNumber: e.target.value.toUpperCase() })}
+                      value={editFormData.partNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, partNumber: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Unit *</label>
                     <select
-                      value={formData.unit}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      value={editFormData.unit}
+                      onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value })}
                       className="w-full p-2.5 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     >
                       <option value="NOS">NOS</option>
@@ -1268,8 +1693,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <textarea
                       rows={2}
                       placeholder="Detailed specifications, scope of work, technical remarks or special clauses..."
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      value={editFormData.description}
+                      onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1284,8 +1709,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       min="0.01"
                       required
                       placeholder="1.00"
-                      value={formData.qty}
-                      onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
+                      value={editFormData.qty}
+                      onChange={(e) => setEditFormData({ ...editFormData, qty: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1297,8 +1722,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       min="0"
                       required
                       placeholder="0.00"
-                      value={formData.rate}
-                      onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
+                      value={editFormData.rate}
+                      onChange={(e) => setEditFormData({ ...editFormData, rate: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1307,8 +1732,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="number"
                       step="any"
-                      value={formData.cgstPercent}
-                      onChange={(e) => setFormData({ ...formData, cgstPercent: e.target.value })}
+                      value={editFormData.cgstPercent}
+                      onChange={(e) => setEditFormData({ ...editFormData, cgstPercent: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1317,8 +1742,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="number"
                       step="any"
-                      value={formData.sgstPercent}
-                      onChange={(e) => setFormData({ ...formData, sgstPercent: e.target.value })}
+                      value={editFormData.sgstPercent}
+                      onChange={(e) => setEditFormData({ ...editFormData, sgstPercent: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1327,8 +1752,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="number"
                       step="any"
-                      value={formData.igstPercent}
-                      onChange={(e) => setFormData({ ...formData, igstPercent: e.target.value })}
+                      value={editFormData.igstPercent}
+                      onChange={(e) => setEditFormData({ ...editFormData, igstPercent: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1338,31 +1763,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="number"
                       step="any"
                       placeholder="0.00"
-                      value={formData.shippingCharges}
-                      onChange={(e) => setFormData({ ...formData, shippingCharges: e.target.value })}
+                      value={editFormData.shippingCharges}
+                      onChange={(e) => setEditFormData({ ...editFormData, shippingCharges: e.target.value })}
                       className="w-full p-2.5 border border-blue-300 bg-blue-50/40 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
-                  </div>
-                </div>
-
-                {/* LIVE CALCULATION SUMMARY CARD */}
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50/80 p-3.5 rounded-xl border border-blue-200 text-xs font-mono space-y-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-slate-600 font-medium">Basic Amount: <strong className="text-slate-900">{formatCurrency(formBasic)}</strong></span>
-                    <span className="text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded border border-blue-200">CGST ({formCgstP}%): +{formatCurrency(formCgstAmt)}</span>
-                    <span className="text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded border border-blue-200">SGST ({formSgstP}%): +{formatCurrency(formSgstAmt)}</span>
-                    {formIgstP > 0 && (
-                      <span className="text-indigo-800 bg-indigo-100/70 px-2 py-0.5 rounded border border-indigo-200">IGST ({formIgstP}%): +{formatCurrency(formIgstAmt)}</span>
-                    )}
-                    {formShip > 0 && (
-                      <span className="text-amber-900 bg-amber-100/70 px-2 py-0.5 rounded border border-amber-200 font-bold">Shipping: +{formatCurrency(formShip)}</span>
-                    )}
-                  </div>
-                  <div className="flex justify-between items-center text-sm font-black text-blue-950 pt-2 border-t border-blue-200">
-                    <span>Grand Total Value:</span>
-                    <span className="text-base font-black text-blue-900 bg-white px-3 py-1 rounded-lg border border-blue-300 shadow-xs font-mono">
-                      {formatCurrency(formTotalAmt)}
-                    </span>
                   </div>
                 </div>
               </div>
@@ -1370,36 +1774,36 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               {/* SECTION 4: DISPATCH & REMARKS */}
               <div className="bg-slate-50/80 p-3.5 sm:p-4 rounded-xl border border-slate-200/90 space-y-3">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
-                  <span>🚚</span> Dispatch Logistics & Remarks
+                  <span>🚚</span> Dispatch Logistics &amp; Remarks
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Vehicle Number <span className="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
+                    <label className="block font-bold text-slate-700 mb-1">Vehicle Number</label>
                     <input
                       type="text"
                       placeholder="e.g. KA-34-A-1234"
-                      value={formData.vehicleNumber}
-                      onChange={(e) => setFormData({ ...formData, vehicleNumber: e.target.value.toUpperCase() })}
+                      value={editFormData.vehicleNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, vehicleNumber: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">E-Way Bill Number <span className="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
+                    <label className="block font-bold text-slate-700 mb-1">E-Way Bill Number</label>
                     <input
                       type="text"
                       placeholder="e.g. 541289654123"
-                      value={formData.eWayBillNumber}
-                      onChange={(e) => setFormData({ ...formData, eWayBillNumber: e.target.value.toUpperCase() })}
+                      value={editFormData.eWayBillNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, eWayBillNumber: e.target.value.toUpperCase() })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Remarks / Note <span className="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
+                    <label className="block font-bold text-slate-700 mb-1">Remarks / Note</label>
                     <input
                       type="text"
                       placeholder="Special instructions, gate pass ref..."
-                      value={formData.remarks}
-                      onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                      value={editFormData.remarks}
+                      onChange={(e) => setEditFormData({ ...editFormData, remarks: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -1463,7 +1867,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             <div className="p-5 space-y-4 overflow-y-auto text-xs">
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Party & Client Details
+                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Party &amp; Client Details
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div><span className="text-slate-500">Party Name:</span> <strong className="text-slate-900 block">{inspectItem.partyName}</strong></div>
@@ -1476,7 +1880,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Item & Pricing Breakdown
+                  <Package className="w-4 h-4 text-[#1e3a8a]" /> Item &amp; Pricing Breakdown
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div><span className="text-slate-500">Item Name:</span> <strong className="text-slate-900 block">{inspectItem.itemName}</strong></div>
@@ -1540,34 +1944,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
               <button
                 type="button"
                 onClick={() => {
-                  const toPrint = {
-                    ...inspectItem,
-                    sourceType: 'WORK_ORDER',
-                    workOrderNumber: inspectItem.workOrderNumber,
-                    workOrderDate: inspectItem.workOrderDate,
-                    poNumber: inspectItem.workOrderNumber,
-                    poDate: inspectItem.workOrderDate,
-                    partyName: inspectItem.partyName,
-                    partyAddress: inspectItem.partyAddress,
-                    gstNumber: inspectItem.partyGstNumber,
-                    companyName: inspectItem.companyName,
-                    companyGstNumber: inspectItem.companyGstNumber,
-                    quantity: inspectItem.qty,
-                    unitPrice: inspectItem.rate,
-                    cgstPercent: inspectItem.cgstPercent,
-                    sgstPercent: inspectItem.sgstPercent,
-                    igstPercent: inspectItem.igstPercent,
-                    shippingCharges: inspectItem.shippingCharges || 0,
-                    item: {
-                      itemName: inspectItem.itemName,
-                      specifications: inspectItem.description || 'Work Order Direct Sale',
-                      partNumber: inspectItem.partNumber || '',
-                      kpclCode: '-',
-                      unit: inspectItem.unit || 'NOS'
-                    }
-                  };
+                  openInvoiceForWorkOrder(inspectItem);
                   setInspectItem(null);
-                  setSelectedForInvoice(toPrint);
                 }}
                 className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
               >

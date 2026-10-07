@@ -3060,8 +3060,9 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// POST /api/work-orders - Create new Work Order Direct Sale
+// POST /api/work-orders - Create new Work Order Direct Sale (Single item or Multi-item invoice batch)
 app.post('/api/work-orders', authenticateToken, async (req, res) => {
+  const client = await pool.connect();
   try {
     const d = req.body;
     if (!d.workOrderNumber || !d.workOrderNumber.trim()) {
@@ -3073,111 +3074,145 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
     if (!d.partyName || !d.partyName.trim()) {
       return res.status(400).json({ error: 'Party / Client Name is required' });
     }
-    if (!d.itemName || !d.itemName.trim()) {
-      return res.status(400).json({ error: 'Item Name is required' });
-    }
-
-    const qty = parseFloat(d.qty) || 0;
-    const rate = parseFloat(d.rate) || 0;
-    const shippingCharges = parseFloat(d.shippingCharges) || 0;
-    if (qty <= 0) return res.status(400).json({ error: 'Quantity must be greater than 0' });
-
-    const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
-    const cgstP = parseFloat(d.cgstPercent) || 0;
-    const sgstP = parseFloat(d.sgstPercent) || 0;
-    const igstP = parseFloat(d.igstPercent) || 0;
-    const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
-    const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
-    const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
-    const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
     const isAutoApproved = req.user.role === 'OWNER';
     const initialStatus = isAutoApproved ? 'APPROVED' : 'PENDING';
 
-    const { rows } = await pool.query(
-      `INSERT INTO "WorkOrder" (
-        "id", "workOrderNumber", "workOrderDate", "invoiceNumber", "invoiceDate",
-        "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
-        "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
-        "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "shippingCharges", "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
-      ) VALUES (
-        gen_random_uuid()::text, $1, $2, $3, $4,
-        $5, $6, $7, $8, $9,
-        $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22,
-        $23, $24, $25, $26, $27, $28, $29, $30, $31, NOW(), NOW()
-      ) RETURNING *`,
-      [
-        d.workOrderNumber.trim().toUpperCase(),
-        d.workOrderDate ? new Date(d.workOrderDate) : new Date(),
-        d.invoiceNumber.trim().toUpperCase(),
-        d.invoiceDate ? new Date(d.invoiceDate) : new Date(),
-        d.partyName.trim(),
-        d.partyAddress ? d.partyAddress.trim() : null,
-        d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null,
-        d.companyName ? d.companyName.trim() : 'Sri Krishna Constructions',
-        d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : '29DWKPP3582H1ZV',
-        d.itemName.trim(),
-        d.description ? d.description.trim() : null,
-        d.partNumber ? d.partNumber.trim().toUpperCase() : null,
-        d.unit ? d.unit.trim().toUpperCase() : 'NOS',
-        qty,
-        rate,
-        basicAmount,
-        cgstP,
-        sgstP,
-        igstP,
-        cgstAmount,
-        sgstAmount,
-        igstAmount,
-        shippingCharges,
-        totalAmount,
-        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
-        d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
-        d.remarks ? d.remarks.trim() : null,
-        initialStatus,
-        isAutoApproved ? req.user.id : null,
-        isAutoApproved ? new Date() : null,
-        req.user.id
-      ]
-    );
+    // Normalize to items array
+    const rawItems = Array.isArray(d.items) && d.items.length > 0 
+      ? d.items 
+      : [{
+          itemName: d.itemName,
+          description: d.description,
+          partNumber: d.partNumber,
+          kpclCode: d.kpclCode,
+          unit: d.unit,
+          qty: d.qty,
+          rate: d.rate,
+          cgstPercent: d.cgstPercent,
+          sgstPercent: d.sgstPercent,
+          igstPercent: d.igstPercent,
+          shippingCharges: d.shippingCharges
+        }];
 
-    const createdWO = rows[0];
+    if (rawItems.length === 0 || !rawItems[0].itemName || !rawItems[0].itemName.trim()) {
+      return res.status(400).json({ error: 'At least one item with a valid Item Name is required' });
+    }
+
+    await client.query('BEGIN');
+    const createdOrders = [];
+    let grandTotal = 0;
+
+    for (const item of rawItems) {
+      if (!item.itemName || !item.itemName.trim()) continue;
+
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const shippingCharges = parseFloat(item.shippingCharges) || 0;
+      if (qty <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Quantity for item "${item.itemName}" must be greater than 0` });
+      }
+
+      const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+      const cgstP = item.cgstPercent !== undefined ? parseFloat(item.cgstPercent) : (parseFloat(d.cgstPercent) || 0);
+      const sgstP = item.sgstPercent !== undefined ? parseFloat(item.sgstPercent) : (parseFloat(d.sgstPercent) || 0);
+      const igstP = item.igstPercent !== undefined ? parseFloat(item.igstPercent) : (parseFloat(d.igstPercent) || 0);
+      const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+      const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+      const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+      const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
+      grandTotal += totalAmount;
+
+      const { rows } = await client.query(
+        `INSERT INTO "WorkOrder" (
+          "id", "workOrderNumber", "workOrderDate", "invoiceNumber", "invoiceDate",
+          "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
+          "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
+          "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+          "shippingCharges", "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
+        ) VALUES (
+          gen_random_uuid()::text, $1, $2, $3, $4,
+          $5, $6, $7, $8, $9,
+          $10, $11, $12, $13, $14, $15, $16,
+          $17, $18, $19, $20, $21, $22,
+          $23, $24, $25, $26, $27, $28, $29, $30, $31, NOW(), NOW()
+        ) RETURNING *`,
+        [
+          d.workOrderNumber.trim().toUpperCase(),
+          d.workOrderDate ? new Date(d.workOrderDate) : new Date(),
+          d.invoiceNumber.trim().toUpperCase(),
+          d.invoiceDate ? new Date(d.invoiceDate) : new Date(),
+          d.partyName.trim(),
+          d.partyAddress ? d.partyAddress.trim() : null,
+          d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null,
+          d.companyName ? d.companyName.trim() : 'Sri Krishna Constructions',
+          d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : '29DWKPP3582H1ZV',
+          item.itemName.trim(),
+          item.description ? item.description.trim() : (item.specifications || null),
+          item.partNumber ? item.partNumber.trim().toUpperCase() : (item.kpclCode || null),
+          item.unit ? item.unit.trim().toUpperCase() : 'NOS',
+          qty,
+          rate,
+          basicAmount,
+          cgstP,
+          sgstP,
+          igstP,
+          cgstAmount,
+          sgstAmount,
+          igstAmount,
+          shippingCharges,
+          totalAmount,
+          d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+          d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
+          d.remarks ? d.remarks.trim() : null,
+          initialStatus,
+          isAutoApproved ? req.user.id : null,
+          isAutoApproved ? new Date() : null,
+          req.user.id
+        ]
+      );
+
+      createdOrders.push(rows[0]);
+    }
+
+    await client.query('COMMIT');
 
     // If added by Manager / Supervisor, create an ApprovalRequest for Owner review
-    if (!isAutoApproved) {
+    if (!isAutoApproved && createdOrders.length > 0) {
       await pool.query(
         `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
          VALUES (gen_random_uuid()::text, 'WORK_ORDER_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
         [
           req.user.id,
           JSON.stringify({
-            workOrderId: createdWO.id,
-            workOrderNumber: createdWO.workOrderNumber,
-            invoiceNumber: createdWO.invoiceNumber,
-            partyName: createdWO.partyName,
-            itemName: createdWO.itemName,
-            qty: createdWO.qty,
-            rate: createdWO.rate,
-            shippingCharges: createdWO.shippingCharges,
-            totalAmount: createdWO.totalAmount
+            workOrderIds: createdOrders.map(o => o.id),
+            workOrderNumber: d.workOrderNumber,
+            invoiceNumber: d.invoiceNumber,
+            partyName: d.partyName,
+            itemCount: createdOrders.length,
+            totalAmount: grandTotal
           }),
-          `Work Order Direct Sale created by ${req.user.fullName || req.user.username} (${createdWO.invoiceNumber} / ₹${totalAmount})`
+          `Work Order Direct Sale (${createdOrders.length} items) created by ${req.user.fullName || req.user.username} (${d.invoiceNumber} / ₹${grandTotal})`
         ]
       );
     }
 
     res.status(201).json({ 
       message: isAutoApproved 
-        ? 'Work Order direct sale recorded and approved!' 
-        : 'Work Order direct sale submitted for Owner approval.',
-      workOrder: createdWO 
+        ? `Work Order invoice (${createdOrders.length} item${createdOrders.length > 1 ? 's' : ''}) recorded and approved!` 
+        : `Work Order invoice (${createdOrders.length} item${createdOrders.length > 1 ? 's' : ''}) submitted for Owner approval.`,
+      workOrders: createdOrders,
+      workOrder: createdOrders[0]
     });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error creating work order:', err);
     res.status(500).json({ error: 'Failed to create work order entry' });
+  } finally {
+    client.release();
   }
+});
 });
 
 // PUT /api/work-orders/:id - Update Work Order

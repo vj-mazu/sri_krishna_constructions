@@ -210,24 +210,24 @@ export const SaleInvoiceModal: React.FC<{
           }
         }
 
-        // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red Serif)
+        // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red)
         doc.setTextColor(218, 18, 18);
-        doc.setFont('times', 'bold');
-        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(17);
         doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
 
         // Subtitle & Address
         doc.setTextColor(0, 0, 0);
-        doc.setFont('times', 'normal');
+        doc.setFont('helvetica', 'normal');
         doc.setFontSize(8.5);
         doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
         
-        doc.setFont('times', 'normal');
-        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
         doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
 
         // GST and Mobile Bar
-        doc.setFont('times', 'bold');
+        doc.setFont('helvetica', 'bold');
         doc.setFontSize(8);
         doc.text(`GST NO: ${primarySale.companyGstNumber || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
         doc.text('Mobile No: 8496841904', pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
@@ -239,12 +239,12 @@ export const SaleInvoiceModal: React.FC<{
 
       // 2. BOXED TAX INVOICE TITLE
       doc.rect(margin, y, contentWidth, 7);
-      doc.setFontSize(13);
-      doc.setFont('times', 'bold');
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
       doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 5.2, { align: 'center' });
       y += 7;
 
-      // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT LAYOUT AS PER USER PDF)
+      // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT LAYOUT)
       const boxHeight = 52;
       const colHalf = contentWidth / 2;
 
@@ -252,7 +252,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
 
       // Left Column items
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       let ly = y + 4.5;
       doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
@@ -265,7 +265,7 @@ export const SaleInvoiceModal: React.FC<{
       ly += 5.5;
       const supplyToText = primarySale.placeOfWork || partyName || '-';
       doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, ly);
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
       
       if (partyAddress) {
@@ -275,7 +275,7 @@ export const SaleInvoiceModal: React.FC<{
         doc.text(`Party: ${partyName}`, margin + 2, ly + 4.5);
       }
       
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, ly + 20);
       doc.line(margin, ly + 22, margin + colHalf, ly + 22);
@@ -285,7 +285,7 @@ export const SaleInvoiceModal: React.FC<{
 
       // Right Column items
       let ry = y + 4.5;
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
       doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
@@ -296,14 +296,14 @@ export const SaleInvoiceModal: React.FC<{
 
       ry += 5.5;
       doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, ry);
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(7.5);
 
       const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
       const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
       doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
       
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, ry + 20);
       doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
@@ -313,7 +313,7 @@ export const SaleInvoiceModal: React.FC<{
 
       y += boxHeight;
 
-      // 4. INVOICE ITEMS TABLE (EXACT AUTOTABLE MATCHING USER'S PDF)
+      // 4. INVOICE ITEMS TABLE
       const tableBody = itemsRows.map((r) => [
         r.slNo.toString(),
         r.kpclCode || '-',
@@ -334,7 +334,7 @@ export const SaleInvoiceModal: React.FC<{
         body: tableBody,
         theme: 'grid',
         styles: {
-          font: 'times',
+          font: 'helvetica',
           fontSize: 7.5,
           lineColor: [0, 0, 0],
           lineWidth: 0.35,
@@ -343,7 +343,7 @@ export const SaleInvoiceModal: React.FC<{
           valign: 'middle'
         },
         headStyles: {
-          font: 'times',
+          font: 'helvetica',
           fillColor: [255, 255, 255],
           textColor: [0, 0, 0],
           fontStyle: 'bold',
@@ -369,7 +369,7 @@ export const SaleInvoiceModal: React.FC<{
           }
           // Page Number at bottom of every page
           const str = `Page ${data.pageNumber} of `;
-          doc.setFont('times', 'normal');
+          doc.setFont('helvetica', 'normal');
           doc.setFontSize(7.5);
           doc.setTextColor(0, 0, 0);
           doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
@@ -390,7 +390,7 @@ export const SaleInvoiceModal: React.FC<{
         fy = 36;
       }
 
-      // 5. BOTTOM TOTALS BOX & BANK DETAILS (EXACT AS USER PDF PAGE 4)
+      // 5. BOTTOM TOTALS BOX & BANK DETAILS
       const leftBoxWidth = 120;
       const bottomBoxHeight = 35;
 
@@ -399,19 +399,19 @@ export const SaleInvoiceModal: React.FC<{
       doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
 
       // Left Box: Total Invoice amount in words + Bank Details
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
       doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
       const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
       doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
 
       doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
 
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.text('Bank Details :', margin + 2, fy + 16.5);
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.text('Account Holder Name : Sri Krishna Constructions', margin + 2, fy + 20.5);
       doc.text('Bank Name : Canara Bank Deosugur Branch', margin + 2, fy + 24.5);
       doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
@@ -422,7 +422,7 @@ export const SaleInvoiceModal: React.FC<{
       const valX = margin + contentWidth - 2;
 
       // Row 1: Basic Cost
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
       doc.text('Basic Cost', rightX + 2, fy + 5.5);
       doc.text(fmt(totalBasic), valX, fy + 5.5, { align: 'right' });
@@ -448,21 +448,21 @@ export const SaleInvoiceModal: React.FC<{
       doc.text('TOTAL AMOUNT', rightX + 2, fy + 33.5);
       doc.text(fmt(totalInvoiceAmount), valX, fy + 33.5, { align: 'right' });
 
-      // Signatures (Right aligned only, matching authentic invoice)
+      // Signatures (Right aligned only)
       let sigY = fy + bottomBoxHeight + 8;
       if (sigY > 270) {
         doc.addPage();
         drawHeaderBox(8);
         sigY = 40;
       }
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
       doc.text('Your Faithfully', pageWidth - margin - 20, sigY, { align: 'center' });
-      doc.setFont('times', 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(59, 130, 246);
       doc.text('For Sri Krishna Constructions', pageWidth - margin - 20, sigY + 6, { align: 'center' });
       doc.setTextColor(0, 0, 0);
-      doc.setFont('times', 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.text('Proprietor', pageWidth - margin - 20, sigY + 16, { align: 'center' });
 
       doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
@@ -517,8 +517,8 @@ export const SaleInvoiceModal: React.FC<{
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
         <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center">
           <div 
-            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-serif"
-            style={{ fontFamily: "'Times New Roman', Times, 'Liberation Serif', serif" }}
+            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-sans"
+            style={{ fontFamily: "Arial, 'Segoe UI', Roboto, Helvetica, sans-serif" }}
           >
             
             {/* 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO */}
@@ -546,12 +546,12 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 2. TAX INVOICE TITLE BOX */}
-            <div className="border-x border-b border-black py-1.5 text-center font-serif font-black text-lg uppercase tracking-wider bg-white">
+            <div className="border-x border-b border-black py-1.5 text-center font-sans font-black text-lg uppercase tracking-wider bg-white">
               {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
             </div>
 
             {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS */}
-            <div className="border-x border-b border-black grid grid-cols-2 text-[11px] font-serif">
+            <div className="border-x border-b border-black grid grid-cols-2 text-[11px] font-sans">
               {/* Left Column */}
               <div className="border-r border-black divide-y divide-black">
                 <div className="p-1.5 font-bold">
@@ -599,7 +599,7 @@ export const SaleInvoiceModal: React.FC<{
 
             {/* 4. TAX INVOICE ITEMS TABLE */}
             <div className="border-x border-b border-black overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse font-serif">
+              <table className="w-full text-left text-[11px] border-collapse font-sans">
                 <thead>
                   <tr className="border-b border-black text-center font-bold bg-white">
                     <th className="p-2 border-r border-black w-10">SL NO</th>
@@ -635,7 +635,7 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 5. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 mt-0 font-serif border-x border-b border-black">
+            <div className="grid grid-cols-1 sm:grid-cols-2 mt-0 font-sans border-x border-b border-black">
               {/* Left Box: Amount in words & Bank info */}
               <div className="p-2.5 text-[11px] space-y-1.5 border-b sm:border-b-0 sm:border-r border-black">
                 <div>
@@ -681,7 +681,7 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 6. SIGNATURES (Right side only matching original PDF, left side clear for stamps) */}
-            <div className="flex justify-end items-end mt-10 pt-4 text-xs font-serif">
+            <div className="flex justify-end items-end mt-10 pt-4 text-xs font-sans">
               <div className="text-center">
                 <div className="text-black">Your Faithfully</div>
                 <div className="font-bold text-blue-600 mt-1">For Sri Krishna Constructions</div>
