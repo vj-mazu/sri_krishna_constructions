@@ -3443,28 +3443,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
-                        <input 
-                          type="text" 
-                          placeholder="e.g. DC-9901" 
-                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900 focus:ring-1 focus:ring-amber-500" 
-                          value={saleForm.partyInvoiceNumber || ''} 
-                          onChange={e => handleSaleChange('partyInvoiceNumber', e.target.value.toUpperCase())} 
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party DC Date</label>
-                        <input 
-                          type="date" 
-                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-amber-500" 
-                          value={saleForm.supplierInvoiceDate || ''} 
-                          onChange={e => handleSaleChange('supplierInvoiceDate', e.target.value)} 
-                        />
-                      </div>
-
-                      <div>
+                      <div className="md:col-span-2">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number (Optional)</label>
                         <input 
                           type="text" 
@@ -3475,7 +3454,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         />
                       </div>
 
-                      <div>
+                      <div className="md:col-span-2">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note</label>
                         <input 
                           type="text" 
@@ -3532,8 +3511,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <th className="text-center px-2 py-2 bg-emerald-900 text-emerald-100 font-bold">Avail Stock</th>
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[110px] text-center">Sale Qty *</th>
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[110px] text-center">Sale Rate (₹) *</th>
-                                <th className="px-2 py-2 bg-amber-950 text-amber-200 w-16 text-center">CGST %</th>
-                                <th className="px-2 py-2 bg-amber-950 text-amber-200 w-16 text-center">SGST %</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">CGST %</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">SGST %</th>
                                 <th className="px-2 py-2 text-right">Basic (₹)</th>
                                 <th className="px-2 py-2 text-right">Tax (₹)</th>
                                 <th className="px-2 py-2 text-right">Line Total (₹)</th>
@@ -3660,26 +3639,26 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                       </td>
 
                                       {/* CGST */}
-                                      <td className="px-1.5 py-1.5 bg-amber-50/50">
+                                      <td className="px-1.5 py-1.5 bg-amber-50/50 text-center">
                                         <input 
                                           type="number" 
                                           step="0.01"
-                                          value={edits.cgstPercent ?? 9}
+                                          value={edits.cgstPercent !== undefined ? edits.cgstPercent : 9}
                                           onChange={(e) => updateEdit('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
                                           disabled={!isSelected}
-                                          className="w-full p-1 text-center font-mono text-xs rounded border border-slate-300 bg-white text-slate-800 disabled:bg-slate-100"
+                                          className="w-14 p-1 text-center font-mono font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
                                         />
                                       </td>
 
                                       {/* SGST */}
-                                      <td className="px-1.5 py-1.5 bg-amber-50/50">
+                                      <td className="px-1.5 py-1.5 bg-amber-50/50 text-center">
                                         <input 
                                           type="number" 
                                           step="0.01"
-                                          value={edits.sgstPercent ?? 9}
+                                          value={edits.sgstPercent !== undefined ? edits.sgstPercent : 9}
                                           onChange={(e) => updateEdit('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
                                           disabled={!isSelected}
-                                          className="w-full p-1 text-center font-mono text-xs rounded border border-slate-300 bg-white text-slate-800 disabled:bg-slate-100"
+                                          className="w-14 p-1 text-center font-mono font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
                                         />
                                       </td>
 

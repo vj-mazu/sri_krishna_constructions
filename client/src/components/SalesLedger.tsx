@@ -58,6 +58,7 @@ export const SalesLedger: React.FC = () => {
   const [sales, setSales] = useState<SaleLedgerItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [invoiceNumberFilter, setInvoiceNumberFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [sourceFilter, setSourceFilter] = useState<'ALL' | 'PO' | 'INDIVIDUAL' | 'WORK_ORDER'>('ALL');
@@ -80,6 +81,7 @@ export const SalesLedger: React.FC = () => {
         sortOrder: sortOrder
       };
       if (searchTerm.trim()) params.search = searchTerm.trim();
+      if (invoiceNumberFilter.trim()) params.invoiceNumber = invoiceNumberFilter.trim();
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
       if (sourceFilter !== 'ALL') params.sourceType = sourceFilter;
@@ -92,7 +94,7 @@ export const SalesLedger: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, searchTerm, dateFrom, dateTo, sourceFilter, sortOrder]);
+  }, [currentPage, pageSize, searchTerm, invoiceNumberFilter, dateFrom, dateTo, sourceFilter, sortOrder]);
 
   useEffect(() => {
     fetchSalesLedger();
@@ -101,7 +103,7 @@ export const SalesLedger: React.FC = () => {
   // Reset to page 1 whenever filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, dateFrom, dateTo, sourceFilter, pageSize]);
+  }, [searchTerm, invoiceNumberFilter, dateFrom, dateTo, sourceFilter, pageSize]);
 
   // The server returns rows with their exact permanent chronological slNo and requested sort order
   const paginatedSales = useMemo(() => {
@@ -275,13 +277,24 @@ export const SalesLedger: React.FC = () => {
             </button>
           </div>
 
+          {/* INVOICE NUMBER FILTER */}
+          <div className="relative w-36">
+            <input
+              type="text"
+              className="w-full px-3 py-1.5 border border-slate-300 rounded-xl text-xs uppercase font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none bg-white text-blue-900"
+              placeholder="Invoice #..."
+              value={invoiceNumberFilter}
+              onChange={(e) => setInvoiceNumberFilter(e.target.value.toUpperCase())}
+            />
+          </div>
+
           {/* SEARCH INPUT */}
           <div className="relative flex-1 min-w-[200px]">
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs uppercase font-mono focus:ring-2 focus:ring-blue-400 outline-none"
-              placeholder="Search Invoice #, Client Name, GSTIN, E-Way Bill..."
+              placeholder="Search Client Name, GSTIN, E-Way Bill, Part No..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
             />
@@ -303,9 +316,9 @@ export const SalesLedger: React.FC = () => {
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
           />
-          {(searchTerm || dateFrom || dateTo) && (
+          {(searchTerm || invoiceNumberFilter || dateFrom || dateTo) && (
             <button
-              onClick={() => { setSearchTerm(''); setDateFrom(''); setDateTo(''); }}
+              onClick={() => { setSearchTerm(''); setInvoiceNumberFilter(''); setDateFrom(''); setDateTo(''); }}
               className="px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-xl font-bold border border-rose-200"
             >
               Reset

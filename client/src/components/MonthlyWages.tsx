@@ -103,9 +103,27 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   const [tableViewMode, setTableViewMode] = useState<'fit' | 'scroll'>('scroll');
 
   // Whether this month is approved & frozen
+  // BUSINESS RULE: A month is only eligible to be locked AFTER the month has completed + 2 days grace period into the next month.
+  // Current running months (like October while in October) or months within the 2-day grace window are NEVER locked.
   const isMonthApproved = useMemo(() => {
+    const m = parseInt(selectedMonth, 10);
+    const y = parseInt(selectedYear, 10);
+    if (isNaN(m) || isNaN(y)) return false;
+
+    // Lock eligibility date = 3rd day of the NEXT month at 00:00:00
+    // In JavaScript Date, month is 0-indexed, so passing `m` (which is 1-12) automatically points to the next month!
+    // e.g., For Month 10 (October 2026), `new Date(2026, 10, 3)` creates November 3, 2026.
+    // e.g., For Month 9 (September 2026), `new Date(2026, 9, 3)` creates October 3, 2026.
+    const lockEligibilityDate = new Date(y, m, 3, 0, 0, 0);
+    const now = new Date();
+
+    if (now < lockEligibilityDate) {
+      // Ongoing month or within 2-day grace period -> NEVER lock, keep editable in DRAFT mode
+      return false;
+    }
+
     return wagesReport.length > 0 && wagesReport.some(w => w.paymentStatus === 'APPROVED');
-  }, [wagesReport]);
+  }, [wagesReport, selectedMonth, selectedYear]);
 
   // Global Escape key handler + scroll lock for modals
   useEffect(() => {

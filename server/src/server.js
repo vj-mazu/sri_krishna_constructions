@@ -1245,30 +1245,29 @@ app.get('/api/sales/next-invoice-number', authenticateToken, async (req, res) =>
     const fyEnd = String(fyStart + 1).slice(-2);
     const fyPrefix = `${fyStart}-${fyEnd}/`;
 
-    const { rows } = await pool.query(
-      `SELECT "invoiceNumber" FROM "Sale" 
-       WHERE "invoiceNumber" IS NOT NULL AND "invoiceNumber" != ''
-       ORDER BY "createdAt" DESC LIMIT 500`
+    // Query sales and work orders to find highest existing sequence for the current financial year
+    const { rows: saleRows } = await pool.query(
+      `SELECT DISTINCT "invoiceNumber" FROM "Sale" 
+       WHERE "invoiceNumber" IS NOT NULL AND "invoiceNumber" != ''`
+    );
+    const { rows: woRows } = await pool.query(
+      `SELECT DISTINCT "invoiceNumber" FROM "WorkOrder" 
+       WHERE "invoiceNumber" IS NOT NULL AND "invoiceNumber" != ''`
     );
 
+    const allInvoices = [...saleRows, ...woRows];
     let maxSeq = 0;
-    for (const r of rows) {
+    // Strictly match patterns like 2026-27/01, 2026-27/02, SKC/2026-27/01, 2026-27/10
+    const escapedPrefix = fyPrefix.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`${escapedPrefix}(\\d+)`, 'i');
+
+    for (const r of allInvoices) {
       const inv = String(r.invoiceNumber || '').trim();
-      // Match patterns like 2026-27/09, 2026-27/10, SKC/2026-27/09, INV/2026-27/09, or simply 09
-      if (inv.includes(fyPrefix)) {
-        const parts = inv.split(fyPrefix);
-        const seqPart = parts[parts.length - 1];
-        const num = parseInt(seqPart, 10);
+      const match = inv.match(regex);
+      if (match) {
+        const num = parseInt(match[1], 10);
         if (!isNaN(num) && num > maxSeq) {
           maxSeq = num;
-        }
-      } else {
-        const match = inv.match(/(\d+)$/);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          if (!isNaN(num) && num > maxSeq && num < 100000) {
-            maxSeq = num;
-          }
         }
       }
     }
@@ -3285,7 +3284,7 @@ app.delete('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MA
 // --- GLOBAL SALES LEDGER API (CONTINUOUS SEQUENTIAL SL NO ACROSS ALL SALES & WORK ORDERS) ---
 app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
   try {
-    const { search, dateFrom, dateTo, sourceType, limit: queryLimit, offset: queryOffset } = req.query;
+    const { search, dateFrom, dateTo, sourceType, invoiceNumber, limit: queryLimit, offset: queryOffset } = req.query;
     const limit = Math.min(Math.max(parseInt(queryLimit, 10) || 50, 1), 500);
     const offset = Math.max(parseInt(queryOffset, 10) || 0, 0);
 
@@ -3295,6 +3294,11 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
     if (sourceType && sourceType !== 'ALL') {
       params.push(sourceType);
       conditions.push(`all_sales."sourceType" = $${params.length}`);
+    }
+
+    if (invoiceNumber && invoiceNumber.trim()) {
+      params.push(`%${invoiceNumber.trim().toLowerCase()}%`);
+      conditions.push(`LOWER(COALESCE(all_sales."invoiceNumber", '')) LIKE $${params.length}`);
     }
 
     if (search && search.trim()) {
