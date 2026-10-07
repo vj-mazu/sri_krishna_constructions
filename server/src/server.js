@@ -6283,9 +6283,30 @@ app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, r
       };
     });
 
-    worksheet.addRow([]);
-    worksheet.addRow(['sunilgouda1280@gmail.com', '', '', '', 'For SRI KRISHNA CONSTRUCTIONS']);
-    worksheet.addRow(['', '', '', '', 'Authorized Signatory']);
+    worksheet.addRow([]); // Blank spacer row
+
+    // Email on Left (Merge Columns A-B), Signature on Right (Merge Columns D-E)
+    const emailSigRow = worksheet.addRow(['sunilgouda1280@gmail.com', '', '', 'For SRI KRISHNA CONSTRUCTIONS', '']);
+    const signTitleRow = worksheet.addRow(['', '', '', 'Authorized Signatory', '']);
+
+    const emailRowIdx = emailSigRow.number;
+    const signRowIdx = signTitleRow.number;
+
+    worksheet.mergeCells(`A${emailRowIdx}:B${emailRowIdx}`);
+    worksheet.mergeCells(`D${emailRowIdx}:E${emailRowIdx}`);
+    worksheet.mergeCells(`D${signRowIdx}:E${signRowIdx}`);
+
+    emailSigRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+    emailSigRow.getCell(1).font = { size: 9.5, color: { argb: 'FF475569' } };
+
+    emailSigRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+    emailSigRow.getCell(4).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+
+    signTitleRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+    signTitleRow.getCell(4).font = { size: 9, color: { argb: 'FF64748B' } };
+
+    emailSigRow.height = 20;
+    signTitleRow.height = 18;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_ADVICE_${monthName.toUpperCase()}_${year}.xlsx"`);

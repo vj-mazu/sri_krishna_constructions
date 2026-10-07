@@ -1472,8 +1472,8 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         ]),
         ['', 'TOTAL AMOUNT', '', '', totalAmount],
         [],
-        ['sunilgouda1280@gmail.com', '', '', '', 'For SRI KRISHNA CONSTRUCTIONS'],
-        ['', '', '', '', 'Authorized Signatory']
+        ['sunilgouda1280@gmail.com', '', '', 'For SRI KRISHNA CONSTRUCTIONS', ''],
+        ['', '', '', 'Authorized Signatory', '']
       ];
 
       const worksheet = XLSX.utils.aoa_to_sheet(rows);
@@ -1483,6 +1483,16 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
         { wch: 28 },
         { wch: 20 },
         { wch: 18 }
+      ];
+      worksheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+        { s: { r: 10, c: 0 }, e: { r: 10, c: 4 } },
+        { s: { r: 12, c: 0 }, e: { r: 12, c: 2 } },
+        { s: { r: 12, c: 3 }, e: { r: 12, c: 4 } },
+        { s: { r: rows.length - 2, c: 0 }, e: { r: rows.length - 2, c: 1 } },
+        { s: { r: rows.length - 2, c: 3 }, e: { r: rows.length - 2, c: 4 } },
+        { s: { r: rows.length - 1, c: 3 }, e: { r: rows.length - 1, c: 4 } }
       ];
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, type === 'canara' ? 'CANARA BANK' : 'NON CANARA');
