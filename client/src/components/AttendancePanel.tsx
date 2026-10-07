@@ -24,11 +24,23 @@ interface AttendancePanelProps {
 
 export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRole }) => {
   const isPrivileged = currentUserRole === 'OWNER' || currentUserRole === 'MANAGER';
+  
+  // Calculate today's date in Indian Standard Time (IST - UTC+5:30)
+  const getTodayIST = () => {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+  };
+
+  const todayIST = useMemo(() => getTodayIST(), []);
   const [assignedDivisionId, setAssignedDivisionId] = useState<string | null>(null);
   const [assignedDivisionName, setAssignedDivisionName] = useState<string>('');
   const [divisions, setDivisions] = useState<any[]>([]);
   const [selectedDivisionId, setSelectedDivisionId] = useState('');
-  const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
+  const [selectedDate, setSelectedDate] = useState(todayIST);
   const [workers, setWorkers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { 
@@ -488,6 +500,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         .filter(([_, data]) => !data.status)
         .map(([workerId]) => workerId);
 
+      if (selectedDate > todayIST) {
+        const msg = 'Attendance cannot be marked for future dates based on Indian Standard Time (IST).';
+        setError(msg);
+        showToast(msg, 'error');
+        setSaving(false);
+        return;
+      }
+
       if (markedEntries.length === 0 && clearedWorkerIds.length === 0) {
         const msg = 'Please select attendance status (Present, Absent, Half, Leave) for at least one worker before saving.';
         setError(msg);
@@ -737,7 +757,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
             </label>
             <DatePickerDMY
               value={selectedDate}
-              onChange={(val) => setSelectedDate(val)}
+              maxDate={todayIST}
+              onChange={(val) => {
+                if (val > todayIST) {
+                  showToast('Cannot select future dates for attendance (IST)', 'error');
+                  return;
+                }
+                setSelectedDate(val);
+              }}
             />
           </div>
           <div className="col-span-1 sm:col-span-2 md:col-span-1">

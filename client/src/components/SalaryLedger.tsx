@@ -313,37 +313,37 @@ export const SalaryLedger: React.FC = () => {
       </div>
 
       {/* HIKE MATRIX GRID TABLE */}
-      <div className="bg-white rounded-2xl border border-slate-300 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto max-h-[75vh]">
-          <table className="w-full text-left text-xs border-collapse border border-slate-300">
-            <tbody className="divide-y divide-slate-200">
+      <div className="bg-white rounded-xl border-2 border-slate-400 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto max-h-[78vh]">
+          <table className="w-full text-left text-xs border-collapse border border-slate-400 font-sans">
+            <tbody className="divide-y-2 divide-slate-400">
               {loadingHikes ? (
                 <tr>
-                  <td colSpan={15} className="p-10 text-center text-slate-400">
+                  <td colSpan={20} className="p-10 text-center text-slate-400">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-blue-600" />
                     Loading Salary Hike Matrix...
                   </td>
                 </tr>
               ) : workers.length === 0 ? (
                 <tr>
-                  <td colSpan={15} className="p-10 text-center text-slate-400">
+                  <td colSpan={20} className="p-10 text-center text-slate-400">
                     <AlertCircle className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                     No workers found matching the search criteria.
                   </td>
                 </tr>
               ) : (
                 workers.map((w, idx) => {
-                  const totalSlots = Math.max(maxMilestones, 3);
+                  const totalSlots = Math.max(maxMilestones, 6);
 
                   return (
                     <React.Fragment key={w.id || idx}>
-                      {/* ROW 1: DATES HEADER (e.g. 2024-08-01, 2025-04-01, 2026-04-01) */}
-                      <tr className="bg-slate-100/90 text-slate-700 font-extrabold border-t-2 border-slate-400">
-                        <td className="p-2 border-r border-slate-300 w-12 text-center text-slate-500 font-mono">
+                      {/* ROW 1: DATES ROW (e.g. Sl No, (blank), 2024-08-01, , , 2025-04-01, , ...) */}
+                      <tr className="bg-slate-100/90 text-slate-800 font-bold border-t-2 border-slate-400">
+                        <td className="p-1.5 border border-slate-400 w-12 text-center text-slate-700 font-bold text-xs">
                           Sl No
                         </td>
-                        <td className="p-2 border-r border-slate-300 min-w-[200px] text-slate-600">
-                          {w.divisionName || 'General Site'}
+                        <td className="p-1.5 border border-slate-400 min-w-[200px] text-slate-500 font-medium text-[11px]">
+                          {w.divisionName || ''}
                         </td>
                         {Array.from({ length: totalSlots }).map((_, slotIdx) => {
                           const milestone = w.hikeHistory[slotIdx];
@@ -351,51 +351,51 @@ export const SalaryLedger: React.FC = () => {
                             <td
                               key={slotIdx}
                               colSpan={3}
-                              className={`p-2 text-center font-mono text-xs border-r border-slate-300 ${
-                                milestone ? 'bg-blue-50 text-blue-900 font-black' : 'text-slate-300 bg-slate-50/50'
+                              className={`p-1.5 text-center font-mono text-xs border border-slate-400 ${
+                                milestone ? 'bg-blue-50/90 text-blue-950 font-black' : 'text-slate-300 bg-slate-50/30'
                               }`}
                             >
-                              {milestone ? milestone.effectiveDate : '—'}
+                              {milestone ? milestone.effectiveDate : ''}
                             </td>
                           );
                         })}
-                        <td className="p-2 text-center border-l border-slate-300 bg-slate-100 font-bold text-slate-600 w-28">
+                        <td className="p-1.5 text-center border border-slate-400 bg-slate-100 font-bold text-slate-600 w-24">
                           Action
                         </td>
                       </tr>
 
-                      {/* ROW 2: SUB-HEADER (Sl No, Name, Paid, Hike, Total, Paid, Hike, Total...) */}
-                      <tr className="bg-slate-200/80 text-slate-800 font-black text-[11px] uppercase tracking-wider border-b border-slate-300">
-                        <td className="p-2 border-r border-slate-300 text-center font-mono text-blue-900">
+                      {/* ROW 2: SUB-HEADER ROW (1, Name, Paid, Hike, Total, Paid, Hike, Total...) */}
+                      <tr className="bg-slate-200/90 text-slate-900 font-black text-[11px] border-b border-slate-400">
+                        <td className="p-1.5 border border-slate-400 text-center font-mono text-blue-950 font-bold text-xs">
                           {idx + 1}
                         </td>
-                        <td className="p-2 border-r border-slate-300 font-bold text-slate-600">
-                          Name (Click for Hike Details)
+                        <td className="p-1.5 border border-slate-400 font-black text-slate-800">
+                          Name
                         </td>
                         {Array.from({ length: totalSlots }).map((_, slotIdx) => (
                           <React.Fragment key={slotIdx}>
-                            <td className="p-1.5 text-right border-r border-slate-300 w-24 text-slate-700">Paid</td>
-                            <td className="p-1.5 text-right border-r border-slate-300 w-24 text-purple-800">Hike</td>
-                            <td className="p-1.5 text-right border-r border-slate-300 w-24 text-emerald-900">Total</td>
+                            <td className="p-1 text-center border border-slate-400 w-20 text-slate-800">Paid</td>
+                            <td className="p-1 text-center border border-slate-400 w-20 text-purple-900">Hike</td>
+                            <td className="p-1 text-center border border-slate-400 w-20 text-emerald-950">Total</td>
                           </React.Fragment>
                         ))}
-                        <td className="p-1.5 text-center border-l border-slate-300">
+                        <td className="p-1 text-center border border-slate-400">
                           <button
                             onClick={(e) => handleOpenAddHike(w, e)}
-                            className="bg-[#1e3a8a] hover:bg-blue-800 active:scale-95 text-white px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center justify-center gap-1 shadow-xs mx-auto cursor-pointer"
-                            title="Add New Hike Revision Milestone"
+                            className="bg-[#1e3a8a] hover:bg-blue-800 text-white px-2 py-0.5 rounded font-bold text-[10px] flex items-center justify-center gap-1 shadow-xs mx-auto cursor-pointer"
+                            title="Add New Hike Revision"
                           >
                             <Plus className="w-3 h-3" /> Add Hike
                           </button>
                         </td>
                       </tr>
 
-                      {/* ROW 3: VALUES DATA ROW */}
-                      <tr className="bg-white hover:bg-blue-50/30 transition-colors border-b-2 border-slate-300">
-                        <td className="p-2 border-r border-slate-300 text-center text-slate-400 font-mono">
-                          •
+                      {/* ROW 3: VALUES ROW (, Krishna, 34980, 5000, 39980...) */}
+                      <tr className="bg-white hover:bg-blue-50/40 transition-colors border-b-2 border-slate-400">
+                        <td className="p-1.5 border border-slate-400 text-center text-slate-400 font-mono">
+                          
                         </td>
-                        <td className="p-2 border-r border-slate-300">
+                        <td className="p-1.5 border border-slate-400">
                           <button
                             type="button"
                             onClick={() => setSelectedWorkerDetail(w)}
@@ -405,9 +405,9 @@ export const SalaryLedger: React.FC = () => {
                               <span>{w.fullName}</span>
                               <ArrowUpRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity text-blue-600" />
                             </div>
-                            <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1 mt-0.5">
-                              <span className="bg-slate-100 text-[#1e3a8a] px-1 rounded font-bold">{w.workerId}</span>
-                              <span>{w.designation || 'Worker'}</span>
+                            <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                              <span className="text-[#1e3a8a] font-bold">{w.workerId}</span>
+                              {w.designation && <span>• {w.designation}</span>}
                             </div>
                           </button>
                         </td>
@@ -416,41 +416,36 @@ export const SalaryLedger: React.FC = () => {
                           if (!milestone) {
                             return (
                               <React.Fragment key={slotIdx}>
-                                <td className="p-2 border-r border-slate-200 text-right text-slate-300 font-mono">—</td>
-                                <td className="p-2 border-r border-slate-200 text-right text-slate-300 font-mono">—</td>
-                                <td className="p-2 border-r border-slate-300 text-right text-slate-300 font-mono">—</td>
+                                <td className="p-1.5 border border-slate-400 text-right text-slate-300 font-mono"></td>
+                                <td className="p-1.5 border border-slate-400 text-right text-slate-300 font-mono"></td>
+                                <td className="p-1.5 border border-slate-400 text-right text-slate-300 font-mono"></td>
                               </React.Fragment>
                             );
                           }
 
                           return (
                             <React.Fragment key={slotIdx}>
-                              <td className="p-2 border-r border-slate-200 text-right font-mono font-bold text-slate-800">
-                                {milestone.basePaid ? formatCurrency(milestone.basePaid) : '—'}
+                              <td className="p-1.5 border border-slate-400 text-right font-mono font-bold text-slate-800">
+                                {milestone.basePaid ? formatCurrency(milestone.basePaid) : ''}
                               </td>
-                              <td className="p-2 border-r border-slate-200 text-right font-mono font-extrabold text-purple-700 bg-purple-50/40">
-                                {milestone.hikeAmount > 0 ? `+${formatCurrency(milestone.hikeAmount)}` : '—'}
+                              <td className="p-1.5 border border-slate-400 text-right font-mono font-black text-purple-700 bg-purple-50/30">
+                                {milestone.hikeAmount > 0 ? formatCurrency(milestone.hikeAmount) : ''}
                               </td>
-                              <td className="p-2 border-r border-slate-300 text-right font-mono font-black text-emerald-700 bg-emerald-50/40">
+                              <td className="p-1.5 border border-slate-400 text-right font-mono font-black text-emerald-800 bg-emerald-50/30">
                                 {formatCurrency(milestone.totalAmount)}
                               </td>
                             </React.Fragment>
                           );
                         })}
-                        <td className="p-2 text-center border-l border-slate-300">
+                        <td className="p-1.5 text-center border border-slate-400">
                           <button
                             type="button"
                             onClick={() => setSelectedWorkerDetail(w)}
-                            className="text-[10px] text-[#1e3a8a] hover:bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full font-bold cursor-pointer"
+                            className="text-[10px] text-[#1e3a8a] hover:underline font-bold cursor-pointer"
                           >
-                            {w.hikeHistory.length} Milestones ↗
+                            Details
                           </button>
                         </td>
-                      </tr>
-
-                      {/* SPACER ROW FOR VISUAL CLARITY */}
-                      <tr className="bg-slate-100/40 h-2">
-                        <td colSpan={2 + totalSlots * 3 + 1} className="p-0 border-b border-slate-200"></td>
                       </tr>
                     </React.Fragment>
                   );

@@ -7,6 +7,8 @@ interface DatePickerDMYProps {
   className?: string;
   minYear?: number;
   maxYear?: number;
+  maxDate?: string; // 'YYYY-MM-DD'
+  minDate?: string; // 'YYYY-MM-DD'
   disabled?: boolean;
 }
 
@@ -32,6 +34,8 @@ export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
   className = '',
   minYear = 2020,
   maxYear = 2035,
+  maxDate,
+  minDate,
   disabled = false
 }) => {
   // Parse incoming YYYY-MM-DD
@@ -154,8 +158,15 @@ export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
       <input
         type="date"
         disabled={disabled}
+        min={minDate}
+        max={maxDate}
         value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const val = e.target.value;
+          if (maxDate && val > maxDate) return;
+          if (minDate && val < minDate) return;
+          onChange(val);
+        }}
         className="w-7 h-7 sm:w-8 sm:h-8 p-0.5 opacity-70 hover:opacity-100 cursor-pointer border border-slate-300 rounded-lg bg-slate-50 text-xs shrink-0"
         title="Pick from calendar"
       />

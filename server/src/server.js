@@ -4609,6 +4609,20 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Date and valid attendance data are required' });
     }
 
+    // Validate future date restriction based on Indian Standard Time (IST)
+    const todayIST = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+
+    if (date > todayIST) {
+      return res.status(400).json({ 
+        error: `Cannot mark attendance for future dates (${date}). Today in Indian Standard Time (IST) is ${todayIST}.` 
+      });
+    }
+
     // If any workers are unselected/cleared, delete their attendance record for this date
     if (clearedWorkerIds && Array.isArray(clearedWorkerIds) && clearedWorkerIds.length > 0) {
       await pool.query(
@@ -4920,6 +4934,7 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
              w."dailyWage", COALESCE(w."dailyAllowance", 0) as "dailyAllowance",
              COALESCE(w."advanceTaken", 0) as "advanceTaken",
              COALESCE(w."advanceBalance", 0) as "advanceBalance",
+             COALESCE(w."extraAmount", 0) as "extraAmount",
              COALESCE(w."otAllowance", 0) as "otAllowance",
              w."otHourlyRate", w."divisionId",
              COALESCE(w."isActive", true) as "isActive",
@@ -5155,7 +5170,9 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         ? Math.max(currentAdvBal + advanceDeducted, advanceTaken) 
         : Math.max(currentAdvBal, advanceTaken);
       const remainingAdvanceBalance = Math.max(0, initialAdvanceBalance - advanceDeducted);
-      const extraAmount = dbPayment ? (parseFloat(dbPayment.extraAmount) || 0) : 0;
+      const extraAmount = dbPayment && dbPayment.extraAmount !== null && dbPayment.extraAmount !== undefined
+        ? (parseFloat(dbPayment.extraAmount) || 0)
+        : (parseFloat(worker.extraAmount) || 0);
       const finalNetAmount = Math.max(0, totalPayment - advanceDeducted + extraAmount);
 
       return {
