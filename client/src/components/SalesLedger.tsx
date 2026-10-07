@@ -463,6 +463,8 @@ export const SalesLedger: React.FC = () => {
                               invoiceDate: item.date,
                               partyName: item.clientDepartment,
                               gstNumber: item.clientGst,
+                              vehicleNumber: item.vehicleNumber,
+                              eWayBillNumber: item.eWayBillNumber,
                               quantity: item.qty,
                               unitPrice: item.rate,
                               item: {
@@ -664,6 +666,8 @@ export const SalesLedger: React.FC = () => {
                     invoiceDate: item.date,
                     partyName: item.clientDepartment,
                     gstNumber: item.clientGst,
+                    vehicleNumber: item.vehicleNumber,
+                    eWayBillNumber: item.eWayBillNumber,
                     quantity: item.qty,
                     unitPrice: item.rate,
                     item: {

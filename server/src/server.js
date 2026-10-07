@@ -1245,7 +1245,7 @@ app.get('/api/sales/next-invoice-number', authenticateToken, async (req, res) =>
     const fyEnd = String(fyStart + 1).slice(-2);
     const fyPrefix = `${fyStart}-${fyEnd}/`;
 
-    // Query sales and work orders to find highest existing sequence for the current financial year
+    // Query sales, work orders, and individual dispatches to find highest existing sequence for the current financial year
     const { rows: saleRows } = await pool.query(
       `SELECT DISTINCT "invoiceNumber" FROM "Sale" 
        WHERE "invoiceNumber" IS NOT NULL AND "invoiceNumber" != ''`
@@ -1254,8 +1254,12 @@ app.get('/api/sales/next-invoice-number', authenticateToken, async (req, res) =>
       `SELECT DISTINCT "invoiceNumber" FROM "WorkOrder" 
        WHERE "invoiceNumber" IS NOT NULL AND "invoiceNumber" != ''`
     );
+    const { rows: indRows } = await pool.query(
+      `SELECT DISTINCT "partyInvoiceNumber" as "invoiceNumber" FROM "IndividualStockTransaction" 
+       WHERE type = 'OUTWARD' AND "partyInvoiceNumber" IS NOT NULL AND "partyInvoiceNumber" != ''`
+    );
 
-    const allInvoices = [...saleRows, ...woRows];
+    const allInvoices = [...saleRows, ...woRows, ...indRows];
     let maxSeq = 0;
     // Strictly match patterns like 2026-27/01, 2026-27/02, SKC/2026-27/01, 2026-27/10
     const escapedPrefix = fyPrefix.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
