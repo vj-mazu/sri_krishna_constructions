@@ -675,6 +675,7 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" DROP DEFAULT;
       ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" TYPE TEXT USING "status"::text;
       ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING';
+      ALTER TABLE "AttendanceCorrectionRequest" ADD COLUMN IF NOT EXISTS "leaveType" TEXT DEFAULT 'CASUAL';
 
       -- Mathematically synchronize IndividualStock currentStock based on opening + (INWARD/PURCHASE) - (OUTWARD/SALE)
       UPDATE "IndividualStock" s

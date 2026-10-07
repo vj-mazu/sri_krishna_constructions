@@ -421,13 +421,13 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
       </div>
 
       {/* WORKER LEAVE LEDGER TABLE */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs excel-table">
+          <table className="w-full text-left text-xs excel-table border-collapse border border-slate-300">
             <thead className="bg-[#1e3a8a] text-white">
-              <tr className="border-b border-blue-900">
-                <th className="w-12 text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Sl No</th>
-                <th className="py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">
+              <tr>
+                <th className="w-12 text-center py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] border border-blue-900">Sl No</th>
+                <th className="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] border border-blue-900">
                   <button 
                     onClick={() => setSortOrder(prev => prev === 'ASC' ? 'DESC' : 'ASC')}
                     className="flex items-center gap-1.5 font-bold text-white hover:text-blue-200 transition-colors"
@@ -436,36 +436,36 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
                     <ArrowUpDown className="w-3.5 h-3.5 text-blue-200" />
                   </button>
                 </th>
-                <th className="py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Worker Name &amp; Designation</th>
-                <th className="py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Division</th>
-                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px] bg-indigo-950/40">
-                  <span className="flex items-center justify-center gap-1.5 text-indigo-100 font-bold">
+                <th className="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] border border-blue-900 min-w-[200px]">Worker Name (Click for History)</th>
+                <th className="py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] border border-blue-900">Division</th>
+                <th className="text-center py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] bg-indigo-950/60 border border-blue-900">
+                  <span className="flex items-center justify-center gap-1 text-indigo-100 font-bold">
                     <Stethoscope className="w-3.5 h-3.5 text-indigo-300" /> Medical (10 ML)
                   </span>
                 </th>
-                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px] bg-amber-950/40">
-                  <span className="flex items-center justify-center gap-1.5 text-amber-100 font-bold">
+                <th className="text-center py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] bg-amber-950/60 border border-blue-900">
+                  <span className="flex items-center justify-center gap-1 text-amber-100 font-bold">
                     <Coffee className="w-3.5 h-3.5 text-amber-300" /> Casual (8 CL)
                   </span>
                 </th>
-                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px] bg-blue-900/60">
-                  <span className="text-blue-100 font-black">Total (18 Allowed)</span>
+                <th className="text-center py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] bg-blue-950/70 border border-blue-900">
+                  <span className="text-blue-100 font-black">Total Taken (18 Allowed)</span>
                 </th>
-                <th className="text-center py-3.5 px-3 font-bold text-emerald-200 uppercase tracking-wider text-[11px] bg-emerald-950/40">Balance Left</th>
-                <th className="text-center py-3.5 px-3 font-bold text-white uppercase tracking-wider text-[11px]">Actions</th>
+                <th className="text-center py-2.5 px-3 font-bold text-emerald-200 uppercase tracking-wider text-[11px] bg-emerald-950/60 border border-blue-900">Balance Left</th>
+                <th className="text-center py-2.5 px-3 font-bold uppercase tracking-wider text-[11px] border border-blue-900 w-24">Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-500">
+                  <td colSpan={9} className="text-center py-10 text-slate-500 border border-slate-300">
                     <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
                     <span>Loading Worker Leave Ledger...</span>
                   </td>
                 </tr>
               ) : paginatedWorkers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-10 text-slate-400">
+                  <td colSpan={9} className="text-center py-10 text-slate-400 border border-slate-300">
                     No worker leave records found for selected filters.
                   </td>
                 </tr>
@@ -480,23 +480,36 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
                   const totBal = w.totalLeavesBalance ?? Math.max(0, 18 - totTaken);
 
                   return (
-                    <tr key={w.id} className="hover:bg-blue-50/30 transition-colors">
-                      <td className="font-mono text-center text-slate-500 font-bold">{slNo}</td>
-                      <td className="font-mono font-bold text-[#1e3a8a]">{w.workerId}</td>
-                      <td>
-                        <div className="font-bold text-slate-800">{w.fullName}</div>
-                        <div className="text-[10px] text-slate-400 font-medium">{w.designation || 'Worker'} • {w.mobileNumber}</div>
+                    <tr key={w.id} className="hover:bg-blue-50/40 transition-colors">
+                      <td className="font-mono text-center text-slate-500 font-bold border border-slate-300 px-3 py-2">{slNo}</td>
+                      <td className="font-mono font-bold text-[#1e3a8a] border border-slate-300 px-3 py-2">{w.workerId}</td>
+                      
+                      {/* Clickable Worker Name Hyperlink */}
+                      <td className="border border-slate-300 px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenHistoryModal(w)}
+                          className="font-bold text-blue-600 hover:text-blue-800 hover:underline text-left cursor-pointer flex items-center gap-1 group"
+                          title="Click to view detailed leave dates & history"
+                        >
+                          <span className="text-xs group-hover:text-blue-900">{w.fullName}</span>
+                          <span className="text-[10px] text-blue-400 font-mono">🔗</span>
+                        </button>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          {w.designation || 'Worker'} {w.fatherName ? `• s/o ${w.fatherName}` : ''} • {w.mobileNumber}
+                        </div>
                       </td>
-                      <td>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+
+                      <td className="border border-slate-300 px-3 py-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
                           {w.divisionName || 'General'}
                         </span>
                       </td>
 
                       {/* Medical Leaves column */}
-                      <td className="text-center bg-indigo-50/20">
-                        <div className="inline-flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-indigo-900">{mlTaken}</span>
+                      <td className="text-center bg-indigo-50/20 border border-slate-300 px-3 py-2">
+                        <div className="inline-flex items-center gap-1.5 font-mono">
+                          <span className="font-bold text-indigo-900">{mlTaken}</span>
                           <span className="text-slate-400">/ 10</span>
                           <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${mlBal > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-red-100 text-red-700'}`}>
                             {mlBal} left
@@ -505,9 +518,9 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
                       </td>
 
                       {/* Casual Leaves column */}
-                      <td className="text-center bg-amber-50/20">
-                        <div className="inline-flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-amber-900">{clTaken}</span>
+                      <td className="text-center bg-amber-50/20 border border-slate-300 px-3 py-2">
+                        <div className="inline-flex items-center gap-1.5 font-mono">
+                          <span className="font-bold text-amber-900">{clTaken}</span>
                           <span className="text-slate-400">/ 8</span>
                           <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${clBal > 0 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
                             {clBal} left
@@ -516,15 +529,15 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
                       </td>
 
                       {/* Total Taken column */}
-                      <td className="text-center bg-blue-50/20">
+                      <td className="text-center bg-blue-50/20 border border-slate-300 px-3 py-2">
                         <div className="font-mono font-bold text-slate-900">
                           {totTaken} <span className="text-[10px] font-normal text-slate-400">/ 18</span>
                         </div>
                       </td>
 
                       {/* Remaining Balance column */}
-                      <td className="text-center bg-emerald-50/20">
-                        <span className={`px-2.5 py-1 rounded-full font-mono font-black text-xs border ${
+                      <td className="text-center bg-emerald-50/20 border border-slate-300 px-3 py-2">
+                        <span className={`px-2.5 py-0.5 rounded-full font-mono font-black text-xs border ${
                           totBal > 0 
                             ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
                             : 'bg-rose-100 text-rose-800 border-rose-300'
@@ -533,27 +546,17 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
                         </span>
                       </td>
 
-                      {/* Action buttons */}
-                      <td className="text-center">
-                        <div className="inline-flex items-center gap-1.5">
-                          <button
-                            onClick={() => handleOpenRecordModal(w)}
-                            className="px-2 py-1 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-[10px] flex items-center gap-1 transition-all shadow-2xs"
-                            title="Record Medical or Casual Leave"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Add Leave</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleOpenHistoryModal(w)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[10px] border border-slate-300 flex items-center gap-1 transition-all"
-                            title="View full leave logs & dates"
-                          >
-                            <History className="w-3 h-3 text-slate-500" />
-                            <span>Logs ({w.totalLeaveRecords || 0})</span>
-                          </button>
-                        </div>
+                      {/* Action button */}
+                      <td className="text-center border border-slate-300 px-2 py-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenHistoryModal(w)}
+                          className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-[10px] border border-blue-200 inline-flex items-center gap-1 transition-all"
+                          title="View full leave breakdown & logs"
+                        >
+                          <History className="w-3 h-3" />
+                          <span>Logs ({w.totalLeaveRecords || 0})</span>
+                        </button>
                       </td>
                     </tr>
                   );
@@ -564,7 +567,7 @@ export const LeaveLedger: React.FC<LeaveLedgerProps> = ({ currentUserRole }) => 
         </div>
 
         {/* PAGINATION BAR */}
-        <div className="p-3 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div className="p-3 bg-slate-50 border-t border-slate-300 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-slate-500 font-medium">
             Showing <strong className="text-slate-800">{paginatedWorkers.length}</strong> of <strong className="text-slate-800">{filteredWorkers.length}</strong> workers
           </div>

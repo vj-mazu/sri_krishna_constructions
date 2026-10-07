@@ -31,7 +31,16 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [workers, setWorkers] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; overtimeHours: string; dailyWageOverride: string; divisionId?: string; divisionName?: string; secondDivisionId?: string; secondDivisionName?: string }>>({});
+  const [attendanceRecords, setAttendanceRecords] = useState<Record<string, { 
+    status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; 
+    leaveType?: 'CASUAL' | 'MEDICAL';
+    overtimeHours: string; 
+    dailyWageOverride: string; 
+    divisionId?: string; 
+    divisionName?: string; 
+    secondDivisionId?: string; 
+    secondDivisionName?: string; 
+  }>>({});
   const [loading, setLoading] = useState(false);
   const [holidayInfo, setHolidayInfo] = useState<{ date: string; name: string; type: string } | null>(null);
   const [offlineCount, setOfflineCount] = useState<number>(0);
@@ -45,11 +54,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [inlineEditWorkerId, setInlineEditWorkerId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<{
     newStatus: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE';
+    newLeaveType: 'CASUAL' | 'MEDICAL';
     newDivisionId: string;
     newOvertimeHours: string;
     reason: string;
   }>({
     newStatus: 'PRESENT',
+    newLeaveType: 'CASUAL',
     newDivisionId: '',
     newOvertimeHours: '0',
     reason: ''
@@ -162,6 +173,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       const recordsMap: Record<string, { 
         status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'LEAVE' | ''; 
+        leaveType?: 'CASUAL' | 'MEDICAL';
         overtimeHours: string; 
         dailyWageOverride: string; 
         divisionId: string; 
@@ -174,6 +186,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       fetchedWorkers.forEach((w: any) => {
         recordsMap[w.id] = {
           status: '',
+          leaveType: 'CASUAL',
           overtimeHours: '0',
           dailyWageOverride: '',
           divisionId: w.divisionId || (selectedDivisionId !== 'ALL' ? selectedDivisionId : ''),
@@ -186,6 +199,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           if (recordsMap[att.workerId]) {
             recordsMap[att.workerId] = {
               status: att.status || '',
+              leaveType: att.leaveType || 'CASUAL',
               overtimeHours: att.overtimeHours ? att.overtimeHours.toString() : '0',
               dailyWageOverride: att.dailyWageOverride ? att.dailyWageOverride.toString() : '',
               divisionId: att.divisionId || att.worker?.divisionId || '',
@@ -350,11 +364,28 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       [workerId]: {
         ...currentRec,
         status,
+        leaveType: status === 'LEAVE' ? (currentRec.leaveType || 'CASUAL') : currentRec.leaveType,
         divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (currentRec.divisionId || ''),
         secondDivisionId: status === 'HALF_DAY' ? currentRec.secondDivisionId : '',
         secondDivisionName: status === 'HALF_DAY' ? currentRec.secondDivisionName : '',
       },
     }));
+  };
+
+  const handleLeaveTypeChange = (workerId: string, leaveType: 'CASUAL' | 'MEDICAL') => {
+    const currentRec = attendanceRecords[workerId] || { status: 'LEAVE', overtimeHours: '0', dailyWageOverride: '', divisionId: '' };
+    setAttendanceRecords((prev) => ({
+      ...prev,
+      [workerId]: {
+        ...currentRec,
+        status: 'LEAVE',
+        leaveType,
+        divisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (currentRec.divisionId || ''),
+        secondDivisionId: '',
+        secondDivisionName: '',
+      },
+    }));
+    showToast(`Selected ${leaveType === 'MEDICAL' ? 'Medical Leave (10 ML)' : 'Casual Leave (8 CL)'}`, 'info');
   };
 
   const handleOtChange = (workerId: string, overtimeHours: string) => {
@@ -406,6 +437,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           attendanceData: [{
             workerId: worker.id,
             status: editForm.newStatus,
+            leaveType: editForm.newLeaveType || 'CASUAL',
             overtimeHours: editForm.newOvertimeHours || '0',
             divisionId: editForm.newDivisionId,
             secondDivisionId: editForm.newStatus === 'HALF_DAY' ? ((state as any).secondDivisionId || null) : null,
@@ -424,6 +456,8 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           oldStatus: state.status || 'UNMARKED',
           oldDivisionName: state.divisionName || 'Unassigned',
           newStatus: editForm.newStatus,
+          newLeaveType: editForm.newLeaveType || 'CASUAL',
+          leaveType: editForm.newLeaveType || 'CASUAL',
           newDivisionId: editForm.newDivisionId,
           newOvertimeHours: editForm.newOvertimeHours,
           reason: editForm.reason
@@ -486,6 +520,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return {
           workerId,
           status: data.status,
+          leaveType: data.leaveType || 'CASUAL',
           overtimeHours: parseFloat(data.overtimeHours) || 0,
           dailyWageOverride: data.dailyWageOverride ? parseFloat(data.dailyWageOverride) : null,
           divisionId: divToAssign || null,
@@ -555,33 +590,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return false;
       }
 
-      // 2. Division Filter:
+      // 2. Division Filter: Show ONLY workers allotted to this division in Worker Registry, or assigned/marked here today
       if (selectedDivisionId && selectedDivisionId !== 'ALL') {
+        const isAllottedToThisDiv = w.divisionId === selectedDivisionId;
         const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
         
-        // 1. If marked as working at this division on this date, show them!
-        if (isMarkedInThisDiv) {
+        if (isAllottedToThisDiv || isMarkedInThisDiv) {
           return true;
         }
-
-        // 2. If marked Full Day at another division, HIDE them
-        const isFullDayAtOtherDiv = rec && Boolean(rec.status) && (rec.status === 'PRESENT' || rec.status === 'ABSENT' || rec.status === 'LEAVE') && rec.divisionId && rec.divisionId !== selectedDivisionId;
-        if (isFullDayAtOtherDiv) {
-          return false;
-        }
-
-        // 3. If marked HALF_DAY at another division and no second division yet, SHOW them so supervisor can mark 2nd half-day!
-        const isHalfDayAtOtherDivAvailable = rec && rec.status === 'HALF_DAY' && rec.divisionId && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
-        if (isHalfDayAtOtherDivAvailable) {
-          return true;
-        }
-
-        // 4. If unmarked anywhere today, show them so supervisor can mark them for this division
-        const isUnmarked = !rec || !rec.status;
-        if (isUnmarked) {
-          return true;
-        }
-
         return false;
       }
 
@@ -623,7 +639,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const leaveCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'LEAVE').length;
   const unmarkedCount = Math.max(0, filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount));
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, leaveType?: string) => {
     switch (status) {
       case 'PRESENT':
         return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-xs">🟢 Present</span>;
@@ -632,7 +648,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
       case 'HALF_DAY':
         return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shadow-xs">🟡 Half Day</span>;
       case 'LEAVE':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-300 shadow-xs">🟣 Leave</span>;
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-300 shadow-xs">
+            🟣 Leave ({leaveType === 'MEDICAL' ? 'ML' : 'CL'})
+          </span>
+        );
       default:
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">⚪ Unmarked</span>;
     }
@@ -835,7 +855,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <div className="flex flex-col items-end">
-                        {getStatusBadge(state.status)}
+                        {getStatusBadge(state.status, state.leaveType)}
                         <div className="text-[10px] text-emerald-800 font-extrabold font-mono mt-0.5">₹{w.dailyWage}/d</div>
                       </div>
                       <button
@@ -847,6 +867,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                             setInlineEditWorkerId(w.id);
                             setEditForm({
                               newStatus: (state.status as any) || 'PRESENT',
+                              newLeaveType: state.leaveType || 'CASUAL',
                               newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
                               newOvertimeHours: state.overtimeHours || '0',
                               reason: ''
@@ -913,6 +934,36 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           ))}
                         </div>
                       </div>
+
+                      {editForm.newStatus === 'LEAVE' && (
+                        <div>
+                          <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Leave Type *</label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditForm(prev => ({ ...prev, newLeaveType: 'CASUAL' }))}
+                              className={`py-1.5 px-2 rounded-lg font-bold text-[10px] border text-center transition-all ${
+                                editForm.newLeaveType === 'CASUAL'
+                                  ? 'bg-purple-600 text-white border-purple-700 shadow-xs'
+                                  : 'bg-white text-purple-900 border-purple-200'
+                              }`}
+                            >
+                              ☕ Casual Leave (8 CL)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditForm(prev => ({ ...prev, newLeaveType: 'MEDICAL' }))}
+                              className={`py-1.5 px-2 rounded-lg font-bold text-[10px] border text-center transition-all ${
+                                editForm.newLeaveType === 'MEDICAL'
+                                  ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                                  : 'bg-white text-indigo-900 border-indigo-200'
+                              }`}
+                            >
+                              🩺 Medical Leave (10 ML)
+                            </button>
+                          </div>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -1014,6 +1065,34 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                         );
                       })}
                     </div>
+
+                    {/* Sub-selector for Casual (8 CL) vs Medical (10 ML) when Leave is selected on mobile */}
+                    {state.status === 'LEAVE' && (
+                      <div className="grid grid-cols-2 gap-1.5 p-1.5 mt-1.5 bg-purple-50 rounded-lg border border-purple-200">
+                        <button
+                          type="button"
+                          onClick={() => handleLeaveTypeChange(w.id, 'CASUAL')}
+                          className={`py-1 px-2 rounded-md font-bold text-xs flex items-center justify-center gap-1 transition-all ${
+                            (state.leaveType || 'CASUAL') === 'CASUAL'
+                              ? 'bg-purple-600 text-white shadow-2xs font-black'
+                              : 'bg-white text-purple-900 border border-purple-200 hover:bg-purple-100/50'
+                          }`}
+                        >
+                          <span>☕ Casual (8 CL)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleLeaveTypeChange(w.id, 'MEDICAL')}
+                          className={`py-1 px-2 rounded-md font-bold text-xs flex items-center justify-center gap-1 transition-all ${
+                            state.leaveType === 'MEDICAL'
+                              ? 'bg-indigo-600 text-white shadow-2xs font-black'
+                              : 'bg-white text-indigo-900 border border-indigo-200 hover:bg-indigo-100/50'
+                          }`}
+                        >
+                          <span>🩺 Medical (10 ML)</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Fixed Daily Wage & Overtime Row */}
@@ -1097,63 +1176,95 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                 </div>
                               ) : isMarkedAtOtherSiteOnly ? (
                                 <div className="inline-flex flex-col items-center gap-0.5">
-                                  {getStatusBadge(state.status)}
+                                  {getStatusBadge(state.status, state.leaveType)}
                                   <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
                                     at {state.divisionName || 'Other Div'}
                                   </span>
                                 </div>
                               ) : isMarkedInThisSelectedDiv ? (
-                                getStatusBadge(state.status)
+                                getStatusBadge(state.status, state.leaveType)
                               ) : (
                                 getStatusBadge('')
                               )}
                             </td>
 
                             <td className="px-3 py-2">
-                              <div className="flex items-center justify-center gap-1.5">
-                                {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
-                                  const active = selectedDivisionId === 'ALL'
-                                    ? (state.status === status)
-                                    : (
-                                        (state.divisionId === selectedDivisionId && state.status === status) ||
-                                        (state.secondDivisionId === selectedDivisionId && status === 'HALF_DAY')
-                                      );
-                                  let colorClasses = '';
-                                  if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                                  if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                                  if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
-                                  if (status === 'LEAVE') colorClasses = active ? 'border-slate-500 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  {(['PRESENT', 'ABSENT', 'HALF_DAY', 'LEAVE'] as const).map((status) => {
+                                    const active = selectedDivisionId === 'ALL'
+                                      ? (state.status === status)
+                                      : (
+                                          (state.divisionId === selectedDivisionId && state.status === status) ||
+                                          (state.secondDivisionId === selectedDivisionId && status === 'HALF_DAY')
+                                        );
+                                    let colorClasses = '';
+                                    if (status === 'PRESENT') colorClasses = active ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                    if (status === 'ABSENT') colorClasses = active ? 'border-red-500 bg-red-50 text-red-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                    if (status === 'HALF_DAY') colorClasses = active ? 'border-amber-500 bg-amber-50 text-amber-700 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
+                                    if (status === 'LEAVE') colorClasses = active ? 'border-purple-600 bg-purple-50 text-purple-900 font-bold' : 'border-slate-200 text-slate-600 hover:bg-slate-50';
 
-                                  let dotColor = '';
-                                  if (status === 'PRESENT') dotColor = 'bg-emerald-500';
-                                  if (status === 'ABSENT') dotColor = 'bg-red-500';
-                                  if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
-                                  if (status === 'LEAVE') dotColor = 'bg-slate-500';
+                                    let dotColor = '';
+                                    if (status === 'PRESENT') dotColor = 'bg-emerald-500';
+                                    if (status === 'ABSENT') dotColor = 'bg-red-500';
+                                    if (status === 'HALF_DAY') dotColor = 'bg-amber-500';
+                                    if (status === 'LEAVE') dotColor = 'bg-purple-600';
 
-                                  return (
+                                    return (
+                                      <button
+                                        type="button"
+                                        key={status}
+                                        onClick={() => handleStatusChange(w.id, status)}
+                                        className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
+                                        title={active ? 'Click to unselect / clear' : `Mark as ${status}`}
+                                      >
+                                        <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
+                                          {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
+                                        </span>
+                                        <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
+                                      </button>
+                                    );
+                                  })}
+                                  {state.status && (
                                     <button
                                       type="button"
-                                      key={status}
-                                      onClick={() => handleStatusChange(w.id, status)}
-                                      className={`flex items-center gap-1 px-2 py-1.5 border rounded-lg cursor-pointer text-[9px] uppercase tracking-wider font-semibold transition-all select-none ${colorClasses}`}
-                                      title={active ? 'Click to unselect / clear' : `Mark as ${status}`}
+                                      onClick={() => handleStatusChange(w.id, '')}
+                                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 text-[10px] transition-colors"
+                                      title="Clear / Unselect attendance"
                                     >
-                                      <span className={`w-2.5 h-2.5 rounded-full border border-slate-300 flex items-center justify-center shrink-0 ${active ? 'border-transparent bg-white shadow-sm' : ''}`}>
-                                        {active && <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />}
-                                      </span>
-                                      <span>{status === 'HALF_DAY' ? 'Half' : status === 'PRESENT' ? 'Present' : status === 'ABSENT' ? 'Absent' : 'Leave'}</span>
+                                      ✖
                                     </button>
-                                  );
-                                })}
-                                {state.status && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleStatusChange(w.id, '')}
-                                    className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 text-[10px] transition-colors"
-                                    title="Clear / Unselect attendance"
-                                  >
-                                    ✖
-                                  </button>
+                                  )}
+                                </div>
+
+                                {/* Desktop Leave Sub-Pill Selector */}
+                                {state.status === 'LEAVE' && (
+                                  <div className="inline-flex items-center gap-1 bg-purple-50 p-0.5 rounded border border-purple-200">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLeaveTypeChange(w.id, 'CASUAL')}
+                                      className={`px-2 py-0.5 rounded text-[9px] font-extrabold transition-all ${
+                                        (state.leaveType || 'CASUAL') === 'CASUAL'
+                                          ? 'bg-purple-600 text-white shadow-2xs'
+                                          : 'text-purple-900 hover:bg-purple-100'
+                                      }`}
+                                      title="Casual Leave (Quota: 8 Days/Year)"
+                                    >
+                                      ☕ Casual (8 CL)
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLeaveTypeChange(w.id, 'MEDICAL')}
+                                      className={`px-2 py-0.5 rounded text-[9px] font-extrabold transition-all ${
+                                        state.leaveType === 'MEDICAL'
+                                          ? 'bg-indigo-600 text-white shadow-2xs'
+                                          : 'text-indigo-900 hover:bg-indigo-100'
+                                      }`}
+                                      title="Medical Leave (Quota: 10 Days/Year)"
+                                    >
+                                      🩺 Medical (10 ML)
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </td>
@@ -1189,6 +1300,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                   setInlineEditWorkerId(w.id);
                                   setEditForm({
                                     newStatus: (state.status as any) || 'PRESENT',
+                                    newLeaveType: state.leaveType || 'CASUAL',
                                     newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
                                     newOvertimeHours: state.overtimeHours || '0',
                                     reason: ''
@@ -1267,6 +1379,32 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                         </button>
                                       ))}
                                     </div>
+                                    {editForm.newStatus === 'LEAVE' && (
+                                      <div className="grid grid-cols-2 gap-1 mt-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditForm(prev => ({ ...prev, newLeaveType: 'CASUAL' }))}
+                                          className={`py-1 px-1.5 rounded text-[9px] font-bold border transition-all ${
+                                            editForm.newLeaveType === 'CASUAL'
+                                              ? 'bg-purple-600 text-white border-purple-700'
+                                              : 'bg-white text-purple-900 border-purple-200'
+                                          }`}
+                                        >
+                                          ☕ Casual (8 CL)
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setEditForm(prev => ({ ...prev, newLeaveType: 'MEDICAL' }))}
+                                          className={`py-1 px-1.5 rounded text-[9px] font-bold border transition-all ${
+                                            editForm.newLeaveType === 'MEDICAL'
+                                              ? 'bg-indigo-600 text-white border-indigo-700'
+                                              : 'bg-white text-indigo-900 border-indigo-200'
+                                          }`}
+                                        >
+                                          🩺 Medical (10 ML)
+                                        </button>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {/* OT Hours */}

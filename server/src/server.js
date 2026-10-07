@@ -3999,11 +3999,42 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
       [newWorkerId, newFullName, newFatherName, newDesignation, cleanedPhone, newDailyWage, previousDailyWage, wageRevisedDate, newAllowance, newExtra, newAdvanceTaken, newAdvance, newAdvDate, newAdvReason, newAdvReturnDate, newOtAllowance, newOtRate, newDivisionId, newIsActive, newPfNumber, newEsiNumber, newUanNumber, newBankAcc, newIfsc, newPlace, newNature, id]
     );
 
-    // If salary/wage was revised or hiked, automatically record an entry in SalaryAuditLog
-    if (isWageHiked) {
+    // If base salary or Extra (hike) was revised, automatically record milestone in WorkerWageHistory and SalaryAuditLog
+    const oldExtra = parseFloat(existing[0].extraAmount) || 0;
+    const isExtraChanged = Math.abs(newExtra - oldExtra) > 0.01;
+
+    if (isWageHiked || isExtraChanged) {
       const now = new Date();
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
+      const dateStr = now.toISOString().split('T')[0];
+
+      // 1. Insert/Update Wage Hike Matrix Milestone
+      await pool.query(
+        `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, $6, $7, NOW(), NOW())
+         ON CONFLICT ("workerId", "effectiveDate")
+         DO UPDATE SET
+           "basePaid" = EXCLUDED."basePaid",
+           "hikeAmount" = EXCLUDED."hikeAmount",
+           "totalAmount" = EXCLUDED."totalAmount",
+           "notes" = EXCLUDED."notes",
+           "recordedById" = EXCLUDED."recordedById",
+           "updatedAt" = NOW()`,
+        [
+          id,
+          dateStr,
+          newDailyWage,
+          newExtra,
+          newDailyWage + newExtra,
+          isExtraChanged && isWageHiked 
+            ? `Wage changed to ₹${newDailyWage}, Extra revised from ₹${oldExtra} to ₹${newExtra}`
+            : (isExtraChanged ? `Extra (Hike) revised from ₹${oldExtra} to ₹${newExtra}` : `Base wage changed to ₹${newDailyWage}`),
+          req.user.id
+        ]
+      );
+
+      // 2. Insert into SalaryAuditLog
       await pool.query(
         `INSERT INTO "SalaryAuditLog" (
            "id", "workerId", "month", "year", "previousAmount", "newAmount", "difference",
@@ -4017,14 +4048,15 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
           id,
           currentMonth,
           currentYear,
-          oldDailyWage,
-          newDailyWage,
-          newDailyWage - oldDailyWage,
-          `Master Wage Revision: Base rate changed from ₹${oldDailyWage} to ₹${newDailyWage}`,
+          oldDailyWage + oldExtra,
+          newDailyWage + newExtra,
+          (newDailyWage + newExtra) - (oldDailyWage + oldExtra),
+          `Master Wage/Extra Revision: Total remuneration changed from ₹${oldDailyWage + oldExtra} to ₹${newDailyWage + newExtra} (Extra: ₹${oldExtra} ➔ ₹${newExtra})`,
           req.user.id
         ]
       );
     }
+
 
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [newDivisionId]);
     const worker = { ...rows[0], division: divRows[0] || null };
@@ -4456,11 +4488,13 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
              a."dailyWageOverride", a."notes",
              d."name" as "divisionName",
              d2."name" as "secondDivisionName",
+             wl."leaveType",
              json_build_object('id', w."id", 'workerId', w."workerId", 'fullName', w."fullName", 'dailyWage', w."dailyWage", 'divisionId', w."divisionId") as "worker"
       FROM "Attendance" a
       JOIN "Worker" w ON a."workerId" = w."id"
       LEFT JOIN "Division" d ON a."divisionId" = d."id"
       LEFT JOIN "Division" d2 ON a."secondDivisionId" = d2."id"
+      LEFT JOIN "WorkerLeave" wl ON a."workerId" = wl."workerId" AND a."date"::date = wl."date"::date
       WHERE a."date"::date = $1::date
     `;
     const params = [date];
@@ -4626,12 +4660,13 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
       const year = new Date(date).getFullYear();
       for (const rec of attendanceData) {
         if (rec.status === 'LEAVE') {
+          const lType = (rec.leaveType === 'MEDICAL' || rec.leaveType === 'CASUAL') ? rec.leaveType : 'CASUAL';
           await pool.query(
             `INSERT INTO "WorkerLeave" ("id", "workerId", "date", "leaveType", "days", "reason", "year", "markedById", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2::timestamp, 'CASUAL', 1.0, COALESCE($3, 'Marked in daily attendance'), $4, $5, NOW(), NOW())
+             VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, 1.0, COALESCE($4, 'Marked in daily attendance'), $5, $6, NOW(), NOW())
              ON CONFLICT ("workerId", "date")
-             DO UPDATE SET "days" = 1.0, "reason" = COALESCE(EXCLUDED."reason", "WorkerLeave"."reason"), "updatedAt" = NOW()`,
-            [rec.workerId, date, rec.notes || null, year, req.user.id]
+             DO UPDATE SET "leaveType" = EXCLUDED."leaveType", "days" = 1.0, "reason" = COALESCE(EXCLUDED."reason", "WorkerLeave"."reason"), "updatedAt" = NOW()`,
+            [rec.workerId, date, lType, rec.notes || null, year, req.user.id]
           );
         } else {
           // If changed away from LEAVE, remove corresponding entry in WorkerLeave
@@ -4676,17 +4711,19 @@ app.get('/api/attendance/correction-requests', authenticateToken, async (req, re
 
 app.post('/api/attendance/correction-requests', authenticateToken, async (req, res) => {
   try {
-    const { workerId, date, oldStatus, oldDivisionName, newStatus, newDivisionId, newOvertimeHours, reason } = req.body;
+    const { workerId, date, oldStatus, oldDivisionName, newStatus, newDivisionId, newOvertimeHours, leaveType, reason } = req.body;
     if (!workerId || !date || !newStatus || !newDivisionId || !reason) {
       return res.status(400).json({ error: 'Worker, date, new status, division, and reason are required' });
     }
 
+    const lType = (leaveType === 'MEDICAL' || leaveType === 'CASUAL') ? leaveType : 'CASUAL';
+
     const { rows } = await pool.query(
       `INSERT INTO "AttendanceCorrectionRequest" 
-       ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "reason", "status", "requestedById", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5::"AttendanceStatus", $6, $7, $8, 'PENDING', $9, NOW(), NOW())
+       ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "leaveType", "reason", "status", "requestedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5::"AttendanceStatus", $6, $7, $8, $9, 'PENDING', $10, NOW(), NOW())
        RETURNING *`,
-      [workerId, date, oldStatus || null, oldDivisionName || null, newStatus, newDivisionId, parseFloat(newOvertimeHours) || 0, reason, req.user.id]
+      [workerId, date, oldStatus || null, oldDivisionName || null, newStatus, newDivisionId, parseFloat(newOvertimeHours) || 0, lType, reason, req.user.id]
     );
 
     res.json({ message: 'Attendance correction request submitted to Manager/Admin for approval!', request: rows[0] });
@@ -4738,12 +4775,13 @@ app.put('/api/attendance/correction-requests/:id/review', authenticateToken, req
       // Sync WorkerLeave table
       const corrYear = new Date(corrReq.date).getFullYear();
       if (corrReq.newStatus === 'LEAVE') {
+        const lType = (corrReq.leaveType === 'MEDICAL' || corrReq.leaveType === 'CASUAL') ? corrReq.leaveType : 'CASUAL';
         await client.query(
           `INSERT INTO "WorkerLeave" ("id", "workerId", "date", "leaveType", "days", "reason", "year", "markedById", "createdAt", "updatedAt")
-           VALUES (gen_random_uuid()::text, $1, $2::timestamp, 'CASUAL', 1.0, COALESCE($3, 'Correction Request Approved'), $4, $5, NOW(), NOW())
+           VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, 1.0, COALESCE($4, 'Correction Request Approved'), $5, $6, NOW(), NOW())
            ON CONFLICT ("workerId", "date")
-           DO UPDATE SET "days" = 1.0, "reason" = COALESCE(EXCLUDED."reason", "WorkerLeave"."reason"), "updatedAt" = NOW()`,
-          [corrReq.workerId, corrReq.date, corrReq.reason || null, corrYear, req.user.id]
+           DO UPDATE SET "leaveType" = EXCLUDED."leaveType", "days" = 1.0, "reason" = COALESCE(EXCLUDED."reason", "WorkerLeave"."reason"), "updatedAt" = NOW()`,
+          [corrReq.workerId, corrReq.date, lType, corrReq.reason || null, corrYear, req.user.id]
         );
       } else {
         await client.query(
