@@ -171,158 +171,139 @@ export const SaleInvoiceModal: React.FC<{
     try {
       const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
       const pageWidth = 210;
-      const margin = 12;
-      const contentWidth = pageWidth - (margin * 2); // 186mm
+      const margin = 10;
+      const contentWidth = pageWidth - (margin * 2); // 190mm
 
-      let y = 10;
+      let y = 8;
 
-      // 1. TOP HEADER WITH RED ORIGINAL LOGO & BUSINESS INFO
+      // 1. TOP HEADER WITH ORIGINAL RED LOGO & COMPANY INFO
       if (SKC_LOGO_BASE64) {
         try {
-          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin, y, 25, 25);
+          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, y, 20, 20);
         } catch (e) {
           console.warn('Logo render fallback:', e);
         }
       }
 
-      // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red)
+      // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red Serif)
       doc.setTextColor(218, 18, 18);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.text('SRI KRISHNA CONSTRUCTIONS', margin + 28, y + 5.5);
+      doc.setFont('times', 'bold');
+      doc.setFontSize(18);
+      doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, y + 6, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.text('All Types of Compressor Spares and Service , Pipe Line Work , Heavy Fabrication Works', margin + 28, y + 10);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, y + 11.5, { align: 'center' });
       
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7);
-      doc.text('# 2436, Raghavendar Colony, SHAKTINAGAR - 584 170. Raichur Dist. (Karnataka)', margin + 28, y + 14.5);
+      doc.setFontSize(9);
+      doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, y + 16.5, { align: 'center' });
 
-      // Contact numbers
+      // GST and Mobile Bar
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.text('SUNIL: 8496841904', pageWidth - margin, y + 5.5, { align: 'right' });
+      doc.setFontSize(8);
+      doc.text('GST NO: 29DWKPP3582H1ZV', margin + 2, y + 21.5);
+      doc.text('Mobile No: 8496841904', pageWidth - margin - 2, y + 21.5, { align: 'right' });
 
-      // 2. GSTIN / PAN / PF BAR
-      y += 24;
+      y += 23;
       doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.35);
+      doc.setLineWidth(0.4);
       doc.line(margin, y, margin + contentWidth, y);
-      y += 3.8;
 
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.text(`GSTIN : 29DWKPP3582H1ZV`, margin + 2, y);
-      doc.text(`PAN No. DWKPP3582H`, margin + 68, y);
-      doc.text(`PF No. GBRCH1955403000`, margin + 128, y);
+      // 2. BOXED TAX INVOICE TITLE
+      y += 1.5;
+      doc.rect(margin, y, contentWidth, 7);
+      doc.setFontSize(13);
+      doc.setFont('times', 'bold');
+      doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 5.2, { align: 'center' });
+      y += 7;
 
-      y += 2;
-      doc.line(margin, y, margin + contentWidth, y);
-      y += 3.5;
-
-      // 3. BOXED TITLE
-      doc.rect(margin, y, contentWidth, 7.5);
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'bold');
-      doc.text(isInward ? 'INWARD MATERIAL RECEIPT / PURCHASE INVOICE' : 'TAX INVOICE', margin + (contentWidth / 2), y + 5.2, { align: 'center' });
-      y += 7.5;
-
-      // 4. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID
-      const boxHeight = 46;
+      // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT LAYOUT AS PER USER PDF)
+      const boxHeight = 52;
       const colHalf = contentWidth / 2;
 
       doc.rect(margin, y, contentWidth, boxHeight);
-      doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical divider
+      doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
 
       // Left Column items
-      doc.setFontSize(7.2);
-      let ly = y + 4;
       doc.setFont('helvetica', 'bold');
-      doc.text(`${isInward ? 'RECEIPT NO' : 'INVOICE NO'}: ${invoiceNo}`, margin + 2, ly);
-      doc.line(margin, ly + 1.5, margin + colHalf, ly + 1.5);
-      
-      ly += 5;
-      doc.text(`${isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: ${invoiceDate}`, margin + 2, ly);
-      doc.line(margin, ly + 1.5, margin + colHalf, ly + 1.5);
+      doc.setFontSize(8);
+      let ly = y + 4.5;
+      doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
+      doc.line(margin, ly + 2, margin + colHalf, ly + 2);
 
-      ly += 4.5;
-      doc.text(`${isInward ? 'SUPPLIER / PARTY' : 'SUPPLY To'} : ${partyName}`, margin + 2, ly);
+      ly += 6.5;
+      doc.text(`INVOICE DATE: ${invoiceDate}`, margin + 2, ly);
+      doc.line(margin, ly + 2, margin + colHalf, ly + 2);
+
+      ly += 5.5;
+      doc.text(`SUPPLY To : ${primarySale.placeOfWork || 'SHAKTINAGAR'}`, margin + 2, ly);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.2);
+      doc.setFontSize(7.5);
       
       if (partyAddress) {
         const addressLines = doc.splitTextToSize(partyAddress, colHalf - 4);
-        doc.text(addressLines.slice(0, 4), margin + 2, ly + 3.8);
-      } else if (isKpclParty) {
-        doc.text(`TO Paying Authority: Deputy General Manager(F)RTPS`, margin + 2, ly + 3.8);
-        doc.text(`Raichur Thermal Power Station (RTPS),KPCL`, margin + 2, ly + 7.2);
-        doc.text(`Plant Premises, Shaktinagara, PIN-584170`, margin + 2, ly + 10.6);
-        doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 14.0);
-      } else {
-        doc.text(isInward ? `Supplier Location: Verified Vendor` : `Customer Location: Shaktinagar / Raichur Region`, margin + 2, ly + 3.8);
+        doc.text(addressLines.slice(0, 4), margin + 2, ly + 4.5);
+      } else if (isKpclParty || !partyAddress) {
+        doc.text(`TO Paying Authority:Deputy General Manager(F)RTPS`, margin + 2, ly + 4);
+        doc.text(`Raichur Thermal Power Station (RTPS),KPCL`, margin + 2, ly + 7.8);
+        doc.text(`Plant Premises, Shaktinagara, PIN-584170`, margin + 2, ly + 11.6);
+        doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 15.4);
       }
       
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
-      doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + 2, ly + 17.5);
-      doc.line(margin, ly + 19, margin + colHalf, ly + 19);
+      doc.setFontSize(8);
+      doc.text(`GST NO: ${partyGst || '29AAACK8032D1ZQ'}`, margin + 2, ly + 20);
+      doc.line(margin, ly + 22, margin + colHalf, ly + 22);
 
-      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}${primarySale.eWayBillNumber ? `  |  E-Way: ${primarySale.eWayBillNumber}` : ''}`;
-      doc.text(vehicleLine, margin + 2, ly + 23.5);
+      const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || 'EE(TM-2)';
+      doc.text(`Division: ${divLabel}`, margin + 2, ly + 27);
 
       // Right Column items
-      let ry = y + 4;
+      let ry = y + 4.5;
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.2);
+      doc.setFontSize(8);
       doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
-      doc.line(margin + colHalf, ry + 1.5, margin + contentWidth, ry + 1.5);
+      doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
 
-      ry += 5;
+      ry += 6.5;
       doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, ry);
-      doc.line(margin + colHalf, ry + 1.5, margin + contentWidth, ry + 1.5);
+      doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
 
-      ry += 4.5;
-      doc.text(isInward ? `DELIVERED TO (RECEIVER):` : `State of Supply: KARNATAKA (29)`, margin + colHalf + 2, ry);
+      ry += 5.5;
+      doc.text(`State of Supply: KARNATAKA`, margin + colHalf + 2, ry);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.2);
-      
-      if (isInward) {
-        doc.text(`SRI KRISHNA CONSTRUCTIONS`, margin + colHalf + 2, ry + 3.8);
-        doc.text(`#2436, Raghavendar Colony, Shaktinagar - 584170`, margin + colHalf + 2, ry + 7.2);
-        doc.text(`Raichur Dist, Karnataka`, margin + colHalf + 2, ry + 10.6);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`GST NO: 29DWKPP3582H1ZV`, margin + colHalf + 2, ry + 17.5);
-      } else if (isKpclParty) {
-        doc.text(`Shipped To: Executive Engineer(Stores) Raichur Thermal`, margin + colHalf + 2, ry + 3.8);
-        doc.text(`Power Station (RTPS),KPCL Plant Premises,`, margin + colHalf + 2, ry + 7.2);
-        doc.text(`Shaktinagara, PIN-584170`, margin + colHalf + 2, ry + 10.6);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
-      } else if (partyAddress) {
-        doc.text(`Shipped To: ${partyName}`, margin + colHalf + 2, ry + 3.8);
-        const shipLines = doc.splitTextToSize(partyAddress, colHalf - 4);
-        doc.text(shipLines.slice(0, 3), margin + colHalf + 2, ry + 7.2);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
+      doc.setFontSize(7.5);
+
+      if (isKpclParty || !partyAddress) {
+        doc.text(`Shipped To: Executive`, margin + colHalf + 2, ry + 4);
+        doc.text(`Engineer(Stores) Raichur Thermal`, margin + colHalf + 2, ry + 7.8);
+        doc.text(`Power Station (RTPS),KPCL Plant`, margin + colHalf + 2, ry + 11.6);
+        doc.text(`Premises, Shaktinagara, PIN-584170`, margin + colHalf + 2, ry + 15.4);
       } else {
-        doc.text(`Shipped To: ${partyName}`, margin + colHalf + 2, ry + 3.8);
-        doc.text(`Delivery as per Order Instruction`, margin + colHalf + 2, ry + 7.2);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`GST NO: ${partyGst || 'URP (Unregistered)'}`, margin + colHalf + 2, ry + 17.5);
+        const shipLines = doc.splitTextToSize(partyAddress, colHalf - 4);
+        doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4);
       }
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(`GST NO: ${partyGst || '29AAACK8032D1ZQ'}`, margin + colHalf + 2, ry + 20);
+      doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
+
+      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || 'KA 36C 2722'}`;
+      doc.text(vehicleLine, margin + colHalf + 2, ry + 27);
 
       y += boxHeight;
 
-      // 5. INVOICE / RECEIPT ITEMS TABLE
+      // 4. INVOICE ITEMS TABLE (EXACT AUTOTABLE MATCHING USER'S PDF)
       const tableBody = itemsRows.map((r) => [
         r.slNo.toString(),
         r.kpclCode || '-',
         r.itemName,
-        `${r.specifications}${r.partNumber ? `\nPart No: ${r.partNumber}` : ''}`,
-        r.unit,
+        `${r.specifications}${r.partNumber ? `\nP NO: ${r.partNumber}` : ''}`,
+        r.unit === 'NOS' ? "No's" : r.unit,
         r.qty.toString(),
         fmt(r.rate),
         fmt(r.amount)
@@ -332,16 +313,17 @@ export const SaleInvoiceModal: React.FC<{
         startY: y,
         margin: { left: margin, right: margin },
         head: [
-          ['SI.\nNO', 'ITEM CODE', 'ITEM NAME', 'SPECIFICATIONS & PART NO', 'UNIT', 'QTY', 'RATE (₹)', 'AMOUNT (₹)']
+          ['SL\nNO', 'KPCL ITEM\nCODE', 'Discription', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
         ],
         body: tableBody,
         theme: 'grid',
         styles: {
-          fontSize: 6.8,
+          fontSize: 7.5,
           lineColor: [0, 0, 0],
-          lineWidth: 0.25,
+          lineWidth: 0.35,
           textColor: [0, 0, 0],
-          cellPadding: 1.8
+          cellPadding: 1.8,
+          valign: 'middle'
         },
         headStyles: {
           fillColor: [255, 255, 255],
@@ -349,93 +331,114 @@ export const SaleInvoiceModal: React.FC<{
           fontStyle: 'bold',
           halign: 'center',
           valign: 'middle',
-          lineWidth: 0.3,
+          lineWidth: 0.4,
           lineColor: [0, 0, 0]
         },
         columnStyles: {
-          0: { halign: 'center', cellWidth: 10 },
-          1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
-          2: { cellWidth: 36, fontStyle: 'bold' },
+          0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
+          1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
+          2: { cellWidth: 44, fontStyle: 'bold' },
           3: { cellWidth: 62 },
           4: { halign: 'center', cellWidth: 12 },
           5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
-          6: { halign: 'right', cellWidth: 15, fontStyle: 'bold' },
-          7: { halign: 'right', cellWidth: 17, fontStyle: 'bold' }
+          6: { halign: 'right', cellWidth: 13, fontStyle: 'bold' },
+          7: { halign: 'right', cellWidth: 13, fontStyle: 'bold' }
+        },
+        didDrawPage: (data) => {
+          // Page Number at bottom of every page
+          const str = `Page ${doc.getNumberOfPages()} of `;
+          doc.setFontSize(7.5);
+          doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
         }
       });
 
-      const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 35);
-
-      // 6. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS BOX
-      let fy = finalTableY + 3;
-
-      // Draw Bank Details & Terms on Left (98mm wide)
-      doc.rect(margin, fy, 98, 30);
-      doc.setFontSize(6.8);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Amount in Words:', margin + 2, fy + 3.8);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.2);
-      const wordsSplit = doc.splitTextToSize(amountInWordsText, 94);
-      doc.text(wordsSplit.slice(0, 2), margin + 2, fy + 7.2);
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(6.8);
-      doc.text('Company Bank & Payment Details:', margin + 2, fy + 14.5);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(6.2);
-      doc.text('Bank Name: Canara Bank, Shaktinagar Branch', margin + 2, fy + 18.0);
-      doc.text('A/C No: 06222200019793  |  IFSC: CNRB0010622', margin + 2, fy + 21.5);
-      doc.text('Terms: Subject to Raichur Jurisdiction • E.&O.E.', margin + 2, fy + 25.0);
-
-      // Draw Summary Box on Right (85mm wide)
-      const taxBoxHeight = 30;
-      doc.rect(margin + 101, fy, 85, taxBoxHeight);
-      doc.setFontSize(7.2);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Basic Amount:`, margin + 103, fy + 4.5);
-      doc.text(`₹${fmt(totalBasic)}`, margin + 184, fy + 4.5, { align: 'right' });
-
-      let taxOffset = 4.5;
-      if (totalCgst > 0 || totalSgst > 0) {
-        taxOffset += 4.5;
-        doc.text(`CGST (${effectiveCgstPercent}%):`, margin + 103, fy + taxOffset);
-        doc.text(`₹${fmt(totalCgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
-
-        taxOffset += 4.5;
-        doc.text(`SGST (${effectiveSgstPercent}%):`, margin + 103, fy + taxOffset);
-        doc.text(`₹${fmt(totalSgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
-      } else if (totalIgst > 0) {
-        taxOffset += 4.5;
-        doc.text(`IGST (${effectiveIgstPercent}%):`, margin + 103, fy + taxOffset);
-        doc.text(`₹${fmt(totalIgst)}`, margin + 184, fy + taxOffset, { align: 'right' });
+      if (typeof (doc as any).putTotalPages === 'function') {
+        (doc as any).putTotalPages('{total_pages_count_string}');
       }
 
-      if (totalShipping > 0) {
-        taxOffset += 4.5;
-        doc.text(`Shipping Charges:`, margin + 103, fy + taxOffset);
-        doc.text(`₹${fmt(totalShipping)}`, margin + 184, fy + taxOffset, { align: 'right' });
+      const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
+
+      // Check if space is sufficient on current page for totals box (needs ~55mm)
+      let fy = finalTableY;
+      if (fy > 230) {
+        doc.addPage();
+        fy = 15;
       }
 
-      doc.line(margin + 101, fy + 20.5, margin + 186, fy + 20.5);
+      // 5. BOTTOM TOTALS BOX & BANK DETAILS (EXACT AS USER PDF PAGE 4)
+      const leftBoxWidth = 120;
+      const rightBoxWidth = contentWidth - leftBoxWidth; // 70mm
+      const bottomBoxHeight = 35;
+
+      // Outer Box border
+      doc.rect(margin, fy, contentWidth, bottomBoxHeight);
+      doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
+
+      // Left Box: Total Invoice amount in words + Bank Details
       doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
+      doc.setFont('helvetica', 'normal');
+      const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
+      const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
+      doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
+
+      doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
+
+      doc.setFont('helvetica', 'bold');
+      doc.text('Bank Details :', margin + 2, fy + 16.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Account Holder Name : Sri Krishna Constructions', margin + 2, fy + 20.5);
+      doc.text('Bank Name : Canara Bank Deosugur Branch', margin + 2, fy + 24.5);
+      doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
+      doc.text('IFSC Code:CNRB0011813', margin + 2, fy + 32.5);
+
+      // Right Box: Basic Cost, SGST 9%, CGST 9%, TOTAL TAX AMOUNT, TOTAL AMOUNT
+      const rightX = margin + leftBoxWidth;
+      const valX = margin + contentWidth - 2;
+
+      // Row 1: Basic Cost
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.text('Basic Cost', rightX + 2, fy + 5.5);
+      doc.text(fmt(totalBasic), valX, fy + 5.5, { align: 'right' });
+      doc.line(rightX, fy + 7, margin + contentWidth, fy + 7);
+
+      // Row 2: SGST 9%
+      doc.text(`SGST ${effectiveSgstPercent || 9}%`, rightX + 2, fy + 12.5);
+      doc.text(fmt(totalSgst), valX, fy + 12.5, { align: 'right' });
+      doc.line(rightX, fy + 14, margin + contentWidth, fy + 14);
+
+      // Row 3: CGST 9%
+      doc.text(`CGST ${effectiveCgstPercent || 9}%`, rightX + 2, fy + 19.5);
+      doc.text(fmt(totalCgst), valX, fy + 19.5, { align: 'right' });
+      doc.line(rightX, fy + 21, margin + contentWidth, fy + 21);
+
+      // Row 4: TOTAL TAX AMOUNT
+      const totalTax = round2(totalCgst + totalSgst + totalIgst);
+      doc.text('TOTAL TAX AMOUNT', rightX + 2, fy + 26.5);
+      doc.text(fmt(totalTax), valX, fy + 26.5, { align: 'right' });
+      doc.line(rightX, fy + 28, margin + contentWidth, fy + 28);
+
+      // Row 5: TOTAL AMOUNT
+      doc.text('TOTAL AMOUNT', rightX + 2, fy + 33.5);
+      doc.text(fmt(totalInvoiceAmount), valX, fy + 33.5, { align: 'right' });
+
+      // Signatures
+      let sigY = fy + bottomBoxHeight + 8;
+      if (sigY > 270) {
+        doc.addPage();
+        sigY = 20;
+      }
+      doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      doc.text(`TOTAL AMOUNT:`, margin + 103, fy + 25.5);
-      doc.text(`₹${fmt(totalInvoiceAmount)}`, margin + 184, fy + 25.5, { align: 'right' });
-
-      // Signature blocks
-      const sigY = fy + 42;
-      doc.setFontSize(7.2);
-      doc.setFont('helvetica', 'normal');
-      doc.text(isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal', margin + 6, sigY);
-
+      doc.text('Your Faithfully', pageWidth - margin - 20, sigY, { align: 'center' });
       doc.setFont('helvetica', 'bold');
-      doc.text('For SRI KRISHNA CONSTRUCTIONS', margin + 120, sigY - 7);
+      doc.setTextColor(59, 130, 246);
+      doc.text('For Sri Krishna Constructions', pageWidth - margin - 20, sigY + 6, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
-      doc.text(isInward ? 'Verified & Approved Signatory' : 'Authorised Signatory', margin + 130, sigY);
-
-      doc.setFontSize(6.5);
-      doc.text('Page 1 of 1', pageWidth / 2, 288, { align: 'center' });
+      doc.text('Proprietor', pageWidth - margin - 20, sigY + 16, { align: 'center' });
 
       doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
       showToast('Tax Invoice PDF downloaded successfully', 'success');
@@ -642,17 +645,18 @@ export const SaleInvoiceModal: React.FC<{
               {/* Left Box: Amount in words & Bank info */}
               <div className="border border-black p-2.5 text-[10px] sm:text-[11px] space-y-2 bg-slate-50/50">
                 <div>
-                  <span className="font-bold block text-slate-900">Amount Chargeable (in words):</span>
+                  <span className="font-bold block text-slate-900">Total Invoice amount in words:</span>
                   <span className="font-serif italic font-bold text-slate-800 text-[11px] block mt-0.5">
                     {amountInWordsText}
                   </span>
                 </div>
                 <div className="pt-2 border-t border-slate-300">
-                  <span className="font-bold block text-slate-900">Company Bank &amp; Payment Details:</span>
+                  <span className="font-bold block text-slate-900">Bank Details:</span>
                   <div className="text-[10px] text-slate-700 space-y-0.5 mt-0.5">
-                    <div>Bank Name: <strong>Canara Bank</strong>, Shaktinagar Branch</div>
-                    <div>Account No: <strong className="font-mono">06222200019793</strong></div>
-                    <div>IFSC Code: <strong className="font-mono">CNRB0010622</strong></div>
+                    <div>Account Holder: <strong>SRI KRISHNA CONSTRUCTIONS</strong></div>
+                    <div>Bank Name: <strong>Canara Bank</strong>, Deosugur Branch</div>
+                    <div>A/C No: <strong className="font-mono">18133070005349</strong></div>
+                    <div>IFSC Code: <strong className="font-mono">CNRB0011813</strong></div>
                   </div>
                 </div>
                 <div className="text-[9px] text-slate-500 pt-1">
@@ -663,25 +667,35 @@ export const SaleInvoiceModal: React.FC<{
               {/* Right Box: Tax Breakdown Summary */}
               <div className="border-2 border-black divide-y divide-black text-[11px] bg-slate-50/50">
                 <div className="p-2 flex justify-between">
-                  <span className="font-semibold">Basic Amount:</span>
+                  <span className="font-semibold">Basic Cost:</span>
                   <span className="font-mono font-bold">₹{fmt(totalBasic)}</span>
                 </div>
                 {(totalCgst > 0 || totalSgst > 0) ? (
                   <>
                     <div className="p-2 flex justify-between">
-                      <span>CGST ({effectiveCgstPercent}%):</span>
-                      <span className="font-mono font-bold">₹{fmt(totalCgst)}</span>
+                      <span>SGST 9%:</span>
+                      <span className="font-mono font-bold">₹{fmt(totalSgst)}</span>
                     </div>
                     <div className="p-2 flex justify-between">
-                      <span>SGST ({effectiveSgstPercent}%):</span>
-                      <span className="font-mono font-bold">₹{fmt(totalSgst)}</span>
+                      <span>CGST 9%:</span>
+                      <span className="font-mono font-bold">₹{fmt(totalCgst)}</span>
+                    </div>
+                    <div className="p-2 flex justify-between font-bold bg-slate-100/70">
+                      <span>TOTAL TAX AMOUNT:</span>
+                      <span className="font-mono">₹{fmt(totalCgst + totalSgst)}</span>
                     </div>
                   </>
                 ) : totalIgst > 0 ? (
-                  <div className="p-2 flex justify-between">
-                    <span>IGST ({effectiveIgstPercent}%):</span>
-                    <span className="font-mono font-bold">₹{fmt(totalIgst)}</span>
-                  </div>
+                  <>
+                    <div className="p-2 flex justify-between">
+                      <span>IGST 18%:</span>
+                      <span className="font-mono font-bold">₹{fmt(totalIgst)}</span>
+                    </div>
+                    <div className="p-2 flex justify-between font-bold bg-slate-100/70">
+                      <span>TOTAL TAX AMOUNT:</span>
+                      <span className="font-mono">₹{fmt(totalIgst)}</span>
+                    </div>
+                  </>
                 ) : null}
                 {totalShipping > 0 && (
                   <div className="p-2 flex justify-between text-blue-900 font-semibold">
@@ -703,9 +717,10 @@ export const SaleInvoiceModal: React.FC<{
                 <div>{isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal'}</div>
               </div>
               <div className="text-center">
-                <div>For SRI KRISHNA CONSTRUCTIONS</div>
+                <div className="italic text-slate-700 font-serif">Your Faithfully</div>
+                <div className="font-bold">For Sri Krishna Constructions</div>
                 <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
-                <div className="font-normal text-slate-600 text-[11px]">{isInward ? 'Verified & Approved Signatory' : 'Authorised Signatory'}</div>
+                <div className="font-bold text-slate-900 text-[11px] uppercase">{isInward ? 'Verified & Approved Signatory' : 'Proprietor'}</div>
               </div>
             </div>
 

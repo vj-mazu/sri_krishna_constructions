@@ -1234,128 +1234,196 @@ app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANA
   }
 });
 
-// POST /api/sales - Outward sale record with ACID transactional safety & mandatory Owner approval
+// GET /api/sales/next-invoice-number - Auto continuation of invoice numbering (e.g. 2026-27/01, 2026-27/02, 2026-27/10)
+app.get('/api/sales/next-invoice-number', authenticateToken, async (req, res) => {
+  try {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    // Financial year: April to March
+    const fyStart = currentMonth >= 4 ? currentYear : currentYear - 1;
+    const fyEnd = String(fyStart + 1).slice(-2);
+    const fyPrefix = `${fyStart}-${fyEnd}/`;
+
+    const { rows } = await pool.query(
+      `SELECT "invoiceNumber" FROM "Sale" 
+       WHERE "invoiceNumber" IS NOT NULL AND "invoiceNumber" != ''
+       ORDER BY "createdAt" DESC LIMIT 500`
+    );
+
+    let maxSeq = 0;
+    for (const r of rows) {
+      const inv = String(r.invoiceNumber || '').trim();
+      // Match patterns like 2026-27/09, 2026-27/10, SKC/2026-27/09, INV/2026-27/09, or simply 09
+      if (inv.includes(fyPrefix)) {
+        const parts = inv.split(fyPrefix);
+        const seqPart = parts[parts.length - 1];
+        const num = parseInt(seqPart, 10);
+        if (!isNaN(num) && num > maxSeq) {
+          maxSeq = num;
+        }
+      } else {
+        const match = inv.match(/(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (!isNaN(num) && num > maxSeq && num < 100000) {
+            maxSeq = num;
+          }
+        }
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    const nextInvoiceNumber = `${fyPrefix}${String(nextSeq).padStart(2, '0')}`;
+
+    res.json({
+      nextInvoiceNumber,
+      fyPrefix,
+      nextSeq
+    });
+  } catch (err) {
+    console.error('Error generating next invoice number:', err);
+    res.status(500).json({ error: 'Failed to generate next invoice number' });
+  }
+});
+
+// POST /api/sales - Outward sale record (Supports Single & Multi-Item Sales in 1 Invoice)
 app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const d = req.body;
-    const qty = parseFloat(d.qty) || 0;
-    const rate = parseFloat(d.rate) || 0;
-    const cgstPercent = parseFloat(d.cgstPercent) || 0;
-    const sgstPercent = parseFloat(d.sgstPercent) || 0;
-    const igstPercent = parseFloat(d.igstPercent) || 0;
-    const shippingCharges = parseFloat(d.shippingCharges) || 0;
-
-    const basicAmount = qty * rate;
-    const cgstAmount = basicAmount * (cgstPercent / 100);
-    const sgstAmount = basicAmount * (sgstPercent / 100);
-    const igstAmount = basicAmount * (igstPercent / 100);
-    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
+    const body = req.body;
+    const isMultiItem = Array.isArray(body.items) && body.items.length > 0;
+    const itemsToProcess = isMultiItem ? body.items : [body];
 
     await client.query('BEGIN');
-
-    // Row-level lock on item to prevent overselling race conditions
-    const stockRes = await client.query(`
-      SELECT 
-        poi."partNumber", poi."itemName",
-        COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as purchased,
-        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)::float as sold
-      FROM "PurchaseOrderItem" poi
-      WHERE poi.id = $1
-      FOR UPDATE
-    `, [d.purchaseOrderItemId]);
-
-    const partNumber = stockRes.rows[0]?.partNumber || '-';
-    const itemName = stockRes.rows[0]?.itemName || '-';
-    const purchased = stockRes.rows[0]?.purchased || 0;
-    const sold = stockRes.rows[0]?.sold || 0;
-    const available = purchased - sold;
-    if (qty > available) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: `Sale quantity (${qty}) exceeds available approved stock (${available})` });
-    }
-
-    const saleId = (await client.query('SELECT gen_random_uuid()::text as id')).rows[0].id;
-
-    // EVERY sale requires Owner approval (even if created by Owner/Manager)
-    const { rows } = await client.query(
-      `INSERT INTO "Sale" (
-        "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate", "basicAmount",
-        "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber", "partyInvoiceNumber",
-        "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "shippingCharges", "status", "addedById", "createdAt"
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13,
-        $14, $15, $16, $17, $18, $19,
-        $20, $21, $22, $23, $24, 'PENDING', $25, NOW()
-      ) RETURNING *`,
-      [
-        saleId, d.purchaseOrderItemId, d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
-        d.invoiceDate ? new Date(d.invoiceDate) : new Date(),
-        qty, rate, basicAmount,
-        cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
-        totalAmount,
-        d.partyName ? d.partyName.trim() : null,
-        d.supplierAddress ? d.supplierAddress.trim() : null,
-        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
-        d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null,
-        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
-        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
-        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
-        d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
-        d.remarks ? d.remarks.trim() : null,
-        shippingCharges,
-        req.user.id
-      ]
-    );
 
     // Ensure SALE_ENTRY is in ApprovalType enum
     try {
       await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY'`);
     } catch (_) {}
 
-    // Automatically create an Approval Request for OWNER review
-    await client.query(
-      `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
-      [
-        req.user.id,
-        JSON.stringify({
-          saleId: saleId,
-          partNumber: partNumber,
-          itemName: itemName,
-          invoiceNumber: d.invoiceNumber || '-',
-          invoiceDate: d.invoiceDate,
-          qty: qty,
-          rate: rate,
-          basicAmount: basicAmount,
-          cgstPercent: cgstPercent,
-          sgstPercent: sgstPercent,
-          igstPercent: igstPercent,
-          cgstAmount: cgstAmount,
-          sgstAmount: sgstAmount,
-          igstAmount: igstAmount,
-          shippingCharges: shippingCharges,
-          totalAmount: totalAmount,
-          partyName: d.partyName || '-',
-          supplierAddress: d.supplierAddress || '-',
-          companyGstNumber: d.companyGstNumber || '-',
-          gstNumber: d.gstNumber || '-',
-          partyInvoiceNumber: d.partyInvoiceNumber || '-',
-          supplierInvoiceDate: d.supplierInvoiceDate || null,
-          vehicleNumber: d.vehicleNumber || '-',
-          eWayBillNumber: d.eWayBillNumber || '-',
-          remarks: d.remarks || '-'
-        }),
-        `Sale Invoice #${d.invoiceNumber || '-'} (${qty} units of ${partNumber}) submitted for Owner Approval`
-      ]
-    );
+    const createdSales = [];
+
+    for (const d of itemsToProcess) {
+      const itemId = d.purchaseOrderItemId || d.itemId;
+      const qty = parseFloat(d.qty) || 0;
+      const rate = parseFloat(d.rate) || 0;
+      const cgstPercent = parseFloat(d.cgstPercent !== undefined ? d.cgstPercent : (body.cgstPercent || 0));
+      const sgstPercent = parseFloat(d.sgstPercent !== undefined ? d.sgstPercent : (body.sgstPercent || 0));
+      const igstPercent = parseFloat(d.igstPercent !== undefined ? d.igstPercent : (body.igstPercent || 0));
+      const shippingCharges = parseFloat(d.shippingCharges || 0);
+
+      const basicAmount = qty * rate;
+      const cgstAmount = basicAmount * (cgstPercent / 100);
+      const sgstAmount = basicAmount * (sgstPercent / 100);
+      const igstAmount = basicAmount * (igstPercent / 100);
+      const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
+
+      // Row-level lock on item to verify stock availability
+      const stockRes = await client.query(`
+        SELECT 
+          poi."partNumber", poi."itemName",
+          COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as purchased,
+          COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)::float as sold
+        FROM "PurchaseOrderItem" poi
+        WHERE poi.id = $1
+        FOR UPDATE
+      `, [itemId]);
+
+      const partNumber = stockRes.rows[0]?.partNumber || '-';
+      const itemName = stockRes.rows[0]?.itemName || '-';
+      const purchased = stockRes.rows[0]?.purchased || 0;
+      const sold = stockRes.rows[0]?.sold || 0;
+      const available = Math.max(0, purchased - sold);
+
+      if (qty > available) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+          error: `Sale quantity (${qty}) for "${itemName}" exceeds available inwarded stock (${available}). Only inwarded stock can be sold.` 
+        });
+      }
+
+      const saleId = (await client.query('SELECT gen_random_uuid()::text as id')).rows[0].id;
+      const invNum = (d.invoiceNumber || body.invoiceNumber ? (d.invoiceNumber || body.invoiceNumber).trim().toUpperCase() : null);
+      const invDate = (d.invoiceDate || body.invoiceDate ? new Date(d.invoiceDate || body.invoiceDate) : new Date());
+
+      const { rows } = await client.query(
+        `INSERT INTO "Sale" (
+          "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate", "basicAmount",
+          "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+          "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber", "partyInvoiceNumber",
+          "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "shippingCharges", "status", "addedById", "createdAt"
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, $12, $13,
+          $14, $15, $16, $17, $18, $19,
+          $20, $21, $22, $23, $24, 'PENDING', $25, NOW()
+        ) RETURNING *`,
+        [
+          saleId, itemId, invNum,
+          invDate,
+          qty, rate, basicAmount,
+          cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
+          totalAmount,
+          (d.partyName || body.partyName ? (d.partyName || body.partyName).trim() : null),
+          (d.supplierAddress || body.supplierAddress ? (d.supplierAddress || body.supplierAddress).trim() : null),
+          (d.gstNumber || body.gstNumber ? (d.gstNumber || body.gstNumber).trim().toUpperCase() : null),
+          (d.companyGstNumber || body.companyGstNumber ? (d.companyGstNumber || body.companyGstNumber).trim().toUpperCase() : null),
+          (d.partyInvoiceNumber || body.partyInvoiceNumber ? (d.partyInvoiceNumber || body.partyInvoiceNumber).trim().toUpperCase() : null),
+          (d.supplierInvoiceDate || body.supplierInvoiceDate ? new Date(d.supplierInvoiceDate || body.supplierInvoiceDate) : null),
+          (d.vehicleNumber || body.vehicleNumber ? (d.vehicleNumber || body.vehicleNumber).trim().toUpperCase() : null),
+          (d.eWayBillNumber || body.eWayBillNumber ? (d.eWayBillNumber || body.eWayBillNumber).trim().toUpperCase() : null),
+          (d.remarks || body.remarks ? (d.remarks || body.remarks).trim() : null),
+          shippingCharges,
+          req.user.id
+        ]
+      );
+
+      createdSales.push(rows[0]);
+
+      // Approval Request for each item
+      await client.query(
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify({
+            saleId: saleId,
+            partNumber: partNumber,
+            itemName: itemName,
+            invoiceNumber: invNum || '-',
+            invoiceDate: invDate,
+            qty: qty,
+            rate: rate,
+            basicAmount: basicAmount,
+            cgstPercent: cgstPercent,
+            sgstPercent: sgstPercent,
+            igstPercent: igstPercent,
+            cgstAmount: cgstAmount,
+            sgstAmount: sgstAmount,
+            igstAmount: igstAmount,
+            shippingCharges: shippingCharges,
+            totalAmount: totalAmount,
+            partyName: (d.partyName || body.partyName || '-'),
+            supplierAddress: (d.supplierAddress || body.supplierAddress || '-'),
+            companyGstNumber: (d.companyGstNumber || body.companyGstNumber || '-'),
+            gstNumber: (d.gstNumber || body.gstNumber || '-'),
+            partyInvoiceNumber: (d.partyInvoiceNumber || body.partyInvoiceNumber || '-'),
+            supplierInvoiceDate: (d.supplierInvoiceDate || body.supplierInvoiceDate || null),
+            vehicleNumber: (d.vehicleNumber || body.vehicleNumber || '-'),
+            eWayBillNumber: (d.eWayBillNumber || body.eWayBillNumber || '-'),
+            remarks: (d.remarks || body.remarks || '-')
+          }),
+          `Sale Invoice #${invNum || '-'} (${qty} units of ${partNumber}) submitted for Owner Approval`
+        ]
+      );
+    }
 
     await client.query('COMMIT');
     res.status(201).json({
-      message: 'Sale recorded and submitted for Owner Approval',
-      sale: rows[0]
+      message: `Sale invoice recorded (${createdSales.length} items) and submitted for Owner Approval`,
+      sales: createdSales,
+      sale: createdSales[0]
     });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) {}

@@ -344,9 +344,28 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   });
 
   const [saleForm, setSaleForm] = useState({
-    itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
-    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
+    itemId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().split('T')[0], qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
+    partyName: 'KPCL / RTPS', supplierAddress: 'Raichur Thermal Power Station (RTPS), KPCL Plant Premises, Shaktinagara, PIN-584170', gstNumber: '29AAACK8032D1ZQ', companyGstNumber: '29DWKPP3582H1ZV', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: 'KA 36C 2722', eWayBillNumber: '', remarks: ''
   });
+
+  // Multi-Item Sales Selection & Inward Table State
+  const [selectedMultiSaleItemIds, setSelectedMultiSaleItemIds] = useState<string[]>([]);
+  const [multiSaleItemEdits, setMultiSaleItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number }>>({});
+
+  // Helper to fetch next continuous invoice number
+  const fetchNextInvoiceNumber = async () => {
+    try {
+      const res = await api.get('/sales/next-invoice-number');
+      if (res.data?.nextInvoiceNumber) {
+        setSaleForm(prev => ({
+          ...prev,
+          invoiceNumber: res.data.nextInvoiceNumber
+        }));
+      }
+    } catch (e) {
+      console.warn('Could not auto-fetch next invoice number:', e);
+    }
+  };
 
   // --- EDIT MODAL STATES ---
   const [editingItem, setEditingItem] = useState<any | null>(null);
@@ -681,19 +700,80 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   };
 
-  // --- ACTIONS: ADD SALE (DOUBLE SUBMISSION PROTECTED) ---
+  // --- ACTIONS: ADD SALE (DOUBLE SUBMISSION PROTECTED - MULTI-ITEM SUPPORT) ---
   const handleAddSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    // 1. If multi-item table selection is active
+    const availableInwardItems = allItemsForSelection.filter(i => {
+      const avail = i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0));
+      return avail > 0;
+    });
+
+    const chosenItems = (selectedMultiSaleItemIds.length > 0 ? selectedMultiSaleItemIds : (saleForm.itemId ? [saleForm.itemId] : []))
+      .map(id => {
+        const itm = allItemsForSelection.find(i => i.id === id);
+        const edit = multiSaleItemEdits[id] || {
+          qty: itm ? Math.max(0, (itm.purchasedQty || 0) - (itm.soldQty || 0)) : (saleForm.qty || 0),
+          rate: itm?.rate ?? saleForm.rate ?? 0,
+          cgstPercent: itm?.cgstPercent ?? saleForm.cgstPercent ?? 9,
+          sgstPercent: itm?.sgstPercent ?? saleForm.sgstPercent ?? 9,
+          igstPercent: itm?.igstPercent ?? saleForm.igstPercent ?? 0
+        };
+        const maxAvail = itm?.availableForSale !== undefined 
+          ? itm.availableForSale 
+          : Math.max(0, (itm?.purchasedQty || 0) - (itm?.soldQty || 0));
+        return {
+          purchaseOrderItemId: id,
+          qty: Number(edit.qty || 0),
+          rate: Number(edit.rate || 0),
+          cgstPercent: Number(edit.cgstPercent ?? 9),
+          sgstPercent: Number(edit.sgstPercent ?? 9),
+          igstPercent: Number(edit.igstPercent ?? 0),
+          itemName: itm?.itemName || '',
+          partNumber: itm?.partNumber || '',
+          maxAvail
+        };
+      })
+      .filter(item => item.qty > 0);
+
+    if (chosenItems.length === 0) {
+      showToast('Please select at least one inwarded item with Sale Quantity greater than 0.', 'error');
+      return;
+    }
+
+    // Validate quantities against inward stock
+    for (const item of chosenItems) {
+      if (item.qty > item.maxAvail) {
+        showToast(`Item '${item.partNumber || item.itemName}': Sale Qty (${item.qty}) cannot exceed Available Inward Stock (${item.maxAvail}).`, 'error');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const { itemId, ...rest } = saleForm;
-      await api.post('/sales', {
-        purchaseOrderItemId: itemId,
-        ...rest
-      });
-      showToast('Sale invoice recorded! Submitted for Owner Approval.', 'success');
+      const payload = {
+        items: chosenItems.map(({ maxAvail, itemName, partNumber, ...rest }) => rest),
+        invoiceNumber: saleForm.invoiceNumber,
+        invoiceDate: saleForm.invoiceDate || new Date().toISOString().split('T')[0],
+        partyName: saleForm.partyName || 'KPCL / RTPS',
+        supplierAddress: saleForm.supplierAddress || 'Raichur Thermal Power Station (RTPS), KPCL Plant Premises, Shaktinagara, PIN-584170',
+        companyGstNumber: saleForm.companyGstNumber || '29DWKPP3582H1ZV',
+        gstNumber: saleForm.gstNumber || '29AAACK8032D1ZQ',
+        partyInvoiceNumber: saleForm.partyInvoiceNumber || '',
+        supplierInvoiceDate: saleForm.supplierInvoiceDate || '',
+        vehicleNumber: saleForm.vehicleNumber || 'KA 36C 2722',
+        eWayBillNumber: saleForm.eWayBillNumber || '',
+        remarks: saleForm.remarks || '',
+        shippingCharges: Number(saleForm.shippingCharges || 0)
+      };
+
+      await api.post('/sales', payload);
+      showToast(`Tax Invoice '${saleForm.invoiceNumber}' recorded successfully with ${chosenItems.length} item(s)! Submitted for Owner Approval.`, 'success');
       setShowAddSale(false);
+      setSelectedMultiSaleItemIds([]);
+      setMultiSaleItemEdits({});
       setSaleForm({
         itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
@@ -3227,7 +3307,40 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </button>
                     {isManagerOrOwner && (
                       <button 
-                        onClick={() => setShowAddSale(!showAddSale)}
+                        onClick={() => {
+                          const nextOpen = !showAddSale;
+                          setShowAddSale(nextOpen);
+                          if (nextOpen) {
+                            fetchNextInvoiceNumber();
+                            // Pre-select all items that have available inward stock
+                            const inwardItems = allItemsForSelection.filter(i => {
+                              const avail = i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0));
+                              return avail > 0;
+                            });
+                            setSelectedMultiSaleItemIds(inwardItems.map(i => i.id));
+                            const initialEdits: Record<string, any> = {};
+                            inwardItems.forEach(i => {
+                              const avail = i.availableForSale !== undefined ? i.availableForSale : Math.max(0, (i.purchasedQty || 0) - (i.soldQty || 0));
+                              initialEdits[i.id] = {
+                                qty: avail,
+                                rate: i.rate || 0,
+                                cgstPercent: i.cgstPercent !== undefined ? i.cgstPercent : 9,
+                                sgstPercent: i.sgstPercent !== undefined ? i.sgstPercent : 9,
+                                igstPercent: i.igstPercent !== undefined ? i.igstPercent : 0
+                              };
+                            });
+                            setMultiSaleItemEdits(initialEdits);
+                            setSaleForm(prev => ({
+                              ...prev,
+                              invoiceDate: prev.invoiceDate || new Date().toISOString().split('T')[0],
+                              partyName: prev.partyName || 'KPCL / RTPS',
+                              supplierAddress: prev.supplierAddress || 'Raichur Thermal Power Station (RTPS), KPCL Plant Premises, Shaktinagara, PIN-584170',
+                              companyGstNumber: prev.companyGstNumber || '29DWKPP3582H1ZV',
+                              gstNumber: prev.gstNumber || '29AAACK8032D1ZQ',
+                              vehicleNumber: prev.vehicleNumber || 'KA 36C 2722'
+                            }));
+                          }
+                        }}
                         className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm"
                       >
                         {showAddSale ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} {showAddSale ? 'Cancel' : '+ New Sale'}
@@ -3236,191 +3349,436 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </div>
                 </div>
 
-                {/* SALE ENTRY FORM */}
+                {/* SALE ENTRY FORM WITH EXCEL-STYLE INWARD SELECTION GRID */}
                 {showAddSale && (
-                  <form onSubmit={handleAddSale} className="bg-amber-50/40 rounded-2xl border border-amber-200 animate-fadeIn shadow-lg overflow-visible">
-                    <div className="font-bold text-sm text-amber-800 border-b border-amber-200 p-4 bg-amber-100/60 rounded-t-2xl">
-                      Record Sales / Dispatch Invoice
+                  <form onSubmit={handleAddSale} className="bg-amber-50/40 rounded-2xl border border-amber-200 animate-fadeIn shadow-lg overflow-visible space-y-4">
+                    <div className="font-bold text-sm text-amber-900 border-b border-amber-200 p-4 bg-amber-100/70 rounded-t-2xl flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="w-4 h-4 text-amber-800" />
+                        <span>Record Sales / Dispatch Invoice (Multi-Item Excel Grid)</span>
+                      </div>
+                      <span className="text-[11px] font-normal text-amber-800 bg-amber-200/60 px-2.5 py-1 rounded-full font-mono">
+                        Available Inward Items: {allItemsForSelection.filter(i => ((i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0))) > 0)).length}
+                      </span>
                     </div>
-                    <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-3.5">
-                      <div className="col-span-2">
+
+                    {/* PARTY & INVOICE METADATA */}
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3 bg-white/60 mx-4 rounded-xl border border-amber-100 shadow-sm">
+                      <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
+                          Invoice Number * <span className="text-[10px] text-amber-700 font-normal">(Auto-Sequential)</span>
                         </label>
-                        <SearchableItemSelect
-                          items={allItemsForSelection}
-                          selectedItemId={saleForm.itemId}
-                          placeholder="🔍 Type Part Number, Item Name, or KPCL Code to search..."
-                          type="sale"
-                          onSelect={(item) => {
-                            if (item) {
-                              setSaleForm(prev => ({
-                                ...prev,
-                                itemId: item.id,
-                                rate: item.rate,
-                                cgstPercent: item.cgstPercent || 0,
-                                sgstPercent: item.sgstPercent || 0,
-                                igstPercent: item.igstPercent || 0
-                              }));
-                            } else {
-                              handleSaleChange('itemId', '');
-                            }
-                          }}
+                        <input 
+                          required 
+                          type="text" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold uppercase text-blue-900 focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.invoiceNumber} 
+                          onChange={e => handleSaleChange('invoiceNumber', e.target.value.toUpperCase())} 
+                          placeholder="e.g. 2026-27/01" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
+                        <input 
+                          required 
+                          type="date" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.invoiceDate} 
+                          onChange={e => handleSaleChange('invoiceDate', e.target.value)} 
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Number *</label>
-                        <input required type="text" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold uppercase" value={saleForm.invoiceNumber} onChange={e => handleSaleChange('invoiceNumber', e.target.value.toUpperCase())} placeholder="INV-2026-001" />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
-                        <input required type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.invoiceDate} onChange={e => handleSaleChange('invoiceDate', e.target.value)} />
-                      </div>
-
-                      {/* PARTY DETAILS SECTION */}
-                      <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Name</label>
-                        <input type="text" placeholder="e.g. KPCL / Client Corp" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold" value={saleForm.partyName || ''} onChange={e => handleSaleChange('partyName', e.target.value)} />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Address</label>
-                        <input type="text" placeholder="e.g. BTPS Project Site, Kudligi" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierAddress || ''} onChange={e => handleSaleChange('supplierAddress', e.target.value)} />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GST No (Our GST)</label>
-                        <input type="text" placeholder="e.g. 29SKC12345F1Z9" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.companyGstNumber || ''} onChange={e => handleSaleChange('companyGstNumber', e.target.value.toUpperCase())} />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GST No</label>
-                        <input type="text" placeholder="e.g. 29ABCDE1234F1Z5" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={saleForm.gstNumber || ''} onChange={e => handleSaleChange('gstNumber', e.target.value.toUpperCase())} />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
-                        <input type="text" placeholder="e.g. DC-9901" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900" value={saleForm.partyInvoiceNumber || ''} onChange={e => handleSaleChange('partyInvoiceNumber', e.target.value.toUpperCase())} />
-                      </div>
-
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC Date</label>
-                        <input type="date" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.supplierInvoiceDate || ''} onChange={e => handleSaleChange('supplierInvoiceDate', e.target.value)} />
+                        <input 
+                          type="text" 
+                          placeholder="KPCL / RTPS" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.partyName || ''} 
+                          onChange={e => handleSaleChange('partyName', e.target.value)} 
+                        />
                       </div>
 
                       <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle No</label>
-                        <input type="text" placeholder="e.g. KA-34-A-1234" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold" value={saleForm.vehicleNumber || ''} onChange={e => handleSaleChange('vehicleNumber', e.target.value.toUpperCase())} />
+                        <input 
+                          type="text" 
+                          placeholder="e.g. KA 36C 2722" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.vehicleNumber || ''} 
+                          onChange={e => handleSaleChange('vehicleNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Supply Address</label>
+                        <input 
+                          type="text" 
+                          placeholder="Raichur Thermal Power Station (RTPS), Shaktinagara, PIN-584170" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.supplierAddress || ''} 
+                          onChange={e => handleSaleChange('supplierAddress', e.target.value)} 
+                        />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          E-Way Bill Number <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
-                        </label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Company GST No (Our GST)</label>
+                        <input 
+                          type="text" 
+                          placeholder="29DWKPP3582H1ZV" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.companyGstNumber || ''} 
+                          onChange={e => handleSaleChange('companyGstNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GST No</label>
+                        <input 
+                          type="text" 
+                          placeholder="29AAACK8032D1ZQ" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.gstNumber || ''} 
+                          onChange={e => handleSaleChange('gstNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. DC-9901" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900 focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.partyInvoiceNumber || ''} 
+                          onChange={e => handleSaleChange('partyInvoiceNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party DC Date</label>
+                        <input 
+                          type="date" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.supplierInvoiceDate || ''} 
+                          onChange={e => handleSaleChange('supplierInvoiceDate', e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number (Optional)</label>
                         <input 
                           type="text" 
                           placeholder="e.g. 231456789012" 
-                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase focus:ring-1 focus:ring-amber-500" 
                           value={saleForm.eWayBillNumber || ''} 
                           onChange={e => handleSaleChange('eWayBillNumber', e.target.value.toUpperCase())} 
                         />
                       </div>
 
-                      <div className="col-span-full">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
-                        <input type="text" placeholder="Dispatch remarks, client PO ref, gate pass details..." className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={saleForm.remarks || ''} onChange={e => handleSaleChange('remarks', e.target.value)} />
-                      </div>
-
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Sold *</label>
-                        <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.qty || ''} onChange={e => handleSaleChange('qty', Number(e.target.value))} />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Sale Rate (₹) *</label>
-                        <input required type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono" value={saleForm.rate || ''} onChange={e => handleSaleChange('rate', Number(e.target.value))} />
-                        {saleForm.rate > 0 && (
-                          <div className="text-[10px] font-bold text-blue-600 font-mono mt-0.5">
-                            Format: {formatCurrency(saleForm.rate)}
-                          </div>
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST %</label>
-                        <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.cgstPercent ?? ''} onChange={e => handleSaleChange('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                        {(() => {
-                          const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                          return (
-                            <div className="text-[10px] font-bold text-blue-700 font-mono mt-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                              CGST {b.cgstPercent}%: {formatCurrency(b.cgstAmount)}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST %</label>
-                        <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.sgstPercent ?? ''} onChange={e => handleSaleChange('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                        {(() => {
-                          const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                          return (
-                            <div className="text-[10px] font-bold text-blue-700 font-mono mt-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                              SGST {b.sgstPercent}%: {formatCurrency(b.sgstAmount)}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST %</label>
-                        <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={saleForm.igstPercent ?? ''} onChange={e => handleSaleChange('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                        {(() => {
-                          const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                          return (
-                            <div className="text-[10px] font-bold text-indigo-700 font-mono mt-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                              IGST {b.igstPercent}%: {formatCurrency(b.igstAmount)}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping Charges (₹)</label>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note</label>
                         <input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="0.00" 
-                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" 
-                          value={saleForm.shippingCharges || ''} 
-                          onChange={e => handleSaleChange('shippingCharges', e.target.value === '' ? 0 : Number(e.target.value))} 
+                          type="text" 
+                          placeholder="e.g. Gate pass ref, supply division..." 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-amber-500" 
+                          value={saleForm.remarks || ''} 
+                          onChange={e => handleSaleChange('remarks', e.target.value)} 
                         />
                       </div>
                     </div>
 
-                    <div className="bg-white p-3.5 border-t border-amber-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                      {(() => {
-                        const b = calculateBreakdown(saleForm.qty, saleForm.rate, saleForm.cgstPercent, saleForm.sgstPercent, saleForm.igstPercent);
-                        const ship = Number(saleForm.shippingCharges || 0);
-                        const totalWithShip = b.totalAmount + ship;
-                        return (
-                          <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-                            <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(b.basicAmount)}</strong></span>
-                            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">CGST {b.cgstPercent}%: +{formatCurrency(b.cgstAmount)}</span>
-                            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SGST {b.sgstPercent}%: +{formatCurrency(b.sgstAmount)}</span>
-                            {b.igstPercent > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST {b.igstPercent}%: +{formatCurrency(b.igstAmount)}</span>}
-                            {ship > 0 && <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">Shipping: +{formatCurrency(ship)}</span>}
-                            <span className="text-sm font-black text-amber-900 ml-2 bg-amber-100/50 px-3 py-1 rounded-lg border border-amber-300">
-                              Total Invoice: {formatCurrency(totalWithShip)}
-                            </span>
-                          </div>
-                        );
-                      })()}
-                      <div className="flex items-center gap-2 self-end md:self-auto">
-                        <button type="button" onClick={() => setShowAddSale(false)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">
-                          Cancel
-                        </button>
-                        <button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md">
-                          Save Sale Record
-                        </button>
+                    {/* EXCEL GRID: INWARD ITEMS SELECTION & INLINE EDITING */}
+                    <div className="px-4">
+                      <div className="bg-white border border-amber-300 rounded-xl shadow-sm overflow-hidden">
+                        <div className="p-2.5 bg-amber-100/50 border-b border-amber-200 text-xs font-bold text-amber-900 flex justify-between items-center">
+                          <span>Select Inward Items to Include in Invoice (Change Sale Qty / Rate as needed):</span>
+                          <span className="font-mono text-[11px] text-slate-600">
+                            {selectedMultiSaleItemIds.length} of {allItemsForSelection.filter(i => ((i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0))) > 0)).length} Items Selected
+                          </span>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+                          <table className="excel-table w-full text-xs text-left">
+                            <thead className="sticky top-0 z-10 shadow-sm bg-sky-950 text-sky-200">
+                              <tr>
+                                <th className="text-center w-10 px-2 py-2">
+                                  {(() => {
+                                    const available = allItemsForSelection.filter(i => ((i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0))) > 0));
+                                    const isAllSelected = available.length > 0 && selectedMultiSaleItemIds.length === available.length;
+                                    return (
+                                      <input 
+                                        type="checkbox" 
+                                        className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer w-4 h-4" 
+                                        checked={isAllSelected}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedMultiSaleItemIds(available.map(i => i.id));
+                                          } else {
+                                            setSelectedMultiSaleItemIds([]);
+                                          }
+                                        }}
+                                      />
+                                    );
+                                  })()}
+                                </th>
+                                <th className="text-center w-12 px-2 py-2">SL NO</th>
+                                <th className="px-2 py-2">KPCL Code</th>
+                                <th className="px-2 py-2 min-w-[140px]">Part Number</th>
+                                <th className="px-2 py-2 min-w-[180px]">Item Name & Specifications</th>
+                                <th className="text-center px-2 py-2">Unit</th>
+                                <th className="text-center px-2 py-2 bg-slate-900">PO Qty</th>
+                                <th className="text-center px-2 py-2 bg-emerald-950">Inward Qty</th>
+                                <th className="text-center px-2 py-2 bg-blue-950">Already Sold</th>
+                                <th className="text-center px-2 py-2 bg-emerald-900 text-emerald-100 font-bold">Avail Stock</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[110px] text-center">Sale Qty *</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[110px] text-center">Sale Rate (₹) *</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 w-16 text-center">CGST %</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 w-16 text-center">SGST %</th>
+                                <th className="px-2 py-2 text-right">Basic (₹)</th>
+                                <th className="px-2 py-2 text-right">Tax (₹)</th>
+                                <th className="px-2 py-2 text-right">Line Total (₹)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(() => {
+                                const available = allItemsForSelection.filter(i => ((i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0))) > 0));
+                                if (available.length === 0) {
+                                  return (
+                                    <tr>
+                                      <td colSpan={17} className="p-8 text-center text-slate-400 font-semibold bg-white">
+                                        No inwarded items available for sale in this Purchase Order. Please record Inward Purchases first.
+                                      </td>
+                                    </tr>
+                                  );
+                                }
+                                return available.map((item, idx) => {
+                                  const isSelected = selectedMultiSaleItemIds.includes(item.id);
+                                  const availStock = item.availableForSale !== undefined ? item.availableForSale : Math.max(0, (item.purchasedQty || 0) - (item.soldQty || 0));
+                                  const edits = multiSaleItemEdits[item.id] || {
+                                    qty: availStock,
+                                    rate: item.rate || 0,
+                                    cgstPercent: item.cgstPercent !== undefined ? item.cgstPercent : 9,
+                                    sgstPercent: item.sgstPercent !== undefined ? item.sgstPercent : 9,
+                                    igstPercent: item.igstPercent !== undefined ? item.igstPercent : 0
+                                  };
+
+                                  const curQty = Number(edits.qty ?? availStock);
+                                  const curRate = Number(edits.rate ?? item.rate ?? 0);
+                                  const curCgst = Number(edits.cgstPercent ?? 9);
+                                  const curSgst = Number(edits.sgstPercent ?? 9);
+                                  const curIgst = Number(edits.igstPercent ?? 0);
+
+                                  const lineBasic = curQty * curRate;
+                                  const lineTax = lineBasic * ((curCgst + curSgst + curIgst) / 100);
+                                  const lineTotal = lineBasic + lineTax;
+                                  const isOverStock = curQty > availStock;
+
+                                  const updateEdit = (field: string, val: number) => {
+                                    setMultiSaleItemEdits(prev => ({
+                                      ...prev,
+                                      [item.id]: {
+                                        ...prev[item.id] || {
+                                          qty: availStock,
+                                          rate: item.rate || 0,
+                                          cgstPercent: item.cgstPercent ?? 9,
+                                          sgstPercent: item.sgstPercent ?? 9,
+                                          igstPercent: item.igstPercent ?? 0
+                                        },
+                                        [field]: val
+                                      }
+                                    }));
+                                  };
+
+                                  return (
+                                    <tr 
+                                      key={item.id} 
+                                      className={`border-b border-slate-200 transition-colors ${
+                                        isSelected ? 'bg-amber-50/70 hover:bg-amber-100/60' : 'bg-white hover:bg-slate-50 opacity-60'
+                                      }`}
+                                    >
+                                      <td className="text-center px-2 py-2">
+                                        <input 
+                                          type="checkbox" 
+                                          className="rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer w-4 h-4" 
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedMultiSaleItemIds(prev => [...prev, item.id]);
+                                              if (!multiSaleItemEdits[item.id]) {
+                                                updateEdit('qty', availStock);
+                                              }
+                                            } else {
+                                              setSelectedMultiSaleItemIds(prev => prev.filter(id => id !== item.id));
+                                            }
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="text-center font-mono font-bold bg-slate-50 text-slate-700 px-2 py-2">{idx + 1}</td>
+                                      <td className="font-mono text-[#1e3a8a] font-bold px-2 py-2">{item.kpclCode || '-'}</td>
+                                      <td className="font-mono font-bold text-slate-800 px-2 py-2">{item.partNumber || '-'}</td>
+                                      <td className="px-2 py-2">
+                                        <div className="font-bold text-slate-800">{item.itemName}</div>
+                                        {item.specifications && (
+                                          <div className="text-[10px] text-slate-500 font-mono truncate max-w-xs">{item.specifications}</div>
+                                        )}
+                                      </td>
+                                      <td className="text-center font-mono px-2 py-2">{item.unit || 'NOS'}</td>
+                                      <td className="text-center font-mono text-slate-600 px-2 py-2">{item.qty || 0}</td>
+                                      <td className="text-center font-mono font-bold text-emerald-800 bg-emerald-50/50 px-2 py-2">{item.purchasedQty || 0}</td>
+                                      <td className="text-center font-mono font-bold text-blue-800 bg-blue-50/50 px-2 py-2">{item.soldQty || 0}</td>
+                                      <td className="text-center font-mono font-black text-emerald-700 bg-emerald-100/60 px-2 py-2">{availStock}</td>
+
+                                      {/* EDITABLE SALE QTY */}
+                                      <td className="px-2 py-1.5 bg-amber-50/50">
+                                        <input 
+                                          type="number" 
+                                          min="0"
+                                          max={availStock}
+                                          step="0.01"
+                                          value={edits.qty ?? availStock}
+                                          onChange={(e) => updateEdit('qty', e.target.value === '' ? 0 : Number(e.target.value))}
+                                          disabled={!isSelected}
+                                          className={`w-full p-1 text-center font-mono font-black text-xs rounded border focus:ring-1 ${
+                                            isOverStock ? 'bg-rose-100 border-rose-500 text-rose-800' : 'bg-white border-amber-400 text-amber-950 focus:ring-amber-500'
+                                          } disabled:bg-slate-100 disabled:text-slate-400`}
+                                        />
+                                        {isOverStock && (
+                                          <div className="text-[9px] text-rose-600 font-bold text-center mt-0.5">Max {availStock}</div>
+                                        )}
+                                      </td>
+
+                                      {/* EDITABLE SALE RATE */}
+                                      <td className="px-2 py-1.5 bg-amber-50/50">
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          value={edits.rate ?? item.rate ?? 0}
+                                          onChange={(e) => updateEdit('rate', e.target.value === '' ? 0 : Number(e.target.value))}
+                                          disabled={!isSelected}
+                                          className="w-full p-1 text-right font-mono font-bold text-xs rounded border border-amber-400 bg-white text-slate-800 focus:ring-1 focus:ring-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
+                                        />
+                                      </td>
+
+                                      {/* CGST */}
+                                      <td className="px-1.5 py-1.5 bg-amber-50/50">
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          value={edits.cgstPercent ?? 9}
+                                          onChange={(e) => updateEdit('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
+                                          disabled={!isSelected}
+                                          className="w-full p-1 text-center font-mono text-xs rounded border border-slate-300 bg-white text-slate-800 disabled:bg-slate-100"
+                                        />
+                                      </td>
+
+                                      {/* SGST */}
+                                      <td className="px-1.5 py-1.5 bg-amber-50/50">
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          value={edits.sgstPercent ?? 9}
+                                          onChange={(e) => updateEdit('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
+                                          disabled={!isSelected}
+                                          className="w-full p-1 text-center font-mono text-xs rounded border border-slate-300 bg-white text-slate-800 disabled:bg-slate-100"
+                                        />
+                                      </td>
+
+                                      <td className="px-2 py-2 text-right font-mono font-semibold text-slate-800">
+                                        {formatCurrency(lineBasic)}
+                                      </td>
+                                      <td className="px-2 py-2 text-right font-mono text-slate-600">
+                                        {formatCurrency(lineTax)}
+                                      </td>
+                                      <td className="px-2 py-2 text-right font-mono font-black text-amber-950">
+                                        {formatCurrency(lineTotal)}
+                                      </td>
+                                    </tr>
+                                  );
+                                });
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
+
+                    {/* REAL-TIME TOTALS & BREAKDOWN SUMMARY BAR */}
+                    {(() => {
+                      let calcBasic = 0;
+                      let calcCgst = 0;
+                      let calcSgst = 0;
+                      let calcIgst = 0;
+                      let calcTotalQty = 0;
+
+                      selectedMultiSaleItemIds.forEach(id => {
+                        const itm = allItemsForSelection.find(i => i.id === id);
+                        if (!itm) return;
+                        const avail = itm.availableForSale !== undefined ? itm.availableForSale : Math.max(0, (itm.purchasedQty || 0) - (itm.soldQty || 0));
+                        const edit = multiSaleItemEdits[id] || {
+                          qty: avail,
+                          rate: itm.rate || 0,
+                          cgstPercent: itm.cgstPercent ?? 9,
+                          sgstPercent: itm.sgstPercent ?? 9,
+                          igstPercent: itm.igstPercent ?? 0
+                        };
+                        const q = Number(edit.qty || 0);
+                        const r = Number(edit.rate || 0);
+                        const b = q * r;
+                        const cg = b * ((Number(edit.cgstPercent ?? 9)) / 100);
+                        const sg = b * ((Number(edit.sgstPercent ?? 9)) / 100);
+                        const ig = b * ((Number(edit.igstPercent ?? 0)) / 100);
+
+                        calcTotalQty += q;
+                        calcBasic += b;
+                        calcCgst += cg;
+                        calcSgst += sg;
+                        calcIgst += ig;
+                      });
+
+                      const calcTax = calcCgst + calcSgst + calcIgst;
+                      const calcShipping = Number(saleForm.shippingCharges || 0);
+                      const calcGrandTotal = Math.round(calcBasic + calcTax + calcShipping);
+
+                      return (
+                        <div className="bg-white p-4 border-t border-amber-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md">
+                          <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+                            <span className="text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 font-bold">
+                              Selected: {selectedMultiSaleItemIds.length} Items ({calcTotalQty} Qty)
+                            </span>
+                            <span className="text-slate-700">Basic Cost: <strong className="text-slate-900">{formatCurrency(calcBasic)}</strong></span>
+                            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">CGST (9%): +{formatCurrency(calcCgst)}</span>
+                            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SGST (9%): +{formatCurrency(calcSgst)}</span>
+                            {calcIgst > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST: +{formatCurrency(calcIgst)}</span>}
+                            <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">Total Tax: {formatCurrency(calcTax)}</span>
+                            {calcShipping > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(calcShipping)}</span>}
+                            <span className="text-base font-black text-amber-950 ml-2 bg-amber-100 px-3.5 py-1.5 rounded-xl border border-amber-300 shadow-sm">
+                              Grand Total: {formatCurrency(calcGrandTotal)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 self-end md:self-auto">
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setShowAddSale(false);
+                                setSelectedMultiSaleItemIds([]);
+                                setMultiSaleItemEdits({});
+                              }} 
+                              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                            >
+                              Cancel
+                            </button>
+                            <button 
+                              type="submit" 
+                              disabled={selectedMultiSaleItemIds.length === 0 || isSubmitting}
+                              className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center gap-1.5"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              Save Tax Invoice ({selectedMultiSaleItemIds.length} Items)
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </form>
                 )}
 
