@@ -31,32 +31,43 @@ export const SaleInvoiceModal: React.FC<{
 
   const primarySale = salesList[0];
   const isInward = invoiceType === 'INWARD' || primarySale.type === 'INWARD' || primarySale.type === 'PURCHASE';
-  const invoiceNo = primarySale.invoiceNumber || primarySale.partyInvoiceNumber || primarySale.invoiceRefNo || `SKC/2025-26/${primarySale.id?.slice(0, 4) || '01'}`;
+  const invoiceNo = isInward
+    ? (primarySale.partyInvoiceNumber || primarySale.invoiceNumber || `SKC/INW/${primarySale.id?.slice(0, 4) || '01'}`)
+    : (primarySale.invoiceNumber || primarySale.partyInvoiceNumber || primarySale.invoiceRefNo || `SKC/2026-27/${primarySale.id?.slice(0, 4) || '01'}`);
+  
   const invoiceDate = primarySale.invoiceDate 
     ? new Date(primarySale.invoiceDate).toLocaleDateString('en-GB') 
-    : (primarySale.date ? new Date(primarySale.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB'));
+    : (primarySale.supplierInvoiceDate 
+      ? new Date(primarySale.supplierInvoiceDate).toLocaleDateString('en-GB')
+      : (primarySale.date ? new Date(primarySale.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')));
   
   // Dynamic Reference: Work Order vs PO vs Inward vs Direct Sale
   const isWorkOrder = invoiceType === 'WORK_ORDER' || primarySale.sourceType === 'WORK_ORDER' || !!primarySale.workOrderNumber;
   const isPo = !!(primarySale.purchaseOrder?.poNumber || (primarySale.poNumber && primarySale.poNumber !== '-'));
   
-  const refLabel = isInward ? 'Supplier Inv No' : (isWorkOrder ? 'WO No' : (isPo ? 'PO No' : 'Ref No'));
+  const refLabel = isInward 
+    ? (isPo ? 'PO No' : 'Supplier Inv No') 
+    : (isWorkOrder ? 'WO No' : (isPo ? 'PO No' : 'Ref No'));
+
   const refNumber = isInward 
-    ? (primarySale.partyInvoiceNumber || primarySale.invoiceNumber || '-')
+    ? (primarySale.purchaseOrder?.poNumber || primarySale.poNumber || primarySale.partyInvoiceNumber || '-')
     : (isWorkOrder 
       ? (primarySale.workOrderNumber || primarySale.poNumber || '-') 
       : (primarySale.poNumber || primarySale.purchaseOrder?.poNumber || '-'));
   
-  const dateLabel = isInward ? 'Supplier Inv Date' : (isWorkOrder ? 'WO Date' : (isPo ? 'PO Date' : 'Order Date'));
+  const dateLabel = isInward 
+    ? (isPo ? 'PO Date' : 'Supplier Inv Date') 
+    : (isWorkOrder ? 'WO Date' : (isPo ? 'PO Date' : 'Order Date'));
+
   const rawRefDate = isInward
-    ? (primarySale.supplierInvoiceDate || primarySale.invoiceDate || primarySale.date)
+    ? (primarySale.purchaseOrder?.date || primarySale.poDate || primarySale.supplierInvoiceDate || primarySale.invoiceDate || primarySale.date)
     : (isWorkOrder 
       ? (primarySale.workOrderDate || primarySale.poDate) 
       : (primarySale.poDate || primarySale.purchaseOrder?.date));
   const refDate = rawRefDate ? new Date(rawRefDate).toLocaleDateString('en-GB') : invoiceDate;
 
   // Party info
-  const partyName = primarySale.partyName || (isInward ? 'Supplier' : 'Customer');
+  const partyName = primarySale.partyName || primarySale.supplierName || (isInward ? 'Supplier' : 'Customer');
   const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || '';
   const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || '';
   const isKpclParty = !isInward && /kpcl|rtps|raichur thermal/i.test(partyName);
@@ -186,41 +197,44 @@ export const SaleInvoiceModal: React.FC<{
 
       let y = 8;
 
-      // 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.4);
-      doc.rect(margin, y, contentWidth, 24);
+      const drawHeaderBox = (targetY = 8) => {
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.4);
+        doc.rect(margin, targetY, contentWidth, 24);
 
-      if (SKC_LOGO_BASE64) {
-        try {
-          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, y + 2, 20, 20);
-        } catch (e) {
-          console.warn('Logo render fallback:', e);
+        if (SKC_LOGO_BASE64) {
+          try {
+            doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, targetY + 2, 20, 20);
+          } catch (e) {
+            console.warn('Logo render fallback:', e);
+          }
         }
-      }
 
-      // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red Serif)
-      doc.setTextColor(218, 18, 18);
-      doc.setFont('times', 'bold');
-      doc.setFontSize(18);
-      doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, y + 6.5, { align: 'center' });
+        // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red Serif)
+        doc.setTextColor(218, 18, 18);
+        doc.setFont('times', 'bold');
+        doc.setFontSize(18);
+        doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
 
-      // Subtitle & Address
-      doc.setTextColor(0, 0, 0);
-      doc.setFont('times', 'normal');
-      doc.setFontSize(8.5);
-      doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, y + 11.5, { align: 'center' });
-      
-      doc.setFont('times', 'normal');
-      doc.setFontSize(9);
-      doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, y + 16.5, { align: 'center' });
+        // Subtitle & Address
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('times', 'normal');
+        doc.setFontSize(8.5);
+        doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
+        
+        doc.setFont('times', 'normal');
+        doc.setFontSize(9);
+        doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
 
-      // GST and Mobile Bar
-      doc.setFont('times', 'bold');
-      doc.setFontSize(8);
-      doc.text('GST NO: 29DWKPP3582H1ZV', margin + 2, y + 21.5);
-      doc.text('Mobile No: 8496841904', pageWidth - margin - 2, y + 21.5, { align: 'right' });
+        // GST and Mobile Bar
+        doc.setFont('times', 'bold');
+        doc.setFontSize(8);
+        doc.text(`GST NO: ${primarySale.companyGstNumber || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
+        doc.text('Mobile No: 8496841904', pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
+      };
 
+      // 1. TOP HEADER BOX ON PAGE 1
+      drawHeaderBox(y);
       y += 24;
 
       // 2. BOXED TAX INVOICE TITLE
@@ -313,7 +327,7 @@ export const SaleInvoiceModal: React.FC<{
 
       autoTable(doc, {
         startY: y,
-        margin: { left: margin, right: margin },
+        margin: { top: 35, left: margin, right: margin, bottom: 15 },
         head: [
           ['SL\nNO', 'KPCL ITEM\nCODE', 'Discription', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
         ],
@@ -342,17 +356,22 @@ export const SaleInvoiceModal: React.FC<{
           0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
           1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
           2: { cellWidth: 44, fontStyle: 'bold' },
-          3: { cellWidth: 62 },
+          3: { cellWidth: 60 },
           4: { halign: 'center', cellWidth: 12 },
           5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
-          6: { halign: 'right', cellWidth: 13, fontStyle: 'bold' },
-          7: { halign: 'right', cellWidth: 13, fontStyle: 'bold' }
+          6: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
+          7: { halign: 'right', cellWidth: 14, fontStyle: 'bold' }
         },
         didDrawPage: (data) => {
+          // Top Header on subsequent pages (page 2, 3...)
+          if (data.pageNumber > 1) {
+            drawHeaderBox(8);
+          }
           // Page Number at bottom of every page
-          const str = `Page ${doc.getNumberOfPages()} of `;
+          const str = `Page ${data.pageNumber} of `;
           doc.setFont('times', 'normal');
           doc.setFontSize(7.5);
+          doc.setTextColor(0, 0, 0);
           doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
         }
       });
@@ -367,12 +386,12 @@ export const SaleInvoiceModal: React.FC<{
       let fy = finalTableY;
       if (fy > 230) {
         doc.addPage();
-        fy = 15;
+        drawHeaderBox(8);
+        fy = 36;
       }
 
       // 5. BOTTOM TOTALS BOX & BANK DETAILS (EXACT AS USER PDF PAGE 4)
       const leftBoxWidth = 120;
-      const rightBoxWidth = contentWidth - leftBoxWidth; // 70mm
       const bottomBoxHeight = 35;
 
       // Outer Box border
@@ -429,11 +448,12 @@ export const SaleInvoiceModal: React.FC<{
       doc.text('TOTAL AMOUNT', rightX + 2, fy + 33.5);
       doc.text(fmt(totalInvoiceAmount), valX, fy + 33.5, { align: 'right' });
 
-      // Signatures
+      // Signatures (Right aligned only, matching authentic invoice)
       let sigY = fy + bottomBoxHeight + 8;
       if (sigY > 270) {
         doc.addPage();
-        sigY = 20;
+        drawHeaderBox(8);
+        sigY = 40;
       }
       doc.setFont('times', 'normal');
       doc.setFontSize(8);
@@ -496,10 +516,13 @@ export const SaleInvoiceModal: React.FC<{
 
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
         <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center">
-          <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black font-sans text-xs self-start my-1 sm:my-3">
+          <div 
+            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-serif"
+            style={{ fontFamily: "'Times New Roman', Times, 'Liberation Serif', serif" }}
+          >
             
             {/* 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO */}
-            <div className="border border-black p-3 flex items-center justify-between gap-4 font-serif">
+            <div className="border border-black p-3 flex items-center justify-between gap-4">
               <img 
                 src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
                 alt="SKC Logo" 
@@ -657,12 +680,8 @@ export const SaleInvoiceModal: React.FC<{
               </div>
             </div>
 
-            {/* 6. SIGNATURES */}
-            <div className="flex justify-between items-end mt-12 pt-4 text-xs font-serif">
-              <div>
-                <div className="w-48 border-b border-black mb-2"></div>
-                <div className="font-bold">{isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal'}</div>
-              </div>
+            {/* 6. SIGNATURES (Right side only matching original PDF, left side clear for stamps) */}
+            <div className="flex justify-end items-end mt-10 pt-4 text-xs font-serif">
               <div className="text-center">
                 <div className="text-black">Your Faithfully</div>
                 <div className="font-bold text-blue-600 mt-1">For Sri Krishna Constructions</div>
