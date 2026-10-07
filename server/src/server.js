@@ -3213,7 +3213,6 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
     client.release();
   }
 });
-});
 
 // PUT /api/work-orders/:id - Update Work Order
 app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
