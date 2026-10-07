@@ -498,215 +498,176 @@ export const SaleInvoiceModal: React.FC<{
         <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center">
           <div className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black font-sans text-xs self-start my-1 sm:my-3">
             
-            {/* 1. TOP HEADER WITH ORIGINAL RED LOGO */}
-            <div className="flex items-start gap-4 pb-3 border-b-2 border-black">
+            {/* 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO */}
+            <div className="border border-black p-3 flex items-center justify-between gap-4 font-serif">
               <img 
                 src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
                 alt="SKC Logo" 
                 className="w-16 sm:w-20 h-16 sm:h-20 object-contain shrink-0" 
               />
-              <div className="flex-1 text-center pr-2 sm:pr-6">
-                <h1 className="text-lg sm:text-2xl font-black text-red-600 tracking-wide uppercase leading-tight font-serif">
+              <div className="flex-1 text-center">
+                <h1 className="text-xl sm:text-2xl font-black text-[#da1212] tracking-wide uppercase leading-tight">
                   SRI KRISHNA CONSTRUCTIONS
                 </h1>
-                <p className="text-[10px] sm:text-[11px] font-bold text-slate-900 mt-1">
-                  All Types of Compressor Spares and Service , Pipe Line Work , Heavy Fabrication Works
+                <p className="text-[11px] font-normal text-black mt-0.5">
+                  H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170
                 </p>
-                <p className="text-[9px] sm:text-[10px] text-slate-800 mt-0.5">
-                  # 2436, Raghavendar Colony, SHAKTINAGAR - 584 170. Raichur Dist. (Karnataka)
+                <p className="text-[11px] font-normal text-black mt-0.5">
+                  All type of air compressor Service and Spares Avaliable.
                 </p>
-                <div className="text-[10px] font-bold text-slate-900 mt-1 flex justify-end">
-                  <span>SUNIL: 8496841904</span>
+                <div className="flex justify-between items-center text-[11px] font-bold text-black mt-1 px-1">
+                  <span>GST NO: {primarySale.companyGstNumber || '29DWKPP3582H1ZV'}</span>
+                  <span>Mobile No: 8496841904</span>
                 </div>
               </div>
             </div>
 
-            {/* 2. REGISTRATION BAR */}
-            <div className="flex justify-between items-center py-1.5 px-2 border-b-2 border-black font-bold text-[10px] sm:text-[11px]">
-              <span>GSTIN : 29DWKPP3582H1ZV</span>
-              <span>PAN No. DWKPP3582H</span>
-              <span>PF No. GBRCH1955403000</span>
+            {/* 2. TAX INVOICE TITLE BOX */}
+            <div className="border-x border-b border-black py-1.5 text-center font-serif font-black text-lg uppercase tracking-wider bg-white">
+              {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
             </div>
 
-            {/* 3. TAX INVOICE TITLE BOX */}
-            <div className="border border-black my-2.5 py-1.5 text-center font-serif font-black text-base sm:text-lg uppercase tracking-widest bg-slate-50">
-              {isInward ? 'INWARD MATERIAL RECEIPT / PURCHASE INVOICE' : 'TAX INVOICE'}
-            </div>
-
-            {/* 4. TWO-COLUMN INVOICE & DISPATCH DETAILS */}
-            <div className="border border-black grid grid-cols-1 sm:grid-cols-2 text-[10px] sm:text-[11px]">
+            {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS */}
+            <div className="border-x border-b border-black grid grid-cols-2 text-[11px] font-serif">
               {/* Left Column */}
-              <div className="sm:border-r border-b sm:border-b-0 border-black divide-y divide-black">
+              <div className="border-r border-black divide-y divide-black">
                 <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-mono">{invoiceNo}</span>
+                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-mono font-bold">{invoiceNo}</span>
                 </div>
                 <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-mono">{invoiceDate}</span>
+                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-mono font-bold">{invoiceDate}</span>
                 </div>
-                <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">{isInward ? 'SUPPLIER / PARTY' : 'SUPPLY To'} : {primarySale.placeOfWork || partyName}</div>
-                  {partyAddress ? (
-                    <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>
-                  ) : (
-                    <div className="text-[10px] text-slate-700">{partyName || '-'}</div>
-                  )}
+                <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
+                  <div>
+                    <div className="font-bold">SUPPLY To : {primarySale.placeOfWork || partyName || '-'}</div>
+                    {partyAddress ? (
+                      <div className="text-[10.5px] text-black whitespace-pre-wrap mt-0.5">{partyAddress}</div>
+                    ) : (
+                      <div className="text-[10.5px] text-black mt-0.5">{partyName || '-'}</div>
+                    )}
+                  </div>
                   <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
-                  <div className="font-bold mt-1">Division: {primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-'}</div>
                 </div>
-                <div className="p-1.5 font-bold flex flex-wrap items-center justify-between gap-2">
-                  <span>Vehicle No : <span className="font-mono uppercase">{primarySale.vehicleNumber || '-'}</span></span>
-                  {primarySale.eWayBillNumber && (
-                    <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                      E-Way Bill: <span className="font-mono">{primarySale.eWayBillNumber}</span>
-                    </span>
-                  )}
+                <div className="p-1.5 font-bold">
+                  Division: <span className="font-bold">{primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-'}</span>
                 </div>
               </div>
 
               {/* Right Column */}
               <div className="divide-y divide-black">
                 <div className="p-1.5 font-bold">
-                  {refLabel}: <span className="font-mono">{refNumber}</span>
+                  {refLabel}: <span className="font-mono font-bold">{refNumber}</span>
                 </div>
                 <div className="p-1.5 font-bold">
-                  {dateLabel}: <span className="font-mono">{refDate}</span>
+                  {dateLabel}: <span className="font-mono font-bold">{refDate}</span>
                 </div>
-                <div className="p-1.5 space-y-0.5 min-h-[90px]">
-                  <div className="font-bold">{isInward ? 'DELIVERED TO (RECEIVER):' : 'State of Supply: KARNATAKA'}</div>
-                  {isInward ? (
-                    <>
-                      <div className="text-[10px] text-slate-700 font-bold">SRI KRISHNA CONSTRUCTIONS</div>
-                      <div className="text-[10px] text-slate-700">#2436, Raghavendar Colony, Shaktinagar - 584170</div>
-                      <div className="text-[10px] text-slate-700">Raichur Dist, Karnataka</div>
-                      <div className="font-bold mt-1">GST NO: 29DWKPP3582H1ZV</div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-[10px] text-slate-700 font-bold">Shipped To: {primarySale.shippedTo || partyName || '-'}</div>
-                      {partyAddress && <div className="text-[10px] text-slate-700 whitespace-pre-wrap">{partyAddress}</div>}
-                      <div className="font-bold mt-2">GST NO: {partyGst || '-'}</div>
-                    </>
-                  )}
+                <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
+                  <div>
+                    <div className="font-bold">State of Supply: {primarySale.stateOfSupply || 'KARNATAKA'}</div>
+                    <div className="font-bold mt-0.5">Shipped To: <span className="font-normal">{primarySale.shippedTo || partyAddress || partyName || '-'}</span></div>
+                  </div>
+                  <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
+                </div>
+                <div className="p-1.5 font-bold">
+                  Vehicle No : <span className="font-mono uppercase font-bold">{primarySale.vehicleNumber || '-'}</span>
                 </div>
               </div>
             </div>
 
-            {/* 5. TAX INVOICE ITEMS TABLE */}
-            <div className="mt-3 border border-black overflow-x-auto">
+            {/* 4. TAX INVOICE ITEMS TABLE */}
+            <div className="border-x border-b border-black overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse font-serif">
                 <thead>
-                  <tr className="border-b border-black text-center font-bold bg-slate-50">
-                    <th className="p-2 border-r border-black w-12">SL NO</th>
+                  <tr className="border-b border-black text-center font-bold bg-white">
+                    <th className="p-2 border-r border-black w-10">SL NO</th>
                     <th className="p-2 border-r border-black w-24">KPCL ITEM CODE</th>
-                    <th className="p-2 border-r border-black w-36">Discription</th>
-                    <th className="p-2 border-r border-black min-w-[200px]">ITEM NAME & SPECIFICATION</th>
-                    <th className="p-2 border-r border-black w-14">UNIT</th>
-                    <th className="p-2 border-r border-black w-14">QTY</th>
-                    <th className="p-2 border-r border-black w-20 text-right">PRICE (₹)</th>
-                    <th className="p-2 w-24 text-right">AMOUNT (₹)</th>
+                    <th className="p-2 border-r border-black w-40">Discription</th>
+                    <th className="p-2 border-r border-black min-w-[220px]">ITEM NAME & SPECIFICATION</th>
+                    <th className="p-2 border-r border-black w-12">UNIT</th>
+                    <th className="p-2 border-r border-black w-12">QTY</th>
+                    <th className="p-2 border-r border-black w-20 text-center">PRICE</th>
+                    <th className="p-2 w-24 text-center">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
                   {itemsRows.map((r) => (
-                    <tr key={r.slNo}>
-                      <td className="p-2 text-center font-mono font-bold border-r border-black">{r.slNo}</td>
-                      <td className="p-2 text-center font-mono font-bold border-r border-black">{r.kpclCode || '-'}</td>
+                    <tr key={r.slNo} className="border-b border-black">
+                      <td className="p-2 text-center font-bold border-r border-black">{r.slNo}</td>
+                      <td className="p-2 text-center font-bold border-r border-black">{r.kpclCode || '-'}</td>
                       <td className="p-2 font-bold border-r border-black">{r.itemName}</td>
-                      <td className="p-2 border-r border-black text-[10px] font-mono whitespace-pre-wrap">
+                      <td className="p-2 border-r border-black text-[10.5px] uppercase whitespace-pre-wrap">
                         {r.specifications}
-                        {r.partNumber && <div className="mt-0.5 font-bold text-blue-900">Part No: {r.partNumber}</div>}
+                        {r.partNumber && !r.specifications.includes(r.partNumber) && (
+                          <div className="font-bold">P NO: {r.partNumber}</div>
+                        )}
                       </td>
-                      <td className="p-2 text-center font-mono border-r border-black">{r.unit}</td>
-                      <td className="p-2 text-center font-mono font-bold border-r border-black">{r.qty}</td>
-                      <td className="p-2 text-right font-mono font-bold border-r border-black">{fmt(r.rate)}</td>
-                      <td className="p-2 text-right font-mono font-bold">{fmt(r.amount)}</td>
+                      <td className="p-2 text-center border-r border-black">{r.unit}</td>
+                      <td className="p-2 text-center font-bold border-r border-black">{r.qty}</td>
+                      <td className="p-2 text-right font-bold border-r border-black">{fmt(r.rate)}</td>
+                      <td className="p-2 text-right font-bold">{fmt(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            {/* 6. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+            {/* 5. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 mt-0 font-serif border-x border-b border-black">
               {/* Left Box: Amount in words & Bank info */}
-              <div className="border border-black p-2.5 text-[10px] sm:text-[11px] space-y-2 bg-slate-50/50">
+              <div className="p-2.5 text-[11px] space-y-1.5 border-b sm:border-b-0 sm:border-r border-black">
                 <div>
-                  <span className="font-bold block text-slate-900">Total Invoice amount in words:</span>
-                  <span className="font-serif italic font-bold text-slate-800 text-[11px] block mt-0.5">
-                    {amountInWordsText}
+                  <span className="font-bold block text-black">Total Invoice amount in words: </span>
+                  <span className="italic font-bold text-black text-[11px] block mt-0.5">
+                    {amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim()}
                   </span>
                 </div>
-                <div className="pt-2 border-t border-slate-300">
-                  <span className="font-bold block text-slate-900">Bank Details:</span>
-                  <div className="text-[10px] text-slate-700 space-y-0.5 mt-0.5">
-                    <div>Account Holder: <strong>SRI KRISHNA CONSTRUCTIONS</strong></div>
-                    <div>Bank Name: <strong>Canara Bank</strong>, Deosugur Branch</div>
-                    <div>A/C No: <strong className="font-mono">18133070005349</strong></div>
+                <div className="pt-2 border-t border-black">
+                  <span className="font-bold block text-black">Bank Details :</span>
+                  <div className="text-[10.5px] text-black space-y-0.5 mt-0.5">
+                    <div>Account Holder Name : <strong>Sri Krishna Constructions</strong></div>
+                    <div>Bank Name : <strong>Canara Bank Deosugur Branch</strong></div>
+                    <div>Bank Account No: <strong className="font-mono">18133070005349</strong></div>
                     <div>IFSC Code: <strong className="font-mono">CNRB0011813</strong></div>
                   </div>
-                </div>
-                <div className="text-[9px] text-slate-500 pt-1">
-                  Terms: Subject to Raichur Jurisdiction • E.&O.E. • Authenticated Tax Invoice.
                 </div>
               </div>
 
               {/* Right Box: Tax Breakdown Summary */}
-              <div className="border-2 border-black divide-y divide-black text-[11px] bg-slate-50/50">
-                <div className="p-2 flex justify-between">
-                  <span className="font-semibold">Basic Cost:</span>
-                  <span className="font-mono font-bold">₹{fmt(totalBasic)}</span>
+              <div className="divide-y divide-black text-[11px]">
+                <div className="p-1.5 px-2 flex justify-between font-bold">
+                  <span>Basic Cost:</span>
+                  <span className="font-bold">₹{fmt(totalBasic)}</span>
                 </div>
-                {(totalCgst > 0 || totalSgst > 0) ? (
-                  <>
-                    <div className="p-2 flex justify-between">
-                      <span>SGST 9%:</span>
-                      <span className="font-mono font-bold">₹{fmt(totalSgst)}</span>
-                    </div>
-                    <div className="p-2 flex justify-between">
-                      <span>CGST 9%:</span>
-                      <span className="font-mono font-bold">₹{fmt(totalCgst)}</span>
-                    </div>
-                    <div className="p-2 flex justify-between font-bold bg-slate-100/70">
-                      <span>TOTAL TAX AMOUNT:</span>
-                      <span className="font-mono">₹{fmt(totalCgst + totalSgst)}</span>
-                    </div>
-                  </>
-                ) : totalIgst > 0 ? (
-                  <>
-                    <div className="p-2 flex justify-between">
-                      <span>IGST 18%:</span>
-                      <span className="font-mono font-bold">₹{fmt(totalIgst)}</span>
-                    </div>
-                    <div className="p-2 flex justify-between font-bold bg-slate-100/70">
-                      <span>TOTAL TAX AMOUNT:</span>
-                      <span className="font-mono">₹{fmt(totalIgst)}</span>
-                    </div>
-                  </>
-                ) : null}
-                {totalShipping > 0 && (
-                  <div className="p-2 flex justify-between text-blue-900 font-semibold">
-                    <span>Shipping Charges:</span>
-                    <span className="font-mono font-bold">+₹{fmt(totalShipping)}</span>
-                  </div>
-                )}
-                <div className="p-2.5 flex justify-between bg-blue-50/80 font-black text-xs border-t-2 border-black">
-                  <span className="text-[#1e3a8a]">TOTAL AMOUNT:</span>
-                  <span className="font-mono text-sm text-[#1e3a8a]">₹{fmt(totalInvoiceAmount)}</span>
+                <div className="p-1.5 px-2 flex justify-between font-bold">
+                  <span>SGST {effectiveSgstPercent || 9}%:</span>
+                  <span className="font-bold">₹{fmt(totalSgst)}</span>
+                </div>
+                <div className="p-1.5 px-2 flex justify-between font-bold">
+                  <span>CGST {effectiveCgstPercent || 9}%:</span>
+                  <span className="font-bold">₹{fmt(totalCgst)}</span>
+                </div>
+                <div className="p-1.5 px-2 flex justify-between font-bold">
+                  <span>TOTAL TAX AMOUNT:</span>
+                  <span className="font-bold">₹{fmt(totalCgst + totalSgst + totalIgst)}</span>
+                </div>
+                <div className="p-2 px-2 flex justify-between font-black text-xs">
+                  <span>TOTAL AMOUNT:</span>
+                  <span className="text-sm font-black">₹{fmt(totalInvoiceAmount)}</span>
                 </div>
               </div>
             </div>
 
-            {/* 7. SIGNATURES */}
-            <div className="flex justify-between items-end mt-12 pt-4 text-xs font-bold border-t border-slate-200">
+            {/* 6. SIGNATURES */}
+            <div className="flex justify-between items-end mt-12 pt-4 text-xs font-serif">
               <div>
                 <div className="w-48 border-b border-black mb-2"></div>
-                <div>{isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal'}</div>
+                <div className="font-bold">{isInward ? 'Received By (Stores / Site)' : 'Receiver\'s Signature with Seal'}</div>
               </div>
               <div className="text-center">
-                <div className="italic text-slate-700 font-serif">Your Faithfully</div>
-                <div className="font-bold">For Sri Krishna Constructions</div>
+                <div className="text-black">Your Faithfully</div>
+                <div className="font-bold text-blue-600 mt-1">For Sri Krishna Constructions</div>
                 <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
-                <div className="font-bold text-slate-900 text-[11px] uppercase">{isInward ? 'Verified & Approved Signatory' : 'Proprietor'}</div>
+                <div className="text-black text-[11px]">Proprietor</div>
               </div>
             </div>
 
