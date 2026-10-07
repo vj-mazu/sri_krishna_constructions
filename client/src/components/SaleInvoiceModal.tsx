@@ -99,13 +99,23 @@ export const SaleInvoiceModal: React.FC<{
     totalIgst = round2(totalIgst + ig);
     totalShipping = round2(totalShipping + ship);
 
+    const rawDiscription = s.itemName || itm.itemName || s.description || 'ITEM';
+    let fullSpecs = itm.specifications || s.specifications || s.description || s.remarks || '';
+    if (!fullSpecs) {
+      if (itm.partNumber || s.partNumber) {
+        fullSpecs = `${rawDiscription} MAKE- ${itm.make || 'KIRLOSKAR'}, P NO: ${itm.partNumber || s.partNumber}`;
+      } else {
+        fullSpecs = rawDiscription;
+      }
+    }
+
     return {
       slNo: idx + 1,
       kpclCode: itm.kpclCode || s.kpclCode || '-',
-      itemName: itm.itemName || s.itemName || 'STANDALONE ITEM',
-      specifications: itm.specifications || s.description || s.remarks || (isInward ? 'INWARD MATERIAL RECEIPT' : 'DIRECT PURCHASE / SALE'),
+      itemName: rawDiscription,
+      specifications: fullSpecs,
       partNumber: itm.partNumber || s.partNumber || s.receivedPartNumber || '',
-      unit: itm.unit || s.unit || "NOS",
+      unit: itm.unit || s.unit || "No's",
       qty: q,
       rate: r,
       amount: b,
@@ -193,16 +203,16 @@ export const SaleInvoiceModal: React.FC<{
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(8.5);
       doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, y + 11.5, { align: 'center' });
       
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(9);
       doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, y + 16.5, { align: 'center' });
 
       // GST and Mobile Bar
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(8);
       doc.text('GST NO: 29DWKPP3582H1ZV', margin + 2, y + 21.5);
       doc.text('Mobile No: 8496841904', pageWidth - margin - 2, y + 21.5, { align: 'right' });
@@ -228,7 +238,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
 
       // Left Column items
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(8);
       let ly = y + 4.5;
       doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
@@ -240,7 +250,7 @@ export const SaleInvoiceModal: React.FC<{
 
       ly += 5.5;
       doc.text(`SUPPLY To : ${primarySale.placeOfWork || 'SHAKTINAGAR'}`, margin + 2, ly);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
       
       if (partyAddress) {
@@ -253,7 +263,7 @@ export const SaleInvoiceModal: React.FC<{
         doc.text(`Phone 9449596504 Fax 8532247846`, margin + 2, ly + 15.4);
       }
       
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(8);
       doc.text(`GST NO: ${partyGst || '29AAACK8032D1ZQ'}`, margin + 2, ly + 20);
       doc.line(margin, ly + 22, margin + colHalf, ly + 22);
@@ -263,7 +273,7 @@ export const SaleInvoiceModal: React.FC<{
 
       // Right Column items
       let ry = y + 4.5;
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(8);
       doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
       doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
@@ -274,7 +284,7 @@ export const SaleInvoiceModal: React.FC<{
 
       ry += 5.5;
       doc.text(`State of Supply: KARNATAKA`, margin + colHalf + 2, ry);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
 
       if (isKpclParty || !partyAddress) {
@@ -287,7 +297,7 @@ export const SaleInvoiceModal: React.FC<{
         doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4);
       }
       
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(8);
       doc.text(`GST NO: ${partyGst || '29AAACK8032D1ZQ'}`, margin + colHalf + 2, ry + 20);
       doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
@@ -302,8 +312,8 @@ export const SaleInvoiceModal: React.FC<{
         r.slNo.toString(),
         r.kpclCode || '-',
         r.itemName,
-        `${r.specifications}${r.partNumber ? `\nP NO: ${r.partNumber}` : ''}`,
-        r.unit === 'NOS' ? "No's" : r.unit,
+        `${r.specifications}${r.partNumber && !r.specifications.includes(r.partNumber) ? `\nP NO: ${r.partNumber}` : ''}`,
+        r.unit === 'NOS' ? "No's" : (r.unit || "No's"),
         r.qty.toString(),
         fmt(r.rate),
         fmt(r.amount)
@@ -318,6 +328,7 @@ export const SaleInvoiceModal: React.FC<{
         body: tableBody,
         theme: 'grid',
         styles: {
+          font: 'times',
           fontSize: 7.5,
           lineColor: [0, 0, 0],
           lineWidth: 0.35,
@@ -326,6 +337,7 @@ export const SaleInvoiceModal: React.FC<{
           valign: 'middle'
         },
         headStyles: {
+          font: 'times',
           fillColor: [255, 255, 255],
           textColor: [0, 0, 0],
           fontStyle: 'bold',
@@ -347,6 +359,7 @@ export const SaleInvoiceModal: React.FC<{
         didDrawPage: (data) => {
           // Page Number at bottom of every page
           const str = `Page ${doc.getNumberOfPages()} of `;
+          doc.setFont('times', 'normal');
           doc.setFontSize(7.5);
           doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
         }
@@ -375,19 +388,19 @@ export const SaleInvoiceModal: React.FC<{
       doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
 
       // Left Box: Total Invoice amount in words + Bank Details
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(7.5);
       doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
       const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
       doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
 
       doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
 
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.text('Bank Details :', margin + 2, fy + 16.5);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.text('Account Holder Name : Sri Krishna Constructions', margin + 2, fy + 20.5);
       doc.text('Bank Name : Canara Bank Deosugur Branch', margin + 2, fy + 24.5);
       doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
@@ -398,7 +411,7 @@ export const SaleInvoiceModal: React.FC<{
       const valX = margin + contentWidth - 2;
 
       // Row 1: Basic Cost
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(7.5);
       doc.text('Basic Cost', rightX + 2, fy + 5.5);
       doc.text(fmt(totalBasic), valX, fy + 5.5, { align: 'right' });
@@ -430,14 +443,14 @@ export const SaleInvoiceModal: React.FC<{
         doc.addPage();
         sigY = 20;
       }
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(8);
       doc.text('Your Faithfully', pageWidth - margin - 20, sigY, { align: 'center' });
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setTextColor(59, 130, 246);
       doc.text('For Sri Krishna Constructions', pageWidth - margin - 20, sigY + 6, { align: 'center' });
       doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.text('Proprietor', pageWidth - margin - 20, sigY + 16, { align: 'center' });
 
       doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
@@ -607,16 +620,16 @@ export const SaleInvoiceModal: React.FC<{
 
             {/* 5. TAX INVOICE ITEMS TABLE */}
             <div className="mt-3 border border-black overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse">
+              <table className="w-full text-left text-[11px] border-collapse font-serif">
                 <thead>
                   <tr className="border-b border-black text-center font-bold bg-slate-50">
-                    <th className="p-2 border-r border-black w-10">SI. NO</th>
-                    <th className="p-2 border-r border-black w-24">ITEM CODE</th>
-                    <th className="p-2 border-r border-black w-36">ITEM NAME</th>
-                    <th className="p-2 border-r border-black min-w-[180px]">SPECIFICATIONS & PART NO</th>
+                    <th className="p-2 border-r border-black w-12">SL NO</th>
+                    <th className="p-2 border-r border-black w-24">KPCL ITEM CODE</th>
+                    <th className="p-2 border-r border-black w-36">Discription</th>
+                    <th className="p-2 border-r border-black min-w-[200px]">ITEM NAME & SPECIFICATION</th>
                     <th className="p-2 border-r border-black w-14">UNIT</th>
                     <th className="p-2 border-r border-black w-14">QTY</th>
-                    <th className="p-2 border-r border-black w-20 text-right">RATE (₹)</th>
+                    <th className="p-2 border-r border-black w-20 text-right">PRICE (₹)</th>
                     <th className="p-2 w-24 text-right">AMOUNT (₹)</th>
                   </tr>
                 </thead>

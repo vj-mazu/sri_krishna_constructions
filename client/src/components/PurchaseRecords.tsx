@@ -2019,28 +2019,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Party Invoice / DC No</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. INV-9821 / DC-402"
-                          value={editSaleForm.partyInvoiceNumber || ''}
-                          onChange={e => setEditSaleForm(prev => ({ ...prev, partyInvoiceNumber: e.target.value.toUpperCase() }))}
-                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-blue-900 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-semibold text-slate-700 mb-1">Party Invoice / DC Date</label>
-                        <input
-                          type="date"
-                          value={editSaleForm.supplierInvoiceDate || ''}
-                          onChange={e => setEditSaleForm(prev => ({ ...prev, supplierInvoiceDate: e.target.value }))}
-                          className="w-full p-2 border border-slate-300 rounded text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
                         <label className="block font-semibold text-slate-700 mb-1">Vehicle No</label>
                         <input
                           type="text"
@@ -3289,7 +3267,19 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         onClick={() => {
                           const chosenSales = poSales
                             .filter(s => selectedSaleIds.includes(s.id))
-                            .map(s => ({ ...s, purchaseOrder: selectedPo }));
+                            .map(s => {
+                              const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+                              return {
+                                ...s,
+                                purchaseOrder: selectedPo,
+                                purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+                                itemName: s.itemName || matchedPoItem?.itemName,
+                                specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+                                partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+                                kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+                                unit: s.unit || matchedPoItem?.unit || "No's"
+                              };
+                            });
                           if (chosenSales.length > 0) {
                             setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
                           }
@@ -3839,7 +3829,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             </div>
                             <div className="flex items-center gap-1.5">
                               <button
-                                onClick={() => setPreviewSaleInvoice({ ...sale, purchaseOrder: selectedPo })}
+                                onClick={() => {
+                                  const invNum = sale.invoiceNumber;
+                                  const sameInvoiceSales = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
+                                  const itemsWithPo = sameInvoiceSales.map(s => {
+                                    const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+                                    return {
+                                      ...s,
+                                      purchaseOrder: selectedPo,
+                                      purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+                                      itemName: s.itemName || matchedPoItem?.itemName,
+                                      specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+                                      partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+                                      kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+                                      unit: s.unit || matchedPoItem?.unit || "No's"
+                                    };
+                                  });
+                                  setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+                                }}
                                 className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
                                 title="View & Download Tax Invoice"
                               >
@@ -3913,8 +3920,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
                         <th className="px-2 py-1.5 min-w-[130px]">Party Address</th>
                         <th className="px-2 py-1.5 min-w-[100px]">Party GST No</th>
-                        <th className="px-2 py-1.5 min-w-[100px]">Party Inv / DC No</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Party Inv Date</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
                         <th className="px-2 py-1.5 min-w-[100px]">Our GST No</th>
                         <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
@@ -3937,9 +3942,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </thead>
                     <tbody>
                       {salesLoading ? (
-                        <tr><td colSpan={25} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
+                        <tr><td colSpan={23} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
                       ) : poSales.length === 0 ? (
-                        <tr><td colSpan={25} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
+                        <tr><td colSpan={23} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
                       ) : (
                         poSales.map((sale, idx) => {
                           const basic = (sale.qty || 0) * (sale.rate || 0);
@@ -3973,8 +3978,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{sale.partyName || '-'}</td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{sale.supplierAddress || '-'}</td>
                               <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{sale.gstNumber || '-'}</td>
-                              <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{sale.partyInvoiceNumber || '-'}</td>
-                              <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{sale.supplierInvoiceDate ? formatDate(sale.supplierInvoiceDate) : '-'}</td>
                               <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
                               <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px] bg-slate-50">{sale.companyGstNumber || '-'}</td>
                               <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
@@ -4003,7 +4006,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
-                                    onClick={() => setPreviewSaleInvoice({ ...sale, purchaseOrder: selectedPo })}
+                                    onClick={() => {
+                                      const invNum = sale.invoiceNumber;
+                                      const sameInvoiceSales = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
+                                      const itemsWithPo = sameInvoiceSales.map(s => {
+                                        const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+                                        return {
+                                          ...s,
+                                          purchaseOrder: selectedPo,
+                                          purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+                                          itemName: s.itemName || matchedPoItem?.itemName,
+                                          specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+                                          partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+                                          kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+                                          unit: s.unit || matchedPoItem?.unit || "No's"
+                                        };
+                                      });
+                                      setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+                                    }}
                                     className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
                                     title="View & Download Tax Invoice"
                                   >
