@@ -610,12 +610,28 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         return false;
       }
 
-      // 2. Division Filter: Show ONLY workers allotted to this division in Worker Registry, or assigned/marked here today
+      // 2. Division Filter:
       if (selectedDivisionId && selectedDivisionId !== 'ALL') {
-        const isAllottedToThisDiv = w.divisionId === selectedDivisionId;
+        // If current user is a restricted supervisor, only show workers allotted to their assigned division or marked here
+        if (assignedDivisionId) {
+          const isAllottedToThisDiv = w.divisionId === assignedDivisionId;
+          const isMarkedInThisDiv = rec && (rec.divisionId === assignedDivisionId || rec.secondDivisionId === assignedDivisionId) && Boolean(rec.status);
+          return isAllottedToThisDiv || isMarkedInThisDiv;
+        }
+
+        // For Owner, Manager, and Unrestricted Supervisors: Dynamic Multi-Site Attendance Allocation
         const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
-        
-        if (isAllottedToThisDiv || isMarkedInThisDiv) {
+        const isHalfDayCandidate = rec && rec.status === 'HALF_DAY' && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
+        const isMarkedElsewhereFull = rec && Boolean(rec.status) && rec.divisionId !== selectedDivisionId && (rec.status !== 'HALF_DAY' || Boolean(rec.secondDivisionId));
+        const isUnmarked = !rec || !rec.status;
+
+        // If worker is already fully marked (Present / Absent / Leave / Both Halves) at another division, hide from this division
+        if (isMarkedElsewhereFull) {
+          return false;
+        }
+
+        // Show worker if marked here, or candidate for 2nd half-day, or completely unmarked (available for dynamic site deployment), or base-allotted here
+        if (isMarkedInThisDiv || isHalfDayCandidate || isUnmarked || w.divisionId === selectedDivisionId) {
           return true;
         }
         return false;
