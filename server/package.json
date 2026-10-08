@@ -10,7 +10,8 @@
     "generate": "npx prisma generate",
     "build": "npx prisma generate && npx prisma db push",
     "db:push": "npx prisma db push",
-    "db:seed": "node src/seed.js"
+    "db:seed": "node src/seed.js",
+    "seed:workers": "node src/seed-workers.js"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1",
