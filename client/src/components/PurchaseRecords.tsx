@@ -345,7 +345,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   });
 
   const [saleForm, setSaleForm] = useState({
-    itemId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().split('T')[0], qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
+    itemId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().split('T')[0], qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
     partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '29DWKPP3582H1ZV', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
   });
 
@@ -900,37 +900,76 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
         if (res.data?.items && res.data.items.length > 0) {
           const itemsWithPo = res.data.items.map((s: any) => {
-            const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+            const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
             return {
               ...s,
               purchaseOrder: s.purchaseOrder || selectedPo,
               purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-              itemName: s.itemName || matchedPoItem?.itemName,
-              specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-              partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-              kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-              unit: s.unit || matchedPoItem?.unit || "No's"
+              itemName: s.purchaseOrderItem?.itemName || s.itemName || matchedPoItem?.itemName || 'ITEM',
+              specifications: s.purchaseOrderItem?.specifications || s.specifications || matchedPoItem?.specifications || s.description || '',
+              partNumber: s.purchaseOrderItem?.partNumber || s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+              kpclCode: s.purchaseOrderItem?.kpclCode || s.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: s.purchaseOrderItem?.unit || s.unit || matchedPoItem?.unit || "No's",
+              partyAddress: s.partyAddress || s.supplierAddress || sale.supplierAddress || '',
+              partyName: s.partyName || sale.partyName || 'Customer',
+              gstNumber: s.gstNumber || sale.gstNumber || '',
+              companyGstNumber: s.companyGstNumber || sale.companyGstNumber || '29DWKPP3582H1ZV',
+              divisionName: s.divisionName || selectedPo?.division?.name || ''
             };
           });
           setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
           return;
         }
       } catch (err) {
-        console.error('Failed to fetch complete invoice items, using local items:', err);
+        console.error('Failed to fetch complete invoice items, attempting PO sales fallback:', err);
+      }
+
+      // Secondary fallback: fetch all sales matching this invoice number from PO
+      try {
+        const res = await api.get(`/purchase-orders/${selectedPo.id}/sales?invoiceNumber=${encodeURIComponent(invNum)}&limit=5000`);
+        if (res.data?.sales && res.data.sales.length > 0) {
+          const itemsWithPo = res.data.sales.map((s: any) => {
+            const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
+            return {
+              ...s,
+              purchaseOrder: s.purchaseOrder || selectedPo,
+              purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+              itemName: s.purchaseOrderItem?.itemName || s.itemName || matchedPoItem?.itemName || 'ITEM',
+              specifications: s.purchaseOrderItem?.specifications || s.specifications || matchedPoItem?.specifications || s.description || '',
+              partNumber: s.purchaseOrderItem?.partNumber || s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+              kpclCode: s.purchaseOrderItem?.kpclCode || s.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: s.purchaseOrderItem?.unit || s.unit || matchedPoItem?.unit || "No's",
+              partyAddress: s.partyAddress || s.supplierAddress || sale.supplierAddress || '',
+              partyName: s.partyName || sale.partyName || 'Customer',
+              gstNumber: s.gstNumber || sale.gstNumber || '',
+              companyGstNumber: s.companyGstNumber || sale.companyGstNumber || '29DWKPP3582H1ZV',
+              divisionName: s.divisionName || selectedPo?.division?.name || ''
+            };
+          });
+          setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+          return;
+        }
+      } catch (e) {
+        console.error('Secondary fallback failed:', e);
       }
     }
     const sameInvoiceSales = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
     const itemsWithPo = sameInvoiceSales.map(s => {
-      const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+      const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
       return {
         ...s,
         purchaseOrder: selectedPo,
         purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-        itemName: s.itemName || matchedPoItem?.itemName,
-        specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-        partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-        kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-        unit: s.unit || matchedPoItem?.unit || "No's"
+        itemName: s.purchaseOrderItem?.itemName || s.itemName || matchedPoItem?.itemName || 'ITEM',
+        specifications: s.purchaseOrderItem?.specifications || s.specifications || matchedPoItem?.specifications || s.description || '',
+        partNumber: s.purchaseOrderItem?.partNumber || s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+        kpclCode: s.purchaseOrderItem?.kpclCode || s.kpclCode || matchedPoItem?.kpclCode || '',
+        unit: s.purchaseOrderItem?.unit || s.unit || matchedPoItem?.unit || "No's",
+        partyAddress: s.partyAddress || s.supplierAddress || sale.supplierAddress || '',
+        partyName: s.partyName || sale.partyName || 'Customer',
+        gstNumber: s.gstNumber || sale.gstNumber || '',
+        companyGstNumber: s.companyGstNumber || sale.companyGstNumber || '29DWKPP3582H1ZV',
+        divisionName: s.divisionName || selectedPo?.division?.name || ''
       };
     });
     setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
@@ -938,22 +977,30 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   const handleOpenSelectedSalesInvoice = async () => {
     if (selectedSaleIds.length === 0) return;
-    const firstSale = poSales.find(s => selectedSaleIds.includes(s.id));
+    const selectedSalesList = poSales.filter(s => selectedSaleIds.includes(s.id));
+    const firstSale = selectedSalesList[0];
+
+    // If all selected items belong to the same invoice number, fetch all items of that invoice directly
     if (firstSale?.invoiceNumber && firstSale.invoiceNumber !== '-') {
       try {
         const res = await api.get(`/invoices/${encodeURIComponent(firstSale.invoiceNumber)}`);
         if (res.data?.items && res.data.items.length > 0) {
           const itemsWithPo = res.data.items.map((s: any) => {
-            const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+            const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
             return {
               ...s,
               purchaseOrder: s.purchaseOrder || selectedPo,
               purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-              itemName: s.itemName || matchedPoItem?.itemName,
-              specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-              partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-              kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-              unit: s.unit || matchedPoItem?.unit || "No's"
+              itemName: s.purchaseOrderItem?.itemName || s.itemName || matchedPoItem?.itemName || 'ITEM',
+              specifications: s.purchaseOrderItem?.specifications || s.specifications || matchedPoItem?.specifications || s.description || '',
+              partNumber: s.purchaseOrderItem?.partNumber || s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+              kpclCode: s.purchaseOrderItem?.kpclCode || s.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: s.purchaseOrderItem?.unit || s.unit || matchedPoItem?.unit || "No's",
+              partyAddress: s.partyAddress || s.supplierAddress || firstSale.supplierAddress || '',
+              partyName: s.partyName || firstSale.partyName || 'Customer',
+              gstNumber: s.gstNumber || firstSale.gstNumber || '',
+              companyGstNumber: s.companyGstNumber || firstSale.companyGstNumber || '29DWKPP3582H1ZV',
+              divisionName: s.divisionName || selectedPo?.division?.name || ''
             };
           });
           setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
@@ -963,21 +1010,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         console.error('Failed to fetch complete invoice items:', err);
       }
     }
-    const chosenSales = poSales
-      .filter(s => selectedSaleIds.includes(s.id))
-      .map(s => {
-        const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
-        return {
-          ...s,
-          purchaseOrder: selectedPo,
-          purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-          itemName: s.itemName || matchedPoItem?.itemName,
-          specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-          partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-          kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-          unit: s.unit || matchedPoItem?.unit || "No's"
-        };
-      });
+    const chosenSales = selectedSalesList.map(s => {
+      const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
+      return {
+        ...s,
+        purchaseOrder: selectedPo,
+        purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+        itemName: s.purchaseOrderItem?.itemName || s.itemName || matchedPoItem?.itemName || 'ITEM',
+        specifications: s.purchaseOrderItem?.specifications || s.specifications || matchedPoItem?.specifications || s.description || '',
+        partNumber: s.purchaseOrderItem?.partNumber || s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+        kpclCode: s.purchaseOrderItem?.kpclCode || s.kpclCode || matchedPoItem?.kpclCode || '',
+        unit: s.purchaseOrderItem?.unit || s.unit || matchedPoItem?.unit || "No's",
+        partyAddress: s.partyAddress || s.supplierAddress || firstSale?.supplierAddress || '',
+        partyName: s.partyName || firstSale?.partyName || 'Customer',
+        gstNumber: s.gstNumber || firstSale?.gstNumber || '',
+        companyGstNumber: s.companyGstNumber || firstSale?.companyGstNumber || '29DWKPP3582H1ZV',
+        divisionName: s.divisionName || selectedPo?.division?.name || ''
+      };
+    });
     if (chosenSales.length > 0) {
       setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
     }
