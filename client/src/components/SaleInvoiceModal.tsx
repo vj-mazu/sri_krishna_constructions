@@ -188,288 +188,293 @@ export const SaleInvoiceModal: React.FC<{
   const effectiveSgstPercent = primarySale.sgstPercent !== undefined ? Number(primarySale.sgstPercent) : (itemsRows[0]?.sgstPercent || 0);
   const effectiveIgstPercent = primarySale.igstPercent !== undefined ? Number(primarySale.igstPercent) : (itemsRows[0]?.igstPercent || 0);
 
-  const downloadPdf = () => {
-    try {
-      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageWidth = 210;
-      const margin = 10;
-      const contentWidth = pageWidth - (margin * 2); // 190mm
+  const generatePdf = (): jsPDF => {
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = 210;
+    const margin = 10;
+    const contentWidth = pageWidth - (margin * 2); // 190mm
 
-      let y = 8;
+    let y = 8;
 
-      const drawHeaderBox = (targetY = 8) => {
-        doc.setDrawColor(0, 0, 0);
-        doc.setLineWidth(0.4);
-        doc.rect(margin, targetY, contentWidth, 24);
+    const drawHeaderBox = (targetY = 8) => {
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.4);
+      doc.rect(margin, targetY, contentWidth, 24);
 
-        if (SKC_LOGO_BASE64) {
-          try {
-            doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, targetY + 2, 20, 20);
-          } catch (e) {
-            console.warn('Logo render fallback:', e);
-          }
+      if (SKC_LOGO_BASE64) {
+        try {
+          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, targetY + 2, 20, 20);
+        } catch (e) {
+          console.warn('Logo render fallback:', e);
         }
-
-        // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red)
-        doc.setTextColor(218, 18, 18);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(17);
-        doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
-
-        // Subtitle & Address
-        doc.setTextColor(0, 0, 0);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8.5);
-        doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
-
-        // GST and Mobile Bar
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.text(`GST NO: ${primarySale.companyGstNumber || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
-        doc.text('Mobile No: 8496841904', pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
-      };
-
-      // 1. TOP HEADER BOX ON PAGE 1
-      drawHeaderBox(y);
-      y += 24;
-
-      // 2. BOXED TAX INVOICE TITLE
-      doc.rect(margin, y, contentWidth, 7);
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 5.2, { align: 'center' });
-      y += 7;
-
-      // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT LAYOUT)
-      const boxHeight = 52;
-      const colHalf = contentWidth / 2;
-
-      doc.rect(margin, y, contentWidth, boxHeight);
-      doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
-
-      // Left Column items
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      let ly = y + 4.5;
-      doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
-      doc.line(margin, ly + 2, margin + colHalf, ly + 2);
-
-      ly += 6.5;
-      doc.text(`INVOICE DATE: ${invoiceDate}`, margin + 2, ly);
-      doc.line(margin, ly + 2, margin + colHalf, ly + 2);
-
-      ly += 5.5;
-      const supplyToText = primarySale.placeOfWork || partyName || '-';
-      doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, ly);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      
-      if (partyAddress) {
-        const addressLines = doc.splitTextToSize(partyAddress, colHalf - 4);
-        doc.text(addressLines.slice(0, 4), margin + 2, ly + 4.5);
-      } else if (partyName && partyName !== '-' && partyName !== 'Customer' && partyName !== 'Supplier') {
-        doc.text(`Party: ${partyName}`, margin + 2, ly + 4.5);
-      }
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, ly + 20);
-      doc.line(margin, ly + 22, margin + colHalf, ly + 22);
-
-      const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
-      doc.text(`Division: ${divLabel}`, margin + 2, ly + 27);
-
-      // Right Column items
-      let ry = y + 4.5;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
-      doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
-
-      ry += 6.5;
-      doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, ry);
-      doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
-
-      ry += 5.5;
-      doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, ry);
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-
-      const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
-      const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
-      doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
-      
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, ry + 20);
-      doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
-
-      const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}`;
-      doc.text(vehicleLine, margin + colHalf + 2, ry + 27);
-
-      y += boxHeight;
-
-      // 4. INVOICE ITEMS TABLE
-      const tableBody = itemsRows.map((r) => [
-        r.slNo.toString(),
-        r.kpclCode || '-',
-        r.itemName,
-        `${r.specifications}${r.partNumber && !r.specifications.includes(r.partNumber) ? `\nP NO: ${r.partNumber}` : ''}`,
-        r.unit === 'NOS' ? "No's" : (r.unit || "No's"),
-        r.qty.toString(),
-        fmt(r.rate),
-        fmt(r.amount)
-      ]);
-
-      autoTable(doc, {
-        startY: y,
-        margin: { top: 35, left: margin, right: margin, bottom: 15 },
-        head: [
-          ['SL\nNO', 'KPCL ITEM\nCODE', 'Discription', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
-        ],
-        body: tableBody,
-        theme: 'grid',
-        styles: {
-          font: 'helvetica',
-          fontSize: 7.5,
-          lineColor: [0, 0, 0],
-          lineWidth: 0.35,
-          textColor: [0, 0, 0],
-          cellPadding: 1.8,
-          valign: 'middle'
-        },
-        headStyles: {
-          font: 'helvetica',
-          fillColor: [255, 255, 255],
-          textColor: [0, 0, 0],
-          fontStyle: 'bold',
-          halign: 'center',
-          valign: 'middle',
-          lineWidth: 0.4,
-          lineColor: [0, 0, 0]
-        },
-        columnStyles: {
-          0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
-          1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
-          2: { cellWidth: 44, fontStyle: 'bold' },
-          3: { cellWidth: 60 },
-          4: { halign: 'center', cellWidth: 12 },
-          5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
-          6: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
-          7: { halign: 'right', cellWidth: 14, fontStyle: 'bold' }
-        },
-        didDrawPage: (data) => {
-          // Top Header on subsequent pages (page 2, 3...)
-          if (data.pageNumber > 1) {
-            drawHeaderBox(8);
-          }
-          // Page Number at bottom of every page
-          const str = `Page ${data.pageNumber} of `;
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(7.5);
-          doc.setTextColor(0, 0, 0);
-          doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
-        }
-      });
-
-      if (typeof (doc as any).putTotalPages === 'function') {
-        (doc as any).putTotalPages('{total_pages_count_string}');
       }
 
-      const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
-
-      // Check if space is sufficient on current page for totals box (needs ~55mm)
-      let fy = finalTableY;
-      if (fy > 230) {
-        doc.addPage();
-        drawHeaderBox(8);
-        fy = 36;
-      }
-
-      // 5. BOTTOM TOTALS BOX & BANK DETAILS
-      const leftBoxWidth = 120;
-      const bottomBoxHeight = 35;
-
-      // Outer Box border
-      doc.rect(margin, fy, contentWidth, bottomBoxHeight);
-      doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
-
-      // Left Box: Total Invoice amount in words + Bank Details
+      // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red)
+      doc.setTextColor(218, 18, 18);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
-      doc.setFont('helvetica', 'normal');
-      const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
-      const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
-      doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
+      doc.setFontSize(17);
+      doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
 
-      doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
-
-      doc.setFont('helvetica', 'bold');
-      doc.text('Bank Details :', margin + 2, fy + 16.5);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Account Holder Name : Sri Krishna Constructions', margin + 2, fy + 20.5);
-      doc.text('Bank Name : Canara Bank Deosugur Branch', margin + 2, fy + 24.5);
-      doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
-      doc.text('IFSC Code:CNRB0011813', margin + 2, fy + 32.5);
-
-      // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
-      const rightX = margin + leftBoxWidth;
-      const valX = margin + contentWidth - 2;
-
-      const summaryRows: Array<{ label: string; value: string; isBold?: boolean }> = [];
-      summaryRows.push({ label: 'Basic Cost', value: fmt(totalBasic) });
-
-      if (totalSgst > 0 || totalCgst > 0) {
-        summaryRows.push({ label: `SGST ${effectiveSgstPercent > 0 ? effectiveSgstPercent + '%' : ''}`.trim(), value: fmt(totalSgst) });
-        summaryRows.push({ label: `CGST ${effectiveCgstPercent > 0 ? effectiveCgstPercent + '%' : ''}`.trim(), value: fmt(totalCgst) });
-      }
-      if (totalIgst > 0) {
-        summaryRows.push({ label: `IGST ${effectiveIgstPercent > 0 ? effectiveIgstPercent + '%' : ''}`.trim(), value: fmt(totalIgst) });
-      }
-      if (totalCgst === 0 && totalSgst === 0 && totalIgst === 0) {
-        summaryRows.push({ label: 'GST (0%)', value: fmt(0) });
-      }
-      if (totalShipping > 0) {
-        summaryRows.push({ label: 'Shipping Charges', value: fmt(totalShipping) });
-      }
-      const totalTax = round2(totalCgst + totalSgst + totalIgst);
-      summaryRows.push({ label: 'TOTAL TAX AMOUNT', value: fmt(totalTax) });
-      summaryRows.push({ label: 'TOTAL AMOUNT', value: fmt(totalInvoiceAmount), isBold: true });
-
-      const rowHeight = bottomBoxHeight / summaryRows.length;
-      summaryRows.forEach((row, rIdx) => {
-        const rowY = fy + (rIdx * rowHeight);
-        doc.setFont('helvetica', row.isBold ? 'bold' : 'normal');
-        doc.setFontSize(row.isBold ? 8 : 7.2);
-        doc.text(row.label, rightX + 2, rowY + (rowHeight * 0.72));
-        doc.text(row.value, valX, rowY + (rowHeight * 0.72), { align: 'right' });
-        if (rIdx < summaryRows.length - 1) {
-          doc.line(rightX, rowY + rowHeight, margin + contentWidth, rowY + rowHeight);
-        }
-      });
-
-      // Signatures (Right aligned only)
-      let sigY = fy + bottomBoxHeight + 8;
-      if (sigY > 270) {
-        doc.addPage();
-        drawHeaderBox(8);
-        sigY = 40;
-      }
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.text('Your Faithfully', pageWidth - margin - 20, sigY, { align: 'center' });
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(59, 130, 246);
-      doc.text('For Sri Krishna Constructions', pageWidth - margin - 20, sigY + 6, { align: 'center' });
+      // Subtitle & Address
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
-      doc.text('Proprietor', pageWidth - margin - 20, sigY + 16, { align: 'center' });
+      doc.setFontSize(8.5);
+      doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
 
+      // GST and Mobile Bar
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(`GST NO: ${primarySale.companyGstNumber || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
+      doc.text('Mobile No: 8496841904', pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
+    };
+
+    // 1. TOP HEADER BOX ON PAGE 1
+    drawHeaderBox(y);
+    y += 24;
+
+    // 2. BOXED TAX INVOICE TITLE
+    doc.rect(margin, y, contentWidth, 7);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 5.2, { align: 'center' });
+    y += 7;
+
+    // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT LAYOUT)
+    const boxHeight = 52;
+    const colHalf = contentWidth / 2;
+
+    doc.rect(margin, y, contentWidth, boxHeight);
+    doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
+
+    // Left Column items
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    let ly = y + 4.5;
+    doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
+    doc.line(margin, ly + 2, margin + colHalf, ly + 2);
+
+    ly += 6.5;
+    doc.text(`INVOICE DATE: ${invoiceDate}`, margin + 2, ly);
+    doc.line(margin, ly + 2, margin + colHalf, ly + 2);
+
+    ly += 5.5;
+    const supplyToText = primarySale.placeOfWork || partyName || '-';
+    doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, ly);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    
+    if (partyAddress) {
+      const addressLines = doc.splitTextToSize(partyAddress, colHalf - 4);
+      doc.text(addressLines.slice(0, 4), margin + 2, ly + 4.5);
+    } else if (partyName && partyName !== '-' && partyName !== 'Customer' && partyName !== 'Supplier') {
+      doc.text(`Party: ${partyName}`, margin + 2, ly + 4.5);
+    }
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, ly + 20);
+    doc.line(margin, ly + 22, margin + colHalf, ly + 22);
+
+    const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
+    doc.text(`Division: ${divLabel}`, margin + 2, ly + 27);
+
+    // Right Column items
+    let ry = y + 4.5;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
+    doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
+
+    ry += 6.5;
+    doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, ry);
+    doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
+
+    ry += 5.5;
+    doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, ry);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+
+    const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
+    const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
+    doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, ry + 20);
+    doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
+
+    const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}`;
+    doc.text(vehicleLine, margin + colHalf + 2, ry + 27);
+
+    y += boxHeight;
+
+    // 4. INVOICE ITEMS TABLE
+    const tableBody = itemsRows.map((r) => [
+      r.slNo.toString(),
+      r.kpclCode || '-',
+      r.itemName,
+      `${r.specifications}${r.partNumber && !r.specifications.includes(r.partNumber) ? `\nP NO: ${r.partNumber}` : ''}`,
+      r.unit === 'NOS' ? "No's" : (r.unit || "No's"),
+      r.qty.toString(),
+      fmt(r.rate),
+      fmt(r.amount)
+    ]);
+
+    autoTable(doc, {
+      startY: y,
+      margin: { top: 35, left: margin, right: margin, bottom: 15 },
+      head: [
+        ['SL\nNO', 'KPCL ITEM\nCODE', 'Discription', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
+      ],
+      body: tableBody,
+      theme: 'grid',
+      styles: {
+        font: 'helvetica',
+        fontSize: 7.5,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.35,
+        textColor: [0, 0, 0],
+        cellPadding: 1.8,
+        valign: 'middle'
+      },
+      headStyles: {
+        font: 'helvetica',
+        fillColor: [255, 255, 255],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+        valign: 'middle',
+        lineWidth: 0.4,
+        lineColor: [0, 0, 0]
+      },
+      columnStyles: {
+        0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
+        1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
+        2: { cellWidth: 44, fontStyle: 'bold' },
+        3: { cellWidth: 60 },
+        4: { halign: 'center', cellWidth: 12 },
+        5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
+        6: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
+        7: { halign: 'right', cellWidth: 14, fontStyle: 'bold' }
+      },
+      didDrawPage: (data) => {
+        // Top Header on subsequent pages (page 2, 3...)
+        if (data.pageNumber > 1) {
+          drawHeaderBox(8);
+        }
+        // Page Number at bottom of every page
+        const str = `Page ${data.pageNumber} of `;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(0, 0, 0);
+        doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
+      }
+    });
+
+    if (typeof (doc as any).putTotalPages === 'function') {
+      (doc as any).putTotalPages('{total_pages_count_string}');
+    }
+
+    const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
+
+    // Check if space is sufficient on current page for totals box (needs ~55mm)
+    let fy = finalTableY;
+    if (fy > 230) {
+      doc.addPage();
+      drawHeaderBox(8);
+      fy = 36;
+    }
+
+    // 5. BOTTOM TOTALS BOX & BANK DETAILS
+    const leftBoxWidth = 120;
+    const bottomBoxHeight = 35;
+
+    // Outer Box border
+    doc.rect(margin, fy, contentWidth, bottomBoxHeight);
+    doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
+
+    // Left Box: Total Invoice amount in words + Bank Details
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
+    doc.setFont('helvetica', 'normal');
+    const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
+    const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
+    doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
+
+    doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Bank Details :', margin + 2, fy + 16.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Account Holder Name : Sri Krishna Constructions', margin + 2, fy + 20.5);
+    doc.text('Bank Name : Canara Bank Deosugur Branch', margin + 2, fy + 24.5);
+    doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
+    doc.text('IFSC Code:CNRB0011813', margin + 2, fy + 32.5);
+
+    // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
+    const rightX = margin + leftBoxWidth;
+    const valX = margin + contentWidth - 2;
+
+    const summaryRows: Array<{ label: string; value: string; isBold?: boolean }> = [];
+    summaryRows.push({ label: 'Basic Cost', value: fmt(totalBasic) });
+
+    if (totalSgst > 0 || totalCgst > 0) {
+      summaryRows.push({ label: `SGST ${effectiveSgstPercent > 0 ? effectiveSgstPercent + '%' : ''}`.trim(), value: fmt(totalSgst) });
+      summaryRows.push({ label: `CGST ${effectiveCgstPercent > 0 ? effectiveCgstPercent + '%' : ''}`.trim(), value: fmt(totalCgst) });
+    }
+    if (totalIgst > 0) {
+      summaryRows.push({ label: `IGST ${effectiveIgstPercent > 0 ? effectiveIgstPercent + '%' : ''}`.trim(), value: fmt(totalIgst) });
+    }
+    if (totalCgst === 0 && totalSgst === 0 && totalIgst === 0) {
+      summaryRows.push({ label: 'GST (0%)', value: fmt(0) });
+    }
+    if (totalShipping > 0) {
+      summaryRows.push({ label: 'Shipping Charges', value: fmt(totalShipping) });
+    }
+    const totalTax = round2(totalCgst + totalSgst + totalIgst);
+    summaryRows.push({ label: 'TOTAL TAX AMOUNT', value: fmt(totalTax) });
+    summaryRows.push({ label: 'TOTAL AMOUNT', value: fmt(totalInvoiceAmount), isBold: true });
+
+    const rowHeight = bottomBoxHeight / summaryRows.length;
+    summaryRows.forEach((row, rIdx) => {
+      const rowY = fy + (rIdx * rowHeight);
+      doc.setFont('helvetica', row.isBold ? 'bold' : 'normal');
+      doc.setFontSize(row.isBold ? 8 : 7.2);
+      doc.text(row.label, rightX + 2, rowY + (rowHeight * 0.72));
+      doc.text(row.value, valX, rowY + (rowHeight * 0.72), { align: 'right' });
+      if (rIdx < summaryRows.length - 1) {
+        doc.line(rightX, rowY + rowHeight, margin + contentWidth, rowY + rowHeight);
+      }
+    });
+
+    // Signatures (Right aligned only)
+    let sigY = fy + bottomBoxHeight + 8;
+    if (sigY > 270) {
+      doc.addPage();
+      drawHeaderBox(8);
+      sigY = 40;
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Your Faithfully', pageWidth - margin - 20, sigY, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(59, 130, 246);
+    doc.text('For Sri Krishna Constructions', pageWidth - margin - 20, sigY + 6, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Proprietor', pageWidth - margin - 20, sigY + 16, { align: 'center' });
+
+    return doc;
+  };
+
+  const downloadPdf = () => {
+    try {
+      const doc = generatePdf();
       doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
       showToast('Tax Invoice PDF downloaded successfully', 'success');
     } catch (error) {
@@ -478,18 +483,101 @@ export const SaleInvoiceModal: React.FC<{
     }
   };
 
+  const printPdf = () => {
+    try {
+      const doc = generatePdf();
+      const pdfBlob = doc.output('blob');
+      const blobUrl = URL.createObjectURL(pdfBlob);
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.src = blobUrl;
+      document.body.appendChild(iframe);
+      iframe.onload = () => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+        setTimeout(() => {
+          try {
+            document.body.removeChild(iframe);
+          } catch (_) {}
+          URL.revokeObjectURL(blobUrl);
+        }, 60000);
+      };
+    } catch (error) {
+      console.error('Print PDF failed, falling back to window.print():', error);
+      window.print();
+    }
+  };
+
   return createPortal(
     <div 
-      className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[999999] flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-fadeIn"
+      className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[999999] flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-fadeIn invoice-modal-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
+      <style>{`
+        @media print {
+          body {
+            overflow: visible !important;
+          }
+          .invoice-modal-overlay {
+            position: static !important;
+            background: white !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            z-index: auto !important;
+          }
+          .invoice-modal-container {
+            position: static !important;
+            max-height: none !important;
+            height: auto !important;
+            overflow: visible !important;
+            border: none !important;
+            box-shadow: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            border-radius: 0 !important;
+          }
+          .invoice-sheet-container {
+            overflow: visible !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            background: white !important;
+          }
+          .invoice-sheet {
+            box-shadow: none !important;
+            border: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          table {
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+          thead {
+            display: table-header-group;
+          }
+        }
+      `}</style>
       {/* CLEAN ENTERPRISE MODAL CONTAINER */}
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl border border-slate-300 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden animate-fadeIn relative z-[1000000]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl border border-slate-300 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden animate-fadeIn relative z-[1000000] invoice-modal-container">
         
         {/* MODAL TOP HEADER BAR */}
-        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-6 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950">
+        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-6 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950 no-print">
           <div className="flex items-center gap-2.5 min-w-0">
             <Printer className="w-5 h-5 text-amber-400 shrink-0" />
             <div className="min-w-0">
@@ -502,6 +590,13 @@ export const SaleInvoiceModal: React.FC<{
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={printPdf}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all cursor-pointer"
+              title="Print All Pages Directly"
+            >
+              <Printer className="w-4 h-4" /> Print
+            </button>
             <button
               onClick={downloadPdf}
               className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all cursor-pointer"
@@ -520,9 +615,9 @@ export const SaleInvoiceModal: React.FC<{
         </div>
 
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
-        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center">
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center invoice-sheet-container">
           <div 
-            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-sans"
+            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-sans invoice-sheet"
             style={{ fontFamily: "Arial, 'Segoe UI', Roboto, Helvetica, sans-serif" }}
           >
             
@@ -721,14 +816,14 @@ export const SaleInvoiceModal: React.FC<{
         </div>
 
         {/* BOTTOM MODAL FOOTER BAR */}
-        <div className="px-4 py-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0">
+        <div className="px-4 py-3 bg-white border-t border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-2 shrink-0 no-print">
           <span className="text-xs text-slate-600 font-medium hidden sm:inline">
             Invoice No: <strong className="font-mono text-slate-900">{invoiceNo}</strong> • Total Amount: <strong className="font-mono text-emerald-800">₹{fmt(totalInvoiceAmount)}</strong>
           </span>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
             <button
-              onClick={() => window.print()}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-slate-300 transition-all cursor-pointer"
+              onClick={printPdf}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" /> Print
             </button>

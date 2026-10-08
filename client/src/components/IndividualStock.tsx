@@ -1970,7 +1970,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                     <input
                       type="number"
                       step="0.01"
-                      value={editingItem.cgstPercent ?? 9}
+                      value={editingItem.cgstPercent ?? 0}
                       onChange={(e) => setEditingItem((prev: any) => ({ ...prev, cgstPercent: parseFloat(e.target.value) || 0 }))}
                       className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
                     />
@@ -1980,7 +1980,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                     <input
                       type="number"
                       step="0.01"
-                      value={editingItem.sgstPercent ?? 9}
+                      value={editingItem.sgstPercent ?? 0}
                       onChange={(e) => setEditingItem((prev: any) => ({ ...prev, sgstPercent: parseFloat(e.target.value) || 0 }))}
                       className="w-full px-2 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs font-mono"
                     />

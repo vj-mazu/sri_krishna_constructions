@@ -53,6 +53,8 @@ interface SaleLedgerItem {
   workOrderDate?: string;
   companyName?: string;
   companyGstNumber?: string;
+  partyAddress?: string;
+  divisionName?: string;
 }
 
 export const SalesLedger: React.FC = () => {
@@ -145,7 +147,11 @@ export const SalesLedger: React.FC = () => {
             poDate: item.workOrderDate || item.purchaseOrder?.date || item.poDate || item.date,
             invoiceDate: item.invoiceDate || item.date,
             partyName: item.partyName || item.clientDepartment,
-            gstNumber: item.gstNumber || item.partyGstNumber || item.clientGst,
+            partyAddress: item.partyAddress || item.supplierAddress || '',
+            gstNumber: item.gstNumber || item.partyGstNumber || item.clientGst || '',
+            companyGstNumber: item.companyGstNumber || '29DWKPP3582H1ZV',
+            divisionName: item.divisionName || item.purchaseOrder?.division?.name || item.division?.name || '',
+            placeOfWork: item.placeOfWork || item.nameOfWork || item.partyName || item.clientDepartment || '',
             vehicleNumber: item.vehicleNumber,
             eWayBillNumber: item.eWayBillNumber,
             quantity: item.qty || item.quantity,
@@ -172,7 +178,11 @@ export const SalesLedger: React.FC = () => {
       poDate: item.workOrderDate || item.date,
       invoiceDate: item.date,
       partyName: item.clientDepartment,
-      gstNumber: item.clientGst,
+      partyAddress: item.partyAddress || '',
+      gstNumber: item.clientGst || '',
+      companyGstNumber: item.companyGstNumber || '29DWKPP3582H1ZV',
+      divisionName: item.divisionName || '',
+      placeOfWork: item.nameOfWork || item.clientDepartment || '',
       vehicleNumber: item.vehicleNumber,
       eWayBillNumber: item.eWayBillNumber,
       quantity: item.qty,

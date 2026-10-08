@@ -4723,7 +4723,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <input
                           type="number"
                           step="any"
-                          value={editingIndStock.cgstPercent ?? 9}
+                          value={editingIndStock.cgstPercent ?? 0}
                           onChange={(e) => setEditingIndStock({ ...editingIndStock, cgstPercent: e.target.value })}
                           className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
                         />
@@ -4733,7 +4733,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                         <input
                           type="number"
                           step="any"
-                          value={editingIndStock.sgstPercent ?? 9}
+                          value={editingIndStock.sgstPercent ?? 0}
                           onChange={(e) => setEditingIndStock({ ...editingIndStock, sgstPercent: e.target.value })}
                           className="w-full p-2 border border-slate-300 rounded-lg text-center font-mono text-xs"
                         />
