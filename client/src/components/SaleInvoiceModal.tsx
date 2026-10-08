@@ -1,10 +1,24 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Download, Printer, X } from 'lucide-react';
+import { Download, Printer, X, Edit3, RotateCcw, Building2, Check } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
 import { showToast } from '../toast';
+
+interface CustomInvoiceSettings {
+  companyName: string;
+  companyAddress: string;
+  companyTagline: string;
+  companyGst: string;
+  companyPhone: string;
+  bankHolder: string;
+  bankName: string;
+  bankAccount: string;
+  bankIfsc: string;
+  signatoryTitle: string;
+  signatoryDesignation: string;
+}
 
 export const SaleInvoiceModal: React.FC<{ 
   sale: any | any[]; 
@@ -70,7 +84,49 @@ export const SaleInvoiceModal: React.FC<{
   const partyName = primarySale.partyName || primarySale.clientDepartment || primarySale.supplierName || (isInward ? 'Supplier' : 'Customer');
   const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || primarySale.clientAddress || '';
   const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || primarySale.clientGst || '';
-  const isKpclParty = !isInward && /kpcl|rtps|raichur thermal/i.test(partyName);
+
+  // Customizable Company & Bank Details state with localStorage caching
+  const defaultSettings: CustomInvoiceSettings = {
+    companyName: primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS',
+    companyAddress: primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170',
+    companyTagline: 'All type of air compressor Service and Spares Avaliable.',
+    companyGst: primarySale.companyGstNumber || '29DWKPP3582H1ZV',
+    companyPhone: primarySale.companyPhone || '8496841904',
+    bankHolder: 'Sri Krishna Constructions',
+    bankName: 'Canara Bank Deosugur Branch',
+    bankAccount: '18133070005349',
+    bankIfsc: 'CNRB0011813',
+    signatoryTitle: 'For Sri Krishna Constructions',
+    signatoryDesignation: 'Proprietor'
+  };
+
+  const [customSettings, setCustomSettings] = useState<CustomInvoiceSettings>(() => {
+    const saved = localStorage.getItem('skc_invoice_custom_settings');
+    if (saved) {
+      try {
+        return { ...defaultSettings, ...JSON.parse(saved) };
+      } catch (_) {}
+    }
+    return defaultSettings;
+  });
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [tempSettings, setTempSettings] = useState<CustomInvoiceSettings>(customSettings);
+
+  const handleSaveSettings = () => {
+    setCustomSettings(tempSettings);
+    localStorage.setItem('skc_invoice_custom_settings', JSON.stringify(tempSettings));
+    setShowSettingsModal(false);
+    showToast('Invoice Header & Bank Details updated successfully', 'success');
+  };
+
+  const handleResetSettings = () => {
+    setTempSettings(defaultSettings);
+    setCustomSettings(defaultSettings);
+    localStorage.removeItem('skc_invoice_custom_settings');
+    setShowSettingsModal(false);
+    showToast('Invoice Header reset to system default', 'info');
+  };
 
   // Format currency helper preserving paise if fractional
   const fmt = (n: number) => {
@@ -96,9 +152,9 @@ export const SaleInvoiceModal: React.FC<{
     const b = round2(q * r);
     const ship = Number(s.shippingCharges || 0);
     
-    const cgstPct = s.cgstPercent !== undefined ? Number(s.cgstPercent) : 0;
-    const sgstPct = s.sgstPercent !== undefined ? Number(s.sgstPercent) : 0;
-    const igstPct = s.igstPercent !== undefined ? Number(s.igstPercent) : 0;
+    const cgstPct = s.cgstPercent !== undefined && s.cgstPercent !== null ? Number(s.cgstPercent) : 0;
+    const sgstPct = s.sgstPercent !== undefined && s.sgstPercent !== null ? Number(s.sgstPercent) : 0;
+    const igstPct = s.igstPercent !== undefined && s.igstPercent !== null ? Number(s.igstPercent) : 0;
 
     const cg = round2(b * (cgstPct / 100));
     const sg = round2(b * (sgstPct / 100));
@@ -209,27 +265,27 @@ export const SaleInvoiceModal: React.FC<{
         }
       }
 
-      // Title text: SRI KRISHNA CONSTRUCTIONS (Bold Red)
+      // Title text: Company Name (Bold Red)
       doc.setTextColor(218, 18, 18);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(17);
-      doc.text('SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
+      doc.setFontSize(16);
+      doc.text(customSettings.companyName || 'SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.text('H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
+      doc.setFontSize(8.2);
+      doc.text(customSettings.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
       
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8.5);
-      doc.text('All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
+      doc.setFontSize(8.2);
+      doc.text(customSettings.companyTagline || 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
 
       // GST and Mobile Bar
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text(`GST NO: ${primarySale.companyGstNumber || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
-      doc.text('Mobile No: 8496841904', pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
+      doc.text(`GST NO: ${customSettings.companyGst || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
+      doc.text(`Mobile No: ${customSettings.companyPhone || '8496841904'}`, pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
     };
 
     // 1. TOP HEADER BOX ON PAGE 1
@@ -312,7 +368,7 @@ export const SaleInvoiceModal: React.FC<{
 
     y += boxHeight;
 
-    // 4. INVOICE ITEMS TABLE
+    // 4. INVOICE ITEMS TABLE WITH COMPACT KPCL AND SINGLE-LINE AMOUNT
     const tableBody = itemsRows.map((r) => [
       r.slNo.toString(),
       r.kpclCode || '-',
@@ -332,6 +388,7 @@ export const SaleInvoiceModal: React.FC<{
       ],
       body: tableBody,
       theme: 'grid',
+      rowPageBreak: 'avoid', // PREVENTS ROWS FROM SPLITTING HALFWAY ACROSS PAGES
       styles: {
         font: 'helvetica',
         fontSize: 7.5,
@@ -352,21 +409,21 @@ export const SaleInvoiceModal: React.FC<{
         lineColor: [0, 0, 0]
       },
       columnStyles: {
-        0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
-        1: { halign: 'center', cellWidth: 24, fontStyle: 'bold' },
-        2: { cellWidth: 44, fontStyle: 'bold' },
-        3: { cellWidth: 60 },
-        4: { halign: 'center', cellWidth: 12 },
-        5: { halign: 'center', cellWidth: 12, fontStyle: 'bold' },
-        6: { halign: 'right', cellWidth: 14, fontStyle: 'bold' },
-        7: { halign: 'right', cellWidth: 14, fontStyle: 'bold' }
+        0: { halign: 'center', cellWidth: 9, fontStyle: 'bold' },
+        1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
+        2: { cellWidth: 42, fontStyle: 'bold' },
+        3: { cellWidth: 55 },
+        4: { halign: 'center', cellWidth: 11 },
+        5: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
+        6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
+        7: { halign: 'right', cellWidth: 22, fontStyle: 'bold' } // WIDE ENOUGH TO NEVER WRAP 'AMOUNT'
       },
       didDrawPage: (data) => {
-        // Top Header on subsequent pages (page 2, 3...)
+        // Draw top header banner on all subsequent pages (page 2, 3...)
         if (data.pageNumber > 1) {
           drawHeaderBox(8);
         }
-        // Page Number at bottom of every page
+        // Page numbering
         const str = `Page ${data.pageNumber} of `;
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(7.5);
@@ -381,9 +438,9 @@ export const SaleInvoiceModal: React.FC<{
 
     const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
 
-    // Check if space is sufficient on current page for totals box (needs ~55mm)
-    let fy = finalTableY;
-    if (fy > 230) {
+    // Check if space is sufficient on current page for totals box & signatures (needs ~70mm)
+    let fy = finalTableY + 2;
+    if (fy + 68 > 280) {
       doc.addPage();
       drawHeaderBox(8);
       fy = 36;
@@ -411,10 +468,10 @@ export const SaleInvoiceModal: React.FC<{
     doc.setFont('helvetica', 'bold');
     doc.text('Bank Details :', margin + 2, fy + 16.5);
     doc.setFont('helvetica', 'normal');
-    doc.text('Account Holder Name : Sri Krishna Constructions', margin + 2, fy + 20.5);
-    doc.text('Bank Name : Canara Bank Deosugur Branch', margin + 2, fy + 24.5);
-    doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
-    doc.text('IFSC Code:CNRB0011813', margin + 2, fy + 32.5);
+    doc.text(`Account Holder Name : ${customSettings.bankHolder || 'Sri Krishna Constructions'}`, margin + 2, fy + 20.5);
+    doc.text(`Bank Name : ${customSettings.bankName || 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 24.5);
+    doc.text(`Bank Account No: ${customSettings.bankAccount || '18133070005349'}`, margin + 2, fy + 28.5);
+    doc.text(`IFSC Code:${customSettings.bankIfsc || 'CNRB0011813'}`, margin + 2, fy + 32.5);
 
     // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
     const rightX = margin + leftBoxWidth;
@@ -452,22 +509,31 @@ export const SaleInvoiceModal: React.FC<{
       }
     });
 
-    // Signatures (Right aligned only)
-    let sigY = fy + bottomBoxHeight + 8;
-    if (sigY > 270) {
+    // 6. Signatures (Royal Blue Company Title & Underlined Signatory)
+    let sigY = fy + bottomBoxHeight + 6;
+    if (sigY + 24 > 285) {
       doc.addPage();
       drawHeaderBox(8);
-      sigY = 40;
+      sigY = 38;
     }
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.text('Your Faithfully', pageWidth - margin - 20, sigY, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
+    doc.text('Your Faithfully', pageWidth - margin - 22, sigY, { align: 'center' });
+    
+    // Royal Blue for company signature
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(59, 130, 246);
-    doc.text('For Sri Krishna Constructions', pageWidth - margin - 20, sigY + 6, { align: 'center' });
+    doc.setTextColor(30, 64, 175); // #1e40af
+    doc.text(customSettings.signatoryTitle || 'For Sri Krishna Constructions', pageWidth - margin - 22, sigY + 5.5, { align: 'center' });
+    
+    // Signature underline
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.35);
+    doc.line(pageWidth - margin - 44, sigY + 15, pageWidth - margin, sigY + 15);
+
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'normal');
-    doc.text('Proprietor', pageWidth - margin - 20, sigY + 16, { align: 'center' });
+    doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 19, { align: 'center' });
 
     return doc;
   };
@@ -573,11 +639,12 @@ export const SaleInvoiceModal: React.FC<{
           }
         }
       `}</style>
+      
       {/* CLEAN ENTERPRISE MODAL CONTAINER */}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl border border-slate-300 flex flex-col h-[90vh] max-h-[90vh] overflow-hidden animate-fadeIn relative z-[1000000] invoice-modal-container">
         
         {/* MODAL TOP HEADER BAR */}
-        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-6 sm:py-3.5 flex justify-between items-center shrink-0 border-b border-blue-950 no-print">
+        <div className="bg-[#1e3a8a] text-white px-4 py-3 sm:px-6 sm:py-3.5 flex flex-wrap justify-between items-center gap-2 shrink-0 border-b border-blue-950 no-print">
           <div className="flex items-center gap-2.5 min-w-0">
             <Printer className="w-5 h-5 text-amber-400 shrink-0" />
             <div className="min-w-0">
@@ -590,6 +657,16 @@ export const SaleInvoiceModal: React.FC<{
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                setTempSettings(customSettings);
+                setShowSettingsModal(true);
+              }}
+              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all cursor-pointer"
+              title="Edit Top Header, Phone & Bank Details"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edit Header / Bank
+            </button>
             <button
               onClick={printPdf}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 shadow transition-all cursor-pointer"
@@ -630,17 +707,17 @@ export const SaleInvoiceModal: React.FC<{
               />
               <div className="flex-1 text-center">
                 <h1 className="text-xl sm:text-2xl font-black text-[#da1212] tracking-wide uppercase leading-tight">
-                  SRI KRISHNA CONSTRUCTIONS
+                  {customSettings.companyName || 'SRI KRISHNA CONSTRUCTIONS'}
                 </h1>
                 <p className="text-[11px] font-normal text-black mt-0.5">
-                  H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170
+                  {customSettings.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170'}
                 </p>
                 <p className="text-[11px] font-normal text-black mt-0.5">
-                  All type of air compressor Service and Spares Avaliable.
+                  {customSettings.companyTagline || 'All type of air compressor Service and Spares Avaliable.'}
                 </p>
                 <div className="flex justify-between items-center text-[11px] font-bold text-black mt-1 px-1">
-                  <span>GST NO: {primarySale.companyGstNumber || '29DWKPP3582H1ZV'}</span>
-                  <span>Mobile No: 8496841904</span>
+                  <span>GST NO: {customSettings.companyGst || '29DWKPP3582H1ZV'}</span>
+                  <span>Mobile No: {customSettings.companyPhone || '8496841904'}</span>
                 </div>
               </div>
             </div>
@@ -699,35 +776,35 @@ export const SaleInvoiceModal: React.FC<{
 
             {/* 4. TAX INVOICE ITEMS TABLE */}
             <div className="border-x border-b border-black overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse font-sans">
+              <table className="w-full text-left text-[11px] border-collapse font-sans table-fixed">
                 <thead>
                   <tr className="border-b border-black text-center font-bold bg-white">
-                    <th className="p-2 border-r border-black w-10">SL NO</th>
-                    <th className="p-2 border-r border-black w-24">KPCL ITEM CODE</th>
-                    <th className="p-2 border-r border-black w-40">Discription</th>
-                    <th className="p-2 border-r border-black min-w-[220px]">ITEM NAME & SPECIFICATION</th>
-                    <th className="p-2 border-r border-black w-12">UNIT</th>
-                    <th className="p-2 border-r border-black w-12">QTY</th>
-                    <th className="p-2 border-r border-black w-20 text-center">PRICE</th>
-                    <th className="p-2 w-24 text-center">AMOUNT</th>
+                    <th className="p-1.5 border-r border-black w-9">SL NO</th>
+                    <th className="p-1.5 border-r border-black w-24">KPCL ITEM CODE</th>
+                    <th className="p-1.5 border-r border-black w-40">Discription</th>
+                    <th className="p-1.5 border-r border-black">ITEM NAME & SPECIFICATION</th>
+                    <th className="p-1.5 border-r border-black w-11">UNIT</th>
+                    <th className="p-1.5 border-r border-black w-11">QTY</th>
+                    <th className="p-1.5 border-r border-black w-20 text-center">PRICE</th>
+                    <th className="p-1.5 w-24 text-center whitespace-nowrap">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
                   {itemsRows.map((r) => (
                     <tr key={r.slNo} className="border-b border-black">
-                      <td className="p-2 text-center font-bold border-r border-black">{r.slNo}</td>
-                      <td className="p-2 text-center font-bold border-r border-black">{r.kpclCode || '-'}</td>
-                      <td className="p-2 font-bold border-r border-black">{r.itemName}</td>
-                      <td className="p-2 border-r border-black text-[10.5px] uppercase whitespace-pre-wrap">
+                      <td className="p-1.5 text-center font-bold border-r border-black">{r.slNo}</td>
+                      <td className="p-1.5 text-center font-bold border-r border-black">{r.kpclCode || '-'}</td>
+                      <td className="p-1.5 font-bold border-r border-black">{r.itemName}</td>
+                      <td className="p-1.5 border-r border-black text-[10.5px] uppercase whitespace-pre-wrap">
                         {r.specifications}
                         {r.partNumber && !r.specifications.includes(r.partNumber) && (
-                          <div className="font-bold">P NO: {r.partNumber}</div>
+                          <div className="font-bold mt-0.5">P NO: {r.partNumber}</div>
                         )}
                       </td>
-                      <td className="p-2 text-center border-r border-black">{r.unit}</td>
-                      <td className="p-2 text-center font-bold border-r border-black">{r.qty}</td>
-                      <td className="p-2 text-right font-bold border-r border-black">{fmt(r.rate)}</td>
-                      <td className="p-2 text-right font-bold">{fmt(r.amount)}</td>
+                      <td className="p-1.5 text-center border-r border-black">{r.unit}</td>
+                      <td className="p-1.5 text-center font-bold border-r border-black">{r.qty}</td>
+                      <td className="p-1.5 text-right font-bold border-r border-black">{fmt(r.rate)}</td>
+                      <td className="p-1.5 text-right font-bold whitespace-nowrap">{fmt(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -747,10 +824,10 @@ export const SaleInvoiceModal: React.FC<{
                 <div className="pt-2 border-t border-black">
                   <span className="font-bold block text-black">Bank Details :</span>
                   <div className="text-[10.5px] text-black space-y-0.5 mt-0.5">
-                    <div>Account Holder Name : <strong>Sri Krishna Constructions</strong></div>
-                    <div>Bank Name : <strong>Canara Bank Deosugur Branch</strong></div>
-                    <div>Bank Account No: <strong className="font-bold">18133070005349</strong></div>
-                    <div>IFSC Code: <strong className="font-bold">CNRB0011813</strong></div>
+                    <div>Account Holder Name : <strong>{customSettings.bankHolder || 'Sri Krishna Constructions'}</strong></div>
+                    <div>Bank Name : <strong>{customSettings.bankName || 'Canara Bank Deosugur Branch'}</strong></div>
+                    <div>Bank Account No: <strong className="font-bold">{customSettings.bankAccount || '18133070005349'}</strong></div>
+                    <div>IFSC Code: <strong className="font-bold">{customSettings.bankIfsc || 'CNRB0011813'}</strong></div>
                   </div>
                 </div>
               </div>
@@ -802,13 +879,17 @@ export const SaleInvoiceModal: React.FC<{
               </div>
             </div>
 
-            {/* 6. SIGNATURES (Right side only matching original PDF, left side clear for stamps) */}
+            {/* 6. SIGNATURES (Right side only with Royal Blue Header matching original PDF) */}
             <div className="flex justify-end items-end mt-10 pt-4 text-xs font-sans">
-              <div className="text-center">
+              <div className="text-center min-w-[200px]">
                 <div className="text-black">Your Faithfully</div>
-                <div className="font-bold text-blue-600 mt-1">For Sri Krishna Constructions</div>
+                <div className="font-bold text-[#1e40af] mt-1 text-xs">
+                  {customSettings.signatoryTitle || 'For Sri Krishna Constructions'}
+                </div>
                 <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
-                <div className="text-black text-[11px]">Proprietor</div>
+                <div className="text-black text-[11px] font-medium">
+                  {customSettings.signatoryDesignation || 'Proprietor'}
+                </div>
               </div>
             </div>
 
@@ -821,6 +902,15 @@ export const SaleInvoiceModal: React.FC<{
             Invoice No: <strong className="font-mono text-slate-900">{invoiceNo}</strong> • Total Amount: <strong className="font-mono text-emerald-800">₹{fmt(totalInvoiceAmount)}</strong>
           </span>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => {
+                setTempSettings(customSettings);
+                setShowSettingsModal(true);
+              }}
+              className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow transition-all cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4" /> Edit Header / Bank
+            </button>
             <button
               onClick={printPdf}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 shadow transition-all cursor-pointer"
@@ -843,6 +933,180 @@ export const SaleInvoiceModal: React.FC<{
         </div>
 
       </div>
+
+      {/* POPUP MODAL: CUSTOMIZE HEADER & BANK DETAILS */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10000000] flex items-center justify-center p-3 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl border border-slate-300 overflow-hidden flex flex-col max-h-[92vh]">
+            <div className="bg-[#1e3a8a] text-white px-5 py-3.5 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-sm sm:text-base">Customize Invoice Header & Bank Details</h3>
+              </div>
+              <button 
+                onClick={() => setShowSettingsModal(false)}
+                className="w-7 h-7 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <span>🏢 Company Header Details (Top Box)</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Company Name</label>
+                    <input
+                      type="text"
+                      value={tempSettings.companyName}
+                      onChange={e => setTempSettings({ ...tempSettings, companyName: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded font-bold uppercase text-red-600 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Company Address</label>
+                    <input
+                      type="text"
+                      value={tempSettings.companyAddress}
+                      onChange={e => setTempSettings({ ...tempSettings, companyAddress: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block font-bold text-slate-700 mb-1">Tagline / Subtitle</label>
+                    <input
+                      type="text"
+                      value={tempSettings.companyTagline}
+                      onChange={e => setTempSettings({ ...tempSettings, companyTagline: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Company GST Number</label>
+                    <input
+                      type="text"
+                      value={tempSettings.companyGst}
+                      onChange={e => setTempSettings({ ...tempSettings, companyGst: e.target.value.toUpperCase() })}
+                      className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Mobile / Phone Number</label>
+                    <input
+                      type="text"
+                      value={tempSettings.companyPhone}
+                      onChange={e => setTempSettings({ ...tempSettings, companyPhone: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded font-mono font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <span>🏦 Bank & Payment Details (Bottom Box)</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Account Holder Name</label>
+                    <input
+                      type="text"
+                      value={tempSettings.bankHolder}
+                      onChange={e => setTempSettings({ ...tempSettings, bankHolder: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Bank Name & Branch</label>
+                    <input
+                      type="text"
+                      value={tempSettings.bankName}
+                      onChange={e => setTempSettings({ ...tempSettings, bankName: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Bank Account Number</label>
+                    <input
+                      type="text"
+                      value={tempSettings.bankAccount}
+                      onChange={e => setTempSettings({ ...tempSettings, bankAccount: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded font-mono font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">IFSC Code</label>
+                    <input
+                      type="text"
+                      value={tempSettings.bankIfsc}
+                      onChange={e => setTempSettings({ ...tempSettings, bankIfsc: e.target.value.toUpperCase() })}
+                      className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <span>✍️ Signatory Details (Bottom Right)</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Signatory Title</label>
+                    <input
+                      type="text"
+                      value={tempSettings.signatoryTitle}
+                      onChange={e => setTempSettings({ ...tempSettings, signatoryTitle: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded font-bold text-blue-700 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Designation</label>
+                    <input
+                      type="text"
+                      value={tempSettings.signatoryDesignation}
+                      onChange={e => setTempSettings({ ...tempSettings, signatoryDesignation: e.target.value })}
+                      className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-100 border-t border-slate-200 flex justify-between items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleResetSettings}
+                className="px-3.5 py-2 bg-white hover:bg-rose-50 text-rose-700 font-bold text-xs rounded-xl border border-rose-300 flex items-center gap-1.5 transition-colors"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reset Default
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveSettings}
+                  className="px-5 py-2 bg-[#1e3a8a] hover:bg-blue-900 text-white font-bold text-xs rounded-xl shadow flex items-center gap-1.5 transition-colors"
+                >
+                  <Check className="w-4 h-4" /> Save & Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>,
     document.body
   );
