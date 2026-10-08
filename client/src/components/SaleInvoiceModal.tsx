@@ -384,7 +384,16 @@ export const SaleInvoiceModal: React.FC<{
       startY: y,
       margin: { top: 35, left: margin, right: margin, bottom: 15 },
       head: [
-        ['SL\nNO', 'KPCL ITEM\nCODE', 'Discription', 'ITEM NAME &\nSPECIFICATION', 'UNIT', 'QTY', 'PRICE', 'AMOUNT']
+        [
+          { content: 'SL\nNO', styles: { halign: 'center' } },
+          { content: 'KPCL ITEM\nCODE', styles: { halign: 'center' } },
+          { content: 'Discription', styles: { halign: 'left' } },
+          { content: 'ITEM NAME &\nSPECIFICATION', styles: { halign: 'left' } },
+          { content: 'UNIT', styles: { halign: 'center' } },
+          { content: 'QTY', styles: { halign: 'center' } },
+          { content: 'PRICE', styles: { halign: 'right' } },
+          { content: 'AMOUNT', styles: { halign: 'right' } }
+        ]
       ],
       body: tableBody,
       theme: 'grid',
@@ -403,7 +412,6 @@ export const SaleInvoiceModal: React.FC<{
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontStyle: 'bold',
-        halign: 'center',
         valign: 'middle',
         lineWidth: 0.4,
         lineColor: [0, 0, 0]
@@ -411,8 +419,8 @@ export const SaleInvoiceModal: React.FC<{
       columnStyles: {
         0: { halign: 'center', cellWidth: 9, fontStyle: 'bold' },
         1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
-        2: { cellWidth: 42, fontStyle: 'bold' },
-        3: { cellWidth: 55 },
+        2: { halign: 'left', cellWidth: 42, fontStyle: 'bold' },
+        3: { halign: 'left', cellWidth: 55 },
         4: { halign: 'center', cellWidth: 11 },
         5: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
         6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
@@ -521,7 +529,7 @@ export const SaleInvoiceModal: React.FC<{
     doc.setTextColor(0, 0, 0);
     doc.text('Your Faithfully', pageWidth - margin - 22, sigY, { align: 'center' });
     
-    // Royal Blue for company signature
+    // Royal Blue for company signature & Proprietor designation
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 64, 175); // #1e40af
     doc.text(customSettings.signatoryTitle || 'For Sri Krishna Constructions', pageWidth - margin - 22, sigY + 5.5, { align: 'center' });
@@ -531,8 +539,9 @@ export const SaleInvoiceModal: React.FC<{
     doc.setLineWidth(0.35);
     doc.line(pageWidth - margin - 44, sigY + 15, pageWidth - margin, sigY + 15);
 
-    doc.setTextColor(0, 0, 0);
-    doc.setFont('helvetica', 'normal');
+    // Proprietor designation in Royal Blue
+    doc.setTextColor(30, 64, 175); // #1e40af
+    doc.setFont('helvetica', 'bold');
     doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 19, { align: 'center' });
 
     return doc;
@@ -778,15 +787,15 @@ export const SaleInvoiceModal: React.FC<{
             <div className="border-x border-b border-black overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse font-sans table-fixed">
                 <thead>
-                  <tr className="border-b border-black text-center font-bold bg-white">
-                    <th className="p-1.5 border-r border-black w-9">SL NO</th>
-                    <th className="p-1.5 border-r border-black w-24">KPCL ITEM CODE</th>
-                    <th className="p-1.5 border-r border-black w-40">Discription</th>
-                    <th className="p-1.5 border-r border-black">ITEM NAME & SPECIFICATION</th>
-                    <th className="p-1.5 border-r border-black w-11">UNIT</th>
-                    <th className="p-1.5 border-r border-black w-11">QTY</th>
-                    <th className="p-1.5 border-r border-black w-20 text-center">PRICE</th>
-                    <th className="p-1.5 w-24 text-center whitespace-nowrap">AMOUNT</th>
+                  <tr className="border-b border-black font-bold bg-white text-[11px]">
+                    <th className="p-1.5 border-r border-black w-9 text-center">SL NO</th>
+                    <th className="p-1.5 border-r border-black w-24 text-center">KPCL ITEM CODE</th>
+                    <th className="p-1.5 border-r border-black w-40 text-left px-2">Discription</th>
+                    <th className="p-1.5 border-r border-black text-left px-2">ITEM NAME & SPECIFICATION</th>
+                    <th className="p-1.5 border-r border-black w-11 text-center">UNIT</th>
+                    <th className="p-1.5 border-r border-black w-11 text-center">QTY</th>
+                    <th className="p-1.5 border-r border-black w-20 text-right px-2">PRICE</th>
+                    <th className="p-1.5 w-24 text-right px-2 whitespace-nowrap">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
@@ -794,8 +803,8 @@ export const SaleInvoiceModal: React.FC<{
                     <tr key={r.slNo} className="border-b border-black">
                       <td className="p-1.5 text-center font-bold border-r border-black">{r.slNo}</td>
                       <td className="p-1.5 text-center font-bold border-r border-black">{r.kpclCode || '-'}</td>
-                      <td className="p-1.5 font-bold border-r border-black">{r.itemName}</td>
-                      <td className="p-1.5 border-r border-black text-[10.5px] uppercase whitespace-pre-wrap">
+                      <td className="p-1.5 font-bold border-r border-black px-2">{r.itemName}</td>
+                      <td className="p-1.5 border-r border-black px-2 text-[10.5px] uppercase whitespace-pre-wrap">
                         {r.specifications}
                         {r.partNumber && !r.specifications.includes(r.partNumber) && (
                           <div className="font-bold mt-0.5">P NO: {r.partNumber}</div>
@@ -803,8 +812,8 @@ export const SaleInvoiceModal: React.FC<{
                       </td>
                       <td className="p-1.5 text-center border-r border-black">{r.unit}</td>
                       <td className="p-1.5 text-center font-bold border-r border-black">{r.qty}</td>
-                      <td className="p-1.5 text-right font-bold border-r border-black">{fmt(r.rate)}</td>
-                      <td className="p-1.5 text-right font-bold whitespace-nowrap">{fmt(r.amount)}</td>
+                      <td className="p-1.5 text-right font-bold border-r border-black px-2">{fmt(r.rate)}</td>
+                      <td className="p-1.5 text-right font-bold px-2 whitespace-nowrap">{fmt(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -879,15 +888,15 @@ export const SaleInvoiceModal: React.FC<{
               </div>
             </div>
 
-            {/* 6. SIGNATURES (Right side only with Royal Blue Header matching original PDF) */}
+            {/* 6. SIGNATURES (Right side only with Royal Blue Header & Proprietor in Royal Blue) */}
             <div className="flex justify-end items-end mt-10 pt-4 text-xs font-sans">
               <div className="text-center min-w-[200px]">
-                <div className="text-black">Your Faithfully</div>
+                <div className="text-black font-medium">Your Faithfully</div>
                 <div className="font-bold text-[#1e40af] mt-1 text-xs">
                   {customSettings.signatoryTitle || 'For Sri Krishna Constructions'}
                 </div>
                 <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
-                <div className="text-black text-[11px] font-medium">
+                <div className="text-[#1e40af] text-[11.5px] font-bold">
                   {customSettings.signatoryDesignation || 'Proprietor'}
                 </div>
               </div>
