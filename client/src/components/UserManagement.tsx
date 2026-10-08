@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
 import { showConfirm } from '../confirmDialog';
-import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2 } from 'lucide-react';
+import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2, Search, Plus, CheckCircle2, Power, Briefcase } from 'lucide-react';
 
 interface UserManagementProps {
   currentUserRole: string;
@@ -45,6 +45,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [divisionCategoryTab, setDivisionCategoryTab] = useState<'ATTENDANCE' | 'PO_CLIENT'>('ATTENDANCE');
   const [divisionStatusFilter, setDivisionStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [divisions, setDivisions] = useState<any[]>([]);
+  const [divisionSearch, setDivisionSearch] = useState('');
   const [divisionName, setDivisionName] = useState('');
   const [editingDivision, setEditingDivision] = useState<any>(null);
   const [editDivisionName, setEditDivisionName] = useState('');
@@ -1448,29 +1449,36 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
       {/* --- SUB-TAB: DIVISIONS --- */}
       {activeSubTab === 'divisions' && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap justify-between items-center gap-3 border-b border-slate-200 pb-3">
+        <div className="space-y-5">
+          {/* TOP HEADER & SEGMENTED SWITCH */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h3 className="text-sm font-bold text-slate-800">Master Divisions & Clients</h3>
+              <h3 className="text-base font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-[#1e3a8a]" />
+                <span>Master Divisions & Cost Centers</span>
+              </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Organize separate divisions for Worker Attendance and Client PO Orders.
+                {divisionCategoryTab === 'ATTENDANCE'
+                  ? 'Organize worker attendance rosters, muster rolls, and site shifts.'
+                  : 'Manage client cost-centers, project divisions, and billing purchase orders.'}
               </p>
             </div>
 
-            {/* BUILT-IN TWO TABS: ATTENDANCE DIVISIONS vs PO DIVISIONS / CLIENTS */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
+            {/* CATEGORY SWITCHER PILLS */}
+            <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/60 self-start md:self-auto">
               <button
                 type="button"
-                onClick={() => setDivisionCategoryTab('ATTENDANCE')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                onClick={() => { setDivisionCategoryTab('ATTENDANCE'); setDivisionSearch(''); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                   divisionCategoryTab === 'ATTENDANCE'
                     ? 'bg-[#1e3a8a] text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                 }`}
               >
+                <Users className="w-3.5 h-3.5" />
                 <span>Attendance Divisions</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  divisionCategoryTab === 'ATTENDANCE' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                  divisionCategoryTab === 'ATTENDANCE' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
                 }`}>
                   {divisions.filter(d => (d.type || 'PO_CLIENT') === 'ATTENDANCE').length}
                 </span>
@@ -1478,16 +1486,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
               <button
                 type="button"
-                onClick={() => setDivisionCategoryTab('PO_CLIENT')}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                onClick={() => { setDivisionCategoryTab('PO_CLIENT'); setDivisionSearch(''); }}
+                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${
                   divisionCategoryTab === 'PO_CLIENT'
                     ? 'bg-[#1e3a8a] text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
                 }`}
               >
+                <Briefcase className="w-3.5 h-3.5" />
                 <span>PO Divisions / Clients</span>
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  divisionCategoryTab === 'PO_CLIENT' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                  divisionCategoryTab === 'PO_CLIENT' ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-700'
                 }`}>
                   {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT').length}
                 </span>
@@ -1495,120 +1504,201 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             </div>
           </div>
 
-          <form onSubmit={handleCreateDivision} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
-            <div className="flex-1 text-xs">
-              <label className="block font-semibold text-slate-700 mb-1">
-                New {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division Name (e.g. Workshop, Boiler, Shift A)' : 'PO Division / Client Name (e.g. RTPS, BTPS, ISGEC)'} *
+          {/* QUICK CREATE CARD */}
+          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+            <form onSubmit={handleCreateDivision} className="bg-gradient-to-r from-slate-50 to-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Create New {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division' : 'PO / Client Division'}
               </label>
+              <div className="flex flex-col sm:flex-row gap-2.5 items-stretch">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    required
+                    value={divisionName}
+                    onChange={(e) => setDivisionName(e.target.value)}
+                    placeholder={divisionCategoryTab === 'ATTENDANCE' ? 'e.g. TM-1, TM-2, AHP-2, Workshop, Bottom Ash...' : 'e.g. KPCL Raichur, BTPS, RTPS Unit 7, ISGEC...'}
+                    className="w-full pl-3.5 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl focus:border-[#1e3a8a] focus:ring-2 focus:ring-[#1e3a8a]/15 outline-none font-medium text-xs text-slate-800 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs hover:shadow transition-all shrink-0 active:scale-98"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>Add {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division' : 'PO Division'}</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* SEARCH & STATUS FILTER BAR */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+            {/* SEARCH */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                required
-                value={divisionName}
-                onChange={(e) => setDivisionName(e.target.value)}
-                placeholder={divisionCategoryTab === 'ATTENDANCE' ? 'Enter attendance division name' : 'Enter client / PO division name'}
-                className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-medium"
+                value={divisionSearch}
+                onChange={(e) => setDivisionSearch(e.target.value)}
+                placeholder={`Search ${divisionCategoryTab === 'ATTENDANCE' ? 'attendance divisions' : 'client divisions'}...`}
+                className="w-full pl-9 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:bg-white focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]"
               />
-            </div>
-            <button
-              type="submit"
-              className="px-4 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 shadow h-fit w-full sm:w-auto"
-            >
-              <FolderPlus className="w-4 h-4" /> Add {divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Division' : 'PO Division'}
-            </button>
-          </form>
-
-          {/* ACTIVE / INACTIVE SUB-FILTER BAR */}
-          <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-slate-700 mr-1 text-[11px] uppercase tracking-wider">Status:</span>
-              {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(status => (
+              {divisionSearch && (
                 <button
-                  key={status}
                   type="button"
-                  onClick={() => setDivisionStatusFilter(status)}
-                  className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all ${
-                    divisionStatusFilter === status 
-                      ? (status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-xs' : status === 'INACTIVE' ? 'bg-rose-600 text-white shadow-xs' : 'bg-[#1e3a8a] text-white shadow-xs')
-                      : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
-                  }`}
+                  onClick={() => setDivisionSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
                 >
-                  {status === 'ACTIVE' ? '🟢 Active' : status === 'INACTIVE' ? '🔴 Inactive' : '📋 All'} (
-                    {divisions.filter(d => (d.type || 'PO_CLIENT') === divisionCategoryTab && (status === 'ALL' || (status === 'ACTIVE' ? d.isActive !== false : d.isActive === false))).length}
-                  )
+                  ✕
                 </button>
-              ))}
+              )}
+            </div>
+
+            {/* STATUS FILTER BUTTONS */}
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(status => {
+                const count = divisions.filter(d => 
+                  (d.type || 'PO_CLIENT') === divisionCategoryTab && 
+                  (status === 'ALL' || (status === 'ACTIVE' ? d.isActive !== false : d.isActive === false))
+                ).length;
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setDivisionStatusFilter(status)}
+                    className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 ${
+                      divisionStatusFilter === status 
+                        ? (status === 'ACTIVE' 
+                            ? 'bg-emerald-600 text-white shadow-xs' 
+                            : status === 'INACTIVE' 
+                              ? 'bg-rose-600 text-white shadow-xs' 
+                              : 'bg-[#1e3a8a] text-white shadow-xs')
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    <span>{status === 'ACTIVE' ? 'Active' : status === 'INACTIVE' ? 'Inactive' : 'All'}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      divisionStatusFilter === status ? 'bg-white/25 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* DIVISIONS GRID FILTERED BY ACTIVE SUB-CATEGORY AND STATUS */}
+          {/* DIVISIONS GRID */}
           {(() => {
-            const filteredDivs = divisions.filter(d => 
-              (d.type || 'PO_CLIENT') === divisionCategoryTab &&
-              (divisionStatusFilter === 'ALL' || (divisionStatusFilter === 'ACTIVE' ? d.isActive !== false : d.isActive === false))
-            );
+            const filteredDivs = divisions.filter(d => {
+              const matchesType = (d.type || 'PO_CLIENT') === divisionCategoryTab;
+              const matchesStatus = divisionStatusFilter === 'ALL' || (divisionStatusFilter === 'ACTIVE' ? d.isActive !== false : d.isActive === false);
+              const matchesSearch = !divisionSearch.trim() || d.name.toLowerCase().includes(divisionSearch.trim().toLowerCase());
+              return matchesType && matchesStatus && matchesSearch;
+            });
+
             if (filteredDivs.length === 0) {
               return (
-                <div className="p-8 text-center text-slate-400 bg-white border border-dashed rounded-xl text-xs">
-                  No {divisionStatusFilter !== 'ALL' ? divisionStatusFilter.toLowerCase() + ' ' : ''}{divisionCategoryTab === 'ATTENDANCE' ? 'Attendance Divisions' : 'PO Divisions / Clients'} found.
+                <div className="p-12 text-center bg-white border border-dashed border-slate-300 rounded-2xl">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-bold text-slate-700 text-sm">No Divisions Found</h4>
+                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                    {divisionSearch 
+                      ? `No ${divisionCategoryTab === 'ATTENDANCE' ? 'attendance' : 'PO'} divisions match "${divisionSearch}".`
+                      : `No ${divisionStatusFilter !== 'ALL' ? divisionStatusFilter.toLowerCase() + ' ' : ''}${divisionCategoryTab === 'ATTENDANCE' ? 'attendance divisions' : 'client divisions'} registered yet.`}
+                  </p>
                 </div>
               );
             }
+
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredDivs.map((d) => {
                   const isActive = d.isActive !== false;
                   return (
-                    <div key={d.id} className={`p-4 bg-white border rounded-xl flex items-center justify-between shadow-xs transition-all ${isActive ? 'border-slate-200' : 'border-rose-200 bg-rose-50/20 opacity-85'}`}>
+                    <div 
+                      key={d.id} 
+                      className={`p-4 bg-white border rounded-2xl flex flex-col justify-between shadow-xs hover:shadow-md transition-all ${
+                        isActive 
+                          ? 'border-slate-200 hover:border-slate-300' 
+                          : 'border-rose-200 bg-rose-50/20 opacity-80'
+                      }`}
+                    >
+                      {/* CARD TOP HEADER */}
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className={`font-bold ${isActive ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{d.name}</h4>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                            d.type === 'ATTENDANCE' ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-300'
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className={`font-bold text-sm leading-tight ${isActive ? 'text-slate-800' : 'text-slate-500 line-through'}`}>
+                            {d.name}
+                          </h4>
+                          {/* STATUS BADGE */}
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                            isActive 
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
                           }`}>
-                            {d.type === 'ATTENDANCE' ? 'Attendance' : 'PO / Client'}
-                          </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase border ${
-                            isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-rose-50 text-rose-700 border-rose-300'
-                          }`}>
-                            {isActive ? 'ACTIVE' : 'INACTIVE'}
+                            <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                            {isActive ? 'Active' : 'Inactive'}
                           </span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-medium mt-1 block">Registered Workers: {d._count?.workers || 0}</span>
+
+                        {/* METRIC BADGE */}
+                        <div className="mt-3">
+                          {d.type === 'ATTENDANCE' ? (
+                            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                              <Users className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <span>{d._count?.workers || 0} Registered Workers</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-xs font-semibold text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                              <Package className="w-4 h-4 text-blue-600 shrink-0" />
+                              <span>{d._count?.purchaseOrders || 0} Purchase Orders</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
+
+                      {/* CARD FOOTER ACTIONS */}
                       {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                        <div className="flex items-center gap-1.5">
+                        <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                           <button
                             type="button"
                             onClick={() => handleToggleDivisionActive(d.id, d.name, isActive)}
-                            className={`px-2 py-1 rounded text-[10px] font-black border transition-all ${
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 transition-all ${
                               isActive 
-                                ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200' 
+                                ? 'bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border-slate-200 hover:border-rose-200' 
                                 : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
                             }`}
                             title={isActive ? 'Mark as Inactive' : 'Activate Division'}
                           >
-                            {isActive ? 'Deactivate' : 'Activate'}
+                            <Power className="w-3 h-3" />
+                            <span>{isActive ? 'Deactivate' : 'Activate'}</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              setEditingDivision(d);
-                              setEditDivisionName(d.name);
-                              setEditDivisionType(d.type || 'PO_CLIENT');
-                              setEditDivisionActive(d.isActive !== false);
-                              clearMessages();
-                            }}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                            title="Edit Division"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteDivision(d.id, d.name)}
-                            className="p-1.5 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                            title="Delete Division"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => {
+                                setEditingDivision(d);
+                                setEditDivisionName(d.name);
+                                setEditDivisionType(d.type || 'PO_CLIENT');
+                                setEditDivisionActive(d.isActive !== false);
+                                clearMessages();
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit Division"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDivision(d.id, d.name)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete Division"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
