@@ -6157,6 +6157,7 @@ app.get('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'MA
         w."fatherName",
         w."designation",
         w."dailyWage",
+        COALESCE(w."dailyAllowance", 0) as "dailyAllowance",
         w."extraAmount",
         w."wageRevisedDate",
         d.id as "divisionId",
@@ -6219,17 +6220,19 @@ app.get('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'MA
 
     const result = workers.map(w => {
       let workerHistory = historyMap[w.id] || [];
-      // If no history exists yet, provide default initial row from worker master
+      // If no history exists yet, provide default initial row from worker master: (dailyWage + dailyAllowance) * 31 days
       if (workerHistory.length === 0) {
         const initialDate = w.wageRevisedDate ? new Date(w.wageRevisedDate).toISOString().split('T')[0] : '2024-08-01';
-        const base = parseFloat(w.dailyWage) || 0;
+        const dailyWage = parseFloat(w.dailyWage) || 0;
+        const dailyAllowance = parseFloat(w.dailyAllowance) || 0;
+        const base = Math.round((dailyWage + dailyAllowance) * 31);
         const hike = parseFloat(w.extraAmount) || 0;
         workerHistory = [{
           effectiveDate: initialDate,
           basePaid: base,
           hikeAmount: hike,
           totalAmount: base + hike,
-          notes: 'Master Registration'
+          notes: 'Master Registration (31 Days)'
         }];
       }
 

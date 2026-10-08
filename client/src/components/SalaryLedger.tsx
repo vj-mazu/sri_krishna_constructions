@@ -37,6 +37,7 @@ interface WorkerHikeRow {
   fatherName?: string;
   designation?: string;
   dailyWage?: number;
+  dailyAllowance?: number;
   extraAmount?: number;
   divisionId?: string;
   divisionName?: string;
@@ -110,7 +111,11 @@ export const SalaryLedger: React.FC = () => {
     if (e) e.stopPropagation();
     setSelectedWorkerForHike(worker);
     const lastHike = worker.hikeHistory[worker.hikeHistory.length - 1];
-    setNewHikeBase(lastHike ? String(lastHike.basePaid) : String(worker.dailyWage || ''));
+
+    // Standard 31 days base paid: (Daily Wage + Daily Allowance) * 31
+    const defaultMonthlyBase = Math.round(((Number(worker.dailyWage) || 0) + (Number(worker.dailyAllowance) || 0)) * 31);
+
+    setNewHikeBase(lastHike ? String(lastHike.basePaid) : String(defaultMonthlyBase));
     setNewHikeExtra(lastHike && lastHike.hikeAmount ? String(lastHike.hikeAmount) : String(worker.extraAmount || '0'));
     setNewHikeDate(new Date().toISOString().split('T')[0]);
     setNewHikeNotes('');
@@ -622,10 +627,13 @@ export const SalaryLedger: React.FC = () => {
                     step="any"
                     value={newHikeBase}
                     onChange={(e) => setNewHikeBase(e.target.value)}
-                    placeholder="e.g. 24000"
+                    placeholder="e.g. 15686"
                     required
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
+                  <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                    31-Day Base: (Wage ₹{selectedWorkerForHike.dailyWage || 0} + Allowance ₹{selectedWorkerForHike.dailyAllowance || 0}) × 31 = ₹{Math.round(((Number(selectedWorkerForHike.dailyWage) || 0) + (Number(selectedWorkerForHike.dailyAllowance) || 0)) * 31)}
+                  </div>
                 </div>
 
                 <div>
