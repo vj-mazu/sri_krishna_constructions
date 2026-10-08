@@ -54,6 +54,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
   // --- WORKERS STATE ---
   const [workerStatusFilter, setWorkerStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [workerSearch, setWorkerSearch] = useState('');
   const [workers, setWorkers] = useState<any[]>([]);
   const [showAddWorkerForm, setShowAddWorkerForm] = useState(false);
   const [workerActive, setWorkerActive] = useState<boolean>(true);
@@ -1795,10 +1796,33 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             )}
           </div>
 
-          {/* ACTIVE / INACTIVE SUB-FILTER BAR */}
-          <div className="flex flex-wrap justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-200 text-xs gap-2">
-            <div className="flex items-center gap-1.5">
-              <span className="font-bold text-slate-700 mr-1 text-[11px] uppercase tracking-wider">Status:</span>
+          {/* SEARCH & STATUS FILTER BAR */}
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+            {/* SEARCH INPUT */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={workerSearch}
+                onChange={(e) => setWorkerSearch(e.target.value)}
+                placeholder="Search by worker name, ID, father, designation, division, phone..."
+                className="w-full pl-9 pr-8 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:bg-white focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] transition-all placeholder:text-slate-400"
+              />
+              {workerSearch && (
+                <button
+                  type="button"
+                  onClick={() => setWorkerSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  title="Clear Search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* STATUS PILLS */}
+            <div className="flex items-center gap-1.5 self-end sm:self-auto">
+              <span className="font-bold text-slate-600 mr-1 text-[11px] uppercase tracking-wider hidden lg:inline">Status:</span>
               {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(status => {
                 const count = status === 'ACTIVE' 
                   ? workers.filter(w => w.isActive !== false).length 
@@ -1810,15 +1834,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     key={status}
                     type="button"
                     onClick={() => setWorkerStatusFilter(status)}
-                    className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 ${
                       workerStatusFilter === status 
                         ? (status === 'ACTIVE' ? 'bg-emerald-600 text-white shadow-xs' : status === 'INACTIVE' ? 'bg-rose-600 text-white shadow-xs' : 'bg-[#1e3a8a] text-white shadow-xs')
-                        : 'bg-white text-slate-600 hover:bg-slate-200 border border-slate-200'
+                        : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80'
                     }`}
                   >
                     <span>{status === 'ACTIVE' ? '🟢 Active' : status === 'INACTIVE' ? '🔴 Inactive' : '📋 All'}</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      workerStatusFilter === status ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
+                      workerStatusFilter === status ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
                     }`}>
                       {count}
                     </span>
@@ -1826,9 +1850,6 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 );
               })}
             </div>
-            <span className="text-[11px] text-slate-500 font-medium hidden sm:inline">
-              Showing {workerStatusFilter === 'ACTIVE' ? 'Active' : workerStatusFilter === 'INACTIVE' ? 'Inactive (Left Company)' : 'All'} Workers
-            </span>
           </div>
 
           {showAddWorkerForm && (
@@ -2445,15 +2466,32 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             ) : (
               (() => {
                 const filtered = workers.filter(w => {
-                  if (workerStatusFilter === 'ACTIVE') return w.isActive !== false;
-                  if (workerStatusFilter === 'INACTIVE') return w.isActive === false;
+                  if (workerStatusFilter === 'ACTIVE' && w.isActive === false) return false;
+                  if (workerStatusFilter === 'INACTIVE' && w.isActive !== false) return false;
+                  if (workerSearch.trim()) {
+                    const q = workerSearch.toLowerCase().trim();
+                    const matches =
+                      (w.fullName && w.fullName.toLowerCase().includes(q)) ||
+                      (w.workerId && w.workerId.toLowerCase().includes(q)) ||
+                      (w.fatherName && w.fatherName.toLowerCase().includes(q)) ||
+                      (w.designation && w.designation.toLowerCase().includes(q)) ||
+                      (w.mobileNumber && w.mobileNumber.toLowerCase().includes(q)) ||
+                      (w.division?.name && w.division.name.toLowerCase().includes(q)) ||
+                      (w.placeOfWork && w.placeOfWork.toLowerCase().includes(q)) ||
+                      (w.natureOfWork && w.natureOfWork.toLowerCase().includes(q)) ||
+                      (w.bankAccountNumber && w.bankAccountNumber.toLowerCase().includes(q)) ||
+                      (w.uanNumber && w.uanNumber.toLowerCase().includes(q)) ||
+                      (w.pfNumber && w.pfNumber.toLowerCase().includes(q)) ||
+                      (w.esiNumber && w.esiNumber.toLowerCase().includes(q));
+                    if (!matches) return false;
+                  }
                   return true;
                 });
 
                 if (filtered.length === 0) {
                   return (
                     <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl">
-                      No {workerStatusFilter === 'ACTIVE' ? 'active' : workerStatusFilter === 'INACTIVE' ? 'inactive' : ''} workers found.
+                      {workerSearch ? `No workers found matching "${workerSearch}".` : `No ${workerStatusFilter === 'ACTIVE' ? 'active' : workerStatusFilter === 'INACTIVE' ? 'inactive' : ''} workers found.`}
                     </div>
                   );
                 }
@@ -2969,8 +3007,25 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               <tbody>
                 {(() => {
                   const filtered = workers.filter(w => {
-                    if (workerStatusFilter === 'ACTIVE') return w.isActive !== false;
-                    if (workerStatusFilter === 'INACTIVE') return w.isActive === false;
+                    if (workerStatusFilter === 'ACTIVE' && w.isActive === false) return false;
+                    if (workerStatusFilter === 'INACTIVE' && w.isActive !== false) return false;
+                    if (workerSearch.trim()) {
+                      const q = workerSearch.toLowerCase().trim();
+                      const matches =
+                        (w.fullName && w.fullName.toLowerCase().includes(q)) ||
+                        (w.workerId && w.workerId.toLowerCase().includes(q)) ||
+                        (w.fatherName && w.fatherName.toLowerCase().includes(q)) ||
+                        (w.designation && w.designation.toLowerCase().includes(q)) ||
+                        (w.mobileNumber && w.mobileNumber.toLowerCase().includes(q)) ||
+                        (w.division?.name && w.division.name.toLowerCase().includes(q)) ||
+                        (w.placeOfWork && w.placeOfWork.toLowerCase().includes(q)) ||
+                        (w.natureOfWork && w.natureOfWork.toLowerCase().includes(q)) ||
+                        (w.bankAccountNumber && w.bankAccountNumber.toLowerCase().includes(q)) ||
+                        (w.uanNumber && w.uanNumber.toLowerCase().includes(q)) ||
+                        (w.pfNumber && w.pfNumber.toLowerCase().includes(q)) ||
+                        (w.esiNumber && w.esiNumber.toLowerCase().includes(q));
+                      if (!matches) return false;
+                    }
                     return true;
                   });
 
@@ -2989,8 +3044,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   if (sortedWorkers.length === 0) {
                     return (
                       <tr>
-                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 14 : 9} className="p-8 text-center text-slate-400">
-                          No {workerStatusFilter === 'ACTIVE' ? 'active' : workerStatusFilter === 'INACTIVE' ? 'inactive' : ''} workers registered yet.
+                        <td colSpan={currentUserRole !== 'SUPERVISOR' ? 14 : 9} className="p-8 text-center text-slate-400 font-medium text-xs">
+                          {workerSearch ? `No workers found matching "${workerSearch}".` : `No ${workerStatusFilter === 'ACTIVE' ? 'active' : workerStatusFilter === 'INACTIVE' ? 'inactive' : ''} workers registered yet.`}
                         </td>
                       </tr>
                     );
