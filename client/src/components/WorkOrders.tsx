@@ -444,8 +444,20 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     }
   };
 
-  // Open invoice view with all matching rows for that invoice number
-  const openInvoiceForWorkOrder = (targetWo: WorkOrderItem) => {
+  // Open invoice view with ALL matching rows for that invoice number (no limit)
+  const openInvoiceForWorkOrder = async (targetWo: WorkOrderItem) => {
+    if (targetWo.invoiceNumber && targetWo.invoiceNumber.trim()) {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(targetWo.invoiceNumber.trim())}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          setSelectedForInvoice(res.data.items);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to fetch complete invoice items:', err);
+      }
+    }
+
     const matching = workOrders.filter(w => 
       (targetWo.invoiceNumber && w.invoiceNumber === targetWo.invoiceNumber) || 
       w.id === targetWo.id

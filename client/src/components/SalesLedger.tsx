@@ -132,6 +132,62 @@ export const SalesLedger: React.FC = () => {
     return `${day}-${month}-${year}`;
   }
 
+  // Fetch all items for an invoice without pagination limit
+  const handleOpenInvoice = async (sale: SaleLedgerItem) => {
+    const invNum = sale.invoiceNumber;
+    if (invNum && invNum !== '-') {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          const itemsToPreview = res.data.items.map((item: any) => ({
+            ...item,
+            poNumber: item.workOrderNumber && item.workOrderNumber !== '-' ? item.workOrderNumber : (item.purchaseOrder?.poNumber || item.poNumber || ''),
+            poDate: item.workOrderDate || item.purchaseOrder?.date || item.poDate || item.date,
+            invoiceDate: item.invoiceDate || item.date,
+            partyName: item.partyName || item.clientDepartment,
+            gstNumber: item.gstNumber || item.partyGstNumber || item.clientGst,
+            vehicleNumber: item.vehicleNumber,
+            eWayBillNumber: item.eWayBillNumber,
+            quantity: item.qty || item.quantity,
+            unitPrice: item.rate || item.unitPrice,
+            item: {
+              itemName: item.purchaseOrderItem?.itemName || item.item?.itemName || item.itemName,
+              partNumber: item.purchaseOrderItem?.partNumber || item.item?.partNumber || item.partNumber,
+              kpclCode: item.purchaseOrderItem?.kpclCode || item.item?.kpclCode || item.kpclCode || '-',
+              unit: item.purchaseOrderItem?.unit || item.item?.unit || item.unit || 'NOS',
+              specifications: item.purchaseOrderItem?.specifications || item.specifications || item.description || item.remarks || ''
+            }
+          }));
+          setSelectedSaleForInvoice(itemsToPreview.length === 1 ? itemsToPreview[0] : itemsToPreview);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to fetch full invoice items, falling back to local items:', err);
+      }
+    }
+    const sameInvoiceSales = (invNum && invNum !== '-') ? sales.filter(s => s.invoiceNumber === invNum) : [sale];
+    const itemsToPreview = sameInvoiceSales.map(item => ({
+      ...item,
+      poNumber: item.workOrderNumber && item.workOrderNumber !== '-' ? item.workOrderNumber : (item.poNumber || ''),
+      poDate: item.workOrderDate || item.date,
+      invoiceDate: item.date,
+      partyName: item.clientDepartment,
+      gstNumber: item.clientGst,
+      vehicleNumber: item.vehicleNumber,
+      eWayBillNumber: item.eWayBillNumber,
+      quantity: item.qty,
+      unitPrice: item.rate,
+      item: {
+        itemName: item.itemName,
+        partNumber: item.partNumber,
+        kpclCode: item.kpclCode,
+        unit: item.unit,
+        specifications: item.specifications || item.remarks || ''
+      }
+    }));
+    setSelectedSaleForInvoice(itemsToPreview.length === 1 ? itemsToPreview[0] : itemsToPreview);
+  };
+
   // Export to CSV / Excel matching user's physical sheet layout
   const handleExportCSV = () => {
     if (filteredSales.length === 0) return;
@@ -451,32 +507,7 @@ export const SalesLedger: React.FC = () => {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => {
-                            const invNum = sale.invoiceNumber;
-                            const sameInvoiceSales = (invNum && invNum !== '-') 
-                              ? sales.filter(s => s.invoiceNumber === invNum) 
-                              : [sale];
-                            const itemsToPreview = sameInvoiceSales.map(item => ({
-                              ...item,
-                              poNumber: item.workOrderNumber && item.workOrderNumber !== '-' ? item.workOrderNumber : (item.poNumber || ''),
-                              poDate: item.workOrderDate || item.date,
-                              invoiceDate: item.date,
-                              partyName: item.clientDepartment,
-                              gstNumber: item.clientGst,
-                              vehicleNumber: item.vehicleNumber,
-                              eWayBillNumber: item.eWayBillNumber,
-                              quantity: item.qty,
-                              unitPrice: item.rate,
-                              item: {
-                                itemName: item.itemName,
-                                partNumber: item.partNumber,
-                                kpclCode: item.kpclCode,
-                                unit: item.unit,
-                                specifications: item.specifications || item.remarks || ''
-                              }
-                            }));
-                            setSelectedSaleForInvoice(itemsToPreview.length === 1 ? itemsToPreview[0] : itemsToPreview);
-                          }}
+                          onClick={() => handleOpenInvoice(sale)}
                           className="px-2 py-1 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-sm"
                           title="Download Tax Invoice PDF"
                         >
@@ -655,31 +686,9 @@ export const SalesLedger: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  const invNum = inspectModalItem.invoiceNumber;
-                  const sameInvoiceSales = (invNum && invNum !== '-') 
-                    ? sales.filter(s => s.invoiceNumber === invNum) 
-                    : [inspectModalItem];
-                  const itemsToPreview = sameInvoiceSales.map(item => ({
-                    ...item,
-                    poNumber: item.workOrderNumber && item.workOrderNumber !== '-' ? item.workOrderNumber : (item.poNumber || ''),
-                    poDate: item.workOrderDate || item.date,
-                    invoiceDate: item.date,
-                    partyName: item.clientDepartment,
-                    gstNumber: item.clientGst,
-                    vehicleNumber: item.vehicleNumber,
-                    eWayBillNumber: item.eWayBillNumber,
-                    quantity: item.qty,
-                    unitPrice: item.rate,
-                    item: {
-                      itemName: item.itemName,
-                      partNumber: item.partNumber,
-                      kpclCode: item.kpclCode,
-                      unit: item.unit,
-                      specifications: item.specifications || item.remarks || ''
-                    }
-                  }));
+                  const item = inspectModalItem;
                   setInspectModalItem(null);
-                  setSelectedSaleForInvoice(itemsToPreview.length === 1 ? itemsToPreview[0] : itemsToPreview);
+                  if (item) handleOpenInvoice(item);
                 }}
                 className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow"
               >

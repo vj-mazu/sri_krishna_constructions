@@ -892,6 +892,97 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   };
 
+  // Open Sale Invoice with ALL items of that invoice (without 20-item page limit)
+  const handleOpenSaleInvoice = async (sale: any) => {
+    const invNum = sale.invoiceNumber;
+    if (invNum && invNum !== '-') {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          const itemsWithPo = res.data.items.map((s: any) => {
+            const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+            return {
+              ...s,
+              purchaseOrder: s.purchaseOrder || selectedPo,
+              purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+              itemName: s.itemName || matchedPoItem?.itemName,
+              specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+              partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+              kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: s.unit || matchedPoItem?.unit || "No's"
+            };
+          });
+          setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to fetch complete invoice items, using local items:', err);
+      }
+    }
+    const sameInvoiceSales = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
+    const itemsWithPo = sameInvoiceSales.map(s => {
+      const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+      return {
+        ...s,
+        purchaseOrder: selectedPo,
+        purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+        itemName: s.itemName || matchedPoItem?.itemName,
+        specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+        partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+        kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+        unit: s.unit || matchedPoItem?.unit || "No's"
+      };
+    });
+    setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+  };
+
+  const handleOpenSelectedSalesInvoice = async () => {
+    if (selectedSaleIds.length === 0) return;
+    const firstSale = poSales.find(s => selectedSaleIds.includes(s.id));
+    if (firstSale?.invoiceNumber && firstSale.invoiceNumber !== '-') {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(firstSale.invoiceNumber)}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          const itemsWithPo = res.data.items.map((s: any) => {
+            const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+            return {
+              ...s,
+              purchaseOrder: s.purchaseOrder || selectedPo,
+              purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+              itemName: s.itemName || matchedPoItem?.itemName,
+              specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+              partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+              kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: s.unit || matchedPoItem?.unit || "No's"
+            };
+          });
+          setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to fetch complete invoice items:', err);
+      }
+    }
+    const chosenSales = poSales
+      .filter(s => selectedSaleIds.includes(s.id))
+      .map(s => {
+        const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
+        return {
+          ...s,
+          purchaseOrder: selectedPo,
+          purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
+          itemName: s.itemName || matchedPoItem?.itemName,
+          specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
+          partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
+          kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
+          unit: s.unit || matchedPoItem?.unit || "No's"
+        };
+      });
+    if (chosenSales.length > 0) {
+      setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
+    }
+  };
+
   // --- ACTIONS: UPDATE PO HEADER (DOUBLE SUBMISSION PROTECTED) ---
   const handleUpdatePoHeader = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3265,26 +3356,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   <div className="flex items-center gap-2">
                     {selectedSaleIds.length > 0 && (
                       <button
-                        onClick={() => {
-                          const chosenSales = poSales
-                            .filter(s => selectedSaleIds.includes(s.id))
-                            .map(s => {
-                              const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
-                              return {
-                                ...s,
-                                purchaseOrder: selectedPo,
-                                purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-                                itemName: s.itemName || matchedPoItem?.itemName,
-                                specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-                                partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-                                kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-                                unit: s.unit || matchedPoItem?.unit || "No's"
-                              };
-                            });
-                          if (chosenSales.length > 0) {
-                            setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
-                          }
-                        }}
+                        onClick={handleOpenSelectedSalesInvoice}
                         className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md animate-pulse"
                       >
                         <Receipt className="w-3.5 h-3.5" /> View & Download Invoice ({selectedSaleIds.length} Selected)
@@ -3828,24 +3900,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             </div>
                             <div className="flex items-center gap-1.5">
                               <button
-                                onClick={() => {
-                                  const invNum = sale.invoiceNumber;
-                                  const sameInvoiceSales = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
-                                  const itemsWithPo = sameInvoiceSales.map(s => {
-                                    const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
-                                    return {
-                                      ...s,
-                                      purchaseOrder: selectedPo,
-                                      purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-                                      itemName: s.itemName || matchedPoItem?.itemName,
-                                      specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-                                      partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-                                      kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-                                      unit: s.unit || matchedPoItem?.unit || "No's"
-                                    };
-                                  });
-                                  setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
-                                }}
+                                onClick={() => handleOpenSaleInvoice(sale)}
                                 className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
                                 title="View & Download Tax Invoice"
                               >
@@ -4005,24 +4060,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
-                                    onClick={() => {
-                                      const invNum = sale.invoiceNumber;
-                                      const sameInvoiceSales = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
-                                      const itemsWithPo = sameInvoiceSales.map(s => {
-                                        const matchedPoItem = selectedPo?.items?.find((it: any) => it.id === s.purchaseOrderItemId);
-                                        return {
-                                          ...s,
-                                          purchaseOrder: selectedPo,
-                                          purchaseOrderItem: s.purchaseOrderItem || matchedPoItem,
-                                          itemName: s.itemName || matchedPoItem?.itemName,
-                                          specifications: s.specifications || matchedPoItem?.specifications || s.description || '',
-                                          partNumber: s.partNumber || matchedPoItem?.partNumber || s.receivedPartNumber || '',
-                                          kpclCode: s.kpclCode || matchedPoItem?.kpclCode || '',
-                                          unit: s.unit || matchedPoItem?.unit || "No's"
-                                        };
-                                      });
-                                      setPreviewSaleInvoice(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
-                                    }}
+                                    onClick={() => handleOpenSaleInvoice(sale)}
                                     className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
                                     title="View & Download Tax Invoice"
                                   >

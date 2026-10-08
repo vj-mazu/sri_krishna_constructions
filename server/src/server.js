@@ -842,6 +842,104 @@ app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) =>
   }
 });
 
+// GET /api/invoices/:invoiceNumber - Fetch ALL items of an invoice (PO Sales & Work Orders) with NO pagination limit
+app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
+  try {
+    const { invoiceNumber } = req.params;
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      return res.status(400).json({ error: 'Invoice number is required' });
+    }
+
+    const trimmedInv = invoiceNumber.trim();
+
+    // 1. Query Sale table (PO Sales & Direct Stock Sales)
+    const salesRes = await pool.query(`
+      SELECT 
+        s.*,
+        json_build_object(
+          'id', poi.id,
+          'partNumber', poi."partNumber",
+          'itemName', poi."itemName",
+          'kpclCode', poi."kpclCode",
+          'specifications', poi."specifications",
+          'unit', poi."unit"
+        ) as "purchaseOrderItem",
+        json_build_object(
+          'id', po.id,
+          'poNumber', po."poNumber",
+          'date', po."date"
+        ) as "purchaseOrder",
+        json_build_object('fullName', u."fullName") as "addedBy"
+      FROM "Sale" s
+      LEFT JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+      LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "User" u ON s."addedById" = u.id
+      WHERE LOWER(s."invoiceNumber") = LOWER($1)
+      ORDER BY s."createdAt" ASC, s."id" ASC
+    `, [trimmedInv]);
+
+    if (salesRes.rows.length > 0) {
+      return res.json({
+        invoiceType: 'OUTWARD',
+        invoiceNumber: trimmedInv,
+        itemsCount: salesRes.rows.length,
+        items: salesRes.rows
+      });
+    }
+
+    // 2. Query WorkOrder table
+    const woRes = await pool.query(`
+      SELECT wo.*,
+             u."fullName" as "addedByName"
+      FROM "WorkOrder" wo
+      LEFT JOIN "User" u ON wo."addedById" = u.id
+      WHERE LOWER(wo."invoiceNumber") = LOWER($1)
+      ORDER BY wo."createdAt" ASC, wo."id" ASC
+    `, [trimmedInv]);
+
+    if (woRes.rows.length > 0) {
+      const formatted = woRes.rows.map(wo => ({
+        ...wo,
+        sourceType: 'WORK_ORDER',
+        workOrderNumber: wo.workOrderNumber,
+        workOrderDate: wo.workOrderDate,
+        poNumber: wo.workOrderNumber,
+        poDate: wo.workOrderDate,
+        partyName: wo.partyName,
+        partyAddress: wo.partyAddress,
+        gstNumber: wo.partyGstNumber,
+        companyName: wo.companyName,
+        companyGstNumber: wo.companyGstNumber,
+        quantity: wo.qty,
+        unitPrice: wo.rate,
+        cgstPercent: wo.cgstPercent,
+        sgstPercent: wo.sgstPercent,
+        igstPercent: wo.igstPercent,
+        shippingCharges: wo.shippingCharges || 0,
+        item: {
+          itemName: wo.itemName,
+          specifications: wo.description || 'Work Order Direct Sale',
+          partNumber: wo.partNumber || '',
+          kpclCode: '-',
+          unit: wo.unit || 'NOS'
+        }
+      }));
+
+      return res.json({
+        invoiceType: 'WORK_ORDER',
+        invoiceNumber: trimmedInv,
+        itemsCount: formatted.length,
+        items: formatted
+      });
+    }
+
+    return res.status(404).json({ error: `No invoice records found for Invoice Number "${trimmedInv}"` });
+  } catch (err) {
+    console.error('Error fetching invoice items:', err);
+    res.status(500).json({ error: 'Failed to fetch invoice details' });
+  }
+});
+
 // PUT /api/purchase-orders/:id - Update PO header & Remarks
 app.put('/api/purchase-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
