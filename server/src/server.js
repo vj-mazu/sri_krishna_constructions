@@ -742,7 +742,7 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
       JOIN "PurchaseOrderItem" poi ON pur."purchaseOrderItemId" = poi.id
       LEFT JOIN "User" u ON pur."addedById" = u.id
       ${whereSql}
-      ORDER BY pur."date" ASC, pur."createdAt" ASC, pur."id" ASC
+      ORDER BY pur."createdAt" ASC, pur."id" ASC
       LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
     `;
 

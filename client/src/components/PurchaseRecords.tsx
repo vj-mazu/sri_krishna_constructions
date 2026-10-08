@@ -2637,7 +2637,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         type="text"
                         placeholder="Search Invoice #, Party Name, GSTIN, Vehicle, Part No..."
                         value={purchasesSearch}
-                        onChange={(e) => setPurchasesSearch(e.target.value.toUpperCase())}
+                        onChange={(e) => { setPurchasesSearch(e.target.value.toUpperCase()); setPurchasesCursor(null); setPurchasesHistory([]); }}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase font-mono"
                       />
                     </div>
@@ -2645,24 +2645,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       type="text"
                       placeholder="Part No..."
                       value={purchasesPartNumber}
-                      onChange={(e) => setPurchasesPartNumber(e.target.value.toUpperCase())}
+                      onChange={(e) => { setPurchasesPartNumber(e.target.value.toUpperCase()); setPurchasesCursor(null); setPurchasesHistory([]); }}
                       className="w-28 px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
                     />
-                    <input
-                      type="date"
-                      value={purchasesDateFrom}
-                      onChange={(e) => setPurchasesDateFrom(e.target.value)}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea]"
-                    />
-                    <input
-                      type="date"
-                      value={purchasesDateTo}
-                      onChange={(e) => setPurchasesDateTo(e.target.value)}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea]"
-                    />
+                    <div className="w-32">
+                      <DatePickerDMY
+                        value={purchasesDateFrom}
+                        onChange={(val) => { setPurchasesDateFrom(val); setPurchasesCursor(null); setPurchasesHistory([]); }}
+                      />
+                    </div>
+                    <div className="w-32">
+                      <DatePickerDMY
+                        value={purchasesDateTo}
+                        onChange={(val) => { setPurchasesDateTo(val); setPurchasesCursor(null); setPurchasesHistory([]); }}
+                      />
+                    </div>
                     {(purchasesSearch || purchasesPartNumber || purchasesDateFrom || purchasesDateTo) && (
                       <button
-                        onClick={() => { setPurchasesSearch(''); setPurchasesPartNumber(''); setPurchasesDateFrom(''); setPurchasesDateTo(''); }}
+                        onClick={() => { setPurchasesSearch(''); setPurchasesPartNumber(''); setPurchasesDateFrom(''); setPurchasesDateTo(''); setPurchasesCursor(null); setPurchasesHistory([]); }}
                         className="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg font-medium"
                       >
                         Reset
@@ -2933,13 +2933,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const igst = basic * ((pur.igstPercent || 0) / 100);
                       const ship = Number(pur.shippingCharges || 0);
                       const total = basic + cgst + sgst + igst + ship;
+                      const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
 
                       return (
                         <div key={pur.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
                           <div className="flex justify-between items-start border-b border-slate-100 pb-2">
                             <div className="flex items-center gap-2">
                               <span className="w-6 h-6 rounded-full bg-blue-50 text-[#1e3a8a] font-mono font-bold text-xs flex items-center justify-center border border-blue-100">
-                                {idx + 1}
+                                {serialNo}
                               </span>
                               <div>
                                 <span className="font-mono font-bold text-xs text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
@@ -3228,7 +3229,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         type="text"
                         placeholder="Search Invoice #, Party Name, GSTIN, Vehicle, E-Way Bill, Part No..."
                         value={salesSearch}
-                        onChange={(e) => setSalesSearch(e.target.value.toUpperCase())}
+                        onChange={(e) => { setSalesSearch(e.target.value.toUpperCase()); setSalesCursor(null); setSalesHistory([]); }}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase font-mono"
                       />
                     </div>
@@ -3236,24 +3237,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       type="text"
                       placeholder="Part No..."
                       value={salesPartNumber}
-                      onChange={(e) => setSalesPartNumber(e.target.value.toUpperCase())}
+                      onChange={(e) => { setSalesPartNumber(e.target.value.toUpperCase()); setSalesCursor(null); setSalesHistory([]); }}
                       className="w-28 px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea] uppercase font-mono"
                     />
-                    <input
-                      type="date"
-                      value={salesDateFrom}
-                      onChange={(e) => setSalesDateFrom(e.target.value)}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea]"
-                    />
-                    <input
-                      type="date"
-                      value={salesDateTo}
-                      onChange={(e) => setSalesDateTo(e.target.value)}
-                      className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#667eea]"
-                    />
+                    <div className="w-32">
+                      <DatePickerDMY
+                        value={salesDateFrom}
+                        onChange={(val) => { setSalesDateFrom(val); setSalesCursor(null); setSalesHistory([]); }}
+                      />
+                    </div>
+                    <div className="w-32">
+                      <DatePickerDMY
+                        value={salesDateTo}
+                        onChange={(val) => { setSalesDateTo(val); setSalesCursor(null); setSalesHistory([]); }}
+                      />
+                    </div>
                     {(salesSearch || salesInvoiceNumber || salesPartNumber || salesDateFrom || salesDateTo) && (
                       <button
-                        onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesPartNumber(''); setSalesDateFrom(''); setSalesDateTo(''); }}
+                        onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesPartNumber(''); setSalesDateFrom(''); setSalesDateTo(''); setSalesCursor(null); setSalesHistory([]); }}
                         className="px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-200 rounded-lg font-medium"
                       >
                         Reset
@@ -4175,23 +4176,19 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           </div>
         </div>
 
-        <div className="w-28 sm:w-36">
+        <div className="w-32 sm:w-36">
           <label className="block text-[10px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">Date From</label>
-          <input 
-            type="date" 
-            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs border border-slate-300 rounded-md sm:rounded-xl focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none"
+          <DatePickerDMY 
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(val) => { setDateFrom(val); setCursor(null); setHistory([]); }}
           />
         </div>
 
-        <div className="w-28 sm:w-36">
+        <div className="w-32 sm:w-36">
           <label className="block text-[10px] sm:text-xs font-bold text-slate-700 mb-0.5 sm:mb-1">Date To</label>
-          <input 
-            type="date" 
-            className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-xs border border-slate-300 rounded-md sm:rounded-xl focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none"
+          <DatePickerDMY 
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(val) => { setDateTo(val); setCursor(null); setHistory([]); }}
           />
         </div>
 
