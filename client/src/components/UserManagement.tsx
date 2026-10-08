@@ -3,6 +3,7 @@ import api from '../api';
 import { showToast } from '../toast';
 import { showConfirm } from '../confirmDialog';
 import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2, Search, Plus, CheckCircle2, Power, Briefcase } from 'lucide-react';
+import { DatePickerDMY } from './DatePickerDMY';
 
 interface UserManagementProps {
   currentUserRole: string;
@@ -1965,11 +1966,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Advance Taken Date</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     value={advanceTakenDate}
-                    onChange={(e) => setAdvanceTakenDate(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
+                    onChange={(val) => setAdvanceTakenDate(val)}
                   />
                 </div>
                 <div>
@@ -1984,11 +1983,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Expected Return Date</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     value={advanceReturnDate}
-                    onChange={(e) => setAdvanceReturnDate(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
+                    onChange={(val) => setAdvanceReturnDate(val)}
                   />
                 </div>
                 <div>
@@ -2358,20 +2355,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                           </div>
                           <div>
                             <label className="block font-semibold text-slate-700 mb-1">Advance Taken Date</label>
-                            <input
-                              type="date"
+                            <DatePickerDMY
                               value={editAdvanceTakenDate}
-                              onChange={(e) => setEditAdvanceTakenDate(e.target.value)}
-                              className="w-full p-2 border border-slate-300 rounded font-mono"
+                              onChange={(val) => setEditAdvanceTakenDate(val)}
                             />
                           </div>
                           <div>
                             <label className="block font-semibold text-slate-700 mb-1">Expected Return Date</label>
-                            <input
-                              type="date"
+                            <DatePickerDMY
                               value={editAdvanceReturnDate}
-                              onChange={(e) => setEditAdvanceReturnDate(e.target.value)}
-                              className="w-full p-2 border border-slate-300 rounded font-mono"
+                              onChange={(val) => setEditAdvanceReturnDate(val)}
                             />
                           </div>
                           <div className="sm:col-span-2">
@@ -2863,20 +2856,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
                                   <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Advance Taken Date</label>
-                                  <input
-                                    type="date"
+                                  <DatePickerDMY
                                     value={editAdvanceTakenDate}
-                                    onChange={(e) => setEditAdvanceTakenDate(e.target.value)}
-                                    className="w-full p-1.5 border border-slate-300 bg-white rounded font-mono text-xs"
+                                    onChange={(val) => setEditAdvanceTakenDate(val)}
                                   />
                                 </div>
                                 <div>
                                   <label className="block font-semibold text-slate-700 text-[11px] mb-0.5">Expected Return Date</label>
-                                  <input
-                                    type="date"
+                                  <DatePickerDMY
                                     value={editAdvanceReturnDate}
-                                    onChange={(e) => setEditAdvanceReturnDate(e.target.value)}
-                                    className="w-full p-1.5 border border-slate-300 bg-white rounded font-mono text-xs"
+                                    onChange={(val) => setEditAdvanceReturnDate(val)}
                                   />
                                 </div>
                               </div>
@@ -3221,12 +3210,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Date *</label>
-                    <input
-                      type="date"
+                    <DatePickerDMY
                       required
                       value={editPODate}
-                      onChange={(e) => setEditPODate(e.target.value)}
-                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                      onChange={(val) => setEditPODate(val)}
                     />
                   </div>
                   <div>
@@ -3301,12 +3288,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Date *</label>
-                <input
-                  type="date"
+                <DatePickerDMY
                   required
                   value={poDate}
-                  onChange={(e) => setPoDate(e.target.value)}
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none"
+                  onChange={(val) => setPoDate(val)}
                 />
               </div>
               <div>
@@ -3462,12 +3447,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">Holiday Date *</label>
-                  <input
-                    type="date"
+                  <DatePickerDMY
                     required
                     value={holidayDate}
-                    onChange={(e) => setHolidayDate(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono"
+                    onChange={(val) => setHolidayDate(val)}
                   />
                 </div>
                 <div className="md:col-span-2">
@@ -4020,12 +4003,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
                         Inward Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="date"
+                      <DatePickerDMY
                         required
                         value={indPurchaseForm.date}
-                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, date: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                        onChange={(val) => setIndPurchaseForm({ ...indPurchaseForm, date: val })}
                       />
                     </div>
 
@@ -4096,11 +4077,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
-                      <input
-                        type="date"
+                      <DatePickerDMY
                         value={indPurchaseForm.supplierInvoiceDate}
-                        onChange={(e) => setIndPurchaseForm({ ...indPurchaseForm, supplierInvoiceDate: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-emerald-600"
+                        onChange={(val) => setIndPurchaseForm({ ...indPurchaseForm, supplierInvoiceDate: val })}
                       />
                     </div>
 
@@ -4253,12 +4232,10 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                       <label className="block text-[11px] font-bold text-slate-700 mb-1">
                         Invoice Date <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        type="date"
+                      <DatePickerDMY
                         required
                         value={indSaleForm.invoiceDate}
-                        onChange={(e) => setIndSaleForm({ ...indSaleForm, invoiceDate: e.target.value })}
-                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                        onChange={(val) => setIndSaleForm({ ...indSaleForm, invoiceDate: val })}
                       />
                     </div>
 
