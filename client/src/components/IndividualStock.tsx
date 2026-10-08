@@ -2058,9 +2058,9 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                         ...prev,
                         stockId: e.target.value,
                         rate: sel ? sel.rate || 0 : prev.rate,
-                        cgstPercent: sel ? sel.cgstPercent || 9 : prev.cgstPercent,
-                        sgstPercent: sel ? sel.sgstPercent || 9 : prev.sgstPercent,
-                        igstPercent: sel ? sel.igstPercent || 0 : prev.igstPercent,
+                        cgstPercent: sel ? (sel.cgstPercent !== undefined && sel.cgstPercent !== null ? Number(sel.cgstPercent) : 0) : prev.cgstPercent,
+                        sgstPercent: sel ? (sel.sgstPercent !== undefined && sel.sgstPercent !== null ? Number(sel.sgstPercent) : 0) : prev.sgstPercent,
+                        igstPercent: sel ? (sel.igstPercent !== undefined && sel.igstPercent !== null ? Number(sel.igstPercent) : 0) : prev.igstPercent,
                       }));
                     }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold focus:ring-2 focus:ring-blue-900"
@@ -2469,9 +2469,9 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                         ...prev,
                         stockId: e.target.value,
                         rate: sel ? sel.rate || 0 : prev.rate,
-                        cgstPercent: sel ? sel.cgstPercent || 9 : prev.cgstPercent,
-                        sgstPercent: sel ? sel.sgstPercent || 9 : prev.sgstPercent,
-                        igstPercent: sel ? sel.igstPercent || 0 : prev.igstPercent,
+                        cgstPercent: sel ? (sel.cgstPercent !== undefined && sel.cgstPercent !== null ? Number(sel.cgstPercent) : 0) : prev.cgstPercent,
+                        sgstPercent: sel ? (sel.sgstPercent !== undefined && sel.sgstPercent !== null ? Number(sel.sgstPercent) : 0) : prev.sgstPercent,
+                        igstPercent: sel ? (sel.igstPercent !== undefined && sel.igstPercent !== null ? Number(sel.igstPercent) : 0) : prev.igstPercent,
                       }));
                     }}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold focus:ring-2 focus:ring-emerald-700"

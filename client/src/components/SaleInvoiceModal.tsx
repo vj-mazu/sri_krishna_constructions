@@ -417,36 +417,41 @@ export const SaleInvoiceModal: React.FC<{
       doc.text('Bank Account No: 18133070005349', margin + 2, fy + 28.5);
       doc.text('IFSC Code:CNRB0011813', margin + 2, fy + 32.5);
 
-      // Right Box: Basic Cost, SGST 9%, CGST 9%, TOTAL TAX AMOUNT, TOTAL AMOUNT
+      // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
       const rightX = margin + leftBoxWidth;
       const valX = margin + contentWidth - 2;
 
-      // Row 1: Basic Cost
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.text('Basic Cost', rightX + 2, fy + 5.5);
-      doc.text(fmt(totalBasic), valX, fy + 5.5, { align: 'right' });
-      doc.line(rightX, fy + 7, margin + contentWidth, fy + 7);
+      const summaryRows: Array<{ label: string; value: string; isBold?: boolean }> = [];
+      summaryRows.push({ label: 'Basic Cost', value: fmt(totalBasic) });
 
-      // Row 2: SGST 9%
-      doc.text(`SGST ${effectiveSgstPercent || 9}%`, rightX + 2, fy + 12.5);
-      doc.text(fmt(totalSgst), valX, fy + 12.5, { align: 'right' });
-      doc.line(rightX, fy + 14, margin + contentWidth, fy + 14);
-
-      // Row 3: CGST 9%
-      doc.text(`CGST ${effectiveCgstPercent || 9}%`, rightX + 2, fy + 19.5);
-      doc.text(fmt(totalCgst), valX, fy + 19.5, { align: 'right' });
-      doc.line(rightX, fy + 21, margin + contentWidth, fy + 21);
-
-      // Row 4: TOTAL TAX AMOUNT
+      if (totalSgst > 0 || totalCgst > 0) {
+        summaryRows.push({ label: `SGST ${effectiveSgstPercent > 0 ? effectiveSgstPercent + '%' : ''}`.trim(), value: fmt(totalSgst) });
+        summaryRows.push({ label: `CGST ${effectiveCgstPercent > 0 ? effectiveCgstPercent + '%' : ''}`.trim(), value: fmt(totalCgst) });
+      }
+      if (totalIgst > 0) {
+        summaryRows.push({ label: `IGST ${effectiveIgstPercent > 0 ? effectiveIgstPercent + '%' : ''}`.trim(), value: fmt(totalIgst) });
+      }
+      if (totalCgst === 0 && totalSgst === 0 && totalIgst === 0) {
+        summaryRows.push({ label: 'GST (0%)', value: fmt(0) });
+      }
+      if (totalShipping > 0) {
+        summaryRows.push({ label: 'Shipping Charges', value: fmt(totalShipping) });
+      }
       const totalTax = round2(totalCgst + totalSgst + totalIgst);
-      doc.text('TOTAL TAX AMOUNT', rightX + 2, fy + 26.5);
-      doc.text(fmt(totalTax), valX, fy + 26.5, { align: 'right' });
-      doc.line(rightX, fy + 28, margin + contentWidth, fy + 28);
+      summaryRows.push({ label: 'TOTAL TAX AMOUNT', value: fmt(totalTax) });
+      summaryRows.push({ label: 'TOTAL AMOUNT', value: fmt(totalInvoiceAmount), isBold: true });
 
-      // Row 5: TOTAL AMOUNT
-      doc.text('TOTAL AMOUNT', rightX + 2, fy + 33.5);
-      doc.text(fmt(totalInvoiceAmount), valX, fy + 33.5, { align: 'right' });
+      const rowHeight = bottomBoxHeight / summaryRows.length;
+      summaryRows.forEach((row, rIdx) => {
+        const rowY = fy + (rIdx * rowHeight);
+        doc.setFont('helvetica', row.isBold ? 'bold' : 'normal');
+        doc.setFontSize(row.isBold ? 8 : 7.2);
+        doc.text(row.label, rightX + 2, rowY + (rowHeight * 0.72));
+        doc.text(row.value, valX, rowY + (rowHeight * 0.72), { align: 'right' });
+        if (rIdx < summaryRows.length - 1) {
+          doc.line(rightX, rowY + rowHeight, margin + contentWidth, rowY + rowHeight);
+        }
+      });
 
       // Signatures (Right aligned only)
       let sigY = fy + bottomBoxHeight + 8;
@@ -661,14 +666,36 @@ export const SaleInvoiceModal: React.FC<{
                   <span>Basic Cost:</span>
                   <span className="font-bold">₹{fmt(totalBasic)}</span>
                 </div>
-                <div className="p-1.5 px-2 flex justify-between font-bold">
-                  <span>SGST {effectiveSgstPercent || 9}%:</span>
-                  <span className="font-bold">₹{fmt(totalSgst)}</span>
-                </div>
-                <div className="p-1.5 px-2 flex justify-between font-bold">
-                  <span>CGST {effectiveCgstPercent || 9}%:</span>
-                  <span className="font-bold">₹{fmt(totalCgst)}</span>
-                </div>
+                {(totalSgst > 0 || totalCgst > 0) && (
+                  <>
+                    <div className="p-1.5 px-2 flex justify-between font-bold">
+                      <span>SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}:</span>
+                      <span className="font-bold">₹{fmt(totalSgst)}</span>
+                    </div>
+                    <div className="p-1.5 px-2 flex justify-between font-bold">
+                      <span>CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}:</span>
+                      <span className="font-bold">₹{fmt(totalCgst)}</span>
+                    </div>
+                  </>
+                )}
+                {totalIgst > 0 && (
+                  <div className="p-1.5 px-2 flex justify-between font-bold text-indigo-900">
+                    <span>IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}:</span>
+                    <span className="font-bold">₹{fmt(totalIgst)}</span>
+                  </div>
+                )}
+                {totalCgst === 0 && totalSgst === 0 && totalIgst === 0 && (
+                  <div className="p-1.5 px-2 flex justify-between font-bold text-slate-600">
+                    <span>GST (0%):</span>
+                    <span className="font-bold">₹0.00</span>
+                  </div>
+                )}
+                {totalShipping > 0 && (
+                  <div className="p-1.5 px-2 flex justify-between font-bold text-blue-900">
+                    <span>Shipping Charges:</span>
+                    <span className="font-bold">₹{fmt(totalShipping)}</span>
+                  </div>
+                )}
                 <div className="p-1.5 px-2 flex justify-between font-bold">
                   <span>TOTAL TAX AMOUNT:</span>
                   <span className="font-bold">₹{fmt(totalCgst + totalSgst + totalIgst)}</span>

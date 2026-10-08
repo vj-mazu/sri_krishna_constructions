@@ -718,9 +718,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         const edit = multiSaleItemEdits[id] || {
           qty: itm ? Math.max(0, (itm.purchasedQty || 0) - (itm.soldQty || 0)) : (saleForm.qty || 0),
           rate: itm?.rate ?? saleForm.rate ?? 0,
-          cgstPercent: itm?.cgstPercent ?? saleForm.cgstPercent ?? 9,
-          sgstPercent: itm?.sgstPercent ?? saleForm.sgstPercent ?? 9,
-          igstPercent: itm?.igstPercent ?? saleForm.igstPercent ?? 0
+          cgstPercent: itm?.cgstPercent !== undefined && itm?.cgstPercent !== null ? itm.cgstPercent : (saleForm.cgstPercent || 0),
+          sgstPercent: itm?.sgstPercent !== undefined && itm?.sgstPercent !== null ? itm.sgstPercent : (saleForm.sgstPercent || 0),
+          igstPercent: itm?.igstPercent !== undefined && itm?.igstPercent !== null ? itm.igstPercent : (saleForm.igstPercent || 0)
         };
         const maxAvail = itm?.availableForSale !== undefined 
           ? itm.availableForSale 
@@ -729,8 +729,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           purchaseOrderItemId: id,
           qty: Number(edit.qty || 0),
           rate: Number(edit.rate || 0),
-          cgstPercent: Number(edit.cgstPercent ?? 9),
-          sgstPercent: Number(edit.sgstPercent ?? 9),
+          cgstPercent: Number(edit.cgstPercent ?? 0),
+          sgstPercent: Number(edit.sgstPercent ?? 0),
           igstPercent: Number(edit.igstPercent ?? 0),
           itemName: itm?.itemName || '',
           partNumber: itm?.partNumber || '',
@@ -2828,12 +2828,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             setPurchaseForm(prev => ({
                               ...prev,
                               itemId: item.id,
-                              rate: item.rate,
+                              rate: item.rate !== undefined && item.rate !== null ? Number(item.rate) : 0,
                               receivedItemName: item.itemName || '',
                               receivedPartNumber: item.partNumber || '',
-                              cgstPercent: item.cgstPercent || 0,
-                              sgstPercent: item.sgstPercent || 0,
-                              igstPercent: item.igstPercent || 0
+                              cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                              sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                              igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0
                             }));
                           } else {
                             handlePurchaseChange('itemId', '');
@@ -2988,9 +2988,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         return (
                           <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
                             <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(b.basicAmount)}</strong></span>
-                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">CGST {b.cgstPercent}%: +{formatCurrency(b.cgstAmount)}</span>
-                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">SGST {b.sgstPercent}%: +{formatCurrency(b.sgstAmount)}</span>
-                            {b.igstPercent > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST {b.igstPercent}%: +{formatCurrency(b.igstAmount)}</span>}
+                            {b.cgstPercent > 0 && <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">CGST {b.cgstPercent}%: +{formatCurrency(b.cgstAmount)}</span>}
+                            {b.sgstPercent > 0 && <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">SGST {b.sgstPercent}%: +{formatCurrency(b.sgstAmount)}</span>}
+                            {b.igstPercent > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 font-semibold">IGST {b.igstPercent}%: +{formatCurrency(b.igstAmount)}</span>}
+                            {b.cgstPercent === 0 && b.sgstPercent === 0 && b.igstPercent === 0 && (
+                              <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Tax: 0% (₹0.00)</span>
+                            )}
                             {ship > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(ship)}</span>}
                             <span className="text-sm font-black text-emerald-800 ml-2 bg-emerald-100/50 px-3 py-1 rounded-lg border border-emerald-300">
                               Total Inward: {formatCurrency(totalWithShip)}
@@ -3095,9 +3098,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
                                         qty: pur.qty || 0,
                                         rate: pur.rate || 0,
-                                        cgstPercent: pur.cgstPercent || 0,
-                                        sgstPercent: pur.sgstPercent || 0,
-                                        igstPercent: pur.igstPercent || 0,
+                                        cgstPercent: pur.cgstPercent !== undefined && pur.cgstPercent !== null ? Number(pur.cgstPercent) : 0,
+                                        sgstPercent: pur.sgstPercent !== undefined && pur.sgstPercent !== null ? Number(pur.sgstPercent) : 0,
+                                        igstPercent: pur.igstPercent !== undefined && pur.igstPercent !== null ? Number(pur.igstPercent) : 0,
                                         shippingCharges: pur.shippingCharges || 0,
                                         partyName: pur.partyName || '',
                                         supplierAddress: pur.supplierAddress || '',
@@ -3236,9 +3239,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                             date: pur.date ? new Date(pur.date).toISOString().split('T')[0] : '',
                                             qty: pur.qty || 0,
                                             rate: pur.rate || 0,
-                                            cgstPercent: pur.cgstPercent || 0,
-                                            sgstPercent: pur.sgstPercent || 0,
-                                            igstPercent: pur.igstPercent || 0,
+                                            cgstPercent: pur.cgstPercent !== undefined && pur.cgstPercent !== null ? Number(pur.cgstPercent) : 0,
+                                            sgstPercent: pur.sgstPercent !== undefined && pur.sgstPercent !== null ? Number(pur.sgstPercent) : 0,
+                                            igstPercent: pur.igstPercent !== undefined && pur.igstPercent !== null ? Number(pur.igstPercent) : 0,
                                             shippingCharges: pur.shippingCharges || 0,
                                             partyName: pur.partyName || '',
                                             supplierAddress: pur.supplierAddress || '',
@@ -3387,9 +3390,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               initialEdits[i.id] = {
                                 qty: avail,
                                 rate: i.rate || 0,
-                                cgstPercent: i.cgstPercent !== undefined ? i.cgstPercent : 9,
-                                sgstPercent: i.sgstPercent !== undefined ? i.sgstPercent : 9,
-                                igstPercent: i.igstPercent !== undefined ? i.igstPercent : 0
+                                cgstPercent: i.cgstPercent !== undefined && i.cgstPercent !== null ? Number(i.cgstPercent) : 0,
+                                sgstPercent: i.sgstPercent !== undefined && i.sgstPercent !== null ? Number(i.sgstPercent) : 0,
+                                igstPercent: i.igstPercent !== undefined && i.igstPercent !== null ? Number(i.igstPercent) : 0
                               };
                             });
                             setMultiSaleItemEdits(initialEdits);
@@ -3574,6 +3577,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[110px] text-center">Sale Rate (₹) *</th>
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">CGST %</th>
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">SGST %</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">IGST %</th>
                                 <th className="px-2 py-2 text-right">Basic (₹)</th>
                                 <th className="px-2 py-2 text-right">Tax (₹)</th>
                                 <th className="px-2 py-2 text-right">Line Total (₹)</th>
@@ -3585,7 +3589,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 if (available.length === 0) {
                                   return (
                                     <tr>
-                                      <td colSpan={17} className="p-8 text-center text-slate-400 font-semibold bg-white">
+                                      <td colSpan={18} className="p-8 text-center text-slate-400 font-semibold bg-white">
                                         No inwarded items available for sale in this Purchase Order. Please record Inward Purchases first.
                                       </td>
                                     </tr>
@@ -3597,15 +3601,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   const edits = multiSaleItemEdits[item.id] || {
                                     qty: availStock,
                                     rate: item.rate || 0,
-                                    cgstPercent: item.cgstPercent !== undefined ? item.cgstPercent : 9,
-                                    sgstPercent: item.sgstPercent !== undefined ? item.sgstPercent : 9,
-                                    igstPercent: item.igstPercent !== undefined ? item.igstPercent : 0
+                                    cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                                    sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                                    igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0
                                   };
 
                                   const curQty = Number(edits.qty ?? availStock);
                                   const curRate = Number(edits.rate ?? item.rate ?? 0);
-                                  const curCgst = Number(edits.cgstPercent ?? 9);
-                                  const curSgst = Number(edits.sgstPercent ?? 9);
+                                  const curCgst = Number(edits.cgstPercent ?? 0);
+                                  const curSgst = Number(edits.sgstPercent ?? 0);
                                   const curIgst = Number(edits.igstPercent ?? 0);
 
                                   const lineBasic = curQty * curRate;
@@ -3620,9 +3624,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         ...prev[item.id] || {
                                           qty: availStock,
                                           rate: item.rate || 0,
-                                          cgstPercent: item.cgstPercent ?? 9,
-                                          sgstPercent: item.sgstPercent ?? 9,
-                                          igstPercent: item.igstPercent ?? 0
+                                          cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                                          sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                                          igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0
                                         },
                                         [field]: val
                                       }
@@ -3704,7 +3708,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         <input 
                                           type="number" 
                                           step="0.01"
-                                          value={edits.cgstPercent !== undefined ? edits.cgstPercent : 9}
+                                          value={edits.cgstPercent !== undefined ? edits.cgstPercent : 0}
                                           onChange={(e) => updateEdit('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
                                           disabled={!isSelected}
                                           className="w-14 p-1 text-center font-mono font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
@@ -3716,8 +3720,20 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         <input 
                                           type="number" 
                                           step="0.01"
-                                          value={edits.sgstPercent !== undefined ? edits.sgstPercent : 9}
+                                          value={edits.sgstPercent !== undefined ? edits.sgstPercent : 0}
                                           onChange={(e) => updateEdit('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
+                                          disabled={!isSelected}
+                                          className="w-14 p-1 text-center font-mono font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
+                                        />
+                                      </td>
+
+                                      {/* IGST */}
+                                      <td className="px-1.5 py-1.5 bg-amber-50/50 text-center">
+                                        <input 
+                                          type="number" 
+                                          step="0.01"
+                                          value={edits.igstPercent !== undefined ? edits.igstPercent : 0}
+                                          onChange={(e) => updateEdit('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
                                           disabled={!isSelected}
                                           className="w-14 p-1 text-center font-mono font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
                                         />
@@ -3757,15 +3773,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         const edit = multiSaleItemEdits[id] || {
                           qty: avail,
                           rate: itm.rate || 0,
-                          cgstPercent: itm.cgstPercent ?? 9,
-                          sgstPercent: itm.sgstPercent ?? 9,
-                          igstPercent: itm.igstPercent ?? 0
+                          cgstPercent: itm.cgstPercent !== undefined && itm.cgstPercent !== null ? Number(itm.cgstPercent) : 0,
+                          sgstPercent: itm.sgstPercent !== undefined && itm.sgstPercent !== null ? Number(itm.sgstPercent) : 0,
+                          igstPercent: itm.igstPercent !== undefined && itm.igstPercent !== null ? Number(itm.igstPercent) : 0
                         };
                         const q = Number(edit.qty || 0);
                         const r = Number(edit.rate || 0);
                         const b = q * r;
-                        const cg = b * ((Number(edit.cgstPercent ?? 9)) / 100);
-                        const sg = b * ((Number(edit.sgstPercent ?? 9)) / 100);
+                        const cg = b * ((Number(edit.cgstPercent ?? 0)) / 100);
+                        const sg = b * ((Number(edit.sgstPercent ?? 0)) / 100);
                         const ig = b * ((Number(edit.igstPercent ?? 0)) / 100);
 
                         calcTotalQty += q;
@@ -3786,9 +3802,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               Selected: {selectedMultiSaleItemIds.length} Items ({calcTotalQty} Qty)
                             </span>
                             <span className="text-slate-700">Basic Cost: <strong className="text-slate-900">{formatCurrency(calcBasic)}</strong></span>
-                            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">CGST (9%): +{formatCurrency(calcCgst)}</span>
-                            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">SGST (9%): +{formatCurrency(calcSgst)}</span>
-                            {calcIgst > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">IGST: +{formatCurrency(calcIgst)}</span>}
+                            {calcCgst > 0 && <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-semibold">CGST: +{formatCurrency(calcCgst)}</span>}
+                            {calcSgst > 0 && <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-semibold">SGST: +{formatCurrency(calcSgst)}</span>}
+                            {calcIgst > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 font-semibold">IGST: +{formatCurrency(calcIgst)}</span>}
+                            {calcCgst === 0 && calcSgst === 0 && calcIgst === 0 && (
+                              <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Tax: 0%</span>
+                            )}
                             <span className="text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">Total Tax: {formatCurrency(calcTax)}</span>
                             {calcShipping > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(calcShipping)}</span>}
                             <span className="text-base font-black text-amber-950 ml-2 bg-amber-100 px-3.5 py-1.5 rounded-xl border border-amber-300 shadow-sm">
