@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Calendar } from 'lucide-react';
 
 interface DatePickerDMYProps {
   value: string; // 'YYYY-MM-DD'
@@ -12,163 +13,169 @@ interface DatePickerDMYProps {
   disabled?: boolean;
 }
 
-const MONTHS = [
-  { value: '01', label: '01 - Jan' },
-  { value: '02', label: '02 - Feb' },
-  { value: '03', label: '03 - Mar' },
-  { value: '04', label: '04 - Apr' },
-  { value: '05', label: '05 - May' },
-  { value: '06', label: '06 - Jun' },
-  { value: '07', label: '07 - Jul' },
-  { value: '08', label: '08 - Aug' },
-  { value: '09', label: '09 - Sep' },
-  { value: '10', label: '10 - Oct' },
-  { value: '11', label: '11 - Nov' },
-  { value: '12', label: '12 - Dec' }
-];
+// Convert YYYY-MM-DD to DD-MM-YYYY
+const toDisplayFormat = (isoDate: string): string => {
+  if (!isoDate || typeof isoDate !== 'string') return '';
+  const parts = isoDate.split('-');
+  if (parts.length === 3 && parts[0].length === 4) {
+    const [y, m, d] = parts;
+    return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${y}`;
+  }
+  return isoDate;
+};
+
+// Convert DD-MM-YYYY (or DD/MM/YYYY) to YYYY-MM-DD
+const toIsoFormat = (displayDate: string): string => {
+  if (!displayDate || typeof displayDate !== 'string') return '';
+  const clean = displayDate.replace(/[\/\.]/g, '-').trim();
+  const parts = clean.split('-');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (d && m && y && y.length === 4) {
+      const dayNum = parseInt(d, 10);
+      const monthNum = parseInt(m, 10);
+      const yearNum = parseInt(y, 10);
+      if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31 && yearNum >= 1900 && yearNum <= 2100) {
+        return `${yearNum}-${String(monthNum).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+      }
+    }
+  }
+  return '';
+};
 
 export const DatePickerDMY: React.FC<DatePickerDMYProps> = ({
   value,
   onChange,
   required = false,
   className = '',
-  minYear = 2020,
-  maxYear = 2035,
   maxDate,
   minDate,
   disabled = false
 }) => {
-  // Parse incoming YYYY-MM-DD
-  const { day, month, year } = useMemo(() => {
-    if (!value || typeof value !== 'string') {
-      return { day: '', month: '', year: '' };
-    }
-    const parts = value.split('-');
-    if (parts.length === 3) {
-      return {
-        year: parts[0] || '',
-        month: parts[1] || '',
-        day: parts[2] || ''
-      };
-    }
-    return { day: '', month: '', year: '' };
+  const [displayText, setDisplayText] = useState(() => toDisplayFormat(value));
+  const hiddenDateRef = useRef<HTMLInputElement>(null);
+
+  // Keep display text synchronized when external value changes
+  useEffect(() => {
+    setDisplayText(toDisplayFormat(value));
   }, [value]);
 
-  // Compute number of days in selected month/year
-  const daysInMonth = useMemo(() => {
-    const y = parseInt(year, 10) || 2026;
-    const m = parseInt(month, 10) || 1;
-    return new Date(y, m, 0).getDate();
-  }, [year, month]);
+  // Handle typing numbers directly with automatic mask (DD-MM-YYYY)
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digitsOnly = raw.replace(/\D/g, '').slice(0, 8); // max 8 digits: DDMMYYYY
 
-  const years = useMemo(() => {
-    const list: number[] = [];
-    for (let y = maxYear; y >= minYear; y--) {
-      list.push(y);
+    let formatted = '';
+    if (digitsOnly.length > 0) {
+      formatted = digitsOnly.slice(0, 2);
     }
-    return list;
-  }, [minYear, maxYear]);
+    if (digitsOnly.length >= 3) {
+      formatted += '-' + digitsOnly.slice(2, 4);
+    }
+    if (digitsOnly.length >= 5) {
+      formatted += '-' + digitsOnly.slice(4, 8);
+    }
 
-  const handleDayChange = (newDay: string) => {
-    const d = newDay.padStart(2, '0');
-    const m = month || '01';
-    const y = year || String(new Date().getFullYear());
-    onChange(`${y}-${m}-${d}`);
+    setDisplayText(formatted);
+
+    // If all 8 digits (DD-MM-YYYY) are entered, parse and trigger onChange
+    if (digitsOnly.length === 8) {
+      const iso = toIsoFormat(formatted);
+      if (iso) {
+        if (maxDate && iso > maxDate) return;
+        if (minDate && iso < minDate) return;
+        onChange(iso);
+      }
+    } else if (digitsOnly.length === 0) {
+      onChange('');
+    }
   };
 
-  const handleMonthChange = (newMonth: string) => {
-    const m = newMonth.padStart(2, '0');
-    const y = year || String(new Date().getFullYear());
-    let d = day || '01';
-    const maxD = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
-    if (parseInt(d, 10) > maxD) {
-      d = String(maxD).padStart(2, '0');
+  // Validate on blur
+  const handleBlur = () => {
+    if (!displayText.trim()) {
+      onChange('');
+      return;
     }
-    onChange(`${y}-${m}-${d}`);
+    const iso = toIsoFormat(displayText);
+    if (iso) {
+      onChange(iso);
+      setDisplayText(toDisplayFormat(iso));
+    } else {
+      // Revert to current valid value if typed date is invalid
+      setDisplayText(toDisplayFormat(value));
+    }
   };
 
-  const handleYearChange = (newYear: string) => {
-    const y = newYear;
-    const m = month || '01';
-    let d = day || '01';
-    const maxD = new Date(parseInt(y, 10), parseInt(m, 10), 0).getDate();
-    if (parseInt(d, 10) > maxD) {
-      d = String(maxD).padStart(2, '0');
+  // Trigger calendar picker
+  const handleOpenCalendar = () => {
+    if (disabled) return;
+    if (hiddenDateRef.current) {
+      try {
+        if (typeof hiddenDateRef.current.showPicker === 'function') {
+          hiddenDateRef.current.showPicker();
+        } else {
+          hiddenDateRef.current.focus();
+          hiddenDateRef.current.click();
+        }
+      } catch {
+        hiddenDateRef.current.focus();
+        hiddenDateRef.current.click();
+      }
     }
-    onChange(`${y}-${m}-${d}`);
+  };
+
+  // When calendar picker selects a date
+  const handleCalendarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const iso = e.target.value;
+    if (iso) {
+      if (maxDate && iso > maxDate) return;
+      if (minDate && iso < minDate) return;
+      onChange(iso);
+      setDisplayText(toDisplayFormat(iso));
+    }
   };
 
   return (
-    <div className={`flex items-center gap-1 sm:gap-1.5 w-full ${className}`}>
-      {/* Day Select */}
-      <select
-        required={required}
-        disabled={disabled}
-        value={day}
-        onChange={(e) => handleDayChange(e.target.value)}
-        className="flex-1 min-w-[48px] py-1.5 px-1 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none text-center"
-        title="Day (DD)"
-      >
-        <option value="">DD</option>
-        {Array.from({ length: daysInMonth }, (_, i) => {
-          const val = String(i + 1).padStart(2, '0');
-          return (
-            <option key={val} value={val}>
-              {val}
-            </option>
-          );
-        })}
-      </select>
-
-      {/* Month Select */}
-      <select
-        required={required}
-        disabled={disabled}
-        value={month}
-        onChange={(e) => handleMonthChange(e.target.value)}
-        className="flex-[1.4] min-w-[70px] py-1.5 px-1 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none truncate"
-        title="Month (MM)"
-      >
-        <option value="">Month</option>
-        {MONTHS.map((m) => (
-          <option key={m.value} value={m.value}>
-            {m.label}
-          </option>
-        ))}
-      </select>
-
-      {/* Year Select */}
-      <select
-        required={required}
-        disabled={disabled}
-        value={year}
-        onChange={(e) => handleYearChange(e.target.value)}
-        className="flex-1 min-w-[58px] py-1.5 px-1 sm:p-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono text-center"
-        title="Year (YYYY)"
-      >
-        <option value="">YYYY</option>
-        {years.map((y) => (
-          <option key={y} value={String(y)}>
-            {y}
-          </option>
-        ))}
-      </select>
-
-      {/* Direct Calendar Picker Button / Fallback */}
+    <div className={`relative flex items-center w-full ${className}`}>
+      {/* Formatted Text Input for Typing Numbers & Normal TAB flow */}
       <input
+        type="text"
+        required={required}
+        disabled={disabled}
+        value={displayText}
+        onChange={handleInputChange}
+        onBlur={handleBlur}
+        placeholder="DD-MM-YYYY"
+        maxLength={10}
+        className="w-full pl-3 pr-9 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono transition-all"
+        title="Date in DD-MM-YYYY format"
+      />
+
+      {/* Calendar Icon Button (tabIndex -1 so TAB key does not get trapped) */}
+      <button
+        type="button"
+        tabIndex={-1}
+        disabled={disabled}
+        onClick={handleOpenCalendar}
+        className="absolute right-2 text-slate-400 hover:text-[#1e3a8a] p-1 rounded transition-colors cursor-pointer"
+        title="Open calendar picker"
+      >
+        <Calendar className="w-4 h-4" />
+      </button>
+
+      {/* Invisible Native Date Picker for Calendar Selection */}
+      <input
+        ref={hiddenDateRef}
         type="date"
+        tabIndex={-1}
         disabled={disabled}
         min={minDate}
         max={maxDate}
         value={value || ''}
-        onChange={(e) => {
-          const val = e.target.value;
-          if (maxDate && val > maxDate) return;
-          if (minDate && val < minDate) return;
-          onChange(val);
-        }}
-        className="w-7 h-7 sm:w-8 sm:h-8 p-0.5 opacity-70 hover:opacity-100 cursor-pointer border border-slate-300 rounded-lg bg-slate-50 text-xs shrink-0"
-        title="Pick from calendar"
+        onChange={handleCalendarChange}
+        className="absolute bottom-0 right-0 w-0 h-0 opacity-0 pointer-events-none"
+        aria-hidden="true"
       />
     </div>
   );
