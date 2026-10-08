@@ -42,8 +42,8 @@ export const SaleInvoiceModal: React.FC<{
       : (primarySale.date ? new Date(primarySale.date).toLocaleDateString('en-GB') : new Date().toLocaleDateString('en-GB')));
   
   // Dynamic Reference: Work Order vs PO vs Inward vs Direct Sale
-  const isWorkOrder = invoiceType === 'WORK_ORDER' || primarySale.sourceType === 'WORK_ORDER' || !!primarySale.workOrderNumber;
-  const isPo = !!(primarySale.purchaseOrder?.poNumber || (primarySale.poNumber && primarySale.poNumber !== '-'));
+  const isWorkOrder = invoiceType === 'WORK_ORDER' || primarySale.sourceType === 'WORK_ORDER' || (!!primarySale.workOrderNumber && primarySale.workOrderNumber !== '-' && primarySale.workOrderNumber.trim() !== '');
+  const isPo = !isWorkOrder && (primarySale.sourceType === 'PO' || !!(primarySale.purchaseOrder?.poNumber || (primarySale.poNumber && primarySale.poNumber !== '-' && primarySale.poNumber.trim() !== '')));
   
   const refLabel = isInward 
     ? (isPo ? 'PO No' : 'Supplier Inv No') 
@@ -53,7 +53,7 @@ export const SaleInvoiceModal: React.FC<{
     ? (primarySale.purchaseOrder?.poNumber || primarySale.poNumber || primarySale.partyInvoiceNumber || '-')
     : (isWorkOrder 
       ? (primarySale.workOrderNumber || primarySale.poNumber || '-') 
-      : (primarySale.poNumber || primarySale.purchaseOrder?.poNumber || '-'));
+      : (primarySale.purchaseOrder?.poNumber || primarySale.poNumber || '-'));
   
   const dateLabel = isInward 
     ? (isPo ? 'PO Date' : 'Supplier Inv Date') 
@@ -63,13 +63,13 @@ export const SaleInvoiceModal: React.FC<{
     ? (primarySale.purchaseOrder?.date || primarySale.poDate || primarySale.supplierInvoiceDate || primarySale.invoiceDate || primarySale.date)
     : (isWorkOrder 
       ? (primarySale.workOrderDate || primarySale.poDate) 
-      : (primarySale.poDate || primarySale.purchaseOrder?.date));
+      : (primarySale.purchaseOrder?.date || primarySale.poDate || primarySale.date));
   const refDate = rawRefDate ? new Date(rawRefDate).toLocaleDateString('en-GB') : invoiceDate;
 
   // Party info
-  const partyName = primarySale.partyName || primarySale.supplierName || (isInward ? 'Supplier' : 'Customer');
-  const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || '';
-  const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || '';
+  const partyName = primarySale.partyName || primarySale.clientDepartment || primarySale.supplierName || (isInward ? 'Supplier' : 'Customer');
+  const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || primarySale.clientAddress || '';
+  const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || primarySale.clientGst || '';
   const isKpclParty = !isInward && /kpcl|rtps|raichur thermal/i.test(partyName);
 
   // Format currency helper preserving paise if fractional

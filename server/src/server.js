@@ -856,6 +856,10 @@ app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
     const salesRes = await pool.query(`
       SELECT 
         s.*,
+        COALESCE(s."supplierAddress", '') as "partyAddress",
+        po."poNumber" as "poNumber",
+        po."date" as "poDate",
+        div.name as "divisionName",
         json_build_object(
           'id', poi.id,
           'partNumber', poi."partNumber",
@@ -867,12 +871,14 @@ app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
         json_build_object(
           'id', po.id,
           'poNumber', po."poNumber",
-          'date', po."date"
+          'date', po."date",
+          'division', json_build_object('id', div.id, 'name', div.name)
         ) as "purchaseOrder",
         json_build_object('fullName', u."fullName") as "addedBy"
       FROM "Sale" s
       LEFT JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
       LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "Division" div ON po."divisionId" = div.id
       LEFT JOIN "User" u ON s."addedById" = u.id
       WHERE LOWER(s."invoiceNumber") = LOWER($1)
       ORDER BY s."createdAt" ASC, s."id" ASC
@@ -3489,6 +3495,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           s."invoiceDate" as "date",
           COALESCE(s."partyName", po."poNumber", '-') as "clientDepartment",
           s."gstNumber" as "clientGst",
+          COALESCE(s."supplierAddress", '') as "partyAddress",
           'Sales' as "nameOfWork",
           s."vehicleNumber",
           s."eWayBillNumber",
@@ -3510,14 +3517,18 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           poi."partNumber" as "partNumber",
           poi."kpclCode" as "kpclCode",
           poi."unit" as "unit",
+          poi."specifications" as "specifications",
           po."poNumber" as "poNumber",
-          '-' as "workOrderNumber",
+          po."date" as "poDate",
+          div.name as "divisionName",
+          NULL::text as "workOrderNumber",
           NULL::timestamp as "workOrderDate",
           'Sri Krishna Constructions' as "companyName",
           '29DWKPP3582H1ZV' as "companyGstNumber"
         FROM "Sale" s
         JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
         LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+        LEFT JOIN "Division" div ON po."divisionId" = div.id
         WHERE s."status" = 'APPROVED'
 
         UNION ALL
@@ -3530,6 +3541,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           tx."date" as "date",
           COALESCE(tx."partyName", 'DIRECT CLIENT') as "clientDepartment",
           tx."gstNumber" as "clientGst",
+          '' as "partyAddress",
           'Sales' as "nameOfWork",
           tx."vehicleNumber",
           tx."eWayBillNumber",
@@ -3551,8 +3563,11 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           ind."partNumber" as "partNumber",
           COALESCE(ind."kpclCode", '-') as "kpclCode",
           ind."unit" as "unit",
-          '-' as "poNumber",
-          '-' as "workOrderNumber",
+          NULL::text as "specifications",
+          NULL::text as "poNumber",
+          NULL::timestamp as "poDate",
+          NULL::text as "divisionName",
+          NULL::text as "workOrderNumber",
           NULL::timestamp as "workOrderDate",
           'Sri Krishna Constructions' as "companyName",
           '29DWKPP3582H1ZV' as "companyGstNumber"
@@ -3570,6 +3585,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           wo."invoiceDate" as "date",
           wo."partyName" as "clientDepartment",
           wo."partyGstNumber" as "clientGst",
+          COALESCE(wo."partyAddress", '') as "partyAddress",
           'Work Order Sales' as "nameOfWork",
           wo."vehicleNumber",
           wo."eWayBillNumber",
@@ -3591,7 +3607,10 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
           COALESCE(wo."partNumber", '-') as "partNumber",
           '-' as "kpclCode",
           wo."unit" as "unit",
-          '-' as "poNumber",
+          wo."description" as "specifications",
+          NULL::text as "poNumber",
+          NULL::timestamp as "poDate",
+          NULL::text as "divisionName",
           wo."workOrderNumber" as "workOrderNumber",
           wo."workOrderDate" as "workOrderDate",
           wo."companyName" as "companyName",
