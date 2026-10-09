@@ -683,7 +683,7 @@ app.get('/api/purchase-orders/:id/items', authenticateToken, async (req, res) =>
 app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { cursor, limit = 20, search, partNumber, dateFrom, dateTo } = req.query;
+    const { cursor, limit = 20, search, invoiceNumber, partyInvoiceNumber, partNumber, dateFrom, dateTo } = req.query;
     const limitNum = parseInt(limit, 10) || 20;
 
     let whereClauses = [`poi."purchaseOrderId" = $1`];
@@ -702,6 +702,11 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
         pur."receivedPartNumber" ILIKE $${params.length} OR 
         pur."receivedItemName" ILIKE $${params.length}
       )`);
+    }
+    const invFilter = partyInvoiceNumber || invoiceNumber;
+    if (invFilter && invFilter.trim()) {
+      params.push(`%${invFilter.trim()}%`);
+      whereClauses.push(`pur."partyInvoiceNumber" ILIKE $${params.length}`);
     }
     if (partNumber && partNumber.trim()) {
       params.push(`%${partNumber.trim()}%`);
@@ -736,7 +741,7 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
     const querySql = `
       SELECT 
         pur.*,
-        json_build_object('id', poi.id, 'partNumber', poi."partNumber", 'itemName', poi."itemName", 'kpclCode', poi."kpclCode") as "purchaseOrderItem",
+        json_build_object('id', poi.id, 'partNumber', poi."partNumber", 'itemName', poi."itemName", 'kpclCode', poi."kpclCode", 'specifications', poi."specifications", 'unit', poi."unit") as "purchaseOrderItem",
         json_build_object('fullName', u."fullName") as "addedBy"
       FROM "Purchase" pur
       JOIN "PurchaseOrderItem" poi ON pur."purchaseOrderItemId" = poi.id
@@ -756,7 +761,250 @@ app.get('/api/purchase-orders/:id/purchases', authenticateToken, async (req, res
   }
 });
 
-// GET /api/purchase-orders/:id/sales - Outward sale records
+// GET /api/invoices/:invoiceNumber - Fetch ALL items of an invoice (PO Sales, Work Orders, and Inward Purchases)
+app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
+  try {
+    const { invoiceNumber } = req.params;
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      return res.status(400).json({ error: 'Invoice number is required' });
+    }
+
+    const trimmedInv = invoiceNumber.trim();
+
+    // 1. Query Sale table (PO Sales & Direct Stock Sales)
+    const salesRes = await pool.query(`
+      SELECT 
+        s.*,
+        COALESCE(s."supplierAddress", '') as "partyAddress",
+        po."poNumber" as "poNumber",
+        po."date" as "poDate",
+        div.name as "divisionName",
+        json_build_object(
+          'id', poi.id,
+          'partNumber', poi."partNumber",
+          'itemName', poi."itemName",
+          'kpclCode', poi."kpclCode",
+          'specifications', poi."specifications",
+          'unit', poi."unit"
+        ) as "purchaseOrderItem",
+        json_build_object(
+          'id', po.id,
+          'poNumber', po."poNumber",
+          'date', po."date",
+          'division', json_build_object('id', div.id, 'name', div.name)
+        ) as "purchaseOrder",
+        json_build_object('fullName', u."fullName") as "addedBy"
+      FROM "Sale" s
+      LEFT JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+      LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "Division" div ON po."divisionId" = div.id
+      LEFT JOIN "User" u ON s."addedById" = u.id
+      WHERE LOWER(s."invoiceNumber") = LOWER($1)
+      ORDER BY s."createdAt" ASC, s."id" ASC
+    `, [trimmedInv]);
+
+    if (salesRes.rows.length > 0) {
+      return res.json({
+        invoiceType: 'OUTWARD',
+        invoiceNumber: trimmedInv,
+        itemsCount: salesRes.rows.length,
+        items: salesRes.rows
+      });
+    }
+
+    // 2. Query WorkOrder table
+    const woRes = await pool.query(`
+      SELECT wo.*,
+             u."fullName" as "addedByName"
+      FROM "WorkOrder" wo
+      LEFT JOIN "User" u ON wo."addedById" = u.id
+      WHERE LOWER(wo."invoiceNumber") = LOWER($1)
+      ORDER BY wo."createdAt" ASC, wo."id" ASC
+    `, [trimmedInv]);
+
+    if (woRes.rows.length > 0) {
+      const formatted = woRes.rows.map(wo => ({
+        ...wo,
+        sourceType: 'WORK_ORDER',
+        workOrderNumber: wo.workOrderNumber,
+        workOrderDate: wo.workOrderDate,
+        divisionName: wo.divisionName || 'DIRECT WORK ORDER',
+        purchaseOrderItem: {
+          itemName: wo.itemName,
+          partNumber: wo.partNumber || '-',
+          kpclCode: wo.kpclCode || '-',
+          specifications: wo.description || '',
+          unit: wo.unit || 'NOS'
+        },
+        purchaseOrder: {
+          poNumber: wo.workOrderNumber,
+          date: wo.workOrderDate
+        }
+      }));
+
+      return res.json({
+        invoiceType: 'OUTWARD',
+        invoiceNumber: trimmedInv,
+        itemsCount: formatted.length,
+        items: formatted
+      });
+    }
+
+    // 3. Query Purchase table (Inward Material Receipts)
+    const purRes = await pool.query(`
+      SELECT 
+        pur.*,
+        pur."partyInvoiceNumber" as "invoiceNumber",
+        pur."date" as "invoiceDate",
+        COALESCE(pur."supplierAddress", '') as "partyAddress",
+        po."poNumber" as "poNumber",
+        po."date" as "poDate",
+        div.name as "divisionName",
+        json_build_object(
+          'id', poi.id,
+          'partNumber', poi."partNumber",
+          'itemName', poi."itemName",
+          'kpclCode', poi."kpclCode",
+          'specifications', poi."specifications",
+          'unit', poi."unit"
+        ) as "purchaseOrderItem",
+        json_build_object(
+          'id', po.id,
+          'poNumber', po."poNumber",
+          'date', po."date",
+          'division', json_build_object('id', div.id, 'name', div.name)
+        ) as "purchaseOrder",
+        json_build_object('fullName', u."fullName") as "addedBy"
+      FROM "Purchase" pur
+      LEFT JOIN "PurchaseOrderItem" poi ON pur."purchaseOrderItemId" = poi.id
+      LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "Division" div ON po."divisionId" = div.id
+      LEFT JOIN "User" u ON pur."addedById" = u.id
+      WHERE LOWER(pur."partyInvoiceNumber") = LOWER($1)
+      ORDER BY pur."createdAt" ASC, pur."id" ASC
+    `, [trimmedInv]);
+
+    if (purRes.rows.length > 0) {
+      return res.json({
+        invoiceType: 'INWARD',
+        invoiceNumber: trimmedInv,
+        itemsCount: purRes.rows.length,
+        items: purRes.rows
+      });
+    }
+
+    return res.status(404).json({ error: 'Invoice not found across Sales, Work Orders or Inward Purchases' });
+  } catch (err) {
+    console.error('Error fetching full invoice:', err);
+    res.status(500).json({ error: 'Failed to fetch invoice items' });
+  }
+});
+
+// POST /api/purchases - Inward purchase record (Supports Single & Multi-Item Inward)
+app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const body = req.body;
+    const isMultiItem = Array.isArray(body.items) && body.items.length > 0;
+    const itemsToProcess = isMultiItem ? body.items : [body];
+
+    await client.query('BEGIN');
+
+    const createdPurchases = [];
+
+    for (const d of itemsToProcess) {
+      const itemId = d.purchaseOrderItemId || d.itemId;
+      const qty = parseFloat(d.qty) || 0;
+      const rate = parseFloat(d.rate) || 0;
+      const cgstPercent = parseFloat(d.cgstPercent !== undefined ? d.cgstPercent : (body.cgstPercent || 0));
+      const sgstPercent = parseFloat(d.sgstPercent !== undefined ? d.sgstPercent : (body.sgstPercent || 0));
+      const igstPercent = parseFloat(d.igstPercent !== undefined ? d.igstPercent : (body.igstPercent || 0));
+      const shippingCharges = parseFloat(d.shippingCharges !== undefined ? d.shippingCharges : (body.shippingCharges || 0));
+
+      const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+      const cgstAmount = Math.round((basicAmount * (cgstPercent / 100) + Number.EPSILON) * 100) / 100;
+      const sgstAmount = Math.round((basicAmount * (sgstPercent / 100) + Number.EPSILON) * 100) / 100;
+      const igstAmount = Math.round((basicAmount * (igstPercent / 100) + Number.EPSILON) * 100) / 100;
+      const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
+
+      // Row-level lock on item to verify and enforce ordered PO quantity limit
+      const itemRes = await client.query(`
+        SELECT poi.qty, poi."itemName", poi."partNumber", COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as purchased
+        FROM "PurchaseOrderItem" poi
+        WHERE poi.id = $1
+        FOR UPDATE
+      `, [itemId]);
+
+      if (itemRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'PO item not found' });
+      }
+
+      const item = itemRes.rows[0];
+      const remainingAllowed = (item.qty || 0) - (item.purchased || 0);
+      if (qty <= 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `Inward quantity for item "${item.itemName}" must be greater than zero.` });
+      }
+
+      if (qty > remainingAllowed) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: `Cannot inward ${qty} units for "${item.itemName}". Ordered PO quantity is ${item.qty}, already received ${item.purchased} units. Remaining balance is ${Math.max(0, remainingAllowed)} units!`
+        });
+      }
+
+      const partyInvoiceNum = (d.partyInvoiceNumber || body.partyInvoiceNumber ? (d.partyInvoiceNumber || body.partyInvoiceNumber).trim().toUpperCase() : null);
+      const invDate = (d.date || body.date || d.supplierInvoiceDate || body.supplierInvoiceDate ? new Date(d.date || body.date || d.supplierInvoiceDate || body.supplierInvoiceDate) : new Date());
+      const supInvDate = (d.supplierInvoiceDate || body.supplierInvoiceDate || d.date || body.date ? new Date(d.supplierInvoiceDate || body.supplierInvoiceDate || d.date || body.date) : null);
+
+      const { rows } = await client.query(
+        `INSERT INTO "Purchase" (
+          "id", "purchaseOrderItemId", "date", "qty", "rate", "basicAmount",
+          "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+          "totalAmount", "partyName", "supplierAddress", "gstNumber", "partyInvoiceNumber",
+          "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "shippingCharges", "addedById", "createdAt"
+        ) VALUES (
+          gen_random_uuid()::text, $1, $2, $3, $4, $5,
+          $6, $7, $8, $9, $10, $11,
+          $12, $13, $14, $15, $16,
+          $17, $18, $19, $20, $21, $22, $23, NOW()
+        ) RETURNING *`,
+        [
+          itemId, invDate, qty, rate, basicAmount,
+          cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
+          totalAmount,
+          (d.partyName || body.partyName ? (d.partyName || body.partyName).trim() : null),
+          (d.supplierAddress || body.supplierAddress ? (d.supplierAddress || body.supplierAddress).trim() : null),
+          (d.gstNumber || body.gstNumber ? (d.gstNumber || body.gstNumber).trim().toUpperCase() : null),
+          partyInvoiceNum,
+          supInvDate,
+          (d.vehicleNumber || body.vehicleNumber ? (d.vehicleNumber || body.vehicleNumber).trim().toUpperCase() : null),
+          (d.remarks || body.remarks ? (d.remarks || body.remarks).trim() : null),
+          (d.receivedItemName || null),
+          (d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null),
+          shippingCharges,
+          req.user.id
+        ]
+      );
+
+      createdPurchases.push(rows[0]);
+    }
+
+    await client.query('COMMIT');
+    res.status(201).json({
+      message: `Inward material recorded successfully (${createdPurchases.length} items)`,
+      purchases: createdPurchases,
+      purchase: createdPurchases[0]
+    });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('Error creating purchase:', err);
+    res.status(500).json({ error: 'Failed to record purchase' });
+  } finally {
+    client.release();
+  }
+});
 app.get('/api/purchase-orders/:id/sales', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;

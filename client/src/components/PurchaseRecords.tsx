@@ -353,6 +353,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [selectedMultiSaleItemIds, setSelectedMultiSaleItemIds] = useState<string[]>([]);
   const [multiSaleItemEdits, setMultiSaleItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number }>>({});
 
+  // Multi-Item Purchases Selection & Inward Table State
+  const [selectedMultiPurchaseItemIds, setSelectedMultiPurchaseItemIds] = useState<string[]>([]);
+  const [multiPurchaseItemEdits, setMultiPurchaseItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number; receivedItemName?: string; receivedPartNumber?: string }>>({});
+  const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<string[]>([]);
+
   // Helper to fetch next continuous invoice number
   const fetchNextInvoiceNumber = async () => {
     try {
@@ -672,19 +677,74 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   };
 
-  // --- ACTIONS: ADD INWARD PURCHASE (DOUBLE SUBMISSION PROTECTED) ---
+  // --- ACTIONS: ADD INWARD PURCHASE (DOUBLE SUBMISSION PROTECTED - MULTI-ITEM & SINGLE ITEM SUPPORT) ---
   const handleAddPurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    // 1. Gather chosen items from multi-selection or single-item select
+    const chosenItems = (selectedMultiPurchaseItemIds.length > 0 ? selectedMultiPurchaseItemIds : (purchaseForm.itemId ? [purchaseForm.itemId] : []))
+      .map(id => {
+        const itm = allItemsForSelection.find(i => i.id === id);
+        const edit = multiPurchaseItemEdits[id] || {
+          qty: itm ? Math.max(0, (itm.qty || 0) - (itm.purchasedQty || 0)) : (purchaseForm.qty || 0),
+          rate: itm?.rate ?? purchaseForm.rate ?? 0,
+          cgstPercent: itm?.cgstPercent !== undefined && itm?.cgstPercent !== null ? itm.cgstPercent : (purchaseForm.cgstPercent || 0),
+          sgstPercent: itm?.sgstPercent !== undefined && itm?.sgstPercent !== null ? itm.sgstPercent : (purchaseForm.sgstPercent || 0),
+          igstPercent: itm?.igstPercent !== undefined && itm?.igstPercent !== null ? itm.igstPercent : (purchaseForm.igstPercent || 0),
+          receivedItemName: purchaseForm.receivedItemName || itm?.itemName || '',
+          receivedPartNumber: purchaseForm.receivedPartNumber || itm?.partNumber || ''
+        };
+        const maxAllowed = itm ? Math.max(0, (itm.qty || 0) - (itm.purchasedQty || 0)) : (purchaseForm.qty || 0);
+        return {
+          purchaseOrderItemId: id,
+          qty: Number(edit.qty || 0),
+          rate: Number(edit.rate || 0),
+          cgstPercent: Number(edit.cgstPercent ?? 0),
+          sgstPercent: Number(edit.sgstPercent ?? 0),
+          igstPercent: Number(edit.igstPercent ?? 0),
+          receivedItemName: edit.receivedItemName || itm?.itemName || '',
+          receivedPartNumber: edit.receivedPartNumber || itm?.partNumber || '',
+          itemName: itm?.itemName || '',
+          partNumber: itm?.partNumber || '',
+          maxAllowed
+        };
+      })
+      .filter(item => item.qty > 0);
+
+    if (chosenItems.length === 0) {
+      showToast('Please select at least one PO item with Inward Quantity greater than 0.', 'error');
+      return;
+    }
+
+    // Validate quantities against PO ordered balance
+    for (const item of chosenItems) {
+      if (item.qty > item.maxAllowed) {
+        showToast(`Item '${item.partNumber || item.itemName}': Inward Qty (${item.qty}) exceeds Remaining Ordered Balance (${item.maxAllowed}).`, 'error');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const { itemId, ...rest } = purchaseForm;
-      await api.post('/purchases', {
-        purchaseOrderItemId: itemId,
-        ...rest
-      });
-      showToast('Inward material recorded successfully', 'success');
+      const payload = {
+        items: chosenItems.map(({ maxAllowed, itemName, partNumber, ...rest }) => rest),
+        date: purchaseForm.date || purchaseForm.supplierInvoiceDate || new Date().toISOString().split('T')[0],
+        partyName: purchaseForm.partyName || '',
+        supplierAddress: purchaseForm.supplierAddress || '',
+        gstNumber: purchaseForm.gstNumber || '',
+        partyInvoiceNumber: purchaseForm.partyInvoiceNumber || '',
+        supplierInvoiceDate: purchaseForm.supplierInvoiceDate || purchaseForm.date || '',
+        vehicleNumber: purchaseForm.vehicleNumber || '',
+        remarks: purchaseForm.remarks || '',
+        shippingCharges: Number(purchaseForm.shippingCharges || 0)
+      };
+
+      await api.post('/purchases', payload);
+      showToast(`Inward material receipt '${purchaseForm.partyInvoiceNumber || 'PO Inward'}' recorded successfully with ${chosenItems.length} item(s)!`, 'success');
       setShowAddPurchase(false);
+      setSelectedMultiPurchaseItemIds([]);
+      setMultiPurchaseItemEdits({});
       setPurchaseForm({
         itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
@@ -1030,6 +1090,159 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     });
     if (chosenSales.length > 0) {
       setPreviewSaleInvoice(chosenSales.length === 1 ? chosenSales[0] : chosenSales);
+    }
+  };
+
+  // Open Inward Material Receipt with ALL items of that party invoice (without 20-item page limit)
+  const handleOpenInwardReceipt = async (pur: any) => {
+    const invNum = pur.partyInvoiceNumber;
+    if (invNum && invNum !== '-') {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          const itemsWithPo = res.data.items.map((p: any) => {
+            const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
+            return {
+              ...p,
+              type: 'INWARD',
+              invoiceType: 'INWARD',
+              purchaseOrder: p.purchaseOrder || selectedPo,
+              purchaseOrderItem: p.purchaseOrderItem || matchedPoItem,
+              itemName: p.receivedItemName || p.purchaseOrderItem?.itemName || p.itemName || matchedPoItem?.itemName || 'ITEM',
+              specifications: p.purchaseOrderItem?.specifications || p.specifications || matchedPoItem?.specifications || p.description || '',
+              partNumber: p.receivedPartNumber || p.purchaseOrderItem?.partNumber || p.partNumber || matchedPoItem?.partNumber || '',
+              kpclCode: p.purchaseOrderItem?.kpclCode || p.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: p.purchaseOrderItem?.unit || p.unit || matchedPoItem?.unit || "No's",
+              partyAddress: p.partyAddress || p.supplierAddress || pur.supplierAddress || '',
+              partyName: p.partyName || pur.partyName || 'Supplier',
+              gstNumber: p.gstNumber || pur.gstNumber || '',
+              companyGstNumber: p.companyGstNumber || pur.companyGstNumber || '29DWKPP3582H1ZV',
+              divisionName: p.divisionName || selectedPo?.division?.name || ''
+            };
+          });
+          setPreviewInwardReceipt(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to fetch complete inward invoice items, attempting PO purchases fallback:', err);
+      }
+
+      // Secondary fallback: fetch all purchases matching this partyInvoiceNumber from PO
+      try {
+        const res = await api.get(`/purchase-orders/${selectedPo.id}/purchases?partyInvoiceNumber=${encodeURIComponent(invNum)}&limit=5000`);
+        if (res.data?.purchases && res.data.purchases.length > 0) {
+          const itemsWithPo = res.data.purchases.map((p: any) => {
+            const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
+            return {
+              ...p,
+              type: 'INWARD',
+              invoiceType: 'INWARD',
+              purchaseOrder: p.purchaseOrder || selectedPo,
+              purchaseOrderItem: p.purchaseOrderItem || matchedPoItem,
+              itemName: p.receivedItemName || p.purchaseOrderItem?.itemName || p.itemName || matchedPoItem?.itemName || 'ITEM',
+              specifications: p.purchaseOrderItem?.specifications || p.specifications || matchedPoItem?.specifications || p.description || '',
+              partNumber: p.receivedPartNumber || p.purchaseOrderItem?.partNumber || p.partNumber || matchedPoItem?.partNumber || '',
+              kpclCode: p.purchaseOrderItem?.kpclCode || p.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: p.purchaseOrderItem?.unit || p.unit || matchedPoItem?.unit || "No's",
+              partyAddress: p.partyAddress || p.supplierAddress || pur.supplierAddress || '',
+              partyName: p.partyName || pur.partyName || 'Supplier',
+              gstNumber: p.gstNumber || pur.gstNumber || '',
+              companyGstNumber: p.companyGstNumber || pur.companyGstNumber || '29DWKPP3582H1ZV',
+              divisionName: p.divisionName || selectedPo?.division?.name || ''
+            };
+          });
+          setPreviewInwardReceipt(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+          return;
+        }
+      } catch (e) {
+        console.error('Secondary fallback for inward failed:', e);
+      }
+    }
+
+    const sameInvoicePurchases = invNum ? poPurchases.filter(p => p.partyInvoiceNumber === invNum) : [pur];
+    const itemsWithPo = sameInvoicePurchases.map(p => {
+      const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
+      return {
+        ...p,
+        type: 'INWARD',
+        invoiceType: 'INWARD',
+        purchaseOrder: selectedPo,
+        purchaseOrderItem: p.purchaseOrderItem || matchedPoItem,
+        itemName: p.receivedItemName || p.purchaseOrderItem?.itemName || p.itemName || matchedPoItem?.itemName || 'ITEM',
+        specifications: p.purchaseOrderItem?.specifications || p.specifications || matchedPoItem?.specifications || p.description || '',
+        partNumber: p.receivedPartNumber || p.purchaseOrderItem?.partNumber || p.partNumber || matchedPoItem?.partNumber || '',
+        kpclCode: p.purchaseOrderItem?.kpclCode || p.kpclCode || matchedPoItem?.kpclCode || '',
+        unit: p.purchaseOrderItem?.unit || p.unit || matchedPoItem?.unit || "No's",
+        partyAddress: p.partyAddress || p.supplierAddress || pur.supplierAddress || '',
+        partyName: p.partyName || pur.partyName || 'Supplier',
+        gstNumber: p.gstNumber || pur.gstNumber || '',
+        companyGstNumber: p.companyGstNumber || pur.companyGstNumber || '29DWKPP3582H1ZV',
+        divisionName: p.divisionName || selectedPo?.division?.name || ''
+      };
+    });
+    setPreviewInwardReceipt(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+  };
+
+  const handleOpenSelectedPurchasesReceipt = async () => {
+    if (selectedPurchaseIds.length === 0) return;
+    const selectedPurchasesList = poPurchases.filter(p => selectedPurchaseIds.includes(p.id));
+    const firstPur = selectedPurchasesList[0];
+
+    // If all selected items belong to the same invoice number, fetch all items of that invoice directly
+    if (firstPur?.partyInvoiceNumber && firstPur.partyInvoiceNumber !== '-') {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(firstPur.partyInvoiceNumber)}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          const itemsWithPo = res.data.items.map((p: any) => {
+            const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
+            return {
+              ...p,
+              type: 'INWARD',
+              invoiceType: 'INWARD',
+              purchaseOrder: p.purchaseOrder || selectedPo,
+              purchaseOrderItem: p.purchaseOrderItem || matchedPoItem,
+              itemName: p.receivedItemName || p.purchaseOrderItem?.itemName || p.itemName || matchedPoItem?.itemName || 'ITEM',
+              specifications: p.purchaseOrderItem?.specifications || p.specifications || matchedPoItem?.specifications || p.description || '',
+              partNumber: p.receivedPartNumber || p.purchaseOrderItem?.partNumber || p.partNumber || matchedPoItem?.partNumber || '',
+              kpclCode: p.purchaseOrderItem?.kpclCode || p.kpclCode || matchedPoItem?.kpclCode || '',
+              unit: p.purchaseOrderItem?.unit || p.unit || matchedPoItem?.unit || "No's",
+              partyAddress: p.partyAddress || p.supplierAddress || firstPur.supplierAddress || '',
+              partyName: p.partyName || firstPur.partyName || 'Supplier',
+              gstNumber: p.gstNumber || firstPur.gstNumber || '',
+              companyGstNumber: p.companyGstNumber || firstPur.companyGstNumber || '29DWKPP3582H1ZV',
+              divisionName: p.divisionName || selectedPo?.division?.name || ''
+            };
+          });
+          setPreviewInwardReceipt(itemsWithPo.length === 1 ? itemsWithPo[0] : itemsWithPo);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to fetch complete inward invoice items:', err);
+      }
+    }
+
+    const chosenPurchases = selectedPurchasesList.map(p => {
+      const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
+      return {
+        ...p,
+        type: 'INWARD',
+        invoiceType: 'INWARD',
+        purchaseOrder: selectedPo,
+        purchaseOrderItem: p.purchaseOrderItem || matchedPoItem,
+        itemName: p.receivedItemName || p.purchaseOrderItem?.itemName || p.itemName || matchedPoItem?.itemName || 'ITEM',
+        specifications: p.purchaseOrderItem?.specifications || p.specifications || matchedPoItem?.specifications || p.description || '',
+        partNumber: p.receivedPartNumber || p.purchaseOrderItem?.partNumber || p.partNumber || matchedPoItem?.partNumber || '',
+        kpclCode: p.purchaseOrderItem?.kpclCode || p.kpclCode || matchedPoItem?.kpclCode || '',
+        unit: p.purchaseOrderItem?.unit || p.unit || matchedPoItem?.unit || "No's",
+        partyAddress: p.partyAddress || p.supplierAddress || firstPur?.supplierAddress || '',
+        partyName: p.partyName || firstPur?.partyName || 'Supplier',
+        gstNumber: p.gstNumber || firstPur?.gstNumber || '',
+        companyGstNumber: p.companyGstNumber || firstPur?.companyGstNumber || '29DWKPP3582H1ZV',
+        divisionName: p.divisionName || selectedPo?.division?.name || ''
+      };
+    });
+    if (chosenPurchases.length > 0) {
+      setPreviewInwardReceipt(chosenPurchases.length === 1 ? chosenPurchases[0] : chosenPurchases);
     }
   };
 
@@ -2840,6 +3053,42 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </button>
                     </div>
 
+                    {selectedPurchaseIds.length > 0 && (
+                      <button
+                        onClick={handleOpenSelectedPurchasesReceipt}
+                        className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-md animate-pulse"
+                      >
+                        <Receipt className="w-3.5 h-3.5" /> View & Download Inward Receipt ({selectedPurchaseIds.length} Selected)
+                      </button>
+                    )}
+                    {/* View Mode Toggle: Fit Screen vs Wide Scroll */}
+                    <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
+                      <button
+                        type="button"
+                        onClick={() => setPurchasesTableViewMode('fit')}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                          purchasesTableViewMode === 'fit'
+                            ? 'bg-[#1e3a8a] text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Fit all columns on screen without horizontal scroll"
+                      >
+                        Fit Screen
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPurchasesTableViewMode('scroll')}
+                        className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
+                          purchasesTableViewMode === 'scroll'
+                            ? 'bg-[#1e3a8a] text-white shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                        title="Expanded scrollable ledger view"
+                      >
+                        Wide View
+                      </button>
+                    </div>
+
                     <button 
                       onClick={() => exportToExcel(poPurchases, `PO_${selectedPo.poNumber}_Purchases`)}
                       className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-semibold"
@@ -2848,7 +3097,40 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </button>
                     {isManagerOrOwner && (
                       <button 
-                        onClick={() => setShowAddPurchase(!showAddPurchase)}
+                        onClick={() => {
+                          const nextOpen = !showAddPurchase;
+                          setShowAddPurchase(nextOpen);
+                          if (nextOpen) {
+                            // Pre-select all items that have remaining ordered balance to inward
+                            const pendingItems = allItemsForSelection.filter(i => ((i.qty || 0) - (i.purchasedQty || 0)) > 0);
+                            setSelectedMultiPurchaseItemIds(pendingItems.map(i => i.id));
+                            const initialEdits: Record<string, any> = {};
+                            pendingItems.forEach(i => {
+                              const remain = Math.max(0, (i.qty || 0) - (i.purchasedQty || 0));
+                              initialEdits[i.id] = {
+                                qty: remain,
+                                rate: i.rate || 0,
+                                cgstPercent: i.cgstPercent !== undefined && i.cgstPercent !== null ? Number(i.cgstPercent) : 0,
+                                sgstPercent: i.sgstPercent !== undefined && i.sgstPercent !== null ? Number(i.sgstPercent) : 0,
+                                igstPercent: i.igstPercent !== undefined && i.igstPercent !== null ? Number(i.igstPercent) : 0,
+                                receivedItemName: i.itemName || '',
+                                receivedPartNumber: i.partNumber || ''
+                              };
+                            });
+                            setMultiPurchaseItemEdits(initialEdits);
+                            setPurchaseForm(prev => ({
+                              ...prev,
+                              date: prev.date || new Date().toISOString().split('T')[0],
+                              partyName: prev.partyName || '',
+                              supplierAddress: prev.supplierAddress || '',
+                              gstNumber: prev.gstNumber || '',
+                              partyInvoiceNumber: prev.partyInvoiceNumber || '',
+                              supplierInvoiceDate: prev.supplierInvoiceDate || new Date().toISOString().split('T')[0],
+                              vehicleNumber: prev.vehicleNumber || '',
+                              remarks: prev.remarks || ''
+                            }));
+                          }
+                        }}
                         className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 rounded-lg text-xs font-bold shadow-sm"
                       >
                         {showAddPurchase ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />} {showAddPurchase ? 'Cancel' : '+ Inward Purchase'}
@@ -2857,206 +3139,454 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </div>
                 </div>
 
-                {/* INWARD PURCHASE FORM */}
+                {/* INWARD PURCHASE FORM WITH MULTI-ITEM EXCEL GRID */}
                 {showAddPurchase && (
-                  <form onSubmit={handleAddPurchase} className="bg-emerald-50/40 rounded-2xl border border-emerald-200 animate-fadeIn shadow-lg overflow-visible">
-                    <div className="font-bold text-sm text-emerald-800 border-b border-emerald-200 p-4 bg-emerald-100/60 rounded-t-2xl">
-                      Record Inward Material Receipt
+                  <form onSubmit={handleAddPurchase} className="bg-emerald-50/40 rounded-2xl border border-emerald-200 animate-fadeIn shadow-lg overflow-visible space-y-4">
+                    <div className="font-bold text-sm text-emerald-900 border-b border-emerald-200 p-4 bg-emerald-100/70 rounded-t-2xl flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="w-4 h-4 text-emerald-800" />
+                        <span>Record Inward Material Receipt (Multi-Item Delivery Grid)</span>
+                      </div>
+                      <span className="text-[11px] font-normal text-emerald-800 bg-emerald-200/60 px-2.5 py-1 rounded-full font-mono">
+                        PO Items: {allItemsForSelection.length} (Pending Inward: {allItemsForSelection.filter(i => ((i.qty || 0) - (i.purchasedQty || 0)) > 0).length})
+                      </span>
                     </div>
-                    <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-3.5">
-                      <div className="col-span-2">
+
+                    {/* SUPPLIER & INVOICE METADATA */}
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-4 gap-3 bg-white/60 mx-4 rounded-xl border border-emerald-100 shadow-sm">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Supplier Name *</label>
+                        <input 
+                          type="text" 
+                          required
+                          placeholder="e.g. Acme Steels & Hardware" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.partyName || ''} 
+                          onChange={e => handlePurchaseChange('partyName', e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier GSTIN No</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. 29ABCDE1234F1Z5" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.gstNumber || ''} 
+                          onChange={e => handlePurchaseChange('gstNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div>
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                          Select Item / Part Number * <span className="font-normal text-slate-500">({allItemsForSelection.length} items loaded)</span>
+                          Supplier Invoice / DC No * <span className="text-[10px] text-slate-400 font-normal">(Manual Entry)</span>
                         </label>
-                      <SearchableItemSelect
-                        items={allItemsForSelection}
-                        selectedItemId={purchaseForm.itemId}
-                        placeholder="🔍 Type Part Number, Item Name, or KPCL Code to search..."
-                        type="inward"
-                        onSelect={(item) => {
-                          if (item) {
-                            setPurchaseForm(prev => ({
-                              ...prev,
-                              itemId: item.id,
-                              rate: item.rate !== undefined && item.rate !== null ? Number(item.rate) : 0,
-                              receivedItemName: item.itemName || '',
-                              receivedPartNumber: item.partNumber || '',
-                              cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
-                              sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
-                              igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0
-                            }));
-                          } else {
-                            handlePurchaseChange('itemId', '');
-                          }
-                        }}
-                      />
+                        <input 
+                          type="text" 
+                          required
+                          placeholder="e.g. INV-9821 / DC-402" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900 focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.partyInvoiceNumber || ''} 
+                          onChange={e => handlePurchaseChange('partyInvoiceNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
+                        <DatePickerDMY
+                          value={purchaseForm.supplierInvoiceDate || ''}
+                          onChange={val => handlePurchaseChange('supplierInvoiceDate', val)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Inward Arrival Date *</label>
+                        <DatePickerDMY
+                          required
+                          value={purchaseForm.date}
+                          onChange={val => handlePurchaseChange('date', val)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle / Lorry No</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. KA-34-A-1234" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.vehicleNumber || ''} 
+                          onChange={e => handlePurchaseChange('vehicleNumber', e.target.value.toUpperCase())} 
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Address</label>
+                        <input 
+                          type="text" 
+                          placeholder="e.g. Industrial Area, Ballari" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.supplierAddress || ''} 
+                          onChange={e => handlePurchaseChange('supplierAddress', e.target.value)} 
+                        />
+                      </div>
+
+                      <div className="md:col-span-3">
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
+                        <input 
+                          type="text" 
+                          placeholder="Delivery notes, driver info, inspection remarks..." 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.remarks || ''} 
+                          onChange={e => handlePurchaseChange('remarks', e.target.value)} 
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping Charges (₹)</label>
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          placeholder="0.00" 
+                          className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold focus:ring-1 focus:ring-emerald-500" 
+                          value={purchaseForm.shippingCharges || ''} 
+                          onChange={e => handlePurchaseChange('shippingCharges', e.target.value === '' ? 0 : Number(e.target.value))} 
+                        />
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Inward Date *</label>
-                      <DatePickerDMY
-                        required
-                        value={purchaseForm.date}
-                        onChange={val => handlePurchaseChange('date', val)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantity Received *</label>
-                      <input required type="number" min="0.01" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={purchaseForm.qty || ''} onChange={e => handlePurchaseChange('qty', Number(e.target.value))} />
-                    </div>
-
-                    {/* PHYSICAL GOODS ARRIVAL NAME & PART NUMBER (EDITABLE IF DIFFERENT FROM PO) */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Received Item Name <span className="text-[10px] text-slate-400 font-normal">(If different on box)</span>
-                      </label>
-                      <input 
-                        type="text" 
-                        placeholder="Item name on vendor invoice or package" 
-                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold text-slate-900 focus:ring-1 focus:ring-emerald-600 outline-none" 
-                        value={purchaseForm.receivedItemName || ''} 
-                        onChange={e => handlePurchaseChange('receivedItemName', e.target.value)} 
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                        Received Part Number <span className="text-[10px] text-slate-400 font-normal">(If different on box)</span>
-                      </label>
-                      <input 
-                        type="text" 
-                        placeholder="Part number on vendor invoice or package" 
-                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-slate-900 focus:ring-1 focus:ring-emerald-600 outline-none" 
-                        value={purchaseForm.receivedPartNumber || ''} 
-                        onChange={e => handlePurchaseChange('receivedPartNumber', e.target.value.toUpperCase())} 
-                      />
-                    </div>
-
-                    {/* SUPPLIER & INVOICE DETAILS SECTION */}
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Supplier Name</label>
-                      <input type="text" placeholder="e.g. Acme Steels & Hardware" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold" value={purchaseForm.partyName || ''} onChange={e => handlePurchaseChange('partyName', e.target.value)} />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Address</label>
-                      <input type="text" placeholder="e.g. Industrial Area, Ballari" className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.supplierAddress || ''} onChange={e => handlePurchaseChange('supplierAddress', e.target.value)} />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier GSTIN No</label>
-                      <input type="text" placeholder="e.g. 29ABCDE1234F1Z5" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase" value={purchaseForm.gstNumber || ''} onChange={e => handlePurchaseChange('gstNumber', e.target.value.toUpperCase())} />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Invoice / DC No</label>
-                      <input type="text" placeholder="e.g. INV-9821 / DC-402" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold text-blue-900" value={purchaseForm.partyInvoiceNumber || ''} onChange={e => handlePurchaseChange('partyInvoiceNumber', e.target.value.toUpperCase())} />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
-                      <DatePickerDMY
-                        value={purchaseForm.supplierInvoiceDate || ''}
-                        onChange={val => handlePurchaseChange('supplierInvoiceDate', val)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle / Lorry No</label>
-                      <input type="text" placeholder="e.g. KA-34-A-1234" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono uppercase font-bold" value={purchaseForm.vehicleNumber || ''} onChange={e => handlePurchaseChange('vehicleNumber', e.target.value.toUpperCase())} />
-                    </div>
-
-                    <div className="col-span-2">
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks</label>
-                      <input type="text" placeholder="Delivery notes, driver info, inspection remarks..." className="w-full p-2 bg-white border border-slate-300 rounded text-xs" value={purchaseForm.remarks || ''} onChange={e => handlePurchaseChange('remarks', e.target.value)} />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Purchase Rate (₹) *</label>
-                      <input required type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono" value={purchaseForm.rate || ''} onChange={e => handlePurchaseChange('rate', Number(e.target.value))} />
-                      {purchaseForm.rate > 0 && (
-                        <div className="text-[10px] font-bold text-emerald-600 font-mono mt-0.5">
-                          Format: {formatCurrency(purchaseForm.rate)}
+                    {/* EXCEL GRID: INWARD PO ITEMS SELECTION & INLINE EDITING */}
+                    <div className="px-4">
+                      <div className="bg-white border border-emerald-300 rounded-xl shadow-sm overflow-hidden">
+                        <div className="p-2.5 bg-emerald-100/50 border-b border-emerald-200 text-xs font-bold text-emerald-900 flex justify-between items-center">
+                          <span>Select PO Items to Inward (Change Inward Qty / Rate / Tax as needed):</span>
+                          <span className="font-mono text-[11px] text-slate-600">
+                            {selectedMultiPurchaseItemIds.length} of {allItemsForSelection.length} Items Selected
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST %</label>
-                      <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={purchaseForm.cgstPercent ?? ''} onChange={e => handlePurchaseChange('cgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                      {(() => {
-                        const b = calculateBreakdown(purchaseForm.qty, purchaseForm.rate, purchaseForm.cgstPercent, purchaseForm.sgstPercent, purchaseForm.igstPercent);
-                        return (
-                          <div className="text-[10px] font-bold text-emerald-700 font-mono mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            CGST {b.cgstPercent}%: {formatCurrency(b.cgstAmount)}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST %</label>
-                      <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={purchaseForm.sgstPercent ?? ''} onChange={e => handlePurchaseChange('sgstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                      {(() => {
-                        const b = calculateBreakdown(purchaseForm.qty, purchaseForm.rate, purchaseForm.cgstPercent, purchaseForm.sgstPercent, purchaseForm.igstPercent);
-                        return (
-                          <div className="text-[10px] font-bold text-emerald-700 font-mono mt-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            SGST {b.sgstPercent}%: {formatCurrency(b.sgstAmount)}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST %</label>
-                      <input type="number" step="0.01" className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" value={purchaseForm.igstPercent ?? ''} onChange={e => handlePurchaseChange('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))} />
-                      {(() => {
-                        const b = calculateBreakdown(purchaseForm.qty, purchaseForm.rate, purchaseForm.cgstPercent, purchaseForm.sgstPercent, purchaseForm.igstPercent);
-                        return (
-                          <div className="text-[10px] font-bold text-indigo-700 font-mono mt-1 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                            IGST {b.igstPercent}%: {formatCurrency(b.igstAmount)}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping Charges (₹)</label>
-                      <input 
-                        type="number" 
-                        step="0.01" 
-                        placeholder="0.00" 
-                        className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-mono font-bold" 
-                        value={purchaseForm.shippingCharges || ''} 
-                        onChange={e => handlePurchaseChange('shippingCharges', e.target.value === '' ? 0 : Number(e.target.value))} 
-                      />
+
+                        <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
+                          <table className="excel-table w-full text-xs text-left">
+                            <thead className="sticky top-0 z-10 shadow-sm bg-sky-950 text-sky-200">
+                              <tr>
+                                <th className="text-center w-10 px-2 py-2">
+                                  {(() => {
+                                    const isAllSelected = allItemsForSelection.length > 0 && selectedMultiPurchaseItemIds.length === allItemsForSelection.length;
+                                    return (
+                                      <input 
+                                        type="checkbox" 
+                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
+                                        checked={isAllSelected}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedMultiPurchaseItemIds(allItemsForSelection.map(i => i.id));
+                                          } else {
+                                            setSelectedMultiPurchaseItemIds([]);
+                                          }
+                                        }}
+                                      />
+                                    );
+                                  })()}
+                                </th>
+                                <th className="text-center w-12 px-2 py-2">SL NO</th>
+                                <th className="px-2 py-2">KPCL Code</th>
+                                <th className="px-2 py-2 min-w-[140px]">PO Part Number</th>
+                                <th className="px-2 py-2 min-w-[180px]">PO Item Name & Specs</th>
+                                <th className="text-center px-2 py-2">Unit</th>
+                                <th className="text-center px-2 py-2 bg-slate-900">Ordered Qty</th>
+                                <th className="text-center px-2 py-2 bg-blue-950">Already Inwarded</th>
+                                <th className="text-center px-2 py-2 bg-emerald-900 text-emerald-100 font-bold">Balance Allowed</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[100px] text-center">Inward Qty *</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[110px] text-center">Inward Rate (₹) *</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[70px] text-center whitespace-nowrap">CGST %</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[70px] text-center whitespace-nowrap">SGST %</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[70px] text-center whitespace-nowrap">IGST %</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[130px]">Received Part No (Display)</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[140px]">Received Item Name (Display)</th>
+                                <th className="px-2 py-2 text-right">Basic (₹)</th>
+                                <th className="px-2 py-2 text-right">Tax (₹)</th>
+                                <th className="px-2 py-2 text-right">Line Total (₹)</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {allItemsForSelection.length === 0 ? (
+                                <tr>
+                                  <td colSpan={19} className="p-8 text-center text-slate-400 font-semibold bg-white">
+                                    No items found in this Purchase Order. Please add items to PO first.
+                                  </td>
+                                </tr>
+                              ) : (
+                                allItemsForSelection.map((item, idx) => {
+                                  const isSelected = selectedMultiPurchaseItemIds.includes(item.id);
+                                  const balance = Math.max(0, (item.qty || 0) - (item.purchasedQty || 0));
+                                  const edit = multiPurchaseItemEdits[item.id] || {
+                                    qty: balance,
+                                    rate: item.rate || 0,
+                                    cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                                    sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                                    igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
+                                    receivedItemName: item.itemName || '',
+                                    receivedPartNumber: item.partNumber || ''
+                                  };
+
+                                  const curQty = Number(edit.qty || 0);
+                                  const curRate = Number(edit.rate || 0);
+                                  const curCgst = Number(edit.cgstPercent || 0);
+                                  const curSgst = Number(edit.sgstPercent || 0);
+                                  const curIgst = Number(edit.igstPercent || 0);
+
+                                  const basic = Math.round((curQty * curRate + Number.EPSILON) * 100) / 100;
+                                  const tax = Math.round((basic * ((curCgst + curSgst + curIgst) / 100) + Number.EPSILON) * 100) / 100;
+                                  const lineTotal = Math.round((basic + tax + Number.EPSILON) * 100) / 100;
+                                  const isOverInward = curQty > balance;
+
+                                  return (
+                                    <tr 
+                                      key={item.id} 
+                                      className={`border-b transition-colors ${
+                                        isSelected ? 'bg-emerald-50/60 font-semibold text-slate-900' : 'bg-white text-slate-600 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <td className="text-center px-2 py-2">
+                                        <input 
+                                          type="checkbox" 
+                                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
+                                          checked={isSelected}
+                                          onChange={(e) => {
+                                            if (e.target.checked) {
+                                              setSelectedMultiPurchaseItemIds(prev => [...prev, item.id]);
+                                              if (!multiPurchaseItemEdits[item.id]) {
+                                                setMultiPurchaseItemEdits(prev => ({
+                                                  ...prev,
+                                                  [item.id]: {
+                                                    qty: balance,
+                                                    rate: item.rate || 0,
+                                                    cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                                                    sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                                                    igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
+                                                    receivedItemName: item.itemName || '',
+                                                    receivedPartNumber: item.partNumber || ''
+                                                  }
+                                                }));
+                                              }
+                                            } else {
+                                              setSelectedMultiPurchaseItemIds(prev => prev.filter(id => id !== item.id));
+                                            }
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="text-center font-mono font-bold text-slate-600 px-2 py-2">{idx + 1}</td>
+                                      <td className="font-mono text-slate-600 px-2 py-2">{item.kpclCode || '-'}</td>
+                                      <td className="font-mono font-bold text-slate-900 px-2 py-2">{item.partNumber || '-'}</td>
+                                      <td className="px-2 py-2 max-w-[220px]">
+                                        <div className="font-bold text-slate-900 truncate">{item.itemName || '-'}</div>
+                                        {item.specifications && (
+                                          <div className="text-[10.5px] text-slate-500 truncate font-normal">{item.specifications}</div>
+                                        )}
+                                      </td>
+                                      <td className="text-center font-mono px-2 py-2">{item.unit || "No's"}</td>
+                                      <td className="text-center font-mono font-semibold px-2 py-2">{item.qty || 0}</td>
+                                      <td className="text-center font-mono text-blue-800 px-2 py-2">{item.purchasedQty || 0}</td>
+                                      <td className="text-center font-mono font-bold text-emerald-800 bg-emerald-100/50 px-2 py-2">
+                                        {balance}
+                                      </td>
+                                      
+                                      {/* Inward Qty Editable */}
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          className={`w-full p-1.5 border rounded text-xs font-mono font-bold text-center outline-none ${
+                                            isOverInward 
+                                              ? 'border-rose-500 bg-rose-50 text-rose-800' 
+                                              : 'border-slate-300 bg-white text-emerald-950 focus:border-emerald-500'
+                                          }`}
+                                          value={edit.qty ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, qty: val }
+                                            }));
+                                          }}
+                                        />
+                                        {isOverInward && (
+                                          <div className="text-[9px] text-rose-600 font-bold text-center mt-0.5">Exceeds PO ({balance})</div>
+                                        )}
+                                      </td>
+
+                                      {/* Inward Rate Editable */}
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="number"
+                                          step="0.01"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono font-bold text-right outline-none bg-white focus:border-emerald-500"
+                                          value={edit.rate ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, rate: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+
+                                      {/* Tax Percentages */}
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="number"
+                                          step="0.01"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500"
+                                          value={edit.cgstPercent ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, cgstPercent: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="number"
+                                          step="0.01"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500"
+                                          value={edit.sgstPercent ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, sgstPercent: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="number"
+                                          step="0.01"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500"
+                                          value={edit.igstPercent ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, igstPercent: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+
+                                      {/* Received Part No Override */}
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="text"
+                                          placeholder={item.partNumber || 'Part No on box'}
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono uppercase outline-none bg-white focus:border-emerald-500"
+                                          value={edit.receivedPartNumber ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value.toUpperCase();
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, receivedPartNumber: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+
+                                      {/* Received Item Name Override */}
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="text"
+                                          placeholder={item.itemName || 'Item name on box'}
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs outline-none bg-white focus:border-emerald-500"
+                                          value={edit.receivedItemName ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, receivedItemName: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+
+                                      <td className="px-2 py-2 text-right font-mono font-medium">{formatCurrency(basic)}</td>
+                                      <td className="px-2 py-2 text-right font-mono text-emerald-700">{formatCurrency(tax)}</td>
+                                      <td className="px-2 py-2 text-right font-mono font-bold text-slate-900">{formatCurrency(lineTotal)}</td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </div>
 
-                    </div>
-
-                    <div className="bg-white p-3.5 border-t border-emerald-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                    {/* INWARD FOOTER CALCULATION & SUBMIT */}
+                    <div className="bg-white p-4 border-t border-emerald-200 rounded-b-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mx-4 mb-4 shadow-sm">
                       {(() => {
-                        const b = calculateBreakdown(purchaseForm.qty, purchaseForm.rate, purchaseForm.cgstPercent, purchaseForm.sgstPercent, purchaseForm.igstPercent);
+                        let totalBasic = 0;
+                        let totalTax = 0;
+                        selectedMultiPurchaseItemIds.forEach(id => {
+                          const item = allItemsForSelection.find(i => i.id === id);
+                          const edit = multiPurchaseItemEdits[id] || {
+                            qty: Math.max(0, (item?.qty || 0) - (item?.purchasedQty || 0)),
+                            rate: item?.rate || 0,
+                            cgstPercent: item?.cgstPercent !== undefined && item?.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                            sgstPercent: item?.sgstPercent !== undefined && item?.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                            igstPercent: item?.igstPercent !== undefined && item?.igstPercent !== null ? Number(item.igstPercent) : 0
+                          };
+                          const q = Number(edit.qty || 0);
+                          const r = Number(edit.rate || 0);
+                          const b = Math.round((q * r + Number.EPSILON) * 100) / 100;
+                          const t = Math.round((b * ((Number(edit.cgstPercent || 0) + Number(edit.sgstPercent || 0) + Number(edit.igstPercent || 0)) / 100) + Number.EPSILON) * 100) / 100;
+                          totalBasic += b;
+                          totalTax += t;
+                        });
                         const ship = Number(purchaseForm.shippingCharges || 0);
-                        const totalWithShip = b.totalAmount + ship;
+                        const grandTotal = Math.round((totalBasic + totalTax + ship + Number.EPSILON) * 100) / 100;
+
                         return (
                           <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-                            <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(b.basicAmount)}</strong></span>
-                            {b.cgstPercent > 0 && <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">CGST {b.cgstPercent}%: +{formatCurrency(b.cgstAmount)}</span>}
-                            {b.sgstPercent > 0 && <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">SGST {b.sgstPercent}%: +{formatCurrency(b.sgstAmount)}</span>}
-                            {b.igstPercent > 0 && <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 font-semibold">IGST {b.igstPercent}%: +{formatCurrency(b.igstAmount)}</span>}
-                            {b.cgstPercent === 0 && b.sgstPercent === 0 && b.igstPercent === 0 && (
-                              <span className="text-slate-500 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">Tax: 0% (₹0.00)</span>
-                            )}
+                            <span className="text-slate-600 font-bold">Selected Items: <strong className="text-emerald-800">{selectedMultiPurchaseItemIds.length}</strong></span>
+                            <span className="text-slate-600">Basic: <strong className="text-slate-900">{formatCurrency(totalBasic)}</strong></span>
+                            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">Total Tax: +{formatCurrency(totalTax)}</span>
                             {ship > 0 && <span className="text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-bold">Shipping: +{formatCurrency(ship)}</span>}
-                            <span className="text-sm font-black text-emerald-800 ml-2 bg-emerald-100/50 px-3 py-1 rounded-lg border border-emerald-300">
-                              Total Inward: {formatCurrency(totalWithShip)}
+                            <span className="text-sm font-black text-emerald-900 ml-2 bg-emerald-100 px-3.5 py-1.5 rounded-xl border border-emerald-300 shadow-sm">
+                              Grand Total: {formatCurrency(grandTotal)}
                             </span>
                           </div>
                         );
                       })()}
                       <div className="flex items-center gap-2 self-end md:self-auto">
-                        <button type="button" onClick={() => setShowAddPurchase(false)} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all">
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setShowAddPurchase(false);
+                            setSelectedMultiPurchaseItemIds([]);
+                            setMultiPurchaseItemEdits({});
+                          }} 
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-all"
+                        >
                           Cancel
                         </button>
-                        <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md">
-                          Save Inward Purchase
+                        <button 
+                          type="submit" 
+                          disabled={isSubmitting || selectedMultiPurchaseItemIds.length === 0}
+                          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md transition-all active:scale-95 cursor-pointer"
+                        >
+                          {isSubmitting ? 'Saving...' : `Save Inward Receipt (${selectedMultiPurchaseItemIds.length} Items)`}
                         </button>
                       </div>
                     </div>
@@ -3078,11 +3608,24 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const ship = Number(pur.shippingCharges || 0);
                       const total = basic + cgst + sgst + igst + ship;
                       const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
+                      const isSelected = selectedPurchaseIds.includes(pur.id);
 
                       return (
-                        <div key={pur.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+                        <div key={pur.id} className={`bg-white p-3.5 rounded-xl border shadow-sm space-y-2.5 transition-colors ${isSelected ? 'border-emerald-400 ring-2 ring-emerald-400/20 bg-emerald-50/20' : 'border-slate-200'}`}>
                           <div className="flex justify-between items-start border-b border-slate-100 pb-2">
                             <div className="flex items-center gap-2">
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedPurchaseIds(prev => [...prev, pur.id]);
+                                  } else {
+                                    setSelectedPurchaseIds(prev => prev.filter(id => id !== pur.id));
+                                  }
+                                }}
+                              />
                               <span className="w-6 h-6 rounded-full bg-blue-50 text-[#1e3a8a] font-mono font-bold text-xs flex items-center justify-center border border-blue-100">
                                 {serialNo}
                               </span>
@@ -3133,8 +3676,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             </div>
                             <div className="flex items-center gap-1.5">
                               <button
-                                onClick={() => setPreviewInwardReceipt({ ...pur, purchaseOrder: selectedPo, type: 'INWARD' })}
-                                className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
+                                onClick={() => handleOpenInwardReceipt(pur)}
+                                className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 cursor-pointer"
                                 title="View & Download Inward Material Receipt"
                               >
                                 <Receipt className="w-3.5 h-3.5" />
@@ -3161,13 +3704,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         remarks: pur.remarks || ''
                                       });
                                     }}
-                                    className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200"
+                                    className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
                                   >
                                     <Edit className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     onClick={() => handleDeletePurchase(pur.id)}
-                                    className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200"
+                                    className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
@@ -3186,6 +3729,25 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   <table className={`excel-table w-full text-left ${purchasesTableViewMode === 'fit' ? 'text-[11px]' : 'text-xs'}`}>
                     <thead className="sticky top-0 z-20 shadow-sm">
                       <tr>
+                        <th className="text-center w-8 bg-sky-950 text-sky-200 px-1 py-1.5">
+                          {(() => {
+                            const isAllSelected = poPurchases.length > 0 && selectedPurchaseIds.length === poPurchases.length;
+                            return (
+                              <input 
+                                type="checkbox" 
+                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5" 
+                                checked={isAllSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedPurchaseIds(poPurchases.map(p => p.id));
+                                  } else {
+                                    setSelectedPurchaseIds([]);
+                                  }
+                                }}
+                              />
+                            );
+                          })()}
+                        </th>
                         <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
                         <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
                         <th className="px-2 py-1.5 min-w-[130px]">Supplier Address</th>
@@ -3211,9 +3773,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     </thead>
                     <tbody>
                       {purchasesLoading ? (
-                        <tr><td colSpan={21} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
+                        <tr><td colSpan={22} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
                       ) : poPurchases.length === 0 ? (
-                        <tr><td colSpan={21} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
+                        <tr><td colSpan={22} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
                       ) : (
                         poPurchases.map((pur, idx) => {
                           const basic = (pur.qty || 0) * (pur.rate || 0);
@@ -3223,8 +3785,23 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           const ship = Number(pur.shippingCharges || 0);
                           const total = basic + cgst + sgst + igst + ship;
                           const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
+                          const isSelected = selectedPurchaseIds.includes(pur.id);
                           return (
-                            <tr key={pur.id} className="hover:bg-slate-50 border-b-2 border-slate-300">
+                            <tr key={pur.id} className={`hover:bg-slate-50 border-b-2 border-slate-300 transition-colors ${isSelected ? 'bg-emerald-50/40' : ''}`}>
+                              <td className="text-center px-1 py-1.5">
+                                <input 
+                                  type="checkbox" 
+                                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5" 
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedPurchaseIds(prev => [...prev, pur.id]);
+                                    } else {
+                                      setSelectedPurchaseIds(prev => prev.filter(id => id !== pur.id));
+                                    }
+                                  }}
+                                />
+                              </td>
                               <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
                               <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{pur.partyName || '-'}</td>
                               <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{pur.supplierAddress || '-'}</td>
@@ -3274,8 +3851,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
-                                    onClick={() => setPreviewInwardReceipt({ ...pur, purchaseOrder: selectedPo, type: 'INWARD' })}
-                                    className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
+                                    onClick={() => handleOpenInwardReceipt(pur)}
+                                    className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm cursor-pointer"
                                     title="View & Download Inward Material Receipt"
                                   >
                                     <Receipt className="w-3.5 h-3.5" />
@@ -3302,14 +3879,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                             remarks: pur.remarks || ''
                                           });
                                         }}
-                                        className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm"
+                                        className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm cursor-pointer"
                                         title="Edit Inward Purchase"
                                       >
                                         <Edit className="w-3.5 h-3.5" />
                                       </button>
                                       <button
                                         onClick={() => handleDeletePurchase(pur.id)}
-                                        className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm"
+                                        className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm cursor-pointer"
                                         title="Delete Inward Purchase"
                                       >
                                         <Trash2 className="w-3.5 h-3.5" />

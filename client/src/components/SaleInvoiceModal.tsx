@@ -166,11 +166,12 @@ export const SaleInvoiceModal: React.FC<{
     totalIgst = round2(totalIgst + ig);
     totalShipping = round2(totalShipping + ship);
 
-    const rawDiscription = s.itemName || itm.itemName || s.description || 'ITEM';
+    const rawDiscription = s.receivedItemName || s.itemName || itm.itemName || s.description || 'ITEM';
     let fullSpecs = itm.specifications || s.specifications || s.description || s.remarks || '';
+    const actualPartNumber = s.receivedPartNumber || itm.partNumber || s.partNumber || '';
     if (!fullSpecs) {
-      if (itm.partNumber || s.partNumber) {
-        fullSpecs = `${rawDiscription} MAKE- ${itm.make || 'KIRLOSKAR'}, P NO: ${itm.partNumber || s.partNumber}`;
+      if (actualPartNumber) {
+        fullSpecs = `${rawDiscription} MAKE- ${itm.make || 'KIRLOSKAR'}, P NO: ${actualPartNumber}`;
       } else {
         fullSpecs = rawDiscription;
       }
@@ -181,7 +182,7 @@ export const SaleInvoiceModal: React.FC<{
       kpclCode: itm.kpclCode || s.kpclCode || '-',
       itemName: rawDiscription,
       specifications: fullSpecs,
-      partNumber: itm.partNumber || s.partNumber || s.receivedPartNumber || '',
+      partNumber: actualPartNumber,
       unit: itm.unit || s.unit || "No's",
       qty: q,
       rate: r,
