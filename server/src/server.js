@@ -1843,10 +1843,9 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
 
     const invoiceDate = d.invoiceDate ? new Date(d.invoiceDate) : existingSale.invoiceDate;
 
-    const isOwner = req.user.role === 'OWNER';
-    const nextStatus = isOwner ? 'APPROVED' : 'PENDING';
-    const approvedById = isOwner ? req.user.id : null;
-    const approvedAt = isOwner ? new Date() : null;
+    const nextStatus = 'PENDING';
+    const approvedById = null;
+    const approvedAt = null;
 
     const { rows } = await client.query(
       `UPDATE "Sale"
@@ -1916,47 +1915,40 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
       remarks: d.remarks ? d.remarks.trim() : existingSale.remarks || '-'
     };
 
-    if (!isOwner) {
-      // Check if an existing ApprovalRequest exists for this sale
-      const approvalCheck = await client.query(
-        `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'SALE_ENTRY' ORDER BY "createdAt" DESC LIMIT 1`,
-        [`%"saleId":"${id}"%`]
-      );
+    // Check if an existing ApprovalRequest exists for this sale
+    const approvalCheck = await client.query(
+      `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" IN ('SALE_ENTRY', 'SALE_EDIT') ORDER BY "createdAt" DESC LIMIT 1`,
+      [`%"saleId":"${id}"%`]
+    );
 
-      if (approvalCheck.rows.length > 0) {
-        await client.query(
-          `UPDATE "ApprovalRequest"
-           SET "status" = 'PENDING',
-               "payload" = $1,
-               "reason" = $2,
-               "requestedById" = $3,
-               "approvedById" = NULL,
-               "rejectionReason" = NULL,
-               "updatedAt" = NOW()
-           WHERE id = $4`,
-          [
-            JSON.stringify(payloadObj),
-            `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`,
-            req.user.id,
-            approvalCheck.rows[0].id
-          ]
-        );
-      } else {
-        await client.query(
-          `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
-           VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
-          [
-            req.user.id,
-            JSON.stringify(payloadObj),
-            `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`
-          ]
-        );
-      }
-    } else {
-      // If Owner edited directly, clear any pending approval request
+    if (approvalCheck.rows.length > 0) {
       await client.query(
-        `UPDATE "ApprovalRequest" SET "status" = 'APPROVED', "approvedById" = $1, "updatedAt" = NOW() WHERE "payload"::text LIKE $2 AND "status" = 'PENDING'`,
-        [req.user.id, `%"saleId":"${id}"%`]
+        `UPDATE "ApprovalRequest"
+         SET "status" = 'PENDING',
+             "type" = 'SALE_EDIT',
+             "payload" = $1,
+             "reason" = $2,
+             "requestedById" = $3,
+             "approvedById" = NULL,
+             "rejectionReason" = NULL,
+             "updatedAt" = NOW()
+         WHERE id = $4`,
+        [
+          JSON.stringify(payloadObj),
+          `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and submitted for Owner Approval`,
+          req.user.id,
+          approvalCheck.rows[0].id
+        ]
+      );
+    } else {
+      await client.query(
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'SALE_EDIT', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify(payloadObj),
+          `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and submitted for Owner Approval`
+        ]
       );
     }
 
@@ -3307,7 +3299,7 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
       } finally {
         client.release();
       }
-    } else if (approval.type === 'SALE_ENTRY' || approval.type === 'INDIVIDUAL_SALE') {
+    } else if (approval.type === 'SALE_ENTRY' || approval.type === 'SALE_EDIT' || approval.type === 'INDIVIDUAL_SALE') {
       // Sales must be approved by OWNER ONLY
       if (req.user.role !== 'OWNER') {
         return res.status(403).json({ error: 'Sale approvals must be reviewed and approved by the OWNER only.' });
@@ -3476,8 +3468,7 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Party / Client Name is required' });
     }
 
-    const isAutoApproved = req.user.role === 'OWNER';
-    const initialStatus = isAutoApproved ? 'APPROVED' : 'PENDING';
+    const initialStatus = 'PENDING';
 
     // Normalize to items array
     const rawItems = Array.isArray(d.items) && d.items.length > 0 
@@ -3501,6 +3492,13 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
     }
 
     await client.query('BEGIN');
+
+    try {
+      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_SALE'`);
+      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_EDIT'`);
+      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_EDIT'`);
+    } catch (_) {}
+
     const createdOrders = [];
     let grandTotal = 0;
 
@@ -3569,8 +3567,8 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
           d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
           d.remarks ? d.remarks.trim() : null,
           initialStatus,
-          isAutoApproved ? req.user.id : null,
-          isAutoApproved ? new Date() : null,
+          null,
+          null,
           req.user.id
         ]
       );
@@ -3580,8 +3578,8 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
 
     await client.query('COMMIT');
 
-    // If added by Manager / Supervisor, create an ApprovalRequest for Owner review
-    if (!isAutoApproved && createdOrders.length > 0) {
+    // Create an ApprovalRequest for Owner review
+    if (createdOrders.length > 0) {
       await pool.query(
         `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
          VALUES (gen_random_uuid()::text, 'WORK_ORDER_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
@@ -3589,21 +3587,37 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
           req.user.id,
           JSON.stringify({
             workOrderIds: createdOrders.map(o => o.id),
+            workOrderId: createdOrders[0]?.id,
             workOrderNumber: d.workOrderNumber,
             invoiceNumber: d.invoiceNumber,
+            invoiceDate: d.invoiceDate,
             partyName: d.partyName,
+            partyAddress: d.partyAddress,
+            partyGstNumber: d.partyGstNumber,
+            companyGstNumber: d.companyGstNumber || '29DWKPP3582H1ZV',
+            vehicleNumber: d.vehicleNumber,
+            eWayBillNumber: d.eWayBillNumber,
             itemCount: createdOrders.length,
-            totalAmount: grandTotal
+            itemName: createdOrders.map(o => o.itemName).join(', '),
+            partNumber: createdOrders.map(o => o.partNumber).filter(Boolean).join(', ') || '-',
+            kpclCode: createdOrders.map(o => o.kpclCode).filter(Boolean).join(', ') || '-',
+            qty: createdOrders.reduce((sum, o) => sum + (parseFloat(o.qty) || 0), 0),
+            rate: createdOrders[0]?.rate,
+            basicAmount: createdOrders.reduce((sum, o) => sum + (parseFloat(o.basicAmount) || 0), 0),
+            cgstAmount: createdOrders.reduce((sum, o) => sum + (parseFloat(o.cgstAmount) || 0), 0),
+            sgstAmount: createdOrders.reduce((sum, o) => sum + (parseFloat(o.sgstAmount) || 0), 0),
+            igstAmount: createdOrders.reduce((sum, o) => sum + (parseFloat(o.igstAmount) || 0), 0),
+            shippingCharges: createdOrders.reduce((sum, o) => sum + (parseFloat(o.shippingCharges) || 0), 0),
+            totalAmount: grandTotal,
+            remarks: d.remarks
           }),
-          `Work Order Direct Sale (${createdOrders.length} items) created by ${req.user.fullName || req.user.username} (${d.invoiceNumber} / ₹${grandTotal})`
+          `Work Order Direct Sale #${d.invoiceNumber} (${createdOrders.length} items) created by ${req.user.fullName || req.user.username} (₹${grandTotal})`
         ]
       );
     }
 
     res.status(201).json({ 
-      message: isAutoApproved 
-        ? `Work Order invoice (${createdOrders.length} item${createdOrders.length > 1 ? 's' : ''}) recorded and approved!` 
-        : `Work Order invoice (${createdOrders.length} item${createdOrders.length > 1 ? 's' : ''}) submitted for Owner approval.`,
+      message: `Work Order invoice (${createdOrders.length} item${createdOrders.length > 1 ? 's' : ''}) recorded and submitted for Owner Approval.`,
       workOrders: createdOrders,
       workOrder: createdOrders[0]
     });
@@ -3637,8 +3651,9 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
     const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
-    const isOwner = req.user.role === 'OWNER';
-    const status = isOwner ? 'APPROVED' : 'PENDING';
+    const status = 'PENDING';
+    const approvedById = null;
+    const approvedAt = null;
 
     await client.query('BEGIN');
 
@@ -3708,8 +3723,8 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
         d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : null,
         d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : null,
         status,
-        isOwner ? req.user.id : null,
-        isOwner ? new Date() : null,
+        approvedById,
+        approvedAt,
         id
       ]
     );
@@ -3719,41 +3734,79 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
       return res.status(404).json({ error: 'Work Order not found' });
     }
 
-    // If edited by non-Owner, create or update ApprovalRequest for Owner review
-    if (!isOwner) {
-      const wo = rows[0];
+    const wo = rows[0];
+    const woPayload = {
+      workOrderIds: [id],
+      workOrderId: id,
+      workOrderNumber: wo.workOrderNumber,
+      invoiceNumber: wo.invoiceNumber,
+      invoiceDate: wo.invoiceDate,
+      partyName: wo.partyName,
+      partyAddress: wo.partyAddress,
+      partyGstNumber: wo.partyGstNumber,
+      companyName: wo.companyName,
+      companyGstNumber: wo.companyGstNumber,
+      vehicleNumber: wo.vehicleNumber,
+      eWayBillNumber: wo.eWayBillNumber,
+      kpclCode: wo.kpclCode,
+      itemName: wo.itemName,
+      partNumber: wo.partNumber,
+      unit: wo.unit,
+      qty: wo.qty,
+      rate: wo.rate,
+      basicAmount: wo.basicAmount,
+      cgstPercent: wo.cgstPercent,
+      sgstPercent: wo.sgstPercent,
+      igstPercent: wo.igstPercent,
+      cgstAmount: wo.cgstAmount,
+      sgstAmount: wo.sgstAmount,
+      igstAmount: wo.igstAmount,
+      shippingCharges: wo.shippingCharges,
+      totalAmount: wo.totalAmount,
+      itemCount: 1,
+      remarks: wo.remarks
+    };
+
+    // Check if an existing ApprovalRequest exists for this work order
+    const approvalCheck = await client.query(
+      `SELECT id FROM "ApprovalRequest" WHERE ("payload"::text LIKE $1 OR "payload"::text LIKE $2) AND "type" IN ('WORK_ORDER_SALE', 'WORK_ORDER', 'WORK_ORDER_EDIT') ORDER BY "createdAt" DESC LIMIT 1`,
+      [`%"workOrderIds":["${id}"]%`, `%"workOrderId":"${id}"%`]
+    );
+
+    if (approvalCheck.rows.length > 0) {
       await client.query(
-        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
-         VALUES (gen_random_uuid()::text, 'WORK_ORDER_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        `UPDATE "ApprovalRequest"
+         SET "status" = 'PENDING',
+             "type" = 'WORK_ORDER_EDIT',
+             "payload" = $1,
+             "reason" = $2,
+             "requestedById" = $3,
+             "approvedById" = NULL,
+             "rejectionReason" = NULL,
+             "updatedAt" = NOW()
+         WHERE id = $4`,
         [
+          JSON.stringify(woPayload),
+          `Work Order #${wo.invoiceNumber} (${wo.itemName}) edited and submitted for Owner approval`,
           req.user.id,
-          JSON.stringify({
-            workOrderIds: [id],
-            workOrderId: id,
-            workOrderNumber: wo.workOrderNumber,
-            invoiceNumber: wo.invoiceNumber,
-            partyName: wo.partyName,
-            kpclCode: wo.kpclCode,
-            itemName: wo.itemName,
-            partNumber: wo.partNumber,
-            qty: wo.qty,
-            rate: wo.rate,
-            itemCount: 1,
-            totalAmount: wo.totalAmount
-          }),
-          `Work Order #${wo.invoiceNumber} (${wo.itemName}) edited by ${req.user.fullName || req.user.username} and submitted for Owner approval`
+          approvalCheck.rows[0].id
         ]
       );
     } else {
       await client.query(
-        `UPDATE "ApprovalRequest" SET "status" = 'APPROVED', "approvedById" = $1, "updatedAt" = NOW() WHERE ("payload"::text LIKE $2 OR "payload"::text LIKE $3) AND "status" = 'PENDING'`,
-        [req.user.id, `%"workOrderIds":["${id}"]%`, `%"workOrderId":"${id}"%`]
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'WORK_ORDER_EDIT', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify(woPayload),
+          `Work Order #${wo.invoiceNumber} (${wo.itemName}) edited and submitted for Owner approval`
+        ]
       );
     }
 
     await client.query('COMMIT');
     res.json({ 
-      message: isOwner ? 'Work Order updated and approved!' : 'Work Order updated and submitted for Owner approval.', 
+      message: 'Work Order updated and submitted for Owner approval.', 
       workOrder: rows[0] 
     });
   } catch (err) {

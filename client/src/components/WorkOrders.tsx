@@ -525,11 +525,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
       try {
         setSubmitting(true);
-        await api.put(`/work-orders/${editItem.id}`, editFormData);
-        showToast('Work Order updated successfully!', 'success');
+        const res = await api.put(`/work-orders/${editItem.id}`, editFormData);
+        showToast(res.data?.message || 'Work Order updated and submitted for Owner approval!', 'success');
         setShowAddModal(false);
         setEditItem(null);
         fetchWorkOrders();
+        window.dispatchEvent(new Event('skc-approvals-updated'));
       } catch (err: any) {
         showToast(err.response?.data?.error || 'Failed to update work order', 'error');
       } finally {
@@ -600,9 +601,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     try {
       setSubmitting(true);
       const res = await api.post('/work-orders', payload);
-      showToast(`Tax Invoice ${invoiceHeader.invoiceNumber} with ${validItems.length} items saved successfully!`, 'success');
+      showToast(res.data?.message || `Tax Invoice ${invoiceHeader.invoiceNumber} with ${validItems.length} items submitted for approval!`, 'success');
       setShowAddModal(false);
       fetchWorkOrders();
+      window.dispatchEvent(new Event('skc-approvals-updated'));
 
       if (openPdfDirectly) {
         const createdOrders = res.data.workOrders || [res.data.workOrder];
