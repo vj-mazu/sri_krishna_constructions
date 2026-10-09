@@ -3831,6 +3831,169 @@ app.delete('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MA
   }
 });
 
+// GET /api/invoices/:invoiceNumber - Fetch all line items matching an invoice number across Sales, Work Orders, Inwards, and Individual Stocks
+app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
+  try {
+    const { invoiceNumber } = req.params;
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      return res.json({ items: [] });
+    }
+    const cleanInv = decodeURIComponent(invoiceNumber.trim());
+
+    // 1. Search PO Sales
+    const { rows: saleRows } = await pool.query(`
+      SELECT 
+        s.*,
+        'PO' as "sourceType",
+        s."qty" as "quantity",
+        s."rate" as "unitPrice",
+        poi."itemName" as "itemName",
+        poi."partNumber" as "partNumber",
+        poi."kpclCode" as "kpclCode",
+        poi."unit" as "unit",
+        poi."specifications" as "specifications",
+        po."poNumber" as "poNumber",
+        po."date" as "poDate",
+        div.name as "divisionName",
+        'Sri Krishna Constructions' as "companyName",
+        COALESCE(s."companyGstNumber", '29DWKPP3582H1ZV') as "companyGstNumber"
+      FROM "Sale" s
+      LEFT JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+      LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "Division" div ON po."divisionId" = div.id
+      WHERE LOWER(TRIM(s."invoiceNumber")) = LOWER($1) OR LOWER(TRIM(COALESCE(s."partyInvoiceNumber", ''))) = LOWER($1)
+      ORDER BY s."createdAt" ASC, s.id ASC
+    `, [cleanInv]);
+
+    if (saleRows.length > 0) {
+      const items = saleRows.map(s => ({
+        ...s,
+        sourceType: 'PO',
+        item: {
+          itemName: s.itemName,
+          partNumber: s.partNumber,
+          kpclCode: s.kpclCode || '-',
+          unit: s.unit || 'NOS',
+          specifications: s.specifications || s.remarks || ''
+        }
+      }));
+      return res.json({ items });
+    }
+
+    // 2. Search Work Orders
+    const { rows: woRows } = await pool.query(`
+      SELECT 
+        wo.*,
+        'WORK_ORDER' as "sourceType",
+        wo."qty" as "quantity",
+        wo."rate" as "unitPrice",
+        wo."workOrderNumber" as "poNumber",
+        wo."workOrderDate" as "poDate",
+        wo."partyGstNumber" as "gstNumber",
+        wo."description" as "specifications"
+      FROM "WorkOrder" wo
+      WHERE LOWER(TRIM(wo."invoiceNumber")) = LOWER($1) OR LOWER(TRIM(wo."workOrderNumber")) = LOWER($1)
+      ORDER BY wo."createdAt" ASC, wo.id ASC
+    `, [cleanInv]);
+
+    if (woRows.length > 0) {
+      const items = woRows.map(wo => ({
+        ...wo,
+        sourceType: 'WORK_ORDER',
+        item: {
+          itemName: wo.itemName,
+          partNumber: wo.partNumber || '',
+          kpclCode: wo.kpclCode || '-',
+          unit: wo.unit || 'NOS',
+          specifications: wo.description || 'Work Order Direct Sale'
+        }
+      }));
+      return res.json({ items });
+    }
+
+    // 3. Search Inward Purchases
+    const { rows: purRows } = await pool.query(`
+      SELECT 
+        p.*,
+        'INWARD' as "sourceType",
+        p."qty" as "quantity",
+        p."rate" as "unitPrice",
+        COALESCE(p."receivedItemName", poi."itemName") as "itemName",
+        COALESCE(p."receivedPartNumber", poi."partNumber") as "partNumber",
+        poi."kpclCode" as "kpclCode",
+        poi."unit" as "unit",
+        poi."specifications" as "specifications",
+        po."poNumber" as "poNumber",
+        po."date" as "poDate",
+        div.name as "divisionName",
+        'Sri Krishna Constructions' as "companyName",
+        '29DWKPP3582H1ZV' as "companyGstNumber"
+      FROM "Purchase" p
+      LEFT JOIN "PurchaseOrderItem" poi ON p."purchaseOrderItemId" = poi.id
+      LEFT JOIN "PurchaseOrder" po ON poi."purchaseOrderId" = po.id
+      LEFT JOIN "Division" div ON po."divisionId" = div.id
+      WHERE LOWER(TRIM(COALESCE(p."partyInvoiceNumber", ''))) = LOWER($1)
+      ORDER BY p."createdAt" ASC, p.id ASC
+    `, [cleanInv]);
+
+    if (purRows.length > 0) {
+      const items = purRows.map(p => ({
+        ...p,
+        sourceType: 'INWARD',
+        item: {
+          itemName: p.itemName,
+          partNumber: p.partNumber,
+          kpclCode: p.kpclCode || '-',
+          unit: p.unit || 'NOS',
+          specifications: p.specifications || p.remarks || ''
+        }
+      }));
+      return res.json({ items });
+    }
+
+    // 4. Search Individual Stock Transactions
+    const { rows: indRows } = await pool.query(`
+      SELECT 
+        tx.*,
+        'INDIVIDUAL' as "sourceType",
+        tx."qty" as "quantity",
+        tx."rate" as "unitPrice",
+        COALESCE(tx."partyInvoiceNumber", '-') as "invoiceNumber",
+        ind."itemName" as "itemName",
+        ind."partNumber" as "partNumber",
+        ind."kpclCode" as "kpclCode",
+        ind."unit" as "unit",
+        ind."specifications" as "specifications",
+        'Sri Krishna Constructions' as "companyName",
+        '29DWKPP3582H1ZV' as "companyGstNumber"
+      FROM "IndividualStockTransaction" tx
+      LEFT JOIN "IndividualStock" ind ON tx."stockId" = ind.id
+      WHERE LOWER(TRIM(COALESCE(tx."partyInvoiceNumber", ''))) = LOWER($1)
+      ORDER BY tx."createdAt" ASC, tx.id ASC
+    `, [cleanInv]);
+
+    if (indRows.length > 0) {
+      const items = indRows.map(tx => ({
+        ...tx,
+        sourceType: 'INDIVIDUAL',
+        item: {
+          itemName: tx.itemName,
+          partNumber: tx.partNumber,
+          kpclCode: tx.kpclCode || '-',
+          unit: tx.unit || 'NOS',
+          specifications: tx.specifications || tx.remarks || ''
+        }
+      }));
+      return res.json({ items });
+    }
+
+    return res.json({ items: [] });
+  } catch (err) {
+    console.error('Error fetching invoice items by invoiceNumber:', err);
+    res.status(500).json({ error: 'Failed to fetch invoice items' });
+  }
+});
+
 // --- GLOBAL SALES LEDGER API (CONTINUOUS SEQUENTIAL SL NO ACROSS ALL SALES & WORK ORDERS) ---
 app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
   try {

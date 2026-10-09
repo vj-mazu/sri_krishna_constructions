@@ -528,7 +528,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
       try {
         setSubmitting(true);
-        const res = await api.put(`/work-orders/${editItem.id}`, editFormData);
+        const payload = {
+          ...editFormData,
+          qty: parseFloat(editFormData.qty) || 0,
+          rate: parseFloat(editFormData.rate) || 0,
+          cgstPercent: parseFloat(editFormData.cgstPercent) || 0,
+          sgstPercent: parseFloat(editFormData.sgstPercent) || 0,
+          igstPercent: parseFloat(editFormData.igstPercent) || 0,
+          shippingCharges: parseFloat(editFormData.shippingCharges) || 0
+        };
+        const res = await api.put(`/work-orders/${editItem.id}`, payload);
         showToast(res.data?.message || 'Work Order updated and submitted for Owner approval!', 'success');
         setShowAddModal(false);
         setEditItem(null);
