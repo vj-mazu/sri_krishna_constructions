@@ -266,6 +266,20 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     const workerName = workerObj?.fullName || 'Worker';
 
     if (status === '') {
+      // If user is clearing attendance while viewing the 2nd split division, only remove the 2nd half-day
+      if (selectedDivisionId !== 'ALL' && currentRec.secondDivisionId === selectedDivisionId) {
+        setAttendanceRecords((prev) => ({
+          ...prev,
+          [workerId]: {
+            ...currentRec,
+            secondDivisionId: '',
+            secondDivisionName: '',
+          },
+        }));
+        showToast(`Removed 2nd Half-Day for ${workerName} at this site`, 'info');
+        return;
+      }
+
       setAttendanceRecords((prev) => ({
         ...prev,
         [workerId]: {
@@ -281,10 +295,11 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     }
 
     // Check if worker is already marked HALF_DAY at another division (Division 1)
+    const effectiveDivId = currentRec.divisionId || workerObj?.divisionId || '';
     const isAlreadyHalfDayAtOtherDiv = currentRec.status === 'HALF_DAY' && 
-      Boolean(currentRec.divisionId) && 
+      Boolean(effectiveDivId) && 
       selectedDivisionId !== 'ALL' && 
-      currentRec.divisionId !== selectedDivisionId;
+      effectiveDivId !== selectedDivisionId;
 
     // SCENARIO 1: Worker has a Half-Day at Division 1, and now user is in Division 2
     if (isAlreadyHalfDayAtOtherDiv) {
@@ -622,10 +637,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         // For Owner, Manager, and Unrestricted Supervisors: Dynamic Multi-Site Attendance Allocation
         const isMarkedInThisDiv = rec && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId) && Boolean(rec.status);
         const isHalfDayCandidate = rec && rec.status === 'HALF_DAY' && rec.divisionId !== selectedDivisionId && !rec.secondDivisionId;
-        const isMarkedElsewhereFull = rec && Boolean(rec.status) && rec.divisionId !== selectedDivisionId && (rec.status !== 'HALF_DAY' || Boolean(rec.secondDivisionId));
+        const isMarkedElsewhereFull = rec && Boolean(rec.status) 
+          && rec.divisionId !== selectedDivisionId 
+          && rec.secondDivisionId !== selectedDivisionId 
+          && (rec.status !== 'HALF_DAY' || Boolean(rec.secondDivisionId));
         const isUnmarked = !rec || !rec.status;
 
-        // If worker is already fully marked (Present / Absent / Leave / Both Halves) at another division, hide from this division
+        // If worker is already fully marked (Present / Absent / Leave / Both Halves) at other divisions, hide from this division
         if (isMarkedElsewhereFull) {
           return false;
         }
@@ -669,10 +687,34 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
     return filteredWorkers.slice(start, start + pageSize);
   }, [filteredWorkers, currentPage, pageSize]);
 
-  const presentCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'PRESENT').length;
-  const absentCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'ABSENT').length;
-  const halfCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'HALF_DAY').length;
-  const leaveCount = filteredWorkers.filter(w => attendanceRecords[w.id]?.status === 'LEAVE').length;
+  const presentCount = filteredWorkers.filter(w => {
+    const rec = attendanceRecords[w.id];
+    if (!rec || !rec.status) return false;
+    if (selectedDivisionId === 'ALL') return rec.status === 'PRESENT';
+    return rec.status === 'PRESENT' && (rec.divisionId === selectedDivisionId || (!rec.divisionId && w.divisionId === selectedDivisionId));
+  }).length;
+
+  const absentCount = filteredWorkers.filter(w => {
+    const rec = attendanceRecords[w.id];
+    if (!rec || !rec.status) return false;
+    if (selectedDivisionId === 'ALL') return rec.status === 'ABSENT';
+    return rec.status === 'ABSENT' && (rec.divisionId === selectedDivisionId || (!rec.divisionId && w.divisionId === selectedDivisionId));
+  }).length;
+
+  const halfCount = filteredWorkers.filter(w => {
+    const rec = attendanceRecords[w.id];
+    if (!rec || !rec.status) return false;
+    if (selectedDivisionId === 'ALL') return rec.status === 'HALF_DAY';
+    return rec.status === 'HALF_DAY' && (rec.divisionId === selectedDivisionId || rec.secondDivisionId === selectedDivisionId);
+  }).length;
+
+  const leaveCount = filteredWorkers.filter(w => {
+    const rec = attendanceRecords[w.id];
+    if (!rec || !rec.status) return false;
+    if (selectedDivisionId === 'ALL') return rec.status === 'LEAVE';
+    return rec.status === 'LEAVE' && (rec.divisionId === selectedDivisionId || (!rec.divisionId && w.divisionId === selectedDivisionId));
+  }).length;
+
   const unmarkedCount = Math.max(0, filteredWorkers.length - (presentCount + absentCount + halfCount + leaveCount));
 
   const getStatusBadge = (status: string, leaveType?: string) => {
@@ -1065,13 +1107,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                   {state.status === 'HALF_DAY' && state.divisionId && selectedDivisionId !== 'ALL' && state.divisionId !== selectedDivisionId && state.secondDivisionId !== selectedDivisionId && (
                     <div className="p-1.5 bg-amber-50 border border-amber-300 rounded-lg flex items-center gap-1.5 text-[10px] text-amber-950 font-medium">
                       <span>⚡</span>
-                      <span>Worker worked <strong>Half-Day (0.5d)</strong> at another site. Mark <strong>Half Day (🟡)</strong> to complete 1.0 day!</span>
+                      <span>Worker worked <strong>Half-Day (0.5d)</strong> at <strong>{state.divisionName || divisions.find(d => d.id === state.divisionId)?.name || 'another site'}</strong>. Tap <strong>Half (🟡)</strong> to complete 1.0 day split!</span>
                     </div>
                   )}
-                  {state.secondDivisionId && (
+                  {state.status === 'HALF_DAY' && state.secondDivisionId && (
                     <div className="p-1.5 bg-emerald-50 border border-emerald-300 rounded-lg flex items-center gap-1.5 text-[10px] text-emerald-950 font-medium">
                       <span>🏢</span>
-                      <span>Full 1.0d Split across <strong>2 Sites Completed</strong></span>
+                      <span>Split: 0.5d at <strong>{state.divisionName || divisions.find(d => d.id === state.divisionId)?.name || 'Site 1'}</strong> + 0.5d at <strong>{state.secondDivisionName || divisions.find(d => d.id === state.secondDivisionId)?.name || 'Site 2'}</strong> (Total 1.0d)</span>
                     </div>
                   )}
 
@@ -1204,7 +1246,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                               </div>
                               {isMarkedAtOtherSiteOnly && (
                                 <div className="mt-1 inline-block px-1.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-200 rounded text-[9px] font-bold">
-                                  📍 Worked at {state.divisionName || 'Other Division'}
+                                  📍 Worked at {state.divisionName || divisions.find(d => d.id === state.divisionId)?.name || 'Other Division'}
                                 </div>
                               )}
                             </td>
@@ -1214,14 +1256,14 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                 <div className="inline-flex flex-col items-center gap-0.5">
                                   {getStatusBadge('HALF_DAY')}
                                   <span className="text-[9px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 rounded">
-                                    Split across 2 Sites (1.0d)
+                                    Split: {state.divisionName || divisions.find(d => d.id === state.divisionId)?.name || 'Site 1'} (0.5d) + {state.secondDivisionName || divisions.find(d => d.id === state.secondDivisionId)?.name || 'Site 2'} (0.5d)
                                   </span>
                                 </div>
                               ) : isMarkedAtOtherSiteOnly ? (
                                 <div className="inline-flex flex-col items-center gap-0.5">
                                   {getStatusBadge(state.status, state.leaveType)}
                                   <span className="text-[9px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                                    at {state.divisionName || 'Other Div'}
+                                    at {state.divisionName || divisions.find(d => d.id === state.divisionId)?.name || 'Other Div'}
                                   </span>
                                 </div>
                               ) : isMarkedInThisSelectedDiv ? (
