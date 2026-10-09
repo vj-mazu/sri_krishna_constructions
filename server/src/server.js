@@ -293,6 +293,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
+    // Check account active status
+    if (user.isActive === false) {
+      return res.status(403).json({ error: 'Your account has been deactivated. Please contact the administrator.' });
+    }
+
     // 2. Check password: match via bcrypt
     const validPassword = await bcrypt.compare(cleanPassword, user.password);
 
@@ -314,6 +319,7 @@ app.post('/api/auth/login', async (req, res) => {
         fullName: user.fullName,
         mobileNumber: user.mobileNumber,
         role: user.role,
+        isActive: user.isActive !== false,
       },
     });
   } catch (err) {
@@ -325,7 +331,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT u."id", u."username", u."fullName", u."mobileNumber", u."role", u."assignedDivisionId",
+      `SELECT u."id", u."username", u."fullName", u."mobileNumber", u."role", u."assignedDivisionId", COALESCE(u."isActive", true) as "isActive",
               json_build_object('id', d.id, 'name', d.name) as "assignedDivision"
        FROM "User" u
        LEFT JOIN "Division" d ON u."assignedDivisionId" = d.id
@@ -334,6 +340,9 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     );
     if (!rows[0]) {
       return res.status(404).json({ error: 'User not found' });
+    }
+    if (rows[0].isActive === false) {
+      return res.status(403).json({ error: 'Account has been deactivated. Session terminated.' });
     }
     res.json({ user: rows[0] });
   } catch (err) {
@@ -1631,11 +1640,6 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
     const itemsToProcess = isMultiItem ? body.items : [body];
 
     await client.query('BEGIN');
-
-    // Ensure SALE_ENTRY is in ApprovalType enum
-    try {
-      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY'`);
-    } catch (_) {}
 
     const createdSales = [];
 
@@ -3493,12 +3497,6 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
 
     await client.query('BEGIN');
 
-    try {
-      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_SALE'`);
-      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_EDIT'`);
-      await client.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_EDIT'`);
-    } catch (_) {}
-
     const createdOrders = [];
     let grandTotal = 0;
 
@@ -4230,7 +4228,7 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
 app.get('/api/users', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { rows: users } = await pool.query(
-      `SELECT u."id", u."username", u."fullName", u."mobileNumber", u."role", u."assignedDivisionId", u."createdAt",
+      `SELECT u."id", u."username", u."fullName", u."mobileNumber", u."role", u."assignedDivisionId", COALESCE(u."isActive", true) as "isActive", u."createdAt",
               json_build_object('id', d.id, 'name', d.name) as "assignedDivision"
        FROM "User" u
        LEFT JOIN "Division" d ON u."assignedDivisionId" = d.id
@@ -4251,7 +4249,7 @@ app.get('/api/users', authenticateToken, requireRoles(['OWNER', 'MANAGER']), asy
 
 app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, res) => {
   try {
-    const { username, fullName, mobileNumber, password, role, assignedDivisionId } = req.body;
+    const { username, fullName, mobileNumber, password, role, assignedDivisionId, isActive } = req.body;
 
     // MANDATORY MOBILE NUMBER CHECK
     if (!username || !fullName || !mobileNumber || !password || !role) {
@@ -4291,12 +4289,13 @@ app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, r
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const assignedDiv = (role === 'SUPERVISOR' && assignedDivisionId && assignedDivisionId !== 'ALL') ? assignedDivisionId : null;
+    const boolIsActive = isActive !== undefined ? Boolean(isActive) : true;
 
     const { rows: newUserRows } = await pool.query(
-      `INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "assignedDivisionId", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5::"Role", $6, NOW(), NOW())
-       RETURNING "id", "username", "fullName", "mobileNumber", "role", "assignedDivisionId", "createdAt"`,
-      [username.trim(), fullName.trim(), mobileNumber.trim(), hashedPassword, role, assignedDiv]
+      `INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "assignedDivisionId", "isActive", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5::"Role", $6, $7, NOW(), NOW())
+       RETURNING "id", "username", "fullName", "mobileNumber", "role", "assignedDivisionId", "isActive", "createdAt"`,
+      [username.trim(), fullName.trim(), mobileNumber.trim(), hashedPassword, role, assignedDiv, boolIsActive]
     );
 
     res.status(201).json({ user: newUserRows[0] });
@@ -4309,7 +4308,7 @@ app.post('/api/users', authenticateToken, requireRoles(['OWNER']), async (req, r
 app.put('/api/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { username, fullName, mobileNumber, password, role, assignedDivisionId } = req.body;
+    const { username, fullName, mobileNumber, password, role, assignedDivisionId, isActive } = req.body;
 
     if (req.user.role !== 'OWNER' && req.user.id !== id) {
       return res.status(403).json({ error: 'Only Owner can edit other user accounts' });
@@ -4377,18 +4376,64 @@ app.put('/api/users/:id', authenticateToken, async (req, res) => {
       ? (assignedDivisionId === 'ALL' || assignedDivisionId === '' ? null : (assignedDivisionId || currentUser.assignedDivisionId || null))
       : null;
 
+    let newIsActive = currentUser.isActive !== undefined ? currentUser.isActive : true;
+    if (isActive !== undefined) {
+      const boolVal = Boolean(isActive);
+      if (!boolVal && currentUser.role === 'OWNER') {
+        const { rows: activeOwners } = await pool.query(
+          `SELECT COUNT(*)::int as count FROM "User" WHERE role = 'OWNER' AND COALESCE("isActive", true) = true AND id != $1`,
+          [id]
+        );
+        if (activeOwners[0].count === 0) {
+          return res.status(400).json({ error: 'Cannot deactivate the only active Owner account.' });
+        }
+      }
+      newIsActive = boolVal;
+    }
+
     const { rows: updatedRows } = await pool.query(
       `UPDATE "User"
-       SET "username" = $1, "fullName" = $2, "mobileNumber" = $3, "password" = $4, "role" = $5::"Role", "assignedDivisionId" = $6, "updatedAt" = NOW()
-       WHERE "id" = $7
-       RETURNING "id", "username", "fullName", "mobileNumber", "role", "assignedDivisionId"`,
-      [newUsername, newFullName, newMobile, newPassword, newRole, assignedDiv, id]
+       SET "username" = $1, "fullName" = $2, "mobileNumber" = $3, "password" = $4, "role" = $5::"Role", "assignedDivisionId" = $6, "isActive" = $7, "updatedAt" = NOW()
+       WHERE "id" = $8
+       RETURNING "id", "username", "fullName", "mobileNumber", "role", "assignedDivisionId", "isActive"`,
+      [newUsername, newFullName, newMobile, newPassword, newRole, assignedDiv, newIsActive, id]
     );
 
     res.json({ message: 'User updated successfully', user: updatedRows[0] });
   } catch (err) {
     console.error('Update user error:', err);
     res.status(500).json({ error: 'Failed to update user account details' });
+  }
+});
+
+app.patch('/api/users/:id/toggle-active', authenticateToken, requireRoles(['OWNER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows: userRows } = await pool.query(`SELECT * FROM "User" WHERE id = $1`, [id]);
+    if (userRows.length === 0) return res.status(404).json({ error: 'User not found' });
+    const targetUser = userRows[0];
+    const currentActive = targetUser.isActive !== false;
+    const nextActive = !currentActive;
+
+    if (!nextActive && targetUser.role === 'OWNER') {
+      const { rows: activeOwners } = await pool.query(
+        `SELECT COUNT(*)::int as count FROM "User" WHERE role = 'OWNER' AND COALESCE("isActive", true) = true AND id != $1`,
+        [id]
+      );
+      if (activeOwners[0].count === 0) {
+        return res.status(400).json({ error: 'Cannot deactivate the only active Owner account.' });
+      }
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE "User" SET "isActive" = $1, "updatedAt" = NOW() WHERE "id" = $2 RETURNING "id", "username", "fullName", "role", "isActive"`,
+      [nextActive, id]
+    );
+
+    res.json({ message: `User '${targetUser.username}' marked as ${nextActive ? 'ACTIVE' : 'INACTIVE'}`, user: rows[0] });
+  } catch (err) {
+    console.error('Toggle user active error:', err);
+    res.status(500).json({ error: 'Failed to update user active status' });
   }
 });
 

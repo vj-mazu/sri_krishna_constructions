@@ -111,6 +111,7 @@ export const initializeDatabaseTables = async () => {
         "fullName" TEXT NOT NULL,
         "mobileNumber" TEXT NOT NULL,
         "role" "Role" NOT NULL DEFAULT 'STAFF',
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -573,8 +574,10 @@ export const initializeDatabaseTables = async () => {
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
-      -- Supervisor Single Division Restriction Column
+      -- Supervisor Single Division Restriction Column & User Active/Inactive Status
       ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "assignedDivisionId" TEXT REFERENCES "Division"("id");
+      ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN NOT NULL DEFAULT true;
+      CREATE INDEX IF NOT EXISTS "idx_user_isactive" ON "User"("isActive");
 
       -- Add MEDICAL_LEAVE and CASUAL_LEAVE to AttendanceStatus enum if possible
       DO $$ BEGIN
@@ -682,6 +685,13 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" TYPE TEXT USING "status"::text;
       ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING';
       ALTER TABLE "AttendanceCorrectionRequest" ADD COLUMN IF NOT EXISTS "leaveType" TEXT DEFAULT 'CASUAL';
+
+      -- Fix ApprovalRequest type and status columns: change to TEXT so all workflow types work cleanly
+      ALTER TABLE "ApprovalRequest" ALTER COLUMN "type" DROP DEFAULT;
+      ALTER TABLE "ApprovalRequest" ALTER COLUMN "type" TYPE TEXT USING "type"::text;
+      ALTER TABLE "ApprovalRequest" ALTER COLUMN "status" DROP DEFAULT;
+      ALTER TABLE "ApprovalRequest" ALTER COLUMN "status" TYPE TEXT USING "status"::text;
+      ALTER TABLE "ApprovalRequest" ALTER COLUMN "status" SET DEFAULT 'PENDING';
 
       -- Mathematically synchronize IndividualStock currentStock based on opening + (INWARD/PURCHASE) - (OUTWARD/SALE)
       UPDATE "IndividualStock" s
