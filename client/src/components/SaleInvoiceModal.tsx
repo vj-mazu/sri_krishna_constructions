@@ -374,22 +374,25 @@ export const SaleInvoiceModal: React.FC<{
     const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
     doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
     
+    // Horizontal separator line above Vehicle No (matching left column line)
+    doc.line(margin + colHalf, ly + 22, margin + contentWidth, ly + 22);
+
     const hasVehicle = vehicleNo && vehicleNo !== '-';
     const hasEway = eWayBillNo && eWayBillNo !== '-';
 
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+
     if (hasVehicle && hasEway) {
-      doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
-      doc.text(`Vehicle No : ${vehicleNo}`, margin + colHalf + 2, ry + 25.5);
-      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ry + 29.5);
+      doc.text(`Vehicle No : ${vehicleNo}`, margin + colHalf + 2, ly + 26);
+      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ly + 30);
     } else if (hasEway) {
-      doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ry + 27);
+      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ly + 27);
     } else {
-      doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text(`Vehicle No : ${vehicleNo || '-'}`, margin + colHalf + 2, ry + 27);
+      doc.text(`Vehicle No : ${vehicleNo || '-'}`, margin + colHalf + 2, ly + 27);
     }
 
     y += boxHeight;
@@ -457,18 +460,8 @@ export const SaleInvoiceModal: React.FC<{
         if (data.pageNumber > 1) {
           drawHeaderBox(8);
         }
-        // Page numbering
-        const str = `Page ${data.pageNumber} of `;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.5);
-        doc.setTextColor(0, 0, 0);
-        doc.text(str + '{total_pages_count_string}', pageWidth / 2, 290, { align: 'center' });
       }
     });
-
-    if (typeof (doc as any).putTotalPages === 'function') {
-      (doc as any).putTotalPages('{total_pages_count_string}');
-    }
 
     const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
 
@@ -545,7 +538,7 @@ export const SaleInvoiceModal: React.FC<{
 
     // 6. Signatures (Royal Blue Company Title & Underlined Signatory)
     let sigY = fy + bottomBoxHeight + 6;
-    if (sigY + 24 > 285) {
+    if (sigY + 24 > 280) {
       doc.addPage();
       drawHeaderBox(8);
       sigY = 38;
@@ -569,6 +562,19 @@ export const SaleInvoiceModal: React.FC<{
     doc.setTextColor(30, 64, 175); // #1e40af
     doc.setFont('helvetica', 'bold');
     doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 19, { align: 'center' });
+
+    // 7. Render exact, synchronized page count on every page (e.g., Page 1 of 3, Page 2 of 3, Page 3 of 3)
+    const totalPages = typeof (doc as any).getNumberOfPages === 'function' 
+      ? (doc as any).getNumberOfPages() 
+      : ((doc.internal as any).pages ? (doc.internal as any).pages.length - 1 : 1);
+
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 290, { align: 'center' });
+    }
 
     return doc;
   };
@@ -806,8 +812,8 @@ export const SaleInvoiceModal: React.FC<{
                 <div className="p-1.5 font-bold space-y-0.5">
                   <div>Vehicle No : <span className="uppercase font-bold">{vehicleNo || '-'}</span></div>
                   {eWayBillNo && eWayBillNo !== '-' && (
-                    <div className="text-blue-900 font-mono text-[10.5px]">
-                      E-Way Bill : <span className="font-bold">{eWayBillNo}</span>
+                    <div className="text-black font-bold text-[10.5px]">
+                      E-Way Bill : <span>{eWayBillNo}</span>
                     </div>
                   )}
                 </div>

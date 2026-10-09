@@ -3274,9 +3274,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       <div className="bg-white border border-emerald-300 rounded-xl shadow-sm overflow-hidden">
                         <div className="p-2.5 bg-emerald-100/50 border-b border-emerald-200 text-xs font-bold text-emerald-900 flex justify-between items-center">
                           <span>Select PO Items to Inward (Change Inward Qty / Rate / Tax as needed):</span>
-                          <span className="font-mono text-[11px] text-slate-600">
-                            {selectedMultiPurchaseItemIds.length} of {allItemsForSelection.length} Items Selected
-                          </span>
+                          {(() => {
+                            const pendingInwardItems = allItemsForSelection.filter(i => Math.max(0, (i.qty || 0) - (i.purchasedQty || 0)) > 0);
+                            return (
+                              <span className="font-mono text-[11px] text-slate-600">
+                                {selectedMultiPurchaseItemIds.length} of {pendingInwardItems.length} Pending Items Selected
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         <div className="overflow-x-auto max-h-[50vh] overflow-y-auto">
@@ -3285,15 +3290,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <tr>
                                 <th className="text-center w-10 px-2 py-2">
                                   {(() => {
-                                    const isAllSelected = allItemsForSelection.length > 0 && selectedMultiPurchaseItemIds.length === allItemsForSelection.length;
+                                    const pendingInwardItems = allItemsForSelection.filter(i => Math.max(0, (i.qty || 0) - (i.purchasedQty || 0)) > 0);
+                                    const isAllSelected = pendingInwardItems.length > 0 && pendingInwardItems.every(i => selectedMultiPurchaseItemIds.includes(i.id));
                                     return (
                                       <input 
                                         type="checkbox" 
-                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
+                                        disabled={pendingInwardItems.length === 0}
+                                        title={pendingInwardItems.length === 0 ? "All items already 100% inwarded" : "Select all pending items"}
+                                        className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4 disabled:opacity-40 disabled:cursor-not-allowed" 
                                         checked={isAllSelected}
                                         onChange={(e) => {
                                           if (e.target.checked) {
-                                            setSelectedMultiPurchaseItemIds(allItemsForSelection.map(i => i.id));
+                                            setSelectedMultiPurchaseItemIds(pendingInwardItems.map(i => i.id));
                                           } else {
                                             setSelectedMultiPurchaseItemIds([]);
                                           }
@@ -3331,8 +3339,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 </tr>
                               ) : (
                                 allItemsForSelection.map((item, idx) => {
-                                  const isSelected = selectedMultiPurchaseItemIds.includes(item.id);
                                   const balance = Math.max(0, (item.qty || 0) - (item.purchasedQty || 0));
+                                  const isCompleted = balance <= 0;
+                                  const isSelected = selectedMultiPurchaseItemIds.includes(item.id) && !isCompleted;
                                   const edit = multiPurchaseItemEdits[item.id] || {
                                     qty: balance,
                                     rate: item.rate || 0,
@@ -3358,36 +3367,46 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <tr 
                                       key={item.id} 
                                       className={`border-b transition-colors ${
-                                        isSelected ? 'bg-emerald-50/60 font-semibold text-slate-900' : 'bg-white text-slate-600 hover:bg-slate-50'
+                                        isCompleted 
+                                          ? 'bg-slate-50/70 text-slate-400' 
+                                          : isSelected 
+                                            ? 'bg-emerald-50/60 font-semibold text-slate-900' 
+                                            : 'bg-white text-slate-600 hover:bg-slate-50'
                                       }`}
                                     >
                                       <td className="text-center px-2 py-2">
-                                        <input 
-                                          type="checkbox" 
-                                          className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
-                                          checked={isSelected}
-                                          onChange={(e) => {
-                                            if (e.target.checked) {
-                                              setSelectedMultiPurchaseItemIds(prev => [...prev, item.id]);
-                                              if (!multiPurchaseItemEdits[item.id]) {
-                                                setMultiPurchaseItemEdits(prev => ({
-                                                  ...prev,
-                                                  [item.id]: {
-                                                    qty: balance,
-                                                    rate: item.rate || 0,
-                                                    cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
-                                                    sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
-                                                    igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
-                                                    receivedItemName: item.itemName || '',
-                                                    receivedPartNumber: item.partNumber || ''
-                                                  }
-                                                }));
+                                        {isCompleted ? (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200" title="100% Inward Completed (0 Balance Remaining)">
+                                            ✓ Done
+                                          </span>
+                                        ) : (
+                                          <input 
+                                            type="checkbox" 
+                                            className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
+                                            checked={isSelected}
+                                            onChange={(e) => {
+                                              if (e.target.checked) {
+                                                setSelectedMultiPurchaseItemIds(prev => [...prev, item.id]);
+                                                if (!multiPurchaseItemEdits[item.id]) {
+                                                  setMultiPurchaseItemEdits(prev => ({
+                                                    ...prev,
+                                                    [item.id]: {
+                                                      qty: balance,
+                                                      rate: item.rate || 0,
+                                                      cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
+                                                      sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
+                                                      igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
+                                                      receivedItemName: item.itemName || '',
+                                                      receivedPartNumber: item.partNumber || ''
+                                                    }
+                                                  }));
+                                                }
+                                              } else {
+                                                setSelectedMultiPurchaseItemIds(prev => prev.filter(id => id !== item.id));
                                               }
-                                            } else {
-                                              setSelectedMultiPurchaseItemIds(prev => prev.filter(id => id !== item.id));
-                                            }
-                                          }}
-                                        />
+                                            }}
+                                          />
+                                        )}
                                       </td>
                                       <td className="text-center font-mono font-bold text-slate-600 px-2 py-2">{idx + 1}</td>
                                       <td className="font-mono text-slate-600 px-2 py-2">{item.kpclCode || '-'}</td>
@@ -3401,8 +3420,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                       <td className="text-center font-mono px-2 py-2">{item.unit || "No's"}</td>
                                       <td className="text-center font-mono font-semibold px-2 py-2">{item.qty || 0}</td>
                                       <td className="text-center font-mono text-blue-800 px-2 py-2">{item.purchasedQty || 0}</td>
-                                      <td className="text-center font-mono font-bold text-emerald-800 bg-emerald-100/50 px-2 py-2">
-                                        {balance}
+                                      <td className={`text-center font-mono font-bold px-2 py-2 ${
+                                        isCompleted ? 'text-emerald-700 bg-emerald-50/50' : 'text-emerald-800 bg-emerald-100/50'
+                                      }`}>
+                                        {isCompleted ? (
+                                          <span className="text-[11px] font-semibold text-emerald-700">0 (Complete)</span>
+                                        ) : (
+                                          balance
+                                        )}
                                       </td>
                                       
                                       {/* Inward Qty Editable */}
@@ -3412,12 +3437,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           min="0"
                                           step="0.01"
                                           className={`w-full p-1.5 border rounded text-xs font-mono font-bold text-center outline-none ${
-                                            isOverInward 
-                                              ? 'border-rose-500 bg-rose-50 text-rose-800' 
-                                              : 'border-slate-300 bg-white text-emerald-950 focus:border-emerald-500'
+                                            isCompleted
+                                              ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                              : isOverInward 
+                                                ? 'border-rose-500 bg-rose-50 text-rose-800' 
+                                                : 'border-slate-300 bg-white text-emerald-950 focus:border-emerald-500'
                                           }`}
-                                          value={edit.qty ?? ''}
-                                          disabled={!isSelected}
+                                          value={isCompleted ? 0 : (edit.qty ?? '')}
+                                          disabled={isCompleted || !isSelected}
                                           onChange={(e) => {
                                             const val = e.target.value === '' ? 0 : Number(e.target.value);
                                             setMultiPurchaseItemEdits(prev => ({
@@ -3426,7 +3453,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                             }));
                                           }}
                                         />
-                                        {isOverInward && (
+                                        {!isCompleted && isOverInward && (
                                           <div className="text-[9px] text-rose-600 font-bold text-center mt-0.5">Exceeds PO ({balance})</div>
                                         )}
                                       </td>
@@ -3436,9 +3463,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         <input 
                                           type="number"
                                           step="0.01"
-                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono font-bold text-right outline-none bg-white focus:border-emerald-500"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono font-bold text-right outline-none bg-white focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                           value={edit.rate ?? ''}
-                                          disabled={!isSelected}
+                                          disabled={isCompleted || !isSelected}
                                           onChange={(e) => {
                                             const val = e.target.value === '' ? 0 : Number(e.target.value);
                                             setMultiPurchaseItemEdits(prev => ({
@@ -3454,9 +3481,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         <input 
                                           type="number"
                                           step="0.01"
-                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                           value={edit.cgstPercent ?? ''}
-                                          disabled={!isSelected}
+                                          disabled={isCompleted || !isSelected}
                                           onChange={(e) => {
                                             const val = e.target.value === '' ? 0 : Number(e.target.value);
                                             setMultiPurchaseItemEdits(prev => ({
@@ -3470,9 +3497,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         <input 
                                           type="number"
                                           step="0.01"
-                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                           value={edit.sgstPercent ?? ''}
-                                          disabled={!isSelected}
+                                          disabled={isCompleted || !isSelected}
                                           onChange={(e) => {
                                             const val = e.target.value === '' ? 0 : Number(e.target.value);
                                             setMultiPurchaseItemEdits(prev => ({
@@ -3486,9 +3513,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         <input 
                                           type="number"
                                           step="0.01"
-                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs font-mono text-center outline-none bg-white focus:border-emerald-500 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                           value={edit.igstPercent ?? ''}
-                                          disabled={!isSelected}
+                                          disabled={isCompleted || !isSelected}
                                           onChange={(e) => {
                                             const val = e.target.value === '' ? 0 : Number(e.target.value);
                                             setMultiPurchaseItemEdits(prev => ({
