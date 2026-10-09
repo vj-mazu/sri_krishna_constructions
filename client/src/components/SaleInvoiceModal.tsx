@@ -106,7 +106,20 @@ export const SaleInvoiceModal: React.FC<{
     const saved = localStorage.getItem('skc_invoice_custom_settings');
     if (saved) {
       try {
-        return { ...defaultSettings, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        return {
+          companyName: parsed.companyName !== undefined ? parsed.companyName : defaultSettings.companyName,
+          companyAddress: parsed.companyAddress !== undefined ? parsed.companyAddress : defaultSettings.companyAddress,
+          companyTagline: parsed.companyTagline !== undefined ? parsed.companyTagline : defaultSettings.companyTagline,
+          companyGst: parsed.companyGst !== undefined ? parsed.companyGst : defaultSettings.companyGst,
+          companyPhone: parsed.companyPhone !== undefined ? parsed.companyPhone : defaultSettings.companyPhone,
+          bankHolder: parsed.bankHolder !== undefined ? parsed.bankHolder : defaultSettings.bankHolder,
+          bankName: parsed.bankName !== undefined ? parsed.bankName : defaultSettings.bankName,
+          bankAccount: parsed.bankAccount !== undefined ? parsed.bankAccount : defaultSettings.bankAccount,
+          bankIfsc: parsed.bankIfsc !== undefined ? parsed.bankIfsc : defaultSettings.bankIfsc,
+          signatoryTitle: parsed.signatoryTitle !== undefined ? parsed.signatoryTitle : defaultSettings.signatoryTitle,
+          signatoryDesignation: parsed.signatoryDesignation !== undefined ? parsed.signatoryDesignation : defaultSettings.signatoryDesignation
+        };
       } catch (_) {}
     }
     return defaultSettings;
@@ -272,23 +285,23 @@ export const SaleInvoiceModal: React.FC<{
       doc.setTextColor(218, 18, 18);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(16);
-      doc.text(customSettings.companyName || 'SRI KRISHNA CONSTRUCTIONS', pageWidth / 2, targetY + 6.5, { align: 'center' });
+      doc.text(customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS'), pageWidth / 2, targetY + 6.5, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.2);
-      doc.text(customSettings.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170', pageWidth / 2, targetY + 11.5, { align: 'center' });
+      doc.text(customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170'), pageWidth / 2, targetY + 11.5, { align: 'center' });
       
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.2);
-      doc.text(customSettings.companyTagline || 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
+      doc.text(customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
 
       // GST and Mobile Bar
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text(`GST NO: ${customSettings.companyGst || '29DWKPP3582H1ZV'}`, margin + 2, targetY + 21.5);
-      doc.text(`Mobile No: ${customSettings.companyPhone || '8496841904'}`, pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
+      doc.text(`GST NO: ${customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}`, margin + 2, targetY + 21.5);
+      doc.text(`Mobile No: ${customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}`, pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
     };
 
     // 1. TOP HEADER BOX ON PAGE 1
@@ -489,10 +502,10 @@ export const SaleInvoiceModal: React.FC<{
     doc.setFont('helvetica', 'bold');
     doc.text('Bank Details :', margin + 2, fy + 16.5);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Account Holder Name : ${customSettings.bankHolder || 'Sri Krishna Constructions'}`, margin + 2, fy + 20.5);
-    doc.text(`Bank Name : ${customSettings.bankName || 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 24.5);
-    doc.text(`Bank Account No: ${customSettings.bankAccount || '18133070005349'}`, margin + 2, fy + 28.5);
-    doc.text(`IFSC Code:${customSettings.bankIfsc || 'CNRB0011813'}`, margin + 2, fy + 32.5);
+    doc.text(`Account Holder Name : ${customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}`, margin + 2, fy + 20.5);
+    doc.text(`Bank Name : ${customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 24.5);
+    doc.text(`Bank Account No: ${customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}`, margin + 2, fy + 28.5);
+    doc.text(`IFSC Code:${customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}`, margin + 2, fy + 32.5);
 
     // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
     const rightX = margin + leftBoxWidth;
@@ -729,17 +742,17 @@ export const SaleInvoiceModal: React.FC<{
               />
               <div className="flex-1 text-center">
                 <h1 className="text-xl sm:text-2xl font-black text-[#da1212] tracking-wide uppercase leading-tight">
-                  {customSettings.companyName || 'SRI KRISHNA CONSTRUCTIONS'}
+                  {customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS')}
                 </h1>
                 <p className="text-[11px] font-normal text-black mt-0.5">
-                  {customSettings.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170'}
+                  {customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170')}
                 </p>
                 <p className="text-[11px] font-normal text-black mt-0.5">
-                  {customSettings.companyTagline || 'All type of air compressor Service and Spares Avaliable.'}
+                  {customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.'}
                 </p>
                 <div className="flex justify-between items-center text-[11px] font-bold text-black mt-1 px-1">
-                  <span>GST NO: {customSettings.companyGst || '29DWKPP3582H1ZV'}</span>
-                  <span>Mobile No: {customSettings.companyPhone || '8496841904'}</span>
+                  <span>GST NO: {customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}</span>
+                  <span>Mobile No: {customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}</span>
                 </div>
               </div>
             </div>
@@ -851,10 +864,10 @@ export const SaleInvoiceModal: React.FC<{
                 <div className="pt-2 border-t border-black">
                   <span className="font-bold block text-black">Bank Details :</span>
                   <div className="text-[10.5px] text-black space-y-0.5 mt-0.5">
-                    <div>Account Holder Name : <strong>{customSettings.bankHolder || 'Sri Krishna Constructions'}</strong></div>
-                    <div>Bank Name : <strong>{customSettings.bankName || 'Canara Bank Deosugur Branch'}</strong></div>
-                    <div>Bank Account No: <strong className="font-bold">{customSettings.bankAccount || '18133070005349'}</strong></div>
-                    <div>IFSC Code: <strong className="font-bold">{customSettings.bankIfsc || 'CNRB0011813'}</strong></div>
+                    <div>Account Holder Name : <strong>{customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}</strong></div>
+                    <div>Bank Name : <strong>{customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}</strong></div>
+                    <div>Bank Account No: <strong className="font-bold">{customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}</strong></div>
+                    <div>IFSC Code: <strong className="font-bold">{customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}</strong></div>
                   </div>
                 </div>
               </div>
