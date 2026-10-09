@@ -1843,6 +1843,11 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
 
     const invoiceDate = d.invoiceDate ? new Date(d.invoiceDate) : existingSale.invoiceDate;
 
+    const isOwner = req.user.role === 'OWNER';
+    const nextStatus = isOwner ? 'APPROVED' : 'PENDING';
+    const approvedById = isOwner ? req.user.id : null;
+    const approvedAt = isOwner ? new Date() : null;
+
     const { rows } = await client.query(
       `UPDATE "Sale"
        SET "invoiceNumber" = COALESCE($1, "invoiceNumber"),
@@ -1855,10 +1860,10 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
            "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18,
            "vehicleNumber" = $19, "eWayBillNumber" = $20, "remarks" = $21,
            "shippingCharges" = $22,
-           "status" = 'PENDING',
-           "approvedById" = NULL,
-           "approvedAt" = NULL
-       WHERE id = $23
+           "status" = $23,
+           "approvedById" = $24,
+           "approvedAt" = $25
+       WHERE id = $26
        RETURNING *`,
       [
         d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
@@ -1876,6 +1881,9 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
         d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
         shippingCharges,
+        nextStatus,
+        approvedById,
+        approvedAt,
         id
       ]
     );
@@ -1908,39 +1916,47 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
       remarks: d.remarks ? d.remarks.trim() : existingSale.remarks || '-'
     };
 
-    // Check if an existing ApprovalRequest exists for this sale
-    const approvalCheck = await client.query(
-      `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'SALE_ENTRY' ORDER BY "createdAt" DESC LIMIT 1`,
-      [`%"saleId":"${id}"%`]
-    );
-
-    if (approvalCheck.rows.length > 0) {
-      await client.query(
-        `UPDATE "ApprovalRequest"
-         SET "status" = 'PENDING',
-             "payload" = $1,
-             "reason" = $2,
-             "requestedById" = $3,
-             "approvedById" = NULL,
-             "rejectionReason" = NULL,
-             "updatedAt" = NOW()
-         WHERE id = $4`,
-        [
-          JSON.stringify(payloadObj),
-          `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`,
-          req.user.id,
-          approvalCheck.rows[0].id
-        ]
+    if (!isOwner) {
+      // Check if an existing ApprovalRequest exists for this sale
+      const approvalCheck = await client.query(
+        `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'SALE_ENTRY' ORDER BY "createdAt" DESC LIMIT 1`,
+        [`%"saleId":"${id}"%`]
       );
+
+      if (approvalCheck.rows.length > 0) {
+        await client.query(
+          `UPDATE "ApprovalRequest"
+           SET "status" = 'PENDING',
+               "payload" = $1,
+               "reason" = $2,
+               "requestedById" = $3,
+               "approvedById" = NULL,
+               "rejectionReason" = NULL,
+               "updatedAt" = NOW()
+           WHERE id = $4`,
+          [
+            JSON.stringify(payloadObj),
+            `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`,
+            req.user.id,
+            approvalCheck.rows[0].id
+          ]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+          [
+            req.user.id,
+            JSON.stringify(payloadObj),
+            `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`
+          ]
+        );
+      }
     } else {
+      // If Owner edited directly, clear any pending approval request
       await client.query(
-        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
-         VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
-        [
-          req.user.id,
-          JSON.stringify(payloadObj),
-          `Sale Invoice #${payloadObj.invoiceNumber} (${qty} units of ${partNumber}) edited and re-submitted for Owner Approval`
-        ]
+        `UPDATE "ApprovalRequest" SET "status" = 'APPROVED', "approvedById" = $1, "updatedAt" = NOW() WHERE "payload"::text LIKE $2 AND "status" = 'PENDING'`,
+        [req.user.id, `%"saleId":"${id}"%`]
       );
     }
 
@@ -2882,8 +2898,11 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
     const newEWayBill = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : currentTx.eWayBillNumber;
     const newRemarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : currentTx.remarks;
 
+    const isOwner = req.user.role === 'OWNER';
     const isOutwardSale = currentTx.type === 'OUTWARD' || currentTx.type === 'SALE';
-    const nextStatus = isOutwardSale ? 'PENDING' : currentTx.status;
+    const nextStatus = isOutwardSale ? (isOwner ? 'APPROVED' : 'PENDING') : currentTx.status;
+    const approvedById = isOwner ? req.user.id : (nextStatus === 'PENDING' ? null : currentTx.approvedById);
+    const approvedAt = isOwner ? new Date() : (nextStatus === 'PENDING' ? null : currentTx.approvedAt);
 
     const { rows: updatedRows } = await client.query(
       `UPDATE "IndividualStockTransaction"
@@ -2907,9 +2926,9 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
            "eWayBillNumber" = $18,
            "remarks" = $19,
            "status" = $20,
-           "approvedById" = CASE WHEN $20 = 'PENDING' THEN NULL ELSE "approvedById" END,
-           "approvedAt" = CASE WHEN $20 = 'PENDING' THEN NULL ELSE "approvedAt" END
-       WHERE "id" = $21
+           "approvedById" = $21,
+           "approvedAt" = $22
+       WHERE "id" = $23
        RETURNING *`,
       [
         newDate, newQty, newRate, basicAmount,
@@ -2918,6 +2937,8 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
         newPartyName, newSupplierAddress, newGstNumber, newInvoiceNo,
         newVehicleNumber, newEWayBill, newRemarks,
         nextStatus,
+        approvedById,
+        approvedAt,
         id
       ]
     );
@@ -2951,38 +2972,46 @@ app.put('/api/individual-stocks/transactions/:id', authenticateToken, requireRol
         remarks: newRemarks || '-'
       };
 
-      const indAppCheck = await client.query(
-        `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'INDIVIDUAL_SALE' ORDER BY "createdAt" DESC LIMIT 1`,
-        [`%"transactionId":"${id}"%`]
-      );
-
-      if (indAppCheck.rows.length > 0) {
-        await client.query(
-          `UPDATE "ApprovalRequest"
-           SET "status" = 'PENDING',
-               "payload" = $1,
-               "reason" = $2,
-               "requestedById" = $3,
-               "approvedById" = NULL,
-               "rejectionReason" = NULL,
-               "updatedAt" = NOW()
-           WHERE id = $4`,
-          [
-            JSON.stringify(indPayload),
-            `Individual Stock Sale #${newInvoiceNo} (${newQty} units of ${stock.itemName}) edited and re-submitted for Owner Approval`,
-            req.user.id,
-            indAppCheck.rows[0].id
-          ]
+      if (!isOwner) {
+        const indAppCheck = await client.query(
+          `SELECT id FROM "ApprovalRequest" WHERE "payload"::text LIKE $1 AND "type" = 'INDIVIDUAL_SALE' ORDER BY "createdAt" DESC LIMIT 1`,
+          [`%"transactionId":"${id}"%`]
         );
+
+        if (indAppCheck.rows.length > 0) {
+          await client.query(
+            `UPDATE "ApprovalRequest"
+             SET "status" = 'PENDING',
+                 "payload" = $1,
+                 "reason" = $2,
+                 "requestedById" = $3,
+                 "approvedById" = NULL,
+                 "rejectionReason" = NULL,
+                 "updatedAt" = NOW()
+             WHERE id = $4`,
+            [
+              JSON.stringify(indPayload),
+              `Individual Stock Sale #${newInvoiceNo} (${newQty} units of ${stock.itemName}) edited and re-submitted for Owner Approval`,
+              req.user.id,
+              indAppCheck.rows[0].id
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, 'INDIVIDUAL_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+            [
+              req.user.id,
+              JSON.stringify(indPayload),
+              `Individual Stock Sale #${newInvoiceNo} (${newQty} units of ${stock.itemName}) edited and re-submitted for Owner Approval`
+            ]
+          );
+        }
       } else {
+        // Auto-approved by Owner
         await client.query(
-          `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
-           VALUES (gen_random_uuid()::text, 'INDIVIDUAL_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
-          [
-            req.user.id,
-            JSON.stringify(indPayload),
-            `Individual Stock Sale #${newInvoiceNo} (${newQty} units of ${stock.itemName}) edited and re-submitted for Owner Approval`
-          ]
+          `UPDATE "ApprovalRequest" SET "status" = 'APPROVED', "approvedById" = $1, "updatedAt" = NOW() WHERE "payload"::text LIKE $2 AND "status" = 'PENDING'`,
+          [req.user.id, `%"transactionId":"${id}"%`]
         );
       }
     }
@@ -3714,6 +3743,11 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
           }),
           `Work Order #${wo.invoiceNumber} (${wo.itemName}) edited by ${req.user.fullName || req.user.username} and submitted for Owner approval`
         ]
+      );
+    } else {
+      await client.query(
+        `UPDATE "ApprovalRequest" SET "status" = 'APPROVED', "approvedById" = $1, "updatedAt" = NOW() WHERE ("payload"::text LIKE $2 OR "payload"::text LIKE $3) AND "status" = 'PENDING'`,
+        [req.user.id, `%"workOrderIds":["${id}"]%`, `%"workOrderId":"${id}"%`]
       );
     }
 
