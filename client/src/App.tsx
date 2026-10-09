@@ -353,7 +353,7 @@ export function App() {
                       setOpenDropdown(prev => prev === 'orders' ? null : 'orders');
                     }}
                     className={`px-3 py-1.5 text-xs rounded-lg transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer select-none ${
-                      activeTab === 'purchase_orders' || activeTab === 'work_orders' || activeTab === 'individual_stock'
+                      activeTab === 'purchase_orders' || activeTab === 'work_orders'
                         ? 'bg-white text-[#1e3a8a] font-bold shadow-md'
                         : 'text-white/80 hover:text-white hover:bg-white/10 font-medium'
                     }`}
@@ -384,15 +384,6 @@ export function App() {
                       >
                         <Receipt className="w-4 h-4 text-emerald-700 shrink-0" />
                         <span>Work Orders</span>
-                      </button>
-                      <button
-                        onClick={() => { setActiveTab('individual_stock'); setOpenDropdown(null); }}
-                        className={`w-full px-3.5 py-2 text-left text-xs font-bold flex items-center gap-2.5 hover:bg-blue-50 transition-colors cursor-pointer ${
-                          activeTab === 'individual_stock' ? 'text-blue-900 bg-blue-50/80 font-black' : 'text-slate-700'
-                        }`}
-                      >
-                        <Layers className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>Individual Stocks (Non-PO)</span>
                       </button>
                     </div>
                   )}

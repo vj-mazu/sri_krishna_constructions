@@ -447,6 +447,7 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "previousDailyWage" DOUBLE PRECISION;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "wageRevisedDate" TIMESTAMP(3);
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceReason" TEXT;
+      ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceTakenDate" TIMESTAMP(3);
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "advanceReturnDate" TIMESTAMP(3);
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "otAllowance" DOUBLE PRECISION NOT NULL DEFAULT 0;
       ALTER TABLE "Worker" ADD COLUMN IF NOT EXISTS "pfNumber" TEXT;
