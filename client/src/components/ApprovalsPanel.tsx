@@ -211,8 +211,9 @@ export const ApprovalsPanel: React.FC = () => {
         ) : (
           invoiceApprovals.map((a, i) => {
             const p = typeof a.payload === 'string' ? safeParsePayload(a.payload) : a.payload;
-            const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE';
+            const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE' || a.type === 'WORK_ORDER_SALE' || a.type === 'WORK_ORDER_EDIT' || a.type === 'SALE_EDIT';
             const isIndSale = a.type === 'INDIVIDUAL_SALE';
+            const isWorkOrder = a.type === 'WORK_ORDER_SALE' || a.type === 'WORK_ORDER_EDIT';
 
             return (
               <div key={a.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
@@ -225,11 +226,13 @@ export const ApprovalsPanel: React.FC = () => {
                       <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
                         isIndSale 
                           ? 'bg-purple-100 text-purple-900 border border-purple-300' 
+                          : isWorkOrder
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                           : isSale 
                           ? 'bg-blue-100 text-blue-900 border border-blue-300' 
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {isIndSale ? 'INDIVIDUAL STOCK SALE' : isSale ? 'SALE INVOICE' : a.type}
+                        {isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (a.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : isSale ? 'SALE INVOICE' : a.type}
                       </span>
                       <div className="font-mono font-bold text-xs text-[#1e3a8a] mt-0.5">
                         {isSale ? `Inv #${p?.invoiceNumber || '-'}` : (p?.date || 'Attendance')}
@@ -246,7 +249,12 @@ export const ApprovalsPanel: React.FC = () => {
                   <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-[11px] space-y-1.5 font-mono">
                     <div className="flex justify-between border-b border-slate-200 pb-1">
                       <span className="text-slate-500">Item:</span>
-                      <strong className="text-slate-900 font-bold">{p?.partNumber || '-'} ({p?.itemName || '-'})</strong>
+                      <div className="text-right">
+                        <strong className="text-slate-900 font-bold">{p?.partNumber || '-'} ({p?.itemName || '-'})</strong>
+                        {p?.kpclCode && p.kpclCode !== '-' && (
+                          <div className="text-[10px] text-blue-700 font-bold">KPCL: {p.kpclCode}</div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-slate-500">Party Name:</span>
@@ -366,8 +374,9 @@ export const ApprovalsPanel: React.FC = () => {
             ) : (
               invoiceApprovals.map((a, i) => {
                 const p = typeof a.payload === 'string' ? safeParsePayload(a.payload) : a.payload;
-                const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE';
+                const isSale = a.type === 'SALE_ENTRY' || a.type === 'INDIVIDUAL_SALE' || a.type === 'WORK_ORDER_SALE' || a.type === 'WORK_ORDER_EDIT' || a.type === 'SALE_EDIT';
                 const isIndSale = a.type === 'INDIVIDUAL_SALE';
+                const isWorkOrder = a.type === 'WORK_ORDER_SALE' || a.type === 'WORK_ORDER_EDIT';
                 const basic = p?.basicAmount || ((p?.qty || 0) * (p?.rate || 0));
 
                 return (
@@ -377,11 +386,13 @@ export const ApprovalsPanel: React.FC = () => {
                       <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
                         isIndSale
                           ? 'bg-purple-100 text-purple-900 border border-purple-300'
+                          : isWorkOrder
+                          ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
                           : isSale
                           ? 'bg-blue-100 text-blue-900 border border-blue-300'
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {isIndSale ? 'INDIVIDUAL SALE' : isSale ? 'SALE INVOICE' : a.type}
+                        {isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (a.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : isSale ? 'SALE INVOICE' : a.type}
                       </span>
                     </td>
                     <td className="px-2 py-2">
@@ -389,6 +400,9 @@ export const ApprovalsPanel: React.FC = () => {
                         <div>
                           <div className="font-mono font-bold text-slate-900">{p?.partNumber || '-'}</div>
                           <div className="text-[10px] text-slate-500">{p?.itemName || '-'}</div>
+                          {p?.kpclCode && p.kpclCode !== '-' && (
+                            <div className="text-[10px] text-blue-700 font-bold font-mono">KPCL: {p.kpclCode}</div>
+                          )}
                         </div>
                       ) : (
                         <div className="font-mono font-bold text-[#1e3a8a]">{p?.date || 'Attendance'}</div>
@@ -505,9 +519,10 @@ export const ApprovalsPanel: React.FC = () => {
             </div>
 
             <div className="space-y-3.5 text-xs overflow-y-auto pr-1">
-              {(inspectModal.type === 'SALE_ENTRY' || inspectModal.type === 'INDIVIDUAL_SALE') ? (() => {
+              {(inspectModal.type === 'SALE_ENTRY' || inspectModal.type === 'INDIVIDUAL_SALE' || inspectModal.type === 'WORK_ORDER_SALE' || inspectModal.type === 'WORK_ORDER_EDIT' || inspectModal.type === 'SALE_EDIT') ? (() => {
                 const p = typeof inspectModal.payload === 'string' ? safeParsePayload(inspectModal.payload) : inspectModal.payload;
                 const isInd = inspectModal.type === 'INDIVIDUAL_SALE';
+                const isWO = inspectModal.type === 'WORK_ORDER_SALE' || inspectModal.type === 'WORK_ORDER_EDIT';
                 const basic = Number(p?.basicAmount) || ((Number(p?.qty) || 0) * (Number(p?.rate) || 0));
                 const cgstP = Number(p?.cgstPercent) || 0;
                 const sgstP = Number(p?.sgstPercent) || 0;
@@ -521,7 +536,9 @@ export const ApprovalsPanel: React.FC = () => {
                     {/* INVOICE & ITEM HEADER */}
                     <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-3.5 rounded-xl flex items-center justify-between">
                       <div>
-                        <div className="text-[10px] text-blue-200 uppercase font-mono tracking-wider">Outward Sale Invoice</div>
+                        <div className="text-[10px] text-blue-200 uppercase font-mono tracking-wider">
+                          {isWO ? 'Work Order Direct Sale Invoice' : isInd ? 'Individual Stock Sale Invoice' : 'Outward Sale Invoice'}
+                        </div>
                         <div className="text-base font-black font-mono mt-0.5">{p?.invoiceNumber || '-'}</div>
                         <div className="text-[11px] text-blue-100 mt-0.5">Date: {formatDate(p?.invoiceDate)}</div>
                       </div>
@@ -538,6 +555,10 @@ export const ApprovalsPanel: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-[11px]">
                         <div><span className="text-slate-500">Part Number:</span> <strong className="text-slate-900 font-mono">{p?.partNumber || '-'}</strong></div>
+                        <div><span className="text-slate-500">KPCL Code:</span> <strong className="text-blue-900 font-mono font-bold">{p?.kpclCode || '-'}</strong></div>
+                        {p?.workOrderNumber && (
+                          <div><span className="text-slate-500">Work Order No:</span> <strong className="text-blue-950 font-mono font-bold">{p?.workOrderNumber}</strong></div>
+                        )}
                         <div><span className="text-slate-500">Item Name:</span> <strong className="text-slate-900">{p?.itemName || '-'}</strong></div>
                         <div><span className="text-slate-500">Sold Quantity:</span> <strong className="text-blue-900 font-mono font-bold">{p?.qty} units</strong></div>
                         <div><span className="text-slate-500">Sale Rate:</span> <strong className="text-slate-900 font-mono">{formatCurrency(p?.rate)}</strong></div>

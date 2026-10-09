@@ -415,8 +415,12 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "eWayBillNumber" TEXT;
       ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
 
-      -- WorkOrder shippingCharges
+      -- WorkOrder shippingCharges, kpclCode & Owner Approval tracking
       ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "kpclCode" TEXT;
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
+      ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
 
       -- Allow same Part Number across different POs by dropping global unique key and making it unique per PO
       ALTER TABLE "PurchaseOrderItem" DROP CONSTRAINT IF EXISTS "PurchaseOrderItem_partNumber_key";

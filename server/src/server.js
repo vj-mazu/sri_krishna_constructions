@@ -1174,7 +1174,7 @@ app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
           itemName: wo.itemName,
           specifications: wo.description || 'Work Order Direct Sale',
           partNumber: wo.partNumber || '',
-          kpclCode: '-',
+          kpclCode: wo.kpclCode || '-',
           unit: wo.unit || 'NOS'
         }
       }));
@@ -3278,53 +3278,57 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
       } finally {
         client.release();
       }
-    } else if (approval.type === 'SALE_ENTRY') {
+    } else if (approval.type === 'SALE_ENTRY' || approval.type === 'INDIVIDUAL_SALE') {
       // Sales must be approved by OWNER ONLY
       if (req.user.role !== 'OWNER') {
         return res.status(403).json({ error: 'Sale approvals must be reviewed and approved by the OWNER only.' });
       }
 
       const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
-      const saleId = payload.saleId;
+      const saleIds = payload.saleIds || (payload.saleId ? [payload.saleId] : (payload.id ? [payload.id] : []));
 
-      if (status === 'APPROVED') {
-        await pool.query(
-          `UPDATE "Sale" 
-           SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() 
-           WHERE id = $2`,
-          [req.user.id, saleId]
-        );
-      } else if (status === 'REJECTED') {
-        await pool.query(
-          `UPDATE "Sale" 
-           SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() 
-           WHERE id = $3`,
-          [rejectionReason || 'Rejected by Owner', req.user.id, saleId]
-        );
+      if (saleIds.length > 0) {
+        if (status === 'APPROVED') {
+          await pool.query(
+            `UPDATE "Sale" 
+             SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() 
+             WHERE id = ANY($2::text[])`,
+            [req.user.id, saleIds]
+          );
+        } else if (status === 'REJECTED') {
+          await pool.query(
+            `UPDATE "Sale" 
+             SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() 
+             WHERE id = ANY($3::text[])`,
+            [rejectionReason || 'Rejected by Owner', req.user.id, saleIds]
+          );
+        }
       }
-    } else if (approval.type === 'WORK_ORDER_SALE') {
+    } else if (approval.type === 'WORK_ORDER_SALE' || approval.type === 'WORK_ORDER' || approval.type === 'WORK_ORDER_EDIT') {
       // Work order sales approved by OWNER
       if (req.user.role !== 'OWNER') {
         return res.status(403).json({ error: 'Work order sale approvals must be reviewed and approved by the OWNER only.' });
       }
 
       const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
-      const workOrderId = payload.workOrderId;
+      const workOrderIds = payload.workOrderIds || (payload.workOrderId ? [payload.workOrderId] : (payload.id ? [payload.id] : []));
 
-      if (status === 'APPROVED') {
-        await pool.query(
-          `UPDATE "WorkOrder" 
-           SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() 
-           WHERE id = $2`,
-          [req.user.id, workOrderId]
-        );
-      } else if (status === 'REJECTED') {
-        await pool.query(
-          `UPDATE "WorkOrder" 
-           SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() 
-           WHERE id = $3`,
-          [rejectionReason || 'Rejected by Owner', req.user.id, workOrderId]
-        );
+      if (workOrderIds.length > 0) {
+        if (status === 'APPROVED') {
+          await pool.query(
+            `UPDATE "WorkOrder" 
+             SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() 
+             WHERE id = ANY($2::text[])`,
+            [req.user.id, workOrderIds]
+          );
+        } else if (status === 'REJECTED') {
+          await pool.query(
+            `UPDATE "WorkOrder" 
+             SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() 
+             WHERE id = ANY($3::text[])`,
+            [rejectionReason || 'Rejected by Owner', req.user.id, workOrderIds]
+          );
+        }
       }
     } else if (status === 'APPROVED' && approval.type === 'EDIT_ATTENDANCE') {
       const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
@@ -3496,15 +3500,15 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
         `INSERT INTO "WorkOrder" (
           "id", "workOrderNumber", "workOrderDate", "invoiceNumber", "invoiceDate",
           "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
-          "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
+          "kpclCode", "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
           "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
           "shippingCharges", "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
         ) VALUES (
           gen_random_uuid()::text, $1, $2, $3, $4,
           $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14, $15, $16,
-          $17, $18, $19, $20, $21, $22,
-          $23, $24, $25, $26, $27, $28, $29, $30, $31, NOW(), NOW()
+          $10, $11, $12, $13, $14, $15, $16, $17,
+          $18, $19, $20, $21, $22, $23,
+          $24, $25, $26, $27, $28, $29, $30, $31, $32, NOW(), NOW()
         ) RETURNING *`,
         [
           d.workOrderNumber.trim().toUpperCase(),
@@ -3516,9 +3520,10 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
           d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null,
           d.companyName ? d.companyName.trim() : 'Sri Krishna Constructions',
           d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : '29DWKPP3582H1ZV',
+          item.kpclCode ? item.kpclCode.trim() : '-',
           item.itemName.trim(),
           item.description ? item.description.trim() : (item.specifications || null),
-          item.partNumber ? item.partNumber.trim().toUpperCase() : (item.kpclCode || null),
+          item.partNumber ? item.partNumber.trim().toUpperCase() : null,
           item.unit ? item.unit.trim().toUpperCase() : 'NOS',
           qty,
           rate,
@@ -3582,8 +3587,9 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/work-orders/:id - Update Work Order
+// PUT /api/work-orders/:id - Update Work Order (With Owner Approval Workflow)
 app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
     const d = req.body;
@@ -3602,7 +3608,12 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
     const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
     const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
 
-    const { rows } = await pool.query(
+    const isOwner = req.user.role === 'OWNER';
+    const status = isOwner ? 'APPROVED' : 'PENDING';
+
+    await client.query('BEGIN');
+
+    const { rows } = await client.query(
       `UPDATE "WorkOrder"
        SET "workOrderNumber" = COALESCE($1, "workOrderNumber"),
            "workOrderDate" = COALESCE($2, "workOrderDate"),
@@ -3613,26 +3624,30 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
            "partyGstNumber" = $7,
            "companyName" = COALESCE($8, "companyName"),
            "companyGstNumber" = COALESCE($9, "companyGstNumber"),
-           "itemName" = COALESCE($10, "itemName"),
-           "description" = $11,
-           "partNumber" = $12,
-           "unit" = COALESCE($13, "unit"),
-           "qty" = $14,
-           "rate" = $15,
-           "basicAmount" = $16,
-           "cgstPercent" = $17,
-           "sgstPercent" = $18,
-           "igstPercent" = $19,
-           "cgstAmount" = $20,
-           "sgstAmount" = $21,
-           "igstAmount" = $22,
-           "shippingCharges" = $23,
-           "totalAmount" = $24,
-           "vehicleNumber" = $25,
-           "eWayBillNumber" = $26,
-           "remarks" = $27,
+           "kpclCode" = COALESCE($10, "kpclCode"),
+           "itemName" = COALESCE($11, "itemName"),
+           "description" = $12,
+           "partNumber" = $13,
+           "unit" = COALESCE($14, "unit"),
+           "qty" = $15,
+           "rate" = $16,
+           "basicAmount" = $17,
+           "cgstPercent" = $18,
+           "sgstPercent" = $19,
+           "igstPercent" = $20,
+           "cgstAmount" = $21,
+           "sgstAmount" = $22,
+           "igstAmount" = $23,
+           "shippingCharges" = $24,
+           "totalAmount" = $25,
+           "vehicleNumber" = $26,
+           "eWayBillNumber" = $27,
+           "remarks" = $28,
+           "status" = $29,
+           "approvedById" = $30,
+           "approvedAt" = $31,
            "updatedAt" = NOW()
-       WHERE "id" = $28
+       WHERE "id" = $32
        RETURNING *`,
       [
         d.workOrderNumber ? d.workOrderNumber.trim().toUpperCase() : null,
@@ -3644,6 +3659,7 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
         d.partyGstNumber !== undefined ? (d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null) : null,
         d.companyName ? d.companyName.trim() : null,
         d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null,
+        d.kpclCode !== undefined ? (d.kpclCode ? d.kpclCode.trim() : '-') : null,
         d.itemName ? d.itemName.trim() : null,
         d.description !== undefined ? (d.description ? d.description.trim() : null) : null,
         d.partNumber !== undefined ? (d.partNumber ? d.partNumber.trim().toUpperCase() : null) : null,
@@ -3662,15 +3678,56 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
         d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : null,
         d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : null,
         d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : null,
+        status,
+        isOwner ? req.user.id : null,
+        isOwner ? new Date() : null,
         id
       ]
     );
 
-    if (rows.length === 0) return res.status(404).json({ error: 'Work Order not found' });
-    res.json({ message: 'Work Order updated successfully', workOrder: rows[0] });
+    if (rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Work Order not found' });
+    }
+
+    // If edited by non-Owner, create or update ApprovalRequest for Owner review
+    if (!isOwner) {
+      const wo = rows[0];
+      await client.query(
+        `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+         VALUES (gen_random_uuid()::text, 'WORK_ORDER_SALE', 'PENDING', $1, $2, $3, NOW(), NOW())`,
+        [
+          req.user.id,
+          JSON.stringify({
+            workOrderIds: [id],
+            workOrderId: id,
+            workOrderNumber: wo.workOrderNumber,
+            invoiceNumber: wo.invoiceNumber,
+            partyName: wo.partyName,
+            kpclCode: wo.kpclCode,
+            itemName: wo.itemName,
+            partNumber: wo.partNumber,
+            qty: wo.qty,
+            rate: wo.rate,
+            itemCount: 1,
+            totalAmount: wo.totalAmount
+          }),
+          `Work Order #${wo.invoiceNumber} (${wo.itemName}) edited by ${req.user.fullName || req.user.username} and submitted for Owner approval`
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json({ 
+      message: isOwner ? 'Work Order updated and approved!' : 'Work Order updated and submitted for Owner approval.', 
+      workOrder: rows[0] 
+    });
   } catch (err) {
+    await client.query('ROLLBACK');
     console.error('Error updating work order:', err);
     res.status(500).json({ error: 'Failed to update work order' });
+  } finally {
+    client.release();
   }
 });
 
@@ -5592,8 +5649,6 @@ app.get('/api/wages/monthly', authenticateToken, async (req, res) => {
         if (!att || att.status === 'LEAVE') {
           if (!isFiltered || workerAtts.some(a => a.divisionId === divisionId)) {
             paidHolidaysCount += 1;
-            const defaultDiv = targetDivisionName || worker.divisionName || 'General';
-            divisionCounts[defaultDiv] = (divisionCounts[defaultDiv] || 0) + 1;
           }
         }
       });
@@ -5861,7 +5916,6 @@ app.get('/api/attendance/worker-month', authenticateToken, async (req, res) => {
         totalOtHours += otHours;
       } else if (declaredHoliday) {
         totalGovtHolidays += 1;
-        divisionSummary[div1Name] = (divisionSummary[div1Name] || 0) + 1;
       }
 
       daysList.push({

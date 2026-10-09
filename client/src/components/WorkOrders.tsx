@@ -37,6 +37,7 @@ interface WorkOrderItem {
   partyGstNumber?: string;
   companyName: string;
   companyGstNumber: string;
+  kpclCode?: string;
   itemName: string;
   description?: string;
   partNumber?: string;
@@ -141,6 +142,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     partyGstNumber: '',
     companyName: 'Sri Krishna Constructions',
     companyGstNumber: '29DWKPP3582H1ZV',
+    kpclCode: '',
     itemName: '',
     description: '',
     partNumber: '',
@@ -410,6 +412,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       partyGstNumber: item.partyGstNumber || '',
       companyName: item.companyName || 'Sri Krishna Constructions',
       companyGstNumber: item.companyGstNumber || '29DWKPP3582H1ZV',
+      kpclCode: item.kpclCode || '',
       itemName: item.itemName,
       description: item.description || '',
       partNumber: item.partNumber || '',
@@ -485,7 +488,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         itemName: wo.itemName,
         specifications: wo.description || 'Work Order Direct Sale',
         partNumber: wo.partNumber || '',
-        kpclCode: '-',
+        kpclCode: wo.kpclCode || '-',
         unit: wo.unit || 'NOS'
       }
     }));
@@ -625,7 +628,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             itemName: wo.itemName,
             specifications: wo.description || 'Work Order Direct Sale',
             partNumber: wo.partNumber || '',
-            kpclCode: '-',
+            kpclCode: wo.kpclCode || '-',
             unit: wo.unit || 'NOS'
           }
         }));
@@ -643,7 +646,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     const headers = [
       'Sl.No', 'WO Number', 'WO Date', 'Invoice No', 'Invoice Date',
       'Party / Client', 'Party GSTIN', 'Company GSTIN', 'Item Name',
-      'Description', 'Part No', 'Qty', 'Unit', 'Rate', 'Basic (Rs)',
+      'KPCL Code', 'Description', 'Part No', 'Qty', 'Unit', 'Rate', 'Basic (Rs)',
       'CGST %', 'SGST %', 'IGST %', 'Total Amount (Rs)', 'Vehicle No', 'E-Way Bill', 'Remarks'
     ];
     const rows = workOrders.map((w, idx) => [
@@ -656,6 +659,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       `"${w.partyGstNumber || '-'}"`,
       `"${w.companyGstNumber || '29DWKPP3582H1ZV'}"`,
       `"${w.itemName.replace(/"/g, '""')}"`,
+      `"${w.kpclCode || '-'}"`,
       `"${(w.description || '-').replace(/"/g, '""')}"`,
       `"${w.partNumber || '-'}"`,
       w.qty,
@@ -810,7 +814,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       itemName: wo.itemName,
                       specifications: wo.description || 'Work Order Direct Sale',
                       partNumber: wo.partNumber || '',
-                      kpclCode: '-',
+                      kpclCode: wo.kpclCode || '-',
                       unit: wo.unit || 'NOS'
                     }
                   }));
@@ -1404,7 +1408,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                         {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
                       </td>
                       <td className="font-mono text-slate-600 whitespace-nowrap p-2.5">
-                        {wo.partNumber || '-'}
+                        <div className="font-bold text-slate-800">{wo.partNumber || '-'}</div>
+                        {wo.kpclCode && wo.kpclCode !== '-' && (
+                          <div className="text-[10px] text-blue-700 font-bold font-mono">KPCL: {wo.kpclCode}</div>
+                        )}
                       </td>
                       <td className="text-center font-mono font-bold text-slate-900 p-2.5">
                         {wo.qty} {wo.unit || 'NOS'}
@@ -1662,7 +1669,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
                   <Package className="w-4 h-4 text-[#1e3a8a]" /> Item Specifications, Pricing &amp; Tax Breakdown
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                   <div className="sm:col-span-2">
                     <label className="block font-bold text-slate-700 mb-1">Item Name *</label>
                     <input
@@ -1672,6 +1679,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       value={editFormData.itemName}
                       onChange={(e) => setEditFormData({ ...editFormData, itemName: e.target.value })}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">KPCL Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. KPCL-2026-001"
+                      value={editFormData.kpclCode}
+                      onChange={(e) => setEditFormData({ ...editFormData, kpclCode: e.target.value.toUpperCase() })}
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
                   <div>
