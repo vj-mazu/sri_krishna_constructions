@@ -1283,7 +1283,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>Save &amp; Add to Sales Ledger</span>
+                      <span>Save &amp; Submit</span>
                     </>
                   )}
                 </button>
@@ -1294,7 +1294,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-95 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-blue-900/20 transition-all disabled:opacity-50"
                 >
                   <Receipt className="w-4 h-4" />
-                  <span>Save &amp; Open Tax Invoice</span>
+                  <span>Save &amp; View Tax Invoice</span>
                 </button>
               </div>
             </form>
