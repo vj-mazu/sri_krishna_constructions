@@ -84,6 +84,8 @@ export const SaleInvoiceModal: React.FC<{
   const partyName = primarySale.partyName || primarySale.clientDepartment || primarySale.supplierName || (isInward ? 'Supplier' : 'Customer');
   const partyAddress = primarySale.partyAddress || primarySale.supplierAddress || primarySale.clientAddress || '';
   const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || primarySale.clientGst || '';
+  const eWayBillNo = primarySale.eWayBillNumber || primarySale.eWayBillNo || primarySale.ewayBillNumber || primarySale.ewayBillNo || salesList.find(s => s.eWayBillNumber || s.eWayBillNo)?.eWayBillNumber || '';
+  const vehicleNo = primarySale.vehicleNumber || primarySale.vehicleNo || salesList.find(s => s.vehicleNumber || s.vehicleNo)?.vehicleNumber || '';
 
   // Customizable Company & Bank Details state with localStorage caching
   const defaultSettings: CustomInvoiceSettings = {
@@ -359,13 +361,23 @@ export const SaleInvoiceModal: React.FC<{
     const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
     doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
     
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, ry + 20);
-    doc.line(margin + colHalf, ry + 22, margin + contentWidth, ry + 22);
+    const hasVehicle = vehicleNo && vehicleNo !== '-';
+    const hasEway = eWayBillNo && eWayBillNo !== '-';
 
-    const vehicleLine = `Vehicle No : ${primarySale.vehicleNumber || '-'}`;
-    doc.text(vehicleLine, margin + colHalf + 2, ry + 27);
+    if (hasVehicle && hasEway) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.text(`Vehicle No : ${vehicleNo}`, margin + colHalf + 2, ry + 25.5);
+      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ry + 29.5);
+    } else if (hasEway) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ry + 27);
+    } else {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(`Vehicle No : ${vehicleNo || '-'}`, margin + colHalf + 2, ry + 27);
+    }
 
     y += boxHeight;
 
@@ -778,8 +790,13 @@ export const SaleInvoiceModal: React.FC<{
                   </div>
                   <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
                 </div>
-                <div className="p-1.5 font-bold">
-                  Vehicle No : <span className="uppercase font-bold">{primarySale.vehicleNumber || '-'}</span>
+                <div className="p-1.5 font-bold space-y-0.5">
+                  <div>Vehicle No : <span className="uppercase font-bold">{vehicleNo || '-'}</span></div>
+                  {eWayBillNo && eWayBillNo !== '-' && (
+                    <div className="text-blue-900 font-mono text-[10.5px]">
+                      E-Way Bill : <span className="font-bold">{eWayBillNo}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

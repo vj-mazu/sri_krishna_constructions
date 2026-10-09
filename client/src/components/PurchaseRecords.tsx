@@ -412,6 +412,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     partyInvoiceNumber?: string;
     supplierInvoiceDate?: string;
     vehicleNumber?: string;
+    eWayBillNumber?: string;
     remarks?: string;
   }>({});
 
@@ -974,6 +975,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
               partyName: s.partyName || sale.partyName || 'Customer',
               gstNumber: s.gstNumber || sale.gstNumber || '',
               companyGstNumber: s.companyGstNumber || sale.companyGstNumber || '29DWKPP3582H1ZV',
+              vehicleNumber: s.vehicleNumber || sale.vehicleNumber || '',
+              eWayBillNumber: s.eWayBillNumber || sale.eWayBillNumber || '',
               divisionName: s.divisionName || selectedPo?.division?.name || ''
             };
           });
@@ -1003,6 +1006,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
               partyName: s.partyName || sale.partyName || 'Customer',
               gstNumber: s.gstNumber || sale.gstNumber || '',
               companyGstNumber: s.companyGstNumber || sale.companyGstNumber || '29DWKPP3582H1ZV',
+              vehicleNumber: s.vehicleNumber || sale.vehicleNumber || '',
+              eWayBillNumber: s.eWayBillNumber || sale.eWayBillNumber || '',
               divisionName: s.divisionName || selectedPo?.division?.name || ''
             };
           });
@@ -2364,7 +2369,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label className="block font-semibold text-slate-700 mb-1">Vehicle No</label>
                         <input
@@ -2376,10 +2381,20 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         />
                       </div>
                       <div>
+                        <label className="block font-semibold text-slate-700 mb-1">E-Way Bill Number</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 531234567890"
+                          value={editSaleForm.eWayBillNumber || ''}
+                          onChange={e => setEditSaleForm(prev => ({ ...prev, eWayBillNumber: e.target.value.toUpperCase() }))}
+                          className="w-full p-2 border border-slate-300 rounded font-mono uppercase font-bold text-xs text-blue-900"
+                        />
+                      </div>
+                      <div>
                         <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
                         <input
                           type="text"
-                          placeholder="Delivery notes, driver info, inspection remarks..."
+                          placeholder="Delivery notes, remarks..."
                           value={editSaleForm.remarks || ''}
                           onChange={e => setEditSaleForm(prev => ({ ...prev, remarks: e.target.value }))}
                           className="w-full p-2 border border-slate-300 rounded text-xs"
@@ -4573,6 +4588,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         partyInvoiceNumber: sale.partyInvoiceNumber || '',
                                         supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
                                         vehicleNumber: sale.vehicleNumber || '',
+                                        eWayBillNumber: sale.eWayBillNumber || '',
                                         remarks: sale.remarks || ''
                                       });
                                     }}
@@ -4733,6 +4749,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                             partyInvoiceNumber: sale.partyInvoiceNumber || '',
                                             supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
                                             vehicleNumber: sale.vehicleNumber || '',
+                                            eWayBillNumber: sale.eWayBillNumber || '',
                                             remarks: sale.remarks || ''
                                           });
                                         }}

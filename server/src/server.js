@@ -1853,12 +1853,12 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
            "partyName" = $13, "supplierAddress" = $14, "gstNumber" = $15,
            "companyGstNumber" = $16,
            "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18,
-           "vehicleNumber" = $19, "remarks" = $20,
-           "shippingCharges" = $21,
+           "vehicleNumber" = $19, "eWayBillNumber" = $20, "remarks" = $21,
+           "shippingCharges" = $22,
            "status" = 'PENDING',
            "approvedById" = NULL,
            "approvedAt" = NULL
-       WHERE id = $22
+       WHERE id = $23
        RETURNING *`,
       [
         d.invoiceNumber ? d.invoiceNumber.trim().toUpperCase() : null,
@@ -1873,6 +1873,7 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
         d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
         d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
         d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
+        d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null,
         d.remarks ? d.remarks.trim() : null,
         shippingCharges,
         id
