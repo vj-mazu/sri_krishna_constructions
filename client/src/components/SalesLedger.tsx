@@ -201,14 +201,15 @@ export const SalesLedger: React.FC = () => {
   // Export to CSV / Excel matching user's physical sheet layout
   const handleExportCSV = () => {
     if (filteredSales.length === 0) return;
-    const headers = ['Sl.No', 'Date', 'Invoice', 'Department / Client', 'GST NO', 'Name of work', 'Item Name', 'Part No', 'Qty', 'Rate', 'Total Amount', 'Vehicle No', 'E-Way Bill No', 'Status'];
+    const headers = ['Sl.No', 'Date', 'Invoice', 'Sale Type', 'Department / Client', 'GST NO', 'Name of work', 'Item Name', 'Part No', 'Qty', 'Rate', 'Total Amount', 'Vehicle No', 'E-Way Bill No', 'Status'];
     const rows = filteredSales.map((s) => [
       s.slNo,
       formatDate(s.date),
       `"${s.invoiceNumber || '-'}"`,
+      `"${s.sourceType === 'WORK_ORDER' ? 'WORK ORDER' : s.sourceType === 'INDIVIDUAL' ? 'INDIVIDUAL STOCK' : 'PO SALE'}"`,
       `"${(s.clientDepartment || '-').replace(/"/g, '""')}"`,
       `"${s.clientGst || '-'}"`,
-      `"${s.nameOfWork || 'Sales'}"`,
+      `"${s.nameOfWork || (s.sourceType === 'WORK_ORDER' ? 'Work Order' : s.sourceType === 'INDIVIDUAL' ? 'Individual Sale' : 'PO Sale')}"`,
       `"${(s.itemName || '-').replace(/"/g, '""')}"`,
       `"${(s.partNumber || '-').replace(/"/g, '""')}"`,
       s.qty || 0,
@@ -455,16 +456,21 @@ export const SalesLedger: React.FC = () => {
                       {sale.invoiceNumber || '-'}
                     </td>
                     <td className="font-semibold text-slate-900 p-2.5">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <span>{sale.clientDepartment || '-'}</span>
-                        {sale.sourceType === 'INDIVIDUAL' && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-900 border border-purple-300">
-                            INDIVIDUAL
+                        {sale.sourceType === 'PO' && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-900 border border-blue-300 whitespace-nowrap">
+                            PO SALE
                           </span>
                         )}
                         {sale.sourceType === 'WORK_ORDER' && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 whitespace-nowrap">
                             WORK ORDER
+                          </span>
+                        )}
+                        {sale.sourceType === 'INDIVIDUAL' && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-900 border border-purple-300 whitespace-nowrap">
+                            INDIVIDUAL SALE
                           </span>
                         )}
                       </div>
@@ -473,8 +479,18 @@ export const SalesLedger: React.FC = () => {
                       {sale.clientGst || '-'}
                     </td>
                     <td className="text-center p-2.5">
-                      <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded font-bold text-[10px]">
-                        {sale.nameOfWork || 'Sales'}
+                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                        sale.sourceType === 'WORK_ORDER' 
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                          : sale.sourceType === 'INDIVIDUAL'
+                          ? 'bg-purple-50 text-purple-800 border border-purple-300'
+                          : 'bg-blue-50 text-blue-800 border border-blue-300'
+                      }`}>
+                        {sale.sourceType === 'WORK_ORDER' 
+                          ? `Work Order (${sale.workOrderNumber || 'Direct'})` 
+                          : sale.sourceType === 'INDIVIDUAL'
+                          ? 'Individual Sale'
+                          : `PO Sale (${sale.poNumber || 'PO'})`}
                       </span>
                     </td>
                     <td className="font-medium text-slate-800 p-2.5">
@@ -612,7 +628,18 @@ export const SalesLedger: React.FC = () => {
                   #{inspectModalItem.slNo}
                 </span>
                 <div>
-                  <h3 className="font-bold text-base">Invoice Details: {inspectModalItem.invoiceNumber}</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-base">Invoice Details: {inspectModalItem.invoiceNumber}</h3>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      inspectModalItem.sourceType === 'WORK_ORDER'
+                        ? 'bg-emerald-400 text-emerald-950 font-black'
+                        : inspectModalItem.sourceType === 'INDIVIDUAL'
+                        ? 'bg-purple-300 text-purple-950 font-black'
+                        : 'bg-blue-300 text-blue-950 font-black'
+                    }`}>
+                      {inspectModalItem.sourceType === 'WORK_ORDER' ? 'WORK ORDER SALE' : inspectModalItem.sourceType === 'INDIVIDUAL' ? 'INDIVIDUAL STOCK SALE' : 'PO SALE'}
+                    </span>
+                  </div>
                   <p className="text-xs text-blue-200">Date: {formatDate(inspectModalItem.date)}</p>
                 </div>
               </div>
@@ -625,11 +652,15 @@ export const SalesLedger: React.FC = () => {
               {/* CLIENT / DEPARTMENT INFO */}
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
                 <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Buyer & Client Department Details
+                  <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Buyer &amp; Order Classification Details
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div><span className="text-slate-500">Sale Category:</span> <strong className="text-blue-900 block font-bold">{inspectModalItem.sourceType === 'WORK_ORDER' ? 'Work Order Contract' : inspectModalItem.sourceType === 'INDIVIDUAL' ? 'Individual Inventory Sale' : 'PO Direct Sale'}</strong></div>
                   <div><span className="text-slate-500">Client / Department:</span> <strong className="text-slate-900 block">{inspectModalItem.clientDepartment}</strong></div>
                   <div><span className="text-slate-500">Buyer GSTIN:</span> <strong className="text-slate-900 font-mono block">{inspectModalItem.clientGst || '-'}</strong></div>
+                  {inspectModalItem.sourceType === 'PO' && (
+                    <div><span className="text-slate-500">PO Number:</span> <strong className="text-blue-900 font-mono block">{inspectModalItem.poNumber || '-'}</strong></div>
+                  )}
                   {inspectModalItem.workOrderNumber && inspectModalItem.workOrderNumber !== '-' && (
                     <div><span className="text-slate-500">Work Order No:</span> <strong className="text-[#1e3a8a] font-mono block">{inspectModalItem.workOrderNumber}</strong></div>
                   )}

@@ -232,7 +232,7 @@ export const ApprovalsPanel: React.FC = () => {
                           ? 'bg-blue-100 text-blue-900 border border-blue-300' 
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (a.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : isSale ? 'SALE INVOICE' : a.type}
+                        {isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (a.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : a.type === 'SALE_EDIT' ? 'PO SALE EDIT' : 'PO SALE'}
                       </span>
                       <div className="font-mono font-bold text-xs text-[#1e3a8a] mt-0.5">
                         {isSale ? `Inv #${p?.invoiceNumber || '-'}` : (p?.date || 'Attendance')}
@@ -392,7 +392,7 @@ export const ApprovalsPanel: React.FC = () => {
                           ? 'bg-blue-100 text-blue-900 border border-blue-300'
                           : 'bg-amber-100 text-amber-800 border border-amber-300'
                       }`}>
-                        {isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (a.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : isSale ? 'SALE INVOICE' : a.type}
+                        {isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (a.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : a.type === 'SALE_EDIT' ? 'PO SALE EDIT' : 'PO SALE'}
                       </span>
                     </td>
                     <td className="px-2 py-2">
