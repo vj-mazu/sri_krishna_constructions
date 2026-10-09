@@ -4752,6 +4752,19 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       );
     }
 
+    // Auto-create initial Wage History baseline milestone for Salary Hike Ledger
+    const initialBase = Math.round((numDailyWage + numAllowance) * 31);
+    const initialEffectiveDate = (advanceTakenDate ? new Date(advanceTakenDate) : (createdWorker.createdAt || new Date())).toISOString().split('T')[0];
+    await pool.query(
+      `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Wage Registration', $6, NOW(), NOW())
+       ON CONFLICT ("workerId", "effectiveDate") DO UPDATE SET
+         "basePaid" = EXCLUDED."basePaid",
+         "hikeAmount" = EXCLUDED."hikeAmount",
+         "totalAmount" = EXCLUDED."totalAmount"`,
+      [createdWorker.id, initialEffectiveDate, initialBase, numExtra, initialBase + numExtra, req.user.id]
+    );
+
     const { rows: divRows } = await pool.query(`SELECT "id", "name" FROM "Division" WHERE "id" = $1`, [divisionId]);
     const worker = { ...createdWorker, division: divRows[0] || null };
 
@@ -4859,13 +4872,31 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
 
     // If base salary or Extra (hike) was revised, automatically record milestone in WorkerWageHistory and SalaryAuditLog
     const oldExtra = parseFloat(existing[0].extraAmount) || 0;
+    const oldAllowance = parseFloat(existing[0].dailyAllowance) || 0;
     const isExtraChanged = Math.abs(newExtra - oldExtra) > 0.01;
+    const isAllowanceChanged = Math.abs(newAllowance - oldAllowance) > 0.01;
 
-    if (isWageHiked || isExtraChanged) {
+    if (isWageHiked || isAllowanceChanged || isExtraChanged) {
       const now = new Date();
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
       const dateStr = now.toISOString().split('T')[0];
+      const monthlyBase = Math.round((newDailyWage + newAllowance) * 31);
+      const prevMonthlyBase = Math.round((oldDailyWage + oldAllowance) * 31);
+
+      // Check if worker has existing baseline in WorkerWageHistory; if not, insert initial first
+      const { rows: histCheck } = await pool.query(`SELECT id FROM "WorkerWageHistory" WHERE "workerId" = $1`, [id]);
+      if (histCheck.length === 0) {
+        const initialDate = existing[0].wageRevisedDate ? new Date(existing[0].wageRevisedDate).toISOString().split('T')[0] : (existing[0].createdAt ? new Date(existing[0].createdAt).toISOString().split('T')[0] : '2024-08-01');
+        if (initialDate !== dateStr) {
+          await pool.query(
+            `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Baseline Setup', $6, NOW() - INTERVAL '1 day', NOW())
+             ON CONFLICT ("workerId", "effectiveDate") DO NOTHING`,
+            [id, initialDate, prevMonthlyBase, oldExtra, prevMonthlyBase + oldExtra, req.user.id]
+          );
+        }
+      }
 
       // 1. Insert/Update Wage Hike Matrix Milestone
       await pool.query(
@@ -4882,12 +4913,12 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
         [
           id,
           dateStr,
-          newDailyWage,
+          monthlyBase,
           newExtra,
-          newDailyWage + newExtra,
-          isExtraChanged && isWageHiked 
-            ? `Wage changed to ₹${newDailyWage}, Extra revised from ₹${oldExtra} to ₹${newExtra}`
-            : (isExtraChanged ? `Extra (Hike) revised from ₹${oldExtra} to ₹${newExtra}` : `Base wage changed to ₹${newDailyWage}`),
+          monthlyBase + newExtra,
+          isExtraChanged && (isWageHiked || isAllowanceChanged)
+            ? `Monthly base ₹${monthlyBase}, Extra revised from ₹${oldExtra} to ₹${newExtra}`
+            : (isExtraChanged ? `Extra (Hike) revised from ₹${oldExtra} to ₹${newExtra}` : `Monthly base changed to ₹${monthlyBase}`),
           req.user.id
         ]
       );
@@ -4906,10 +4937,10 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
           id,
           currentMonth,
           currentYear,
-          oldDailyWage + oldExtra,
-          newDailyWage + newExtra,
-          (newDailyWage + newExtra) - (oldDailyWage + oldExtra),
-          `Master Wage/Extra Revision: Total remuneration changed from ₹${oldDailyWage + oldExtra} to ₹${newDailyWage + newExtra} (Extra: ₹${oldExtra} ➔ ₹${newExtra})`,
+          prevMonthlyBase + oldExtra,
+          monthlyBase + newExtra,
+          (monthlyBase + newExtra) - (prevMonthlyBase + oldExtra),
+          `Master Wage/Extra Revision: Total remuneration changed from ₹${prevMonthlyBase + oldExtra} to ₹${monthlyBase + newExtra} (Extra: ₹${oldExtra} ➔ ₹${newExtra})`,
           req.user.id
         ]
       );
@@ -6926,6 +6957,30 @@ app.post('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'M
       return res.status(400).json({ error: 'Worker, effective date, and base wage are required' });
     }
 
+    const { rows: workerRows } = await pool.query(`SELECT * FROM "Worker" WHERE "id" = $1`, [workerId]);
+    if (workerRows.length === 0) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+    const worker = workerRows[0];
+
+    // Check if worker has existing baseline in WorkerWageHistory; if not, insert initial first so past baseline is preserved
+    const { rows: histCheck } = await pool.query(`SELECT id FROM "WorkerWageHistory" WHERE "workerId" = $1`, [workerId]);
+    if (histCheck.length === 0) {
+      const initialDate = worker.wageRevisedDate ? new Date(worker.wageRevisedDate).toISOString().split('T')[0] : (worker.createdAt ? new Date(worker.createdAt).toISOString().split('T')[0] : '2024-08-01');
+      const dailyWage = parseFloat(worker.dailyWage) || 0;
+      const dailyAllowance = parseFloat(worker.dailyAllowance) || 0;
+      const prevBase = Math.round((dailyWage + dailyAllowance) * 31);
+      const prevHike = parseFloat(worker.extraAmount) || 0;
+      if (initialDate !== effectiveDate) {
+        await pool.query(
+          `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Baseline Setup', $6, NOW() - INTERVAL '1 day', NOW())
+           ON CONFLICT ("workerId", "effectiveDate") DO NOTHING`,
+          [workerId, initialDate, prevBase, prevHike, prevBase + prevHike, req.user.id]
+        );
+      }
+    }
+
     const base = parseFloat(basePaid) || 0;
     const hike = parseFloat(hikeAmount) || 0;
     const total = base + hike;
@@ -6943,6 +6998,14 @@ app.post('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'M
          "updatedAt" = NOW()
        RETURNING *`,
       [workerId, effectiveDate, base, hike, total, notes || null, req.user.id]
+    );
+
+    // Also update Worker master extraAmount and wageRevisedDate
+    await pool.query(
+      `UPDATE "Worker"
+       SET "extraAmount" = $1, "wageRevisedDate" = $2::date, "updatedAt" = NOW()
+       WHERE "id" = $3`,
+      [hike, effectiveDate, workerId]
     );
 
     res.json({ message: 'Wage hike record saved successfully!', record: rows[0] });
