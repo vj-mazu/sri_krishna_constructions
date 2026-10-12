@@ -1123,9 +1123,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     setEditInwardInvoiceItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  // Open Grouped Inward Invoice Edit Modal
+  // Open Grouped Inward Invoice Edit Modal (or Toggle Inline)
   const handleOpenEditInwardInvoice = async (pur: any, initialItems?: any[]) => {
     const invNum = (pur.partyInvoiceNumber || '').trim();
+    if (editInwardInvoiceModal && (editInwardInvoiceModal.partyInvoiceNumber || '').trim() === invNum) {
+      setEditInwardInvoiceModal(null);
+      return;
+    }
     setOriginalInwardInvoiceNumber(invNum);
 
     // Populate immediately from group items or local cache so popup opens instantly
@@ -1348,9 +1352,13 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     setEditSaleInvoiceItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  // Open Grouped Sale Invoice Edit Modal
+  // Open Grouped Sale Invoice Edit Modal (or Toggle Inline)
   const handleOpenEditSaleInvoice = async (sale: any, initialItems?: any[]) => {
     const invNum = (sale.invoiceNumber || '').trim();
+    if (editSaleInvoiceModal && (editSaleInvoiceModal.invoiceNumber || '').trim() === invNum) {
+      setEditSaleInvoiceModal(null);
+      return;
+    }
     setOriginalSaleInvoiceNumber(invNum);
 
     // Populate immediately from group items or local cache so popup opens instantly
@@ -3082,650 +3090,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
               </div>
             )}
 
-            {/* 5. GROUPED INWARD INVOICE EDIT MODAL (ALL ITEMS ON DC/INVOICE) */}
-            {editInwardInvoiceModal && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
-                  {/* MODAL HEADER */}
-                  <div className="bg-emerald-800 text-white p-4 rounded-t-2xl flex items-center justify-between shrink-0">
-                    <div>
-                      <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
-                        <span>📦 Edit Inward Receipt / DC</span>
-                        <span className="font-mono bg-emerald-700 px-2.5 py-0.5 rounded text-xs">
-                          {editInwardInvoiceHeader.partyInvoiceNumber || 'NO INVOICE NO'}
-                        </span>
-                        <span className="bg-white/20 text-white text-[11px] px-2 py-0.5 rounded-full font-bold">
-                          {editInwardInvoiceItems.length} {editInwardInvoiceItems.length === 1 ? 'Item' : 'Items'}
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-emerald-100 mt-0.5">
-                        Supplier: <strong className="text-white">{editInwardInvoiceHeader.partyName || '-'}</strong>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditInwardInvoiceModal(null)}
-                      className="text-white/80 hover:text-white text-2xl font-bold leading-none p-1 cursor-pointer"
-                    >
-                      ×
-                    </button>
-                  </div>
 
-                  {/* FORM */}
-                  <form onSubmit={handleSaveInwardInvoiceEdit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-                    {/* INVOICE & SUPPLIER DETAILS */}
-                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Receipt className="w-3.5 h-3.5 text-emerald-600" /> Inward Receipt / DC Metadata
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Party Invoice / DC No *</label>
-                          <input
-                            type="text"
-                            required
-                            value={editInwardInvoiceHeader.partyInvoiceNumber}
-                            onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, partyInvoiceNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono font-bold uppercase text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Inward Date *</label>
-                          <DatePickerDMY
-                            required
-                            value={editInwardInvoiceHeader.date}
-                            onChange={val => setEditInwardInvoiceHeader(prev => ({ ...prev, date: val }))}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
-                          <DatePickerDMY
-                            value={editInwardInvoiceHeader.supplierInvoiceDate}
-                            onChange={val => setEditInwardInvoiceHeader(prev => ({ ...prev, supplierInvoiceDate: val }))}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Supplier / Party Name</label>
-                          <input
-                            type="text"
-                            value={editInwardInvoiceHeader.partyName}
-                            onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, partyName: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Supplier GSTIN</label>
-                          <input
-                            type="text"
-                            value={editInwardInvoiceHeader.gstNumber}
-                            onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono uppercase text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Vehicle No</label>
-                          <input
-                            type="text"
-                            value={editInwardInvoiceHeader.vehicleNumber}
-                            onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono uppercase text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Supplier Address</label>
-                          <input
-                            type="text"
-                            value={editInwardInvoiceHeader.supplierAddress}
-                            onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, supplierAddress: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Remarks</label>
-                          <input
-                            type="text"
-                            value={editInwardInvoiceHeader.remarks}
-                            onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, remarks: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ITEMS TABLE */}
-                    <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
-                      <div className="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-800 text-xs flex justify-between items-center">
-                        <span>Line Items ({editInwardInvoiceItems.length})</span>
-                      </div>
-                      <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                        <table className="w-full text-xs text-left">
-                          <thead className="bg-slate-800 text-slate-200 sticky top-0 z-10 text-[11px]">
-                            <tr>
-                              <th className="p-2 w-10 text-center">Sl No</th>
-                              <th className="p-2 min-w-[130px]">Part Number</th>
-                              <th className="p-2 min-w-[180px]">Item Name</th>
-                              <th className="p-2 w-24 text-center">Unit</th>
-                              <th className="p-2 w-24 text-center">Inward Qty *</th>
-                              <th className="p-2 w-28 text-right">Inward Rate (₹) *</th>
-                              <th className="p-2 w-20 text-center">CGST %</th>
-                              <th className="p-2 w-20 text-center">SGST %</th>
-                              <th className="p-2 w-20 text-center">IGST %</th>
-                              <th className="p-2 w-28 text-right">Total (₹)</th>
-                              <th className="p-2 w-12 text-center">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-200">
-                            {editInwardInvoiceItems.map((item, idx) => {
-                              const b = (Number(item.qty) || 0) * (Number(item.rate) || 0);
-                              const taxP = (Number(item.cgstPercent) || 0) + (Number(item.sgstPercent) || 0) + (Number(item.igstPercent) || 0);
-                              const tax = b * (taxP / 100);
-                              const total = b + tax + (Number(item.shippingCharges) || 0);
-
-                              return (
-                                <tr key={item.id || idx} className="hover:bg-slate-50">
-                                  <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
-                                  <td className="p-1">
-                                    <input
-                                      type="text"
-                                      value={item.partNumber || ''}
-                                      onChange={e => {
-                                        const val = e.target.value.toUpperCase();
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, partNumber: val } : it));
-                                      }}
-                                      placeholder="Part No"
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs uppercase outline-none focus:border-emerald-500 text-[#1e3a8a]"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="text"
-                                      required
-                                      value={item.itemName || ''}
-                                      onChange={e => {
-                                        const val = e.target.value;
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, itemName: val } : it));
-                                      }}
-                                      placeholder="Item Name"
-                                      className="w-full p-1.5 border border-slate-300 rounded font-semibold text-xs outline-none focus:border-emerald-500 text-slate-900"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <select
-                                      value={item.unit || 'NOS'}
-                                      onChange={e => {
-                                        const val = e.target.value;
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, unit: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white uppercase font-medium"
-                                    >
-                                      <option value="NOS">NOS</option>
-                                      <option value="PCS">PCS</option>
-                                      <option value="SET">SET</option>
-                                      <option value="BOX">BOX</option>
-                                      <option value="MTR">MTR</option>
-                                      <option value="KGS">KGS</option>
-                                      <option value="LTR">LTR</option>
-                                      <option value="SQM">SQM</option>
-                                      <option value="ROLL">ROLL</option>
-                                      <option value="BAG">BAG</option>
-                                      <option value="PAIRS">PAIRS</option>
-                                      <option value="PKT">PKT</option>
-                                      <option value="LOT">LOT</option>
-                                      <option value="JOB">JOB</option>
-                                      <option value="HRS">HRS</option>
-                                    </select>
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.01"
-                                      required
-                                      value={item.qty ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, qty: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-center text-xs outline-none focus:border-emerald-500"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      required
-                                      value={item.rate ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, rate: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-emerald-500"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.cgstPercent ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, cgstPercent: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.sgstPercent ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, sgstPercent: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.igstPercent ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, igstPercent: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-2 font-mono font-bold text-right text-emerald-900 bg-emerald-50/50">
-                                    {formatCurrency(total)}
-                                  </td>
-                                  <td className="p-1 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveInwardItem(idx)}
-                                      disabled={editInwardInvoiceItems.length <= 1}
-                                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
-                                      title={editInwardInvoiceItems.length <= 1 ? "At least 1 item is required" : "Remove this item from inward invoice"}
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* TOTALS SUMMARY */}
-                    {(() => {
-                      let grandBasic = 0;
-                      let grandTax = 0;
-                      editInwardInvoiceItems.forEach(it => {
-                        const b = (Number(it.qty) || 0) * (Number(it.rate) || 0);
-                        const t = b * (((Number(it.cgstPercent) || 0) + (Number(it.sgstPercent) || 0) + (Number(it.igstPercent) || 0)) / 100);
-                        grandBasic += b;
-                        grandTax += t;
-                      });
-                      const grandTotal = grandBasic + grandTax;
-
-                      return (
-                        <div className="bg-emerald-50/80 p-3.5 rounded-xl border border-emerald-200 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-                          <div className="flex flex-wrap gap-3">
-                            <span className="text-slate-700">Total Items: <strong className="text-slate-900">{editInwardInvoiceItems.length}</strong></span>
-                            <span className="text-slate-700">Basic: <strong className="text-slate-900">{formatCurrency(grandBasic)}</strong></span>
-                            <span className="text-emerald-800">Total Tax: <strong className="text-emerald-950">+{formatCurrency(grandTax)}</strong></span>
-                          </div>
-                          <span className="text-base font-black text-emerald-950 bg-white px-3 py-1.5 rounded-lg border border-emerald-300 shadow-xs">
-                            Grand Total: {formatCurrency(grandTotal)}
-                          </span>
-                        </div>
-                      );
-                    })()}
-
-                    {/* MODAL FOOTER BUTTONS */}
-                    <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200 sticky bottom-0 bg-white">
-                      <button
-                        type="button"
-                        onClick={() => setEditInwardInvoiceModal(null)}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg shadow text-xs transition-all cursor-pointer"
-                      >
-                        {isSubmitting ? 'Saving...' : `Save & Update Entire Receipt (${editInwardInvoiceItems.length} Items)`}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-
-            {/* 6. GROUPED SALE INVOICE EDIT MODAL (ALL ITEMS ON TAX INVOICE) */}
-            {editSaleInvoiceModal && (
-              <div className="fixed inset-0 bg-black/60 z-[99999] flex items-center justify-center p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
-                <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl animate-fadeIn my-auto max-h-[92vh] flex flex-col">
-                  {/* MODAL HEADER */}
-                  <div className="bg-[#1e3a8a] text-white p-4 rounded-t-2xl flex items-center justify-between shrink-0">
-                    <div>
-                      <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
-                        <span>🧾 Edit Tax Invoice</span>
-                        <span className="font-mono bg-blue-900 px-2.5 py-0.5 rounded text-xs">
-                          {editSaleInvoiceHeader.invoiceNumber || 'NO INVOICE NO'}
-                        </span>
-                        <span className="bg-white/20 text-white text-[11px] px-2 py-0.5 rounded-full font-bold">
-                          {editSaleInvoiceItems.length} {editSaleInvoiceItems.length === 1 ? 'Item' : 'Items'}
-                        </span>
-                      </h3>
-                      <p className="text-[11px] text-blue-100 mt-0.5">
-                        Party: <strong className="text-white">{editSaleInvoiceHeader.partyName || '-'}</strong>
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setEditSaleInvoiceModal(null)}
-                      className="text-white/80 hover:text-white text-2xl font-bold leading-none p-1 cursor-pointer"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  {/* FORM */}
-                  <form onSubmit={handleSaveSaleInvoiceEdit} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-xs">
-                    {/* INVOICE & CUSTOMER DETAILS */}
-                    <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                        <Receipt className="w-3.5 h-3.5 text-blue-600" /> Tax Invoice Metadata
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Invoice Number *</label>
-                          <input
-                            type="text"
-                            required
-                            value={editSaleInvoiceHeader.invoiceNumber}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, invoiceNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono font-bold uppercase text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Invoice Date *</label>
-                          <DatePickerDMY
-                            required
-                            value={editSaleInvoiceHeader.invoiceDate}
-                            onChange={val => setEditSaleInvoiceHeader(prev => ({ ...prev, invoiceDate: val }))}
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Customer / Party Name</label>
-                          <input
-                            type="text"
-                            value={editSaleInvoiceHeader.partyName}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, partyName: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs font-semibold"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Party GSTIN</label>
-                          <input
-                            type="text"
-                            value={editSaleInvoiceHeader.gstNumber}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono uppercase text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Vehicle No</label>
-                          <input
-                            type="text"
-                            value={editSaleInvoiceHeader.vehicleNumber}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono uppercase text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">E-Way Bill No</label>
-                          <input
-                            type="text"
-                            value={editSaleInvoiceHeader.eWayBillNumber}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, eWayBillNumber: e.target.value.toUpperCase() }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded font-mono uppercase text-xs"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Party Address</label>
-                          <input
-                            type="text"
-                            value={editSaleInvoiceHeader.supplierAddress}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, supplierAddress: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs"
-                          />
-                        </div>
-                        <div>
-                          <label className="block font-bold text-slate-700 mb-1">Remarks</label>
-                          <input
-                            type="text"
-                            value={editSaleInvoiceHeader.remarks}
-                            onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, remarks: e.target.value }))}
-                            className="w-full p-2 bg-white border border-slate-300 rounded text-xs"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* ITEMS TABLE */}
-                    <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
-                      <div className="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-800 text-xs flex justify-between items-center">
-                        <span>Invoice Line Items ({editSaleInvoiceItems.length})</span>
-                      </div>
-                      <div className="overflow-x-auto max-h-72 overflow-y-auto">
-                        <table className="w-full text-xs text-left">
-                          <thead className="bg-slate-800 text-slate-200 sticky top-0 z-10 text-[11px]">
-                            <tr>
-                              <th className="p-2 w-10 text-center">Sl No</th>
-                              <th className="p-2 min-w-[140px]">Part Number</th>
-                              <th className="p-2 min-w-[200px]">Item Name</th>
-                              <th className="p-2 w-28 text-center">Unit</th>
-                              <th className="p-2 w-24 text-center">Sale Qty *</th>
-                              <th className="p-2 w-28 text-right">Sale Rate (₹) *</th>
-                              <th className="p-2 w-20 text-center">CGST %</th>
-                              <th className="p-2 w-20 text-center">SGST %</th>
-                              <th className="p-2 w-20 text-center">IGST %</th>
-                              <th className="p-2 w-28 text-right">Total (₹)</th>
-                              <th className="p-2 w-12 text-center">Action</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-200">
-                            {editSaleInvoiceItems.map((item, idx) => {
-                              const b = (Number(item.qty) || 0) * (Number(item.rate) || 0);
-                              const taxP = (Number(item.cgstPercent) || 0) + (Number(item.sgstPercent) || 0) + (Number(item.igstPercent) || 0);
-                              const tax = b * (taxP / 100);
-                              const total = b + tax + (Number(item.shippingCharges) || 0);
-
-                              return (
-                                <tr key={item.id || idx} className="hover:bg-slate-50">
-                                  <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
-                                  <td className="p-2 font-mono font-bold text-[#1e3a8a]">{item.partNumber}</td>
-                                  <td className="p-2 font-semibold text-slate-800">{item.itemName}</td>
-                                  <td className="p-1">
-                                    <select
-                                      value={item.unit || 'NOS'}
-                                      onChange={e => {
-                                        const val = e.target.value;
-                                        setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, unit: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white uppercase font-medium"
-                                    >
-                                      <option value="NOS">NOS</option>
-                                      <option value="PCS">PCS</option>
-                                      <option value="SET">SET</option>
-                                      <option value="BOX">BOX</option>
-                                      <option value="MTR">MTR</option>
-                                      <option value="KGS">KGS</option>
-                                      <option value="LTR">LTR</option>
-                                      <option value="SQM">SQM</option>
-                                      <option value="ROLL">ROLL</option>
-                                      <option value="BAG">BAG</option>
-                                      <option value="PAIRS">PAIRS</option>
-                                      <option value="PKT">PKT</option>
-                                      <option value="LOT">LOT</option>
-                                      <option value="JOB">JOB</option>
-                                      <option value="HRS">HRS</option>
-                                    </select>
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0.01"
-                                      required
-                                      value={item.qty ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, qty: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-center text-xs outline-none focus:border-blue-500"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      min="0"
-                                      required
-                                      value={item.rate ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, rate: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.cgstPercent ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, cgstPercent: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.sgstPercent ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, sgstPercent: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-1">
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={item.igstPercent ?? ''}
-                                      onChange={e => {
-                                        const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                        setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, igstPercent: val } : it));
-                                      }}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
-                                    />
-                                  </td>
-                                  <td className="p-2 font-mono font-bold text-right text-blue-900 bg-blue-50/50">
-                                    {formatCurrency(total)}
-                                  </td>
-                                  <td className="p-1 text-center">
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveSaleItem(idx)}
-                                      disabled={editSaleInvoiceItems.length <= 1}
-                                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
-                                      title={editSaleInvoiceItems.length <= 1 ? "At least 1 item is required" : "Remove this item from tax invoice"}
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    {/* TOTALS SUMMARY */}
-                    {(() => {
-                      let grandBasic = 0;
-                      let grandTax = 0;
-                      editSaleInvoiceItems.forEach(it => {
-                        const b = (Number(it.qty) || 0) * (Number(it.rate) || 0);
-                        const t = b * (((Number(it.cgstPercent) || 0) + (Number(it.sgstPercent) || 0) + (Number(it.igstPercent) || 0)) / 100);
-                        grandBasic += b;
-                        grandTax += t;
-                      });
-                      const grandTotal = grandBasic + grandTax;
-
-                      return (
-                        <div className="bg-blue-50/80 p-3.5 rounded-xl border border-blue-200 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-                          <div className="flex flex-wrap gap-3">
-                            <span className="text-slate-700">Total Items: <strong className="text-slate-900">{editSaleInvoiceItems.length}</strong></span>
-                            <span className="text-slate-700">Basic: <strong className="text-slate-900">{formatCurrency(grandBasic)}</strong></span>
-                            <span className="text-blue-800">Total Tax: <strong className="text-blue-950">+{formatCurrency(grandTax)}</strong></span>
-                          </div>
-                          <span className="text-base font-black text-blue-950 bg-white px-3 py-1.5 rounded-lg border border-blue-300 shadow-xs">
-                            Grand Total: {formatCurrency(grandTotal)}
-                          </span>
-                        </div>
-                      );
-                    })()}
-
-                    {/* MODAL FOOTER BUTTONS */}
-                    <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200 sticky bottom-0 bg-white">
-                      <button
-                        type="button"
-                        onClick={() => setEditSaleInvoiceModal(null)}
-                        className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="px-6 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] disabled:opacity-50 text-white font-bold rounded-lg shadow text-xs transition-all cursor-pointer"
-                      >
-                        {isSubmitting ? 'Saving...' : `Save & Re-submit Entire Invoice (${editSaleInvoiceItems.length} Items)`}
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
 
             {/* ======================================================== */}
             {/* SUB-TAB 1: PO ITEMS                                      */}
@@ -4876,6 +4241,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const isAllGrpSelected = grpItemIds.length > 0 && grpItemIds.every(id => selectedPurchaseIds.includes(id));
                       const isSomeGrpSelected = grpItemIds.some(id => selectedPurchaseIds.includes(id));
 
+                      const isGrpEditing = !!(editInwardInvoiceModal && (
+                        (editInwardInvoiceModal.partyInvoiceNumber && (editInwardInvoiceModal.partyInvoiceNumber || '').trim().toLowerCase() === (grp.invoiceNumber || '').trim().toLowerCase()) ||
+                        (editInwardInvoiceModal.id && grpItemIds.includes(editInwardInvoiceModal.id))
+                      ));
+
                       return (
                         <div 
                           key={grp.invoiceNumber + '_' + grpIdx}
@@ -4966,11 +4336,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       type="button"
                                       onClick={() => handleOpenEditInwardInvoice(grp.firstPur, grp.items)}
-                                      className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
-                                      title="Edit Inward Invoice / DC (All Items)"
+                                      className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-all flex items-center gap-1 cursor-pointer ${
+                                        isGrpEditing
+                                          ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                                          : 'text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white border-blue-200'
+                                      }`}
+                                      title={isGrpEditing ? "Close Inline Edit" : "Edit Inward Invoice / DC (All Items)"}
                                     >
                                       <Edit className="w-3.5 h-3.5" />
-                                      <span className="hidden sm:inline">Edit Invoice</span>
+                                      <span className="hidden sm:inline">{isGrpEditing ? 'Close Edit' : 'Edit Invoice'}</span>
                                     </button>
                                     <button
                                       type="button"
@@ -5093,6 +4467,331 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               </span>
                             </div>
                           </div>
+
+                          {/* INLINE INWARD EDIT EXPANDED DRAWER */}
+                          {isGrpEditing && (
+                            <div className="border-t-2 border-emerald-500 bg-emerald-50/20 p-4 sm:p-5 space-y-4 text-xs animate-fadeIn">
+                              <div className="bg-emerald-800 text-white p-3 sm:p-3.5 rounded-xl flex items-center justify-between shadow-xs">
+                                <div className="flex items-center gap-2">
+                                  <Edit className="w-4 h-4 text-emerald-200" />
+                                  <span className="font-bold text-xs sm:text-sm">
+                                    Inline Edit Inward Receipt / DC: <strong className="font-mono bg-emerald-700 px-2 py-0.5 rounded text-white">{editInwardInvoiceHeader.partyInvoiceNumber || grp.invoiceNumber}</strong>
+                                  </span>
+                                  <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                    {editInwardInvoiceItems.length} {editInwardInvoiceItems.length === 1 ? 'Item' : 'Items'}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditInwardInvoiceModal(null)}
+                                  className="text-white/80 hover:text-white px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer transition-colors"
+                                  title="Close Inline Edit"
+                                >
+                                  ✕ Close
+                                </button>
+                              </div>
+
+                              <form onSubmit={handleSaveInwardInvoiceEdit} className="space-y-4">
+                                {/* INVOICE & SUPPLIER DETAILS */}
+                                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                    <Receipt className="w-3.5 h-3.5 text-emerald-600" /> Inward Receipt / DC Metadata
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Party Invoice / DC No *</label>
+                                      <input
+                                        type="text"
+                                        required
+                                        value={editInwardInvoiceHeader.partyInvoiceNumber}
+                                        onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, partyInvoiceNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono font-bold uppercase text-xs focus:bg-white outline-none focus:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Inward Date *</label>
+                                      <DatePickerDMY
+                                        required
+                                        value={editInwardInvoiceHeader.date}
+                                        onChange={val => setEditInwardInvoiceHeader(prev => ({ ...prev, date: val }))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Supplier Invoice Date</label>
+                                      <DatePickerDMY
+                                        value={editInwardInvoiceHeader.supplierInvoiceDate}
+                                        onChange={val => setEditInwardInvoiceHeader(prev => ({ ...prev, supplierInvoiceDate: val }))}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Supplier / Party Name</label>
+                                      <input
+                                        type="text"
+                                        value={editInwardInvoiceHeader.partyName}
+                                        onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, partyName: e.target.value }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded text-xs font-semibold focus:bg-white outline-none focus:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Supplier GSTIN</label>
+                                      <input
+                                        type="text"
+                                        value={editInwardInvoiceHeader.gstNumber}
+                                        onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono uppercase text-xs focus:bg-white outline-none focus:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Vehicle No</label>
+                                      <input
+                                        type="text"
+                                        value={editInwardInvoiceHeader.vehicleNumber}
+                                        onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono uppercase text-xs focus:bg-white outline-none focus:border-emerald-500"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Supplier Address</label>
+                                      <input
+                                        type="text"
+                                        value={editInwardInvoiceHeader.supplierAddress}
+                                        onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, supplierAddress: e.target.value }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded text-xs focus:bg-white outline-none focus:border-emerald-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Remarks</label>
+                                      <input
+                                        type="text"
+                                        value={editInwardInvoiceHeader.remarks}
+                                        onChange={e => setEditInwardInvoiceHeader(prev => ({ ...prev, remarks: e.target.value }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded text-xs focus:bg-white outline-none focus:border-emerald-500"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* ITEMS TABLE */}
+                                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                                  <div className="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-800 text-xs flex justify-between items-center">
+                                    <span>Inward Line Items ({editInwardInvoiceItems.length})</span>
+                                  </div>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-xs text-left">
+                                      <thead className="bg-slate-800 text-slate-200 text-[11px]">
+                                        <tr>
+                                          <th className="p-2 w-10 text-center">Sl No</th>
+                                          <th className="p-2 min-w-[130px]">Part Number</th>
+                                          <th className="p-2 min-w-[180px]">Item Name</th>
+                                          <th className="p-2 w-24 text-center">Unit</th>
+                                          <th className="p-2 w-24 text-center">Inward Qty *</th>
+                                          <th className="p-2 w-28 text-right">Inward Rate (₹) *</th>
+                                          <th className="p-2 w-20 text-center">CGST %</th>
+                                          <th className="p-2 w-20 text-center">SGST %</th>
+                                          <th className="p-2 w-20 text-center">IGST %</th>
+                                          <th className="p-2 w-28 text-right">Total (₹)</th>
+                                          <th className="p-2 w-12 text-center">Action</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-200">
+                                        {editInwardInvoiceItems.map((item, idx) => {
+                                          const b = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                          const taxP = (Number(item.cgstPercent) || 0) + (Number(item.sgstPercent) || 0) + (Number(item.igstPercent) || 0);
+                                          const tax = b * (taxP / 100);
+                                          const total = b + tax + (Number(item.shippingCharges) || 0);
+
+                                          return (
+                                            <tr key={item.id || idx} className="hover:bg-slate-50">
+                                              <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="text"
+                                                  value={item.partNumber || ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value.toUpperCase();
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, partNumber: val } : it));
+                                                  }}
+                                                  placeholder="Part No"
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs uppercase outline-none focus:border-emerald-500 text-[#1e3a8a]"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="text"
+                                                  required
+                                                  value={item.itemName || ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value;
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, itemName: val } : it));
+                                                  }}
+                                                  placeholder="Item Name"
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-semibold text-xs outline-none focus:border-emerald-500 text-slate-900"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <select
+                                                  value={item.unit || 'NOS'}
+                                                  onChange={e => {
+                                                    const val = e.target.value;
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, unit: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white uppercase font-medium"
+                                                >
+                                                  <option value="NOS">NOS</option>
+                                                  <option value="PCS">PCS</option>
+                                                  <option value="SET">SET</option>
+                                                  <option value="BOX">BOX</option>
+                                                  <option value="MTR">MTR</option>
+                                                  <option value="KGS">KGS</option>
+                                                  <option value="LTR">LTR</option>
+                                                  <option value="SQM">SQM</option>
+                                                  <option value="ROLL">ROLL</option>
+                                                  <option value="BAG">BAG</option>
+                                                  <option value="PAIRS">PAIRS</option>
+                                                  <option value="PKT">PKT</option>
+                                                  <option value="LOT">LOT</option>
+                                                  <option value="JOB">JOB</option>
+                                                  <option value="HRS">HRS</option>
+                                                </select>
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0.01"
+                                                  required
+                                                  value={item.qty ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, qty: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-center text-xs outline-none focus:border-emerald-500"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0"
+                                                  required
+                                                  value={item.rate ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, rate: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-emerald-500"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  value={item.cgstPercent ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, cgstPercent: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  value={item.sgstPercent ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, sgstPercent: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  value={item.igstPercent ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, igstPercent: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-2 font-mono font-bold text-right text-emerald-900 bg-emerald-50/50">
+                                                {formatCurrency(total)}
+                                              </td>
+                                              <td className="p-1 text-center">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveInwardItem(idx)}
+                                                  disabled={editInwardInvoiceItems.length <= 1}
+                                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
+                                                  title={editInwardInvoiceItems.length <= 1 ? "At least 1 item is required" : "Remove this item from inward invoice"}
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+
+                                {/* TOTALS SUMMARY */}
+                                {(() => {
+                                  let grandBasic = 0;
+                                  let grandTax = 0;
+                                  editInwardInvoiceItems.forEach(it => {
+                                    const b = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+                                    const t = b * (((Number(it.cgstPercent) || 0) + (Number(it.sgstPercent) || 0) + (Number(it.igstPercent) || 0)) / 100);
+                                    grandBasic += b;
+                                    grandTax += t;
+                                  });
+                                  const grandTotal = grandBasic + grandTax;
+
+                                  return (
+                                    <div className="bg-white p-3.5 rounded-xl border border-emerald-300 flex flex-wrap items-center justify-between gap-3 text-xs font-mono shadow-2xs">
+                                      <div className="flex flex-wrap gap-3">
+                                        <span className="text-slate-700">Total Items: <strong className="text-slate-900">{editInwardInvoiceItems.length}</strong></span>
+                                        <span className="text-slate-700">Basic: <strong className="text-slate-900">{formatCurrency(grandBasic)}</strong></span>
+                                        <span className="text-emerald-800">Total Tax: <strong className="text-emerald-950">+{formatCurrency(grandTax)}</strong></span>
+                                      </div>
+                                      <span className="text-sm sm:text-base font-black text-emerald-950 bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-400 shadow-xs">
+                                        Grand Total: {formatCurrency(grandTotal)}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* FORM BUTTONS */}
+                                <div className="flex justify-end gap-2.5 pt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditInwardInvoiceModal(null)}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-lg shadow text-xs transition-all cursor-pointer"
+                                  >
+                                    {isSubmitting ? 'Saving...' : `Save & Update Entire Receipt (${editInwardInvoiceItems.length} Items)`}
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+                          )}
                         </div>
                       );
                     })
@@ -5682,6 +5381,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       const isApproved = grp.status === 'APPROVED';
                       const isPending = grp.status === 'PENDING';
 
+                      const isGrpEditing = !!(editSaleInvoiceModal && (
+                        (editSaleInvoiceModal.invoiceNumber && (editSaleInvoiceModal.invoiceNumber || '').trim().toLowerCase() === (grp.invoiceNumber || '').trim().toLowerCase()) ||
+                        (editSaleInvoiceModal.id && grpItemIds.includes(editSaleInvoiceModal.id))
+                      ));
+
                       return (
                         <div 
                           key={grp.invoiceNumber + '_' + grpIdx}
@@ -5781,11 +5485,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       type="button"
                                       onClick={() => handleOpenEditSaleInvoice(grp.firstSale, grp.items)}
-                                      className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
-                                      title="Edit Sale Invoice (All Items)"
+                                      className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-all flex items-center gap-1 cursor-pointer ${
+                                        isGrpEditing
+                                          ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                                          : 'text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white border-blue-200'
+                                      }`}
+                                      title={isGrpEditing ? "Close Inline Edit" : "Edit Sale Invoice (All Items)"}
                                     >
                                       <Edit className="w-3.5 h-3.5" />
-                                      <span className="hidden sm:inline">Edit Invoice</span>
+                                      <span className="hidden sm:inline">{isGrpEditing ? 'Close Edit' : 'Edit Invoice'}</span>
                                     </button>
                                     <button
                                       type="button"
@@ -5896,6 +5604,310 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               </span>
                             </div>
                           </div>
+
+                          {/* INLINE PO SALES EDIT EXPANDED DRAWER */}
+                          {isGrpEditing && (
+                            <div className="border-t-2 border-amber-500 bg-amber-50/20 p-4 sm:p-5 space-y-4 text-xs animate-fadeIn">
+                              <div className="bg-[#1e3a8a] text-white p-3 sm:p-3.5 rounded-xl flex items-center justify-between shadow-xs">
+                                <div className="flex items-center gap-2">
+                                  <Receipt className="w-4 h-4 text-amber-200" />
+                                  <span className="font-bold text-xs sm:text-sm">
+                                    Inline Edit Tax Invoice: <strong className="font-mono bg-blue-900 px-2 py-0.5 rounded text-white">{editSaleInvoiceHeader.invoiceNumber || grp.invoiceNumber}</strong>
+                                  </span>
+                                  <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                    {editSaleInvoiceItems.length} {editSaleInvoiceItems.length === 1 ? 'Item' : 'Items'}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditSaleInvoiceModal(null)}
+                                  className="text-white/80 hover:text-white px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer transition-colors"
+                                  title="Close Inline Edit"
+                                >
+                                  ✕ Close
+                                </button>
+                              </div>
+
+                              <form onSubmit={handleSaveSaleInvoiceEdit} className="space-y-4">
+                                {/* INVOICE & CUSTOMER DETAILS */}
+                                <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                    <Receipt className="w-3.5 h-3.5 text-blue-600" /> Tax Invoice Metadata
+                                  </div>
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Invoice Number *</label>
+                                      <input
+                                        type="text"
+                                        required
+                                        value={editSaleInvoiceHeader.invoiceNumber}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, invoiceNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono font-bold uppercase text-xs focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Invoice Date *</label>
+                                      <DatePickerDMY
+                                        required
+                                        value={editSaleInvoiceHeader.invoiceDate}
+                                        onChange={val => setEditSaleInvoiceHeader(prev => ({ ...prev, invoiceDate: val }))}
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Customer / Party Name</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleInvoiceHeader.partyName}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, partyName: e.target.value }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded text-xs font-semibold focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Party GSTIN</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleInvoiceHeader.gstNumber}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, gstNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono uppercase text-xs focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Vehicle No</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleInvoiceHeader.vehicleNumber}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, vehicleNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono uppercase text-xs focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">E-Way Bill No</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleInvoiceHeader.eWayBillNumber}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, eWayBillNumber: e.target.value.toUpperCase() }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded font-mono uppercase text-xs focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Party Address</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleInvoiceHeader.supplierAddress}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, supplierAddress: e.target.value }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded text-xs focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block font-bold text-slate-700 mb-1">Remarks</label>
+                                      <input
+                                        type="text"
+                                        value={editSaleInvoiceHeader.remarks}
+                                        onChange={e => setEditSaleInvoiceHeader(prev => ({ ...prev, remarks: e.target.value }))}
+                                        className="w-full p-2 bg-slate-50 border border-slate-300 rounded text-xs focus:bg-white outline-none focus:border-blue-500"
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* ITEMS TABLE */}
+                                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
+                                  <div className="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-800 text-xs flex justify-between items-center">
+                                    <span>Invoice Line Items ({editSaleInvoiceItems.length})</span>
+                                  </div>
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-xs text-left">
+                                      <thead className="bg-slate-800 text-slate-200 text-[11px]">
+                                        <tr>
+                                          <th className="p-2 w-10 text-center">Sl No</th>
+                                          <th className="p-2 min-w-[140px]">Part Number</th>
+                                          <th className="p-2 min-w-[200px]">Item Name</th>
+                                          <th className="p-2 w-28 text-center">Unit</th>
+                                          <th className="p-2 w-24 text-center">Sale Qty *</th>
+                                          <th className="p-2 w-28 text-right">Sale Rate (₹) *</th>
+                                          <th className="p-2 w-20 text-center">CGST %</th>
+                                          <th className="p-2 w-20 text-center">SGST %</th>
+                                          <th className="p-2 w-20 text-center">IGST %</th>
+                                          <th className="p-2 w-28 text-right">Total (₹)</th>
+                                          <th className="p-2 w-12 text-center">Action</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-slate-200">
+                                        {editSaleInvoiceItems.map((item, idx) => {
+                                          const b = (Number(item.qty) || 0) * (Number(item.rate) || 0);
+                                          const taxP = (Number(item.cgstPercent) || 0) + (Number(item.sgstPercent) || 0) + (Number(item.igstPercent) || 0);
+                                          const tax = b * (taxP / 100);
+                                          const total = b + tax + (Number(item.shippingCharges) || 0);
+
+                                          return (
+                                            <tr key={item.id || idx} className="hover:bg-slate-50">
+                                              <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
+                                              <td className="p-2 font-mono font-bold text-[#1e3a8a]">{item.partNumber}</td>
+                                              <td className="p-2 font-semibold text-slate-800">{item.itemName}</td>
+                                              <td className="p-1">
+                                                <select
+                                                  value={item.unit || 'NOS'}
+                                                  onChange={e => {
+                                                    const val = e.target.value;
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, unit: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded text-xs bg-white uppercase font-medium"
+                                                >
+                                                  <option value="NOS">NOS</option>
+                                                  <option value="PCS">PCS</option>
+                                                  <option value="SET">SET</option>
+                                                  <option value="BOX">BOX</option>
+                                                  <option value="MTR">MTR</option>
+                                                  <option value="KGS">KGS</option>
+                                                  <option value="LTR">LTR</option>
+                                                  <option value="SQM">SQM</option>
+                                                  <option value="ROLL">ROLL</option>
+                                                  <option value="BAG">BAG</option>
+                                                  <option value="PAIRS">PAIRS</option>
+                                                  <option value="PKT">PKT</option>
+                                                  <option value="LOT">LOT</option>
+                                                  <option value="JOB">JOB</option>
+                                                  <option value="HRS">HRS</option>
+                                                </select>
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0.01"
+                                                  required
+                                                  value={item.qty ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, qty: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-center text-xs outline-none focus:border-blue-500"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  min="0"
+                                                  required
+                                                  value={item.rate ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, rate: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  value={item.cgstPercent ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, cgstPercent: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  value={item.sgstPercent ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, sgstPercent: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="number"
+                                                  step="0.01"
+                                                  value={item.igstPercent ?? ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, igstPercent: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-2 font-mono font-bold text-right text-blue-900 bg-blue-50/50">
+                                                {formatCurrency(total)}
+                                              </td>
+                                              <td className="p-1 text-center">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveSaleItem(idx)}
+                                                  disabled={editSaleInvoiceItems.length <= 1}
+                                                  className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
+                                                  title={editSaleInvoiceItems.length <= 1 ? "At least 1 item is required" : "Remove this item from tax invoice"}
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+
+                                {/* TOTALS SUMMARY */}
+                                {(() => {
+                                  let grandBasic = 0;
+                                  let grandTax = 0;
+                                  editSaleInvoiceItems.forEach(it => {
+                                    const b = (Number(it.qty) || 0) * (Number(it.rate) || 0);
+                                    const t = b * (((Number(it.cgstPercent) || 0) + (Number(it.sgstPercent) || 0) + (Number(it.igstPercent) || 0)) / 100);
+                                    grandBasic += b;
+                                    grandTax += t;
+                                  });
+                                  const grandTotal = grandBasic + grandTax;
+
+                                  return (
+                                    <div className="bg-white p-3.5 rounded-xl border border-blue-300 flex flex-wrap items-center justify-between gap-3 text-xs font-mono shadow-2xs">
+                                      <div className="flex flex-wrap gap-3">
+                                        <span className="text-slate-700">Total Items: <strong className="text-slate-900">{editSaleInvoiceItems.length}</strong></span>
+                                        <span className="text-slate-700">Basic: <strong className="text-slate-900">{formatCurrency(grandBasic)}</strong></span>
+                                        <span className="text-blue-800">Total Tax: <strong className="text-blue-950">+{formatCurrency(grandTax)}</strong></span>
+                                      </div>
+                                      <span className="text-sm sm:text-base font-black text-blue-950 bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-400 shadow-xs">
+                                        Grand Total: {formatCurrency(grandTotal)}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* FORM BUTTONS */}
+                                <div className="flex justify-end gap-2.5 pt-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditSaleInvoiceModal(null)}
+                                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="px-6 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] disabled:opacity-50 text-white font-bold rounded-lg shadow text-xs transition-all cursor-pointer"
+                                  >
+                                    {isSubmitting ? 'Saving...' : `Save & Re-submit Entire Invoice (${editSaleInvoiceItems.length} Items)`}
+                                  </button>
+                                </div>
+                              </form>
+                            </div>
+                          )}
                         </div>
                       );
                     })

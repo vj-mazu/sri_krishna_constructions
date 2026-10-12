@@ -1482,9 +1482,10 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
 });
 
 // PUT /api/purchases/:id - Update purchase
-app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res, next) => {
   try {
     const { id } = req.params;
+    if (id === 'invoice') return next();
     const d = req.body;
     const qty = parseFloat(d.qty) || 0;
     const rate = parseFloat(d.rate) || 0;
@@ -1564,10 +1565,11 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
 });
 
 // DELETE /api/purchases/:id - Request deletion of purchase/inward item (Requires Owner Approval)
-app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res, next) => {
+  const { id } = req.params;
+  if (id === 'invoice') return next();
   const client = await pool.connect();
   try {
-    const { id } = req.params;
     const { reason } = req.body || {};
 
     const existing = await client.query(`
@@ -4534,7 +4536,9 @@ app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', 
       if (!item.itemName || !item.itemName.trim()) continue;
       const qty = parseFloat(item.qty) || 0;
       const rate = parseFloat(item.rate) || 0;
-      const shippingCharges = parseFloat(item.shippingCharges || 0);
+      const shippingCharges = (item.shippingCharges !== undefined && item.shippingCharges !== '')
+        ? (parseFloat(item.shippingCharges) || 0)
+        : (items.length === 1 ? (parseFloat(d.shippingCharges) || 0) : 0);
       const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
       const cgstP = item.cgstPercent !== undefined ? parseFloat(item.cgstPercent) : (parseFloat(d.cgstPercent) || 0);
       const sgstP = item.sgstPercent !== undefined ? parseFloat(item.sgstPercent) : (parseFloat(d.sgstPercent) || 0);

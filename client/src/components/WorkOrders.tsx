@@ -489,6 +489,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
   const handleOpenEdit = async (item: WorkOrderItem) => {
     const targetInvNum = (item.invoiceNumber || item.workOrderNumber || '').trim();
+    if (isEditingInvoice && (originalEditingInvoiceNo === targetInvNum || invoiceHeader.invoiceNumber === targetInvNum)) {
+      setIsEditingInvoice(false);
+      setOriginalEditingInvoiceNo(null);
+      return;
+    }
     setIsEditingInvoice(true);
     setOriginalEditingInvoiceNo(targetInvNum);
     setEditItem(null);
@@ -532,7 +537,6 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     }));
 
     setInvoiceItems(mapWoItems(matchingItems));
-    setShowAddModal(true);
 
     // 2. Silently fetch from server to enhance/merge if there are items from other pages
     if (targetInvNum && targetInvNum !== '-') {
@@ -1003,11 +1007,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       </div>
 
-      {/* 4. DIRECT INTERACTIVE TAX INVOICE CREATOR & MULTI-ITEM EDIT MODAL */}
-      {showAddModal && (
+      {/* 4. DIRECT INTERACTIVE TAX INVOICE CREATOR (NEW WORK ORDER SALE MODAL) */}
+      {showAddModal && !isEditingInvoice && (
         <div 
           className="fixed inset-0 z-[99998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
-          onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setIsEditingInvoice(false); setOriginalEditingInvoiceNo(null); } }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); } }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-fadeIn">
             {/* INVOICE MODAL HEADER */}
@@ -1478,6 +1482,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             const grpItemIds = grp.items.map(wo => wo.id);
             const isAllGrpSelected = grpItemIds.length > 0 && grpItemIds.every(id => selectedWorkOrderIds.includes(id));
             const isSomeGrpSelected = grpItemIds.some(id => selectedWorkOrderIds.includes(id));
+            const isGrpEditing = Boolean(isEditingInvoice && (
+              (originalEditingInvoiceNo && (
+                originalEditingInvoiceNo.toLowerCase() === (grp.invoiceNumber || '').trim().toLowerCase() ||
+                originalEditingInvoiceNo.toLowerCase() === (grp.workOrderNumber || '').trim().toLowerCase()
+              )) ||
+              (invoiceHeader.invoiceNumber && invoiceHeader.invoiceNumber.trim().toLowerCase() === (grp.invoiceNumber || '').trim().toLowerCase()) ||
+              (invoiceHeader.workOrderNumber && invoiceHeader.workOrderNumber.trim().toLowerCase() === (grp.workOrderNumber || '').trim().toLowerCase())
+            ));
 
             return (
               <div 
@@ -1577,11 +1589,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(grp.firstItem)}
-                            className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
-                            title="Edit Work Order (All Items)"
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-md border transition-all flex items-center gap-1 cursor-pointer ${
+                              isGrpEditing
+                                ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                                : 'text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white border-blue-200'
+                            }`}
+                            title={isGrpEditing ? "Close Inline Edit" : "Edit Work Order (All Items)"}
                           >
                             <Edit className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Edit WO</span>
+                            <span className="hidden sm:inline">{isGrpEditing ? 'Close Edit' : 'Edit WO'}</span>
                           </button>
                           <button
                             type="button"
@@ -1675,6 +1691,436 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     </span>
                   </div>
                 </div>
+
+                {/* INLINE WORK ORDER EDIT DRAWER */}
+                {isGrpEditing && (
+                  <div className="border-t-2 border-blue-600 bg-blue-50/20 p-4 sm:p-5 space-y-4 text-xs animate-fadeIn">
+                    <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0369a1] text-white p-3 sm:p-3.5 rounded-xl flex items-center justify-between shadow-xs">
+                      <div className="flex items-center gap-2">
+                        <Edit className="w-4 h-4 text-blue-200" />
+                        <span className="font-bold text-xs sm:text-sm uppercase">
+                          Inline Edit Work Order • <strong className="font-mono bg-white/20 px-2 py-0.5 rounded text-white">{invoiceHeader.invoiceNumber || invoiceHeader.workOrderNumber || grp.invoiceNumber || grp.workOrderNumber}</strong>
+                        </span>
+                        <span className="bg-white/20 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                          {invoiceItems.length} {invoiceItems.length === 1 ? 'Item' : 'Items'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => { setIsEditingInvoice(false); setOriginalEditingInvoiceNo(null); }}
+                        className="text-white/80 hover:text-white px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-xs font-bold cursor-pointer transition-colors"
+                        title="Close Inline Edit"
+                      >
+                        ✕ Close
+                      </button>
+                    </div>
+
+                    <form onSubmit={(e) => handleSaveInvoice(e, false)} className="space-y-4">
+                      {/* SECTION 1: INVOICE IDENTIFIERS & METADATA */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                          <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
+                            <FileSpreadsheet className="w-4 h-4 text-[#1e3a8a]" /> Tax Invoice &amp; Order Details
+                          </span>
+                          <div className="text-[11px] text-slate-500 font-mono">
+                            Company GSTIN: <strong className="text-slate-800">29DWKPP3582H1ZV</strong>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Tax Invoice No *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. 2026-27/02"
+                              value={invoiceHeader.invoiceNumber}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, invoiceNumber: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-blue-50/50 border border-blue-300 text-blue-900 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Invoice Date *</label>
+                            <DatePickerDMY
+                              required
+                              value={invoiceHeader.invoiceDate}
+                              onChange={(val) => setInvoiceHeader({ ...invoiceHeader, invoiceDate: val })}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order No *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. WO/2026/001"
+                              value={invoiceHeader.workOrderNumber}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, workOrderNumber: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Work Order Date *</label>
+                            <DatePickerDMY
+                              required
+                              value={invoiceHeader.workOrderDate}
+                              onChange={(val) => setInvoiceHeader({ ...invoiceHeader, workOrderDate: val })}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Logistics & Dispatch Row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Vehicle / Lorry No</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. KA-34-A-1234"
+                              value={invoiceHeader.vehicleNumber}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, vehicleNumber: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">E-Way Bill Number</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 541289654123"
+                              value={invoiceHeader.eWayBillNumber}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, eWayBillNumber: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note</label>
+                            <input
+                              type="text"
+                              placeholder="Special instructions or gate pass ref..."
+                              value={invoiceHeader.remarks}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, remarks: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 2: BILLED TO (PARTY / CLIENT DETAILS) */}
+                      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs space-y-3">
+                        <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-2">
+                          <Building2 className="w-4 h-4 text-[#1e3a8a]" /> Details of Receiver (Billed To)
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Party / Client Name *</label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="e.g. THE CHIEF ENGINEER (TPC) RTPS"
+                              value={invoiceHeader.partyName}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, partyName: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Party GSTIN Number</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. 29AAAAA0000A1Z5"
+                              value={invoiceHeader.partyGstNumber}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, partyGstNumber: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Party Billing Address</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. KPCL, RTPS, Shaktinagar - 584170..."
+                              value={invoiceHeader.partyAddress}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, partyAddress: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 3: MULTI-ITEM TAX INVOICE TABLE */}
+                      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                        <div className="bg-slate-100 p-3 border-b border-slate-200 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Package className="w-4 h-4 text-[#1e3a8a]" />
+                            <span className="font-bold text-slate-800 text-xs">
+                              Invoice Line Items ({invoiceItems.length} {invoiceItems.length === 1 ? 'Item' : 'Items'})
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleAddItemRow}
+                            className="bg-[#1e3a8a] hover:bg-[#1e40af] text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all shadow-xs cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5 stroke-[3]" /> Add Line Item Row
+                          </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="bg-slate-800 text-slate-200 font-bold">
+                                <th className="p-2 w-12 text-center">Sl No</th>
+                                <th className="p-2 w-28">KPCL Code</th>
+                                <th className="p-2 min-w-[200px]">Item Name &amp; Specification *</th>
+                                <th className="p-2 min-w-[150px]">Description / Scope</th>
+                                <th className="p-2 w-28">Part No</th>
+                                <th className="p-2 w-20">Unit</th>
+                                <th className="p-2 w-20 text-right">Qty *</th>
+                                <th className="p-2 w-28 text-right">Unit Rate (₹) *</th>
+                                <th className="p-2 w-32 text-right">Amount (₹)</th>
+                                <th className="p-2 w-12 text-center">Action</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              {invoiceCalculations.computedRows.map((row, idx) => (
+                                <tr key={row.id} className="hover:bg-slate-50/80 transition-colors">
+                                  <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      placeholder="-"
+                                      value={row.kpclCode}
+                                      onChange={(e) => handleItemRowChange(row.id, 'kpclCode', e.target.value.toUpperCase())}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs uppercase outline-none focus:border-blue-500"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      required
+                                      placeholder="e.g. Fabrication and Erection Structure Work"
+                                      value={row.itemName}
+                                      onChange={(e) => handleItemRowChange(row.id, 'itemName', e.target.value)}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-bold text-xs outline-none focus:border-blue-500"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      placeholder="Scope or technical clause..."
+                                      value={row.description}
+                                      onChange={(e) => handleItemRowChange(row.id, 'description', e.target.value)}
+                                      className="w-full p-1.5 border border-slate-300 rounded text-xs outline-none focus:border-blue-500"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="text"
+                                      placeholder="e.g. STR-01"
+                                      value={row.partNumber}
+                                      onChange={(e) => handleItemRowChange(row.id, 'partNumber', e.target.value.toUpperCase())}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-mono text-xs uppercase outline-none focus:border-blue-500"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <select
+                                      value={row.unit}
+                                      onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value)}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-medium text-xs bg-white outline-none focus:border-blue-500 font-bold"
+                                    >
+                                      <option value="">-- Select Unit --</option>
+                                      <option value="NOS">NOS</option>
+                                      <option value="PCS">PCS</option>
+                                      <option value="SET">SET</option>
+                                      <option value="BOX">BOX</option>
+                                      <option value="MTR">MTR</option>
+                                      <option value="KGS">KGS</option>
+                                      <option value="LTR">LTR</option>
+                                      <option value="SQM">SQM</option>
+                                      <option value="ROLL">ROLL</option>
+                                      <option value="BAG">BAG</option>
+                                      <option value="PAIRS">PAIRS</option>
+                                      <option value="PKT">PKT</option>
+                                      <option value="LOT">LOT</option>
+                                      <option value="JOB">JOB</option>
+                                      <option value="HRS">HRS</option>
+                                    </select>
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0.01"
+                                      required
+                                      placeholder="1"
+                                      value={row.qty}
+                                      onChange={(e) => handleItemRowChange(row.id, 'qty', e.target.value)}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
+                                    />
+                                  </td>
+                                  <td className="p-1.5">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      required
+                                      placeholder="0.00"
+                                      value={row.rate}
+                                      onChange={(e) => handleItemRowChange(row.id, 'rate', e.target.value)}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
+                                    />
+                                  </td>
+                                  <td className="p-2 text-right font-mono font-bold text-slate-900 bg-slate-50">
+                                    {formatCurrency(row.computedAmount)}
+                                  </td>
+                                  <td className="p-1.5 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveItemRow(row.id)}
+                                      disabled={invoiceItems.length <= 1}
+                                      className="p-1 text-slate-400 hover:text-rose-600 rounded disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+                                      title="Delete Row"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                          <button
+                            type="button"
+                            onClick={handleAddItemRow}
+                            className="text-xs font-bold text-[#1e3a8a] hover:text-[#1e40af] flex items-center gap-1 px-2 py-1 rounded hover:bg-blue-50 transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> + Add Another Item Row
+                          </button>
+                          <div className="text-xs font-mono font-bold text-slate-700">
+                            Total Basic: <strong className="text-slate-900 text-sm">{formatCurrency(invoiceCalculations.basicTotal)}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* SECTION 4: REAL-TIME GST & SUMMARY PANEL */}
+                      <div className="bg-gradient-to-r from-blue-50 via-slate-50 to-indigo-50/70 border border-blue-200 rounded-xl p-4 space-y-3">
+                        <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-blue-200 pb-2">
+                          <Receipt className="w-4 h-4 text-[#1e3a8a]" /> Tax Calculation &amp; Total Value Breakdown
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">CGST Rate (%)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={invoiceHeader.cgstPercent}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, cgstPercent: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">SGST Rate (%)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={invoiceHeader.sgstPercent}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, sgstPercent: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">IGST Rate (%)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={invoiceHeader.igstPercent}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, igstPercent: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Shipping / Freight (₹)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              placeholder="0.00"
+                              value={invoiceHeader.shippingCharges}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, shippingCharges: e.target.value })}
+                              className="w-full p-2 bg-white border border-blue-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Calculation Summary Strip */}
+                        <div className="bg-white p-3 rounded-lg border border-blue-200 text-xs font-mono space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-slate-700">
+                            <span>Total Basic Cost: <strong>{formatCurrency(invoiceCalculations.basicTotal)}</strong></span>
+                            <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              CGST ({invoiceCalculations.cgstP}%): +{formatCurrency(invoiceCalculations.cgstAmt)}
+                            </span>
+                            <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                              SGST ({invoiceCalculations.sgstP}%): +{formatCurrency(invoiceCalculations.sgstAmt)}
+                            </span>
+                            {invoiceCalculations.igstP > 0 && (
+                              <span className="text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                                IGST ({invoiceCalculations.igstP}%): +{formatCurrency(invoiceCalculations.igstAmt)}
+                              </span>
+                            )}
+                            {invoiceCalculations.ship > 0 && (
+                              <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-bold">
+                                Shipping: +{formatCurrency(invoiceCalculations.ship)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-between pt-2 border-t border-slate-200">
+                            <div className="text-[11px] text-slate-600 italic">
+                              Amount in words: <strong className="text-slate-900 not-italic">{invoiceCalculations.amountInWords}</strong>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-800">Grand Total Invoice:</span>
+                              <span className="text-base font-black text-[#1e3a8a] bg-blue-50 px-3 py-1 rounded-lg border border-blue-300 shadow-2xs font-mono">
+                                {formatCurrency(invoiceCalculations.grandTotal)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* ACTIONS */}
+                      <div className="pt-2 flex justify-end items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => { setIsEditingInvoice(false); setOriginalEditingInvoiceNo(null); }}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-95 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          {submitting ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Updating...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Update Work Order Invoice</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
               </div>
             );
           })
