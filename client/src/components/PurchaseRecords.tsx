@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Package, ShoppingCart, ArrowLeft, Plus, Trash2, 
   Search, ChevronLeft, ChevronRight, Edit, 
   ArrowDownToLine, Receipt, Eye, Minus,
-  IndianRupee, Zap, FileText
+  IndianRupee, Zap, FileText, Calendar, Building2, Truck, CheckCircle2
 } from 'lucide-react';
 import api from '../api';
 import { showToast } from '../toast';
@@ -477,6 +477,126 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
   const [previewInwardReceipt, setPreviewInwardReceipt] = useState<any | null>(null);
   const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
+
+  // Group inward purchases by party invoice number into distinct containers
+  const groupedPurchasesList = useMemo(() => {
+    const map = new Map<string, {
+      invoiceNumber: string;
+      date: string;
+      partyName: string;
+      supplierAddress: string;
+      gstNumber: string;
+      supplierInvoiceDate: string;
+      vehicleNumber: string;
+      remarks: string;
+      shippingCharges: number;
+      items: any[];
+      totalBasic: number;
+      totalTax: number;
+      totalAmount: number;
+      totalQty: number;
+      firstPur: any;
+    }>();
+
+    poPurchases.forEach(p => {
+      const inv = (p.partyInvoiceNumber && p.partyInvoiceNumber !== '-') ? p.partyInvoiceNumber.trim() : '';
+      const key = inv ? inv.toUpperCase() : `SINGLE_${p.id}`;
+      
+      let grp = map.get(key);
+      if (!grp) {
+        grp = {
+          invoiceNumber: p.partyInvoiceNumber || '-',
+          date: p.date,
+          partyName: p.partyName || p.supplierName || 'Supplier',
+          supplierAddress: p.supplierAddress || '',
+          gstNumber: p.gstNumber || '',
+          supplierInvoiceDate: p.supplierInvoiceDate || '',
+          vehicleNumber: p.vehicleNumber || '',
+          remarks: p.remarks || '',
+          shippingCharges: Number(p.shippingCharges || 0),
+          items: [],
+          totalBasic: 0,
+          totalTax: 0,
+          totalAmount: 0,
+          totalQty: 0,
+          firstPur: p
+        };
+        map.set(key, grp);
+      }
+      grp.items.push(p);
+      const b = (Number(p.qty) || 0) * (Number(p.rate) || 0);
+      const taxP = (Number(p.cgstPercent) || 0) + (Number(p.sgstPercent) || 0) + (Number(p.igstPercent) || 0);
+      const tax = b * (taxP / 100);
+      grp.totalBasic += b;
+      grp.totalTax += tax;
+      grp.totalQty += Number(p.qty || 0);
+      grp.totalAmount += (b + tax + Number(p.shippingCharges || 0));
+    });
+
+    return Array.from(map.values());
+  }, [poPurchases]);
+
+  // Group sales by invoice number into distinct containers
+  const groupedSalesList = useMemo(() => {
+    const map = new Map<string, {
+      invoiceNumber: string;
+      invoiceDate: string;
+      partyName: string;
+      supplierAddress: string;
+      gstNumber: string;
+      companyGstNumber: string;
+      vehicleNumber: string;
+      eWayBillNumber: string;
+      remarks: string;
+      status: string;
+      shippingCharges: number;
+      items: any[];
+      totalBasic: number;
+      totalTax: number;
+      totalAmount: number;
+      totalQty: number;
+      firstSale: any;
+    }>();
+
+    poSales.forEach(s => {
+      const inv = (s.invoiceNumber && s.invoiceNumber !== '-') ? s.invoiceNumber.trim() : '';
+      const key = inv ? inv.toUpperCase() : `SINGLE_${s.id}`;
+      
+      let grp = map.get(key);
+      if (!grp) {
+        grp = {
+          invoiceNumber: s.invoiceNumber || '-',
+          invoiceDate: s.invoiceDate,
+          partyName: s.partyName || 'Customer',
+          supplierAddress: s.supplierAddress || '',
+          gstNumber: s.gstNumber || '',
+          companyGstNumber: s.companyGstNumber || '29DWKPP3582H1ZV',
+          vehicleNumber: s.vehicleNumber || '',
+          eWayBillNumber: s.eWayBillNumber || '',
+          remarks: s.remarks || '',
+          status: s.status || 'PENDING',
+          shippingCharges: Number(s.shippingCharges || 0),
+          items: [],
+          totalBasic: 0,
+          totalTax: 0,
+          totalAmount: 0,
+          totalQty: 0,
+          firstSale: s
+        };
+        map.set(key, grp);
+      }
+      grp.items.push(s);
+      const b = (Number(s.qty) || 0) * (Number(s.rate) || 0);
+      const taxP = (Number(s.cgstPercent) || 0) + (Number(s.sgstPercent) || 0) + (Number(s.igstPercent) || 0);
+      const tax = b * (taxP / 100);
+      grp.totalBasic += b;
+      grp.totalTax += tax;
+      grp.totalQty += Number(s.qty || 0);
+      grp.totalAmount += (b + tax + Number(s.shippingCharges || 0));
+    });
+
+    return Array.from(map.values());
+  }, [poSales]);
 
   // Fetch divisions for PO creation/edit dropdowns (Filtered to PO Divisions/Clients)
   const fetchDivisions = async () => {
@@ -974,12 +1094,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     let items: any[] = [];
     if (invNum && invNum !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
         if (res.data?.items && res.data.items.length > 0) {
           items = res.data.items.filter((it: any) => it.type === 'INWARD' || it.invoiceType === 'INWARD' || it.partyInvoiceNumber === invNum);
         }
       } catch (e) {
-        console.error('Inward invoice fetch failed:', e);
+        // Fallback to local purchases gracefully
       }
     }
     if (items.length === 0) {
@@ -1026,7 +1146,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         ...editInwardInvoiceHeader,
         items: editInwardInvoiceItems
       };
-      await api.put(`/purchases/invoice/${encodeURIComponent(invNum)}`, payload);
+      await api.put('/purchases/invoice', payload, { params: { invoiceNumber: invNum } });
       showToast(`Inward invoice '${invNum}' updated successfully (${editInwardInvoiceItems.length} items)!`, 'success');
       setEditInwardInvoiceModal(null);
       fetchPoHeaderAndKpi(selectedPo.id);
@@ -1056,7 +1176,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       });
       if (confirmAll) {
         try {
-          const res = await api.delete(`/purchases/invoice/${encodeURIComponent(invNum)}`);
+          const res = await api.delete('/purchases/invoice', { params: { invoiceNumber: invNum }, data: { invoiceNumber: invNum } });
           showToast(res.data?.message || `Inward invoice '${invNum}' deletion request submitted for Owner Approval!`, 'success');
           fetchPoHeaderAndKpi(selectedPo.id);
           fetchPoPurchases(selectedPo.id, purchasesCursor);
@@ -1159,12 +1279,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     let items: any[] = [];
     if (invNum && invNum !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
         if (res.data?.items && res.data.items.length > 0) {
           items = res.data.items.filter((it: any) => it.type === 'SALE' || it.invoiceType === 'SALE' || it.invoiceNumber === invNum);
         }
       } catch (e) {
-        console.error('Invoice fetch failed:', e);
+        // Fallback to local sales gracefully
       }
     }
     if (items.length === 0) {
@@ -1214,7 +1334,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         ...editSaleInvoiceHeader,
         items: editSaleInvoiceItems
       };
-      await api.put(`/sales/invoice/${encodeURIComponent(invNum)}`, payload);
+      await api.put('/sales/invoice', payload, { params: { invoiceNumber: invNum } });
       showToast(`Tax invoice '${invNum}' updated (${editSaleInvoiceItems.length} items) and submitted for Owner Approval!`, 'success');
       setEditSaleInvoiceModal(null);
       fetchPoHeaderAndKpi(selectedPo.id);
@@ -1245,7 +1365,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       });
       if (confirmAll) {
         try {
-          const res = await api.delete(`/sales/invoice/${encodeURIComponent(invNum)}`);
+          const res = await api.delete('/sales/invoice', { params: { invoiceNumber: invNum }, data: { invoiceNumber: invNum } });
           showToast(res.data?.message || `Tax invoice '${invNum}' deletion request submitted for Owner Approval!`, 'success');
           fetchPoHeaderAndKpi(selectedPo.id);
           fetchPoSales(selectedPo.id, salesCursor);
@@ -1304,7 +1424,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     const invNum = sale.invoiceNumber;
     if (invNum && invNum !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
         if (res.data?.items && res.data.items.length > 0) {
           const itemsWithPo = res.data.items.map((s: any) => {
             const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
@@ -1330,7 +1450,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           return;
         }
       } catch (err) {
-        console.error('Failed to fetch complete invoice items, attempting PO sales fallback:', err);
+        // Fallback to PO sales
       }
 
       // Secondary fallback: fetch all sales matching this invoice number from PO
@@ -1394,7 +1514,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     // If all selected items belong to the same invoice number, fetch all items of that invoice directly
     if (firstSale?.invoiceNumber && firstSale.invoiceNumber !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(firstSale.invoiceNumber)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: firstSale.invoiceNumber } });
         if (res.data?.items && res.data.items.length > 0) {
           const itemsWithPo = res.data.items.map((s: any) => {
             const matchedPoItem = allItemsForSelection.find((it: any) => it.id === s.purchaseOrderItemId) || s.purchaseOrderItem || {};
@@ -1418,7 +1538,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           return;
         }
       } catch (err) {
-        console.error('Failed to fetch complete invoice items:', err);
+        // Fallback to chosen sales
       }
     }
     const chosenSales = selectedSalesList.map(s => {
@@ -1449,7 +1569,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     const invNum = pur.partyInvoiceNumber;
     if (invNum && invNum !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
         if (res.data?.items && res.data.items.length > 0) {
           const itemsWithPo = res.data.items.map((p: any) => {
             const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
@@ -1475,7 +1595,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           return;
         }
       } catch (err) {
-        console.error('Failed to fetch complete inward invoice items, attempting PO purchases fallback:', err);
+        // Fallback to PO purchases
       }
 
       // Secondary fallback: fetch all purchases matching this partyInvoiceNumber from PO
@@ -1542,7 +1662,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     // If all selected items belong to the same invoice number, fetch all items of that invoice directly
     if (firstPur?.partyInvoiceNumber && firstPur.partyInvoiceNumber !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(firstPur.partyInvoiceNumber)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: firstPur.partyInvoiceNumber } });
         if (res.data?.items && res.data.items.length > 0) {
           const itemsWithPo = res.data.items.map((p: any) => {
             const matchedPoItem = allItemsForSelection.find((it: any) => it.id === p.purchaseOrderItemId) || p.purchaseOrderItem || {};
@@ -1568,7 +1688,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           return;
         }
       } catch (err) {
-        console.error('Failed to fetch complete inward invoice items:', err);
+        // Fallback to chosen purchases
       }
     }
 
@@ -4616,280 +4736,243 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </form>
                 )}
 
-                {/* 1. NATIVE MOBILE APP INWARD CARDS (Shown on Mobile) */}
-                <div className="block md:hidden space-y-3">
+                {/* GROUPED INWARD PURCHASE CONTAINERS (ONE CONTAINER PER INVOICE/DC) */}
+                <div className="space-y-6">
                   {purchasesLoading ? (
-                    <div className="p-8 text-center text-slate-500 font-semibold text-xs">Loading purchases...</div>
-                  ) : poPurchases.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl bg-white">No inward purchases recorded yet.</div>
+                    <div className="p-12 text-center text-slate-500 font-semibold text-xs bg-white rounded-2xl border-2 border-slate-200">
+                      Loading inward purchases...
+                    </div>
+                  ) : groupedPurchasesList.length === 0 ? (
+                    <div className="p-12 text-center text-slate-400 text-xs border-2 border-dashed border-slate-300 rounded-2xl bg-white">
+                      No inward purchases recorded yet.
+                    </div>
                   ) : (
-                    poPurchases.map((pur, idx) => {
-                      const basic = (pur.qty || 0) * (pur.rate || 0);
-                      const cgst = basic * ((pur.cgstPercent || 0) / 100);
-                      const sgst = basic * ((pur.sgstPercent || 0) / 100);
-                      const igst = basic * ((pur.igstPercent || 0) / 100);
-                      const ship = Number(pur.shippingCharges || 0);
-                      const total = basic + cgst + sgst + igst + ship;
-                      const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
-                      const isSelected = selectedPurchaseIds.includes(pur.id);
+                    groupedPurchasesList.map((grp, grpIdx) => {
+                      const grpItemIds = grp.items.map(p => p.id);
+                      const isAllGrpSelected = grpItemIds.length > 0 && grpItemIds.every(id => selectedPurchaseIds.includes(id));
+                      const isSomeGrpSelected = grpItemIds.some(id => selectedPurchaseIds.includes(id));
 
                       return (
-                        <div key={pur.id} className={`bg-white p-3.5 rounded-xl border shadow-sm space-y-2.5 transition-colors ${isSelected ? 'border-emerald-400 ring-2 ring-emerald-400/20 bg-emerald-50/20' : 'border-slate-200'}`}>
-                          <div className="flex justify-between items-start border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-2">
+                        <div 
+                          key={grp.invoiceNumber + '_' + grpIdx}
+                          className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden transition-all hover:border-slate-400"
+                        >
+                          {/* CONTAINER HEADER BANNER */}
+                          <div className="bg-gradient-to-r from-slate-50 via-blue-50/40 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                            {/* Left: Metadata badges & Select All Checkbox */}
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
                               <input 
-                                type="checkbox" 
-                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-4 h-4" 
-                                checked={isSelected}
+                                type="checkbox"
+                                checked={isAllGrpSelected}
+                                ref={el => {
+                                  if (el) el.indeterminate = isSomeGrpSelected && !isAllGrpSelected;
+                                }}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedPurchaseIds(prev => [...prev, pur.id]);
+                                    setSelectedPurchaseIds(prev => Array.from(new Set([...prev, ...grpItemIds])));
                                   } else {
-                                    setSelectedPurchaseIds(prev => prev.filter(id => id !== pur.id));
+                                    setSelectedPurchaseIds(prev => prev.filter(id => !grpItemIds.includes(id)));
                                   }
                                 }}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                                title="Select all items in this invoice"
                               />
-                              <span className="w-6 h-6 rounded-full bg-blue-50 text-[#1e3a8a] font-mono font-bold text-xs flex items-center justify-center border border-blue-100">
-                                {serialNo}
-                              </span>
-                              <div>
-                                <span className="font-mono font-bold text-xs text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                                  {pur.receivedPartNumber || pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || 'NO PART NO'}
+
+                              {/* Invoice / DC Number Pill */}
+                              <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5 text-blue-200" />
+                                <span>DC / INV: {grp.invoiceNumber}</span>
+                              </div>
+
+                              {/* Date */}
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                {formatDate(grp.date)}
+                              </div>
+
+                              {/* Party / Supplier */}
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1">
+                                <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                                <span className="truncate max-w-[200px]" title={grp.partyName}>{grp.partyName}</span>
+                              </div>
+
+                              {/* GSTIN */}
+                              {grp.gstNumber && (
+                                <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-semibold">
+                                  GST: {grp.gstNumber}
                                 </span>
-                                {pur.receivedPartNumber && pur.receivedPartNumber !== (pur.purchaseOrderItem?.partNumber || pur.item?.partNumber) && (
-                                  <span className="text-[10px] text-slate-400 font-mono ml-1.5">
-                                    (PO: {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber})
-                                  </span>
-                                )}
-                                <div className="font-bold text-slate-800 text-xs mt-1">
-                                  {pur.receivedItemName || pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
+                              )}
+
+                              {/* Vehicle */}
+                              {grp.vehicleNumber && (
+                                <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-bold flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-blue-600" />
+                                  {grp.vehicleNumber}
+                                </span>
+                              )}
+
+                              {/* Item Count Badge */}
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-bold">
+                                {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
+                              </span>
+                            </div>
+
+                            {/* Right: Invoice Grand Total & Single Action Group */}
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Invoice Total</div>
+                                <div className="text-sm sm:text-base font-black font-mono text-[#1e3a8a]">
+                                  {formatCurrency(grp.totalAmount)}
                                 </div>
-                                {pur.receivedItemName && pur.receivedItemName !== (pur.purchaseOrderItem?.itemName || pur.item?.itemName) && (
-                                  <div className="text-[10px] text-slate-400">
-                                    PO: {pur.purchaseOrderItem?.itemName || pur.item?.itemName}
-                                  </div>
+                              </div>
+
+                              {/* Unified Action Buttons for the Whole Invoice */}
+                              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenInwardReceipt(grp.firstPur)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                                  title="View & Download Inward Material Receipt"
+                                >
+                                  <Receipt className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Receipt</span>
+                                </button>
+                                {isManagerOrOwner && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditInwardInvoice(grp.firstPur)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      title="Edit Inward Invoice / DC (All Items)"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Edit Invoice</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteInwardGrouped(grp.firstPur)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      title="Delete Inward Purchase Log (All Items)"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Delete</span>
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
-                            <span className="text-[10px] text-slate-400 font-mono">
-                              {formatDate(pur.date)}
-                            </span>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                              <div className="text-[10px] font-bold text-slate-500 uppercase">Party / Supplier</div>
-                              <div className="font-bold text-slate-800 truncate">{pur.partyName || '-'}</div>
-                              {pur.partyInvoiceNumber && (
-                                <div className="text-[10px] text-blue-900 font-mono font-bold mt-0.5">Inv: {pur.partyInvoiceNumber}</div>
-                              )}
-                            </div>
-                            <div className="bg-emerald-50/70 p-2 rounded-lg border border-emerald-100 text-right">
-                              <div className="text-[10px] font-bold text-emerald-700 uppercase">Inward Qty & Rate</div>
-                              <div className="font-mono font-black text-emerald-900 text-sm">{pur.qty} <span className="text-xs font-normal">units</span></div>
-                              <div className="text-[10px] text-slate-600 font-mono">@ {formatCurrency(pur.rate)}</div>
-                            </div>
+                          {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP BORDERS) */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                                <tr>
+                                  <th className="py-2.5 px-3 text-center w-12 border-r border-slate-200">#</th>
+                                  <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200">Part Number</th>
+                                  <th className="py-2.5 px-3 min-w-[200px] border-r border-slate-200">Item Name &amp; Description</th>
+                                  <th className="py-2.5 px-3 text-center min-w-[90px] border-r border-slate-200 bg-emerald-50/60 text-emerald-900">Inward Qty</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[90px] border-r border-slate-200">Rate (₹)</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[100px] border-r border-slate-200">Basic (₹)</th>
+                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border-r border-slate-200">CGST</th>
+                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border-r border-slate-200">SGST</th>
+                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border-r border-slate-200">IGST</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[85px] border-r border-slate-200">Shipping (₹)</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[110px] border-r border-slate-200 bg-blue-50/50 text-[#1e3a8a] font-black">Total (₹)</th>
+                                  <th className="py-2.5 px-3 min-w-[120px]">Remarks</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {grp.items.map((pur, itmIdx) => {
+                                  const basic = (pur.qty || 0) * (pur.rate || 0);
+                                  const cgst = basic * ((pur.cgstPercent || 0) / 100);
+                                  const sgst = basic * ((pur.sgstPercent || 0) / 100);
+                                  const igst = basic * ((pur.igstPercent || 0) / 100);
+                                  const ship = Number(pur.shippingCharges || 0);
+                                  const itemTotal = basic + cgst + sgst + igst + ship;
+                                  const isSelected = selectedPurchaseIds.includes(pur.id);
+
+                                  return (
+                                    <tr 
+                                      key={pur.id || itmIdx} 
+                                      className={`hover:bg-blue-50/40 transition-colors ${isSelected ? 'bg-emerald-50/30' : (itmIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white')}`}
+                                    >
+                                      <td className="py-2 px-3 text-center font-mono font-bold text-slate-500 bg-slate-50 border-r border-slate-200">
+                                        {itmIdx + 1}
+                                      </td>
+                                      <td className="py-2 px-3 border-r border-slate-200">
+                                        <div className="font-mono font-bold text-slate-900">
+                                          {pur.receivedPartNumber || pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}
+                                        </div>
+                                        {pur.receivedPartNumber && pur.receivedPartNumber !== (pur.purchaseOrderItem?.partNumber || pur.item?.partNumber) && (
+                                          <div className="text-[10px] text-slate-400 font-mono">
+                                            PO: {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber}
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 border-r border-slate-200">
+                                        <div className="font-bold text-slate-800">
+                                          {pur.receivedItemName || pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
+                                        </div>
+                                        {pur.receivedItemName && pur.receivedItemName !== (pur.purchaseOrderItem?.itemName || pur.item?.itemName) && (
+                                          <div className="text-[10px] text-slate-400">
+                                            PO: {pur.purchaseOrderItem?.itemName || pur.item?.itemName}
+                                          </div>
+                                        )}
+                                      </td>
+                                      <td className="py-2 px-3 text-center font-mono font-bold text-emerald-800 bg-emerald-50/40 border-r border-slate-200">
+                                        {pur.qty}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-200">
+                                        {formatCurrency(pur.rate)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-slate-800 font-semibold border-r border-slate-200">
+                                        {formatCurrency(basic)}
+                                      </td>
+                                      <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {cgst > 0 ? `${formatCurrency(cgst)} (${pur.cgstPercent}%)` : '-'}
+                                      </td>
+                                      <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {sgst > 0 ? `${formatCurrency(sgst)} (${pur.sgstPercent}%)` : '-'}
+                                      </td>
+                                      <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {igst > 0 ? `${formatCurrency(igst)} (${pur.igstPercent}%)` : '-'}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {ship > 0 ? formatCurrency(ship) : '-'}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-50/30 border-r border-slate-200">
+                                        {formatCurrency(itemTotal)}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-600 text-[11px] truncate max-w-[150px]" title={pur.remarks || '-'}>
+                                        {pur.remarks || '-'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
 
-                          <div className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">Total Amount</span>
-                              <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
-                              {ship > 0 && <span className="text-[10px] text-blue-900 font-mono font-semibold">+₹{ship} ship</span>}
+                          {/* CONTAINER SUMMARY FOOTER */}
+                          <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
+                            <div className="flex items-center gap-4">
+                              <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
+                              <span>Total Inward Qty: <strong className="text-emerald-800 font-mono font-bold">{grp.totalQty} units</strong></span>
+                              {grp.shippingCharges > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.shippingCharges}</strong></span>}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => handleOpenInwardReceipt(pur)}
-                                className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200 cursor-pointer"
-                                title="View & Download Inward Material Receipt"
-                              >
-                                <Receipt className="w-3.5 h-3.5" />
-                              </button>
-                              {isManagerOrOwner && (
-                                <>
-                                  <button
-                                    onClick={() => handleOpenEditInwardInvoice(pur)}
-                                    className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
-                                    title="Edit Inward Invoice / DC (All Items)"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteInwardGrouped(pur)}
-                                    className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer"
-                                    title="Delete Inward Purchase Log"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
-                              )}
+                            <div className="flex items-center gap-4 font-mono">
+                              <span>Basic: <strong className="text-slate-800">{formatCurrency(grp.totalBasic)}</strong></span>
+                              <span>Tax: <strong className="text-slate-800">{formatCurrency(grp.totalTax)}</strong></span>
+                              <span className="text-sm font-black text-[#1e3a8a] bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">
+                                Net: {formatCurrency(grp.totalAmount)}
+                              </span>
                             </div>
                           </div>
                         </div>
                       );
                     })
                   )}
-                </div>
-
-                {/* 2. DESKTOP EXCEL TABLE (Hidden on Mobile) */}
-                <div className="hidden md:block overflow-x-auto max-h-[70vh] overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-sm">
-                  <table className={`excel-table w-full text-left ${purchasesTableViewMode === 'fit' ? 'text-[11px]' : 'text-xs'}`}>
-                    <thead className="sticky top-0 z-20 shadow-sm">
-                      <tr>
-                        <th className="text-center w-8 bg-sky-950 text-sky-200 px-1 py-1.5">
-                          {(() => {
-                            const isAllSelected = poPurchases.length > 0 && selectedPurchaseIds.length === poPurchases.length;
-                            return (
-                              <input 
-                                type="checkbox" 
-                                className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5" 
-                                checked={isAllSelected}
-                                onChange={(e) => {
-                                  if (e.target.checked) {
-                                    setSelectedPurchaseIds(poPurchases.map(p => p.id));
-                                  } else {
-                                    setSelectedPurchaseIds([]);
-                                  }
-                                }}
-                              />
-                            );
-                          })()}
-                        </th>
-                        <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
-                        <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
-                        <th className="px-2 py-1.5 min-w-[130px]">Supplier Address</th>
-                        <th className="px-2 py-1.5 min-w-[100px]">GST No</th>
-                        <th className="px-2 py-1.5 min-w-[100px]">Party Inv No</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Supplier Date</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Inward Date</th>
-                        <th className="px-2 py-1.5 min-w-[90px]">Vehicle No</th>
-                        <th className="text-center px-2 py-1.5 whitespace-nowrap">Inward Qty</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Rate</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Basic</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">CGST</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">SGST</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">IGST</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Shipping</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Total Inward</th>
-                        <th className="px-2 py-1.5 min-w-[110px]">Remarks</th>
-                        <th className="px-2 py-1.5 min-w-[90px]">Added By</th>
-                        <th className="text-center px-2 py-1.5 sticky right-0 bg-sky-950 text-sky-200 font-bold z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] min-w-[70px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {purchasesLoading ? (
-                        <tr><td colSpan={22} className="p-8 text-center text-slate-500 font-semibold">Loading purchases...</td></tr>
-                      ) : poPurchases.length === 0 ? (
-                        <tr><td colSpan={22} className="p-8 text-center text-slate-400">No inward purchases recorded yet.</td></tr>
-                      ) : (
-                        poPurchases.map((pur, idx) => {
-                          const basic = (pur.qty || 0) * (pur.rate || 0);
-                          const cgst = basic * ((pur.cgstPercent || 0) / 100);
-                          const sgst = basic * ((pur.sgstPercent || 0) / 100);
-                          const igst = basic * ((pur.igstPercent || 0) / 100);
-                          const ship = Number(pur.shippingCharges || 0);
-                          const total = basic + cgst + sgst + igst + ship;
-                          const serialNo = (parseInt(purchasesCursor || '0', 10) || 0) + idx + 1;
-                          const isSelected = selectedPurchaseIds.includes(pur.id);
-                          return (
-                            <tr key={pur.id} className={`hover:bg-slate-50 border-b-2 border-slate-300 transition-colors ${isSelected ? 'bg-emerald-50/40' : ''}`}>
-                              <td className="text-center px-1 py-1.5">
-                                <input 
-                                  type="checkbox" 
-                                  className="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer w-3.5 h-3.5" 
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedPurchaseIds(prev => [...prev, pur.id]);
-                                    } else {
-                                      setSelectedPurchaseIds(prev => prev.filter(id => id !== pur.id));
-                                    }
-                                  }}
-                                />
-                              </td>
-                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
-                              <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{pur.partyName || '-'}</td>
-                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{pur.supplierAddress || '-'}</td>
-                              <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{pur.gstNumber || '-'}</td>
-                              <td className="font-mono font-bold text-blue-900 uppercase px-2 py-1.5 break-all max-w-[110px]">{pur.partyInvoiceNumber || '-'}</td>
-                              <td className="whitespace-nowrap font-mono text-slate-600 px-2 py-1.5">{pur.supplierInvoiceDate ? formatDate(pur.supplierInvoiceDate) : '-'}</td>
-                              <td className="font-mono text-slate-700 px-2 py-1.5 break-all">
-                                {pur.receivedPartNumber && pur.receivedPartNumber !== (pur.purchaseOrderItem?.partNumber || pur.item?.partNumber) ? (
-                                  <div className="leading-tight">
-                                    <div className="font-bold text-slate-900 font-mono text-xs">
-                                      {pur.receivedPartNumber}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400 font-mono">
-                                      PO: {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="font-bold text-slate-800">{pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}</span>
-                                )}
-                              </td>
-                              <td className="text-slate-800 px-2 py-1.5 break-words max-w-[140px]">
-                                {pur.receivedItemName && pur.receivedItemName !== (pur.purchaseOrderItem?.itemName || pur.item?.itemName) ? (
-                                  <div className="leading-tight">
-                                    <div className="font-bold text-slate-900 text-xs">
-                                      {pur.receivedItemName}
-                                    </div>
-                                    <div className="text-[10px] text-slate-400">
-                                      PO: {pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="font-semibold">{pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}</span>
-                                )}
-                              </td>
-                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(pur.date)}</td>
-                              <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{pur.vehicleNumber || '-'}</td>
-                              <td className="text-center font-mono font-bold text-emerald-700 bg-emerald-50/50 px-2 py-1.5">{pur.qty}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(pur.rate)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap text-blue-900 font-semibold">{ship > 0 ? formatCurrency(ship) : '-'}</td>
-                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(total)}</td>
-                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{pur.remarks || '-'}</td>
-                              <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{pur.addedBy?.fullName || '-'}</td>
-                              <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleOpenInwardReceipt(pur)}
-                                    className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm cursor-pointer"
-                                    title="View & Download Inward Material Receipt"
-                                  >
-                                    <Receipt className="w-3.5 h-3.5" />
-                                  </button>
-                                  {isManagerOrOwner && (
-                                    <>
-                                      <button
-                                        onClick={() => handleOpenEditInwardInvoice(pur)}
-                                        className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm cursor-pointer"
-                                        title="Edit Inward Invoice / DC (All Items)"
-                                      >
-                                        <Edit className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteInwardGrouped(pur)}
-                                        className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm cursor-pointer"
-                                        title="Delete Inward Purchase Log"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
                 </div>
 
                 {/* PURCHASES PAGINATION */}
@@ -5457,258 +5540,242 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                   </form>
                 )}
 
-                {/* 1. NATIVE MOBILE APP OUTWARD SALES CARDS (Shown on Mobile) */}
-                <div className="block md:hidden space-y-3">
+                {/* GROUPED TAX INVOICE CONTAINERS (ONE CONTAINER PER TAX INVOICE) */}
+                <div className="space-y-6">
                   {salesLoading ? (
-                    <div className="p-8 text-center text-slate-500 font-semibold text-xs">Loading sales...</div>
-                  ) : poSales.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-xs border border-dashed rounded-xl bg-white">No sales recorded yet.</div>
+                    <div className="p-12 text-center text-slate-500 font-semibold text-xs bg-white rounded-2xl border-2 border-slate-200">
+                      Loading sales invoices...
+                    </div>
+                  ) : groupedSalesList.length === 0 ? (
+                    <div className="p-12 text-center text-slate-400 text-xs border-2 border-dashed border-slate-300 rounded-2xl bg-white">
+                      No sales recorded yet.
+                    </div>
                   ) : (
-                    poSales.map((sale, idx) => {
-                      const basic = (sale.qty || 0) * (sale.rate || 0);
-                      const cgst = basic * ((sale.cgstPercent || 0) / 100);
-                      const sgst = basic * ((sale.sgstPercent || 0) / 100);
-                      const igst = basic * ((sale.igstPercent || 0) / 100);
-                      const ship = Number(sale.shippingCharges || 0);
-                      const total = basic + cgst + sgst + igst + ship;
-                      const isApproved = sale.status === 'APPROVED';
-                      const isPending = sale.status === 'PENDING';
-                      const isRejected = sale.status === 'REJECTED';
+                    groupedSalesList.map((grp, grpIdx) => {
+                      const grpItemIds = grp.items.map(s => s.id);
+                      const isAllGrpSelected = grpItemIds.length > 0 && grpItemIds.every(id => selectedSaleIds.includes(id));
+                      const isSomeGrpSelected = grpItemIds.some(id => selectedSaleIds.includes(id));
+                      const isApproved = grp.status === 'APPROVED';
+                      const isPending = grp.status === 'PENDING';
 
                       return (
-                        <div key={sale.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
-                          <div className="flex justify-between items-start border-b border-slate-100 pb-2">
-                            <div className="flex items-center gap-2">
-                              <input
+                        <div 
+                          key={grp.invoiceNumber + '_' + grpIdx}
+                          className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden transition-all hover:border-slate-400"
+                        >
+                          {/* CONTAINER HEADER BANNER */}
+                          <div className="bg-gradient-to-r from-slate-50 via-amber-50/30 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                            {/* Left: Metadata badges & Select Checkbox */}
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                              <input 
                                 type="checkbox"
-                                checked={selectedSaleIds.includes(sale.id)}
+                                checked={isAllGrpSelected}
+                                ref={el => {
+                                  if (el) el.indeterminate = isSomeGrpSelected && !isAllGrpSelected;
+                                }}
                                 onChange={(e) => {
                                   if (e.target.checked) {
-                                    setSelectedSaleIds(prev => [...prev, sale.id]);
+                                    setSelectedSaleIds(prev => Array.from(new Set([...prev, ...grpItemIds])));
                                   } else {
-                                    setSelectedSaleIds(prev => prev.filter(id => id !== sale.id));
+                                    setSelectedSaleIds(prev => prev.filter(id => !grpItemIds.includes(id)));
                                   }
                                 }}
-                                className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer mt-0.5"
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                                title="Select all items in this invoice"
                               />
-                              <span className="w-6 h-6 rounded-full bg-amber-50 text-amber-900 font-mono font-bold text-xs flex items-center justify-center border border-amber-200">
-                                {idx + 1}
-                              </span>
-                              <div>
-                                <span className="font-mono font-bold text-xs text-[#1e3a8a] bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
-                                  {sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || 'NO PART NO'}
+
+                              {/* Tax Invoice Pill */}
+                              <div className="px-3 py-1 rounded-lg bg-amber-700 text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5 text-amber-200" />
+                                <span>TAX INV: #{grp.invoiceNumber}</span>
+                              </div>
+
+                              {/* Date */}
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                                {formatDate(grp.invoiceDate)}
+                              </div>
+
+                              {/* Customer / Party Name */}
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1">
+                                <Building2 className="w-3.5 h-3.5 text-amber-700" />
+                                <span className="truncate max-w-[200px]" title={grp.partyName}>{grp.partyName}</span>
+                              </div>
+
+                              {/* GSTIN */}
+                              {grp.gstNumber && (
+                                <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-semibold">
+                                  GST: {grp.gstNumber}
                                 </span>
-                                <div className="font-bold text-slate-800 text-xs mt-1">
-                                  {sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}
+                              )}
+
+                              {/* Vehicle */}
+                              {grp.vehicleNumber && (
+                                <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-bold flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-blue-600" />
+                                  {grp.vehicleNumber}
+                                </span>
+                              )}
+
+                              {/* Approval Status Badge */}
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                                isApproved ? 'bg-emerald-100 text-emerald-800 border-emerald-300' :
+                                isPending ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                                'bg-rose-100 text-rose-800 border-rose-300'
+                              }`}>
+                                {grp.status}
+                              </span>
+
+                              {/* Item Count Badge */}
+                              <span className="px-2.5 py-0.5 rounded-full bg-slate-200 border border-slate-300 text-slate-800 text-[11px] font-bold">
+                                {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
+                              </span>
+                            </div>
+
+                            {/* Right: Invoice Grand Total & Single Action Group */}
+                            <div className="flex items-center gap-3">
+                              <div className="text-right">
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Invoice Total</div>
+                                <div className="text-sm sm:text-base font-black font-mono text-amber-950">
+                                  {formatCurrency(grp.totalAmount)}
                                 </div>
                               </div>
+
+                              {/* Unified Action Buttons for the Whole Invoice */}
+                              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenSaleInvoice(grp.firstSale)}
+                                  className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                                  title="View & Download Official Tax Invoice"
+                                >
+                                  <Receipt className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Tax Invoice</span>
+                                </button>
+                                {isManagerOrOwner && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleOpenEditSaleInvoice(grp.firstSale)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      title="Edit Sale Invoice (All Items)"
+                                    >
+                                      <Edit className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Edit Invoice</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteSaleGrouped(grp.firstSale)}
+                                      className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      title="Delete Tax Invoice (All Items)"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Delete</span>
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                              isPending ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                              'bg-rose-100 text-rose-800 border border-rose-300'
-                            }`}>
-                              {sale.status}
-                            </span>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
-                              <div className="text-[10px] font-bold text-slate-500 uppercase">Customer / Buyer</div>
-                              <div className="font-bold text-slate-800 truncate">{sale.partyName || '-'}</div>
-                              {sale.invoiceNumber && (
-                                <div className="text-[10px] text-[#1e3a8a] font-mono font-bold mt-0.5">Inv: #{sale.invoiceNumber}</div>
-                              )}
-                            </div>
-                            <div className="bg-amber-50/70 p-2 rounded-lg border border-amber-100 text-right">
-                              <div className="text-[10px] font-bold text-amber-800 uppercase">Sold Qty & Rate</div>
-                              <div className="font-mono font-black text-amber-950 text-sm">{sale.qty} <span className="text-xs font-normal">units</span></div>
-                              <div className="text-[10px] text-slate-600 font-mono">@ {formatCurrency(sale.rate)}</div>
-                            </div>
+                          {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP BORDERS) */}
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                                <tr>
+                                  <th className="py-2.5 px-3 text-center w-12 border-r border-slate-200">#</th>
+                                  <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200">Part Number</th>
+                                  <th className="py-2.5 px-3 min-w-[200px] border-r border-slate-200">Item Name</th>
+                                  <th className="py-2.5 px-3 text-center min-w-[90px] border-r border-slate-200 bg-amber-50/70 text-amber-950">Sold Qty</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[90px] border-r border-slate-200">Rate (₹)</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[100px] border-r border-slate-200">Basic (₹)</th>
+                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border-r border-slate-200">CGST</th>
+                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border-r border-slate-200">SGST</th>
+                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border-r border-slate-200">IGST</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[85px] border-r border-slate-200">Shipping (₹)</th>
+                                  <th className="py-2.5 px-3 text-right min-w-[110px] border-r border-slate-200 bg-amber-50/40 text-amber-950 font-black">Total (₹)</th>
+                                  <th className="py-2.5 px-3 min-w-[120px]">Remarks</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-200">
+                                {grp.items.map((sale, itmIdx) => {
+                                  const basic = (sale.qty || 0) * (sale.rate || 0);
+                                  const cgst = basic * ((sale.cgstPercent || 0) / 100);
+                                  const sgst = basic * ((sale.sgstPercent || 0) / 100);
+                                  const igst = basic * ((sale.igstPercent || 0) / 100);
+                                  const ship = Number(sale.shippingCharges || 0);
+                                  const itemTotal = basic + cgst + sgst + igst + ship;
+                                  const isSelected = selectedSaleIds.includes(sale.id);
+
+                                  return (
+                                    <tr 
+                                      key={sale.id || itmIdx} 
+                                      className={`hover:bg-amber-50/30 transition-colors ${isSelected ? 'bg-amber-50/50' : (itmIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white')}`}
+                                    >
+                                      <td className="py-2 px-3 text-center font-mono font-bold text-slate-500 bg-slate-50 border-r border-slate-200">
+                                        {itmIdx + 1}
+                                      </td>
+                                      <td className="py-2 px-3 border-r border-slate-200">
+                                        <span className="font-mono font-bold text-slate-900">
+                                          {sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}
+                                        </span>
+                                      </td>
+                                      <td className="py-2 px-3 font-semibold text-slate-800 border-r border-slate-200">
+                                        {sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}
+                                      </td>
+                                      <td className="py-2 px-3 text-center font-mono font-bold text-amber-900 bg-amber-50/40 border-r border-slate-200">
+                                        {sale.qty}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-200">
+                                        {formatCurrency(sale.rate)}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-slate-800 font-semibold border-r border-slate-200">
+                                        {formatCurrency(basic)}
+                                      </td>
+                                      <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {cgst > 0 ? `${formatCurrency(cgst)} (${sale.cgstPercent}%)` : '-'}
+                                      </td>
+                                      <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {sgst > 0 ? `${formatCurrency(sgst)} (${sale.sgstPercent}%)` : '-'}
+                                      </td>
+                                      <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {igst > 0 ? `${formatCurrency(igst)} (${sale.igstPercent}%)` : '-'}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono text-slate-600 border-r border-slate-200">
+                                        {ship > 0 ? formatCurrency(ship) : '-'}
+                                      </td>
+                                      <td className="py-2 px-3 text-right font-mono font-black text-amber-950 bg-amber-50/20 border-r border-slate-200">
+                                        {formatCurrency(itemTotal)}
+                                      </td>
+                                      <td className="py-2 px-3 text-slate-600 text-[11px] truncate max-w-[150px]" title={sale.remarks || '-'}>
+                                        {sale.remarks || '-'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
 
-                          <div className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-                            <div>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">Total Invoice Value</span>
-                              <div className="font-mono font-black text-slate-900 text-sm">{formatCurrency(total)}</div>
-                              {ship > 0 && <span className="text-[10px] text-blue-900 font-mono font-semibold">+₹{ship} ship</span>}
+                          {/* CONTAINER SUMMARY FOOTER */}
+                          <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
+                            <div className="flex items-center gap-4">
+                              <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
+                              <span>Total Sold Qty: <strong className="text-amber-900 font-mono font-bold">{grp.totalQty} units</strong></span>
+                              {grp.shippingCharges > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.shippingCharges}</strong></span>}
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => handleOpenSaleInvoice(sale)}
-                                className="p-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
-                                title="View & Download Tax Invoice"
-                              >
-                                <Receipt className="w-3.5 h-3.5" />
-                              </button>
-                              {isManagerOrOwner && (
-                                <>
-                                  <button
-                                    onClick={() => handleOpenEditSaleInvoice(sale)}
-                                    className="p-1.5 text-[#1e3a8a] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 cursor-pointer"
-                                    title="Edit Sale Invoice (All Items)"
-                                  >
-                                    <Edit className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeleteSaleGrouped(sale)}
-                                    className="p-1.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 cursor-pointer"
-                                    title="Delete Sale Record"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </>
-                              )}
+                            <div className="flex items-center gap-4 font-mono">
+                              <span>Basic: <strong className="text-slate-800">{formatCurrency(grp.totalBasic)}</strong></span>
+                              <span>Tax: <strong className="text-slate-800">{formatCurrency(grp.totalTax)}</strong></span>
+                              <span className="text-sm font-black text-amber-950 bg-amber-100/70 px-2.5 py-0.5 rounded border border-amber-200">
+                                Net: {formatCurrency(grp.totalAmount)}
+                              </span>
                             </div>
                           </div>
                         </div>
                       );
                     })
                   )}
-                </div>
-
-                {/* 2. DESKTOP EXCEL SALES TABLE (Hidden on Mobile) */}
-                <div className="hidden md:block overflow-x-auto max-h-[70vh] overflow-y-auto border border-slate-200 rounded-xl bg-white shadow-sm">
-                  <table className="excel-table w-full text-[11px] text-left">
-                    <thead className="sticky top-0 z-20 shadow-sm">
-                      <tr>
-                        <th className="text-center w-8 bg-sky-950 text-sky-200 border-r border-sky-800 px-1 py-1.5">
-                          <input
-                            type="checkbox"
-                            checked={poSales.length > 0 && selectedSaleIds.length === poSales.length}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setSelectedSaleIds(poSales.map(s => s.id));
-                              } else {
-                                setSelectedSaleIds([]);
-                              }
-                            }}
-                            className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer"
-                            title="Select All"
-                          />
-                        </th>
-                        <th className="text-center w-10 bg-sky-950 text-sky-200 font-bold border-r border-sky-800 px-2 py-1.5 whitespace-nowrap">SL NO</th>
-                        <th className="px-2 py-1.5 min-w-[120px]">Party Name</th>
-                        <th className="px-2 py-1.5 min-w-[130px]">Party Address</th>
-                        <th className="px-2 py-1.5 min-w-[100px]">Party GST No</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Part Number</th>
-                        <th className="px-2 py-1.5 min-w-[100px]">Our GST No</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Item Name</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Invoice No</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Invoice Date</th>
-                        <th className="px-2 py-1.5 min-w-[90px]">Vehicle No</th>
-                        <th className="text-center px-2 py-1.5 whitespace-nowrap bg-blue-900 text-blue-100 font-bold">Sold Qty</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Rate</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Basic</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">CGST</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">SGST</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">IGST</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Shipping</th>
-                        <th className="px-2 py-1.5 whitespace-nowrap">Total Invoice</th>
-                        <th className="px-2 py-1.5 min-w-[90px] text-center">Status</th>
-                        <th className="px-2 py-1.5 min-w-[110px]">Remarks</th>
-                        <th className="px-2 py-1.5 min-w-[90px]">Added By</th>
-                        <th className="text-center px-2 py-1.5 sticky right-0 bg-sky-950 text-sky-200 font-bold z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] min-w-[70px]">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {salesLoading ? (
-                        <tr><td colSpan={23} className="p-8 text-center text-slate-500 font-semibold">Loading sales...</td></tr>
-                      ) : poSales.length === 0 ? (
-                        <tr><td colSpan={23} className="p-8 text-center text-slate-400">No sales recorded yet.</td></tr>
-                      ) : (
-                        poSales.map((sale, idx) => {
-                          const basic = (sale.qty || 0) * (sale.rate || 0);
-                          const cgst = basic * ((sale.cgstPercent || 0) / 100);
-                          const sgst = basic * ((sale.sgstPercent || 0) / 100);
-                          const igst = basic * ((sale.igstPercent || 0) / 100);
-                          const ship = Number(sale.shippingCharges || 0);
-                          const isApproved = sale.status === 'APPROVED';
-                          const isPending = sale.status === 'PENDING';
-                          const isRejected = sale.status === 'REJECTED';
-                          const serialNo = (parseInt(salesCursor || '0', 10) || 0) + idx + 1;
-                          const isSelected = selectedSaleIds.includes(sale.id);
-
-                          return (
-                            <tr key={sale.id} className={`hover:bg-slate-50 border-b-2 border-slate-300 ${isSelected ? 'bg-blue-50/70' : ''}`}>
-                              <td className="text-center px-1 py-1.5 border-r border-slate-200">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setSelectedSaleIds(prev => [...prev, sale.id]);
-                                    } else {
-                                      setSelectedSaleIds(prev => prev.filter(id => id !== sale.id));
-                                    }
-                                  }}
-                                  className="rounded border-slate-300 text-[#1e3a8a] focus:ring-[#1e3a8a] cursor-pointer"
-                                />
-                              </td>
-                              <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 px-2 py-1.5">{serialNo}</td>
-                              <td className="font-semibold text-slate-900 px-2 py-1.5 break-words max-w-[130px]">{sale.partyName || '-'}</td>
-                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[140px]">{sale.supplierAddress || '-'}</td>
-                              <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px]">{sale.gstNumber || '-'}</td>
-                              <td className="font-mono font-bold text-slate-800 px-2 py-1.5 break-all">{sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}</td>
-                              <td className="font-mono text-slate-700 uppercase font-semibold px-2 py-1.5 break-all max-w-[110px] bg-slate-50">{sale.companyGstNumber || '-'}</td>
-                              <td className="font-semibold text-slate-800 px-2 py-1.5 break-words max-w-[130px]">{sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}</td>
-                              <td className="font-mono font-bold text-[#1e3a8a] px-2 py-1.5 break-all">{sale.invoiceNumber || '-'}</td>
-                              <td className="whitespace-nowrap font-mono px-2 py-1.5">{formatDate(sale.invoiceDate)}</td>
-                              <td className="font-mono font-bold text-slate-800 uppercase px-2 py-1.5 break-all max-w-[100px]">{sale.vehicleNumber || '-'}</td>
-                              <td className="text-center font-mono font-bold text-blue-900 bg-blue-50/50 px-2 py-1.5">{sale.qty}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sale.rate)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(cgst)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(sgst)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap">{formatCurrency(igst)}</td>
-                              <td className="text-left font-mono px-2 py-1.5 whitespace-nowrap text-blue-900">{sale.shippingCharges ? formatCurrency(sale.shippingCharges) : '-'}</td>
-                              <td className="text-left font-mono font-bold text-slate-900 bg-slate-50 px-2 py-1.5 whitespace-nowrap">{formatCurrency(basic + cgst + sgst + igst + ship)}</td>
-                              <td className="text-center px-2 py-1.5">
-                                <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                                  isApproved ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' :
-                                  isPending ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                                  'bg-rose-100 text-rose-800 border border-rose-300'
-                                }`}>
-                                  {sale.status}
-                                </span>
-                              </td>
-                              <td className="text-slate-600 px-2 py-1.5 break-words max-w-[130px]">{sale.remarks || '-'}</td>
-                              <td className="text-slate-600 font-medium px-2 py-1.5 break-words max-w-[100px]">{sale.addedBy?.fullName || '-'}</td>
-                              <td className="text-center px-2 py-1.5 sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
-                                <div className="flex items-center justify-center gap-1.5">
-                                  <button
-                                    onClick={() => handleOpenSaleInvoice(sale)}
-                                    className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 rounded-lg transition-colors shadow-sm"
-                                    title="View & Download Tax Invoice"
-                                  >
-                                    <Receipt className="w-3.5 h-3.5" />
-                                  </button>
-                                  {isManagerOrOwner && (
-                                    <>
-                                      <button
-                                        onClick={() => handleOpenEditSaleInvoice(sale)}
-                                        className="p-1.5 text-[#1e3a8a] hover:text-white hover:bg-[#1e3a8a] bg-blue-50 rounded-lg transition-colors shadow-sm cursor-pointer"
-                                        title="Edit Sale Invoice (All Items)"
-                                      >
-                                        <Edit className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleDeleteSaleGrouped(sale)}
-                                        className="p-1.5 text-rose-600 hover:text-white hover:bg-rose-600 bg-rose-50 rounded-lg transition-colors shadow-sm cursor-pointer"
-                                        title="Delete Sale Record"
-                                      >
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                    </tbody>
-                  </table>
                 </div>
 
                 {/* SALES PAGINATION */}

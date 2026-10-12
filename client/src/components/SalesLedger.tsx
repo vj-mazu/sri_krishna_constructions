@@ -18,7 +18,9 @@ import {
   ChevronsLeft,
   ChevronsRight,
   ArrowUpDown,
-  Trash2
+  Trash2,
+  Calendar,
+  Truck
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 import { showToast } from '../toast';
@@ -120,6 +122,66 @@ export const SalesLedger: React.FC = () => {
   }, [sales]);
 
   const filteredSales = paginatedSales;
+
+  // Group ledger sales by invoice number into distinct containers
+  const groupedSalesLedger = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      invoiceNumber: string;
+      date: string;
+      clientDepartment: string;
+      clientGst: string;
+      vehicleNumber: string;
+      eWayBillNumber: string;
+      sourceType: 'PO' | 'INDIVIDUAL' | 'WORK_ORDER';
+      poNumber: string;
+      workOrderNumber?: string;
+      items: SaleLedgerItem[];
+      totalAmount: number;
+      totalBasic: number;
+      totalTax: number;
+      totalQty: number;
+      firstSale: SaleLedgerItem;
+    }>();
+
+    filteredSales.forEach(sale => {
+      const inv = (sale.invoiceNumber && sale.invoiceNumber !== '-') ? sale.invoiceNumber.trim() : '';
+      const key = inv ? `INV_${inv.toUpperCase()}` : `${sale.sourceType}_${sale.id}`;
+
+      let grp = map.get(key);
+      if (!grp) {
+        grp = {
+          key,
+          invoiceNumber: sale.invoiceNumber || '-',
+          date: sale.date,
+          clientDepartment: sale.clientDepartment || '-',
+          clientGst: sale.clientGst || '',
+          vehicleNumber: sale.vehicleNumber || '',
+          eWayBillNumber: sale.eWayBillNumber || '',
+          sourceType: sale.sourceType,
+          poNumber: sale.poNumber || '',
+          workOrderNumber: sale.workOrderNumber,
+          items: [],
+          totalAmount: 0,
+          totalBasic: 0,
+          totalTax: 0,
+          totalQty: 0,
+          firstSale: sale
+        };
+        map.set(key, grp);
+      }
+      grp.items.push(sale);
+      const b = Number(sale.basicAmount || (sale.qty * sale.rate) || 0);
+      const t = Number((sale.cgstAmount || 0) + (sale.sgstAmount || 0) + (sale.igstAmount || 0));
+      grp.totalBasic += b;
+      grp.totalTax += t;
+      grp.totalAmount += Number(sale.totalAmount || 0);
+      grp.totalQty += Number(sale.qty || 0);
+    });
+
+    return Array.from(map.values());
+  }, [filteredSales]);
+
   const totalPages = Math.max(1, Math.ceil(totalServerCount / pageSize));
 
   const formatCurrency = (amount: number | string | undefined | null) => {
@@ -145,7 +207,7 @@ export const SalesLedger: React.FC = () => {
     const invNum = sale.invoiceNumber;
     if (invNum && invNum !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
         if (res.data?.items && res.data.items.length > 0) {
           const itemsToPreview = res.data.items.map((item: any) => ({
             ...item,
@@ -211,7 +273,7 @@ export const SalesLedger: React.FC = () => {
       return;
     }
     try {
-      const res = await api.get(`/invoices/${encodeURIComponent(invNum)}`);
+      const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
       const items = res.data?.items || [];
       if (items.length === 0) {
         showToast('No items found for this invoice', 'error');
@@ -266,9 +328,7 @@ export const SalesLedger: React.FC = () => {
     try {
       setSavingEdit(true);
       const isWO = editInvoiceData.sourceType === 'WORK_ORDER';
-      const endpoint = isWO 
-        ? `/work-orders/invoice/${encodeURIComponent(editInvoiceData.invoiceNumber)}`
-        : `/sales/invoice/${encodeURIComponent(editInvoiceData.invoiceNumber)}`;
+      const endpoint = isWO ? '/work-orders/invoice' : '/sales/invoice';
       
       const payload = {
         ...editInvoiceData,
@@ -283,7 +343,7 @@ export const SalesLedger: React.FC = () => {
         }))
       };
 
-      await api.put(endpoint, payload);
+      await api.put(endpoint, payload, { params: { invoiceNumber: editInvoiceData.invoiceNumber } });
       showToast(`Invoice #${editInvoiceData.invoiceNumber} (${editInvoiceData.items.length} items) updated and submitted for Owner approval!`, 'success');
       setEditInvoiceData(null);
       fetchSalesLedger();
@@ -312,10 +372,8 @@ export const SalesLedger: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      const endpoint = isWO 
-        ? `/work-orders/invoice/${encodeURIComponent(invNum)}`
-        : `/sales/invoice/${encodeURIComponent(invNum)}`;
-      const res = await api.delete(endpoint);
+      const endpoint = isWO ? '/work-orders/invoice' : '/sales/invoice';
+      const res = await api.delete(endpoint, { params: { invoiceNumber: invNum }, data: { invoiceNumber: invNum } });
       showToast(res.data?.message || `Invoice #${invNum} deletion request submitted for Owner Approval!`, 'success');
       fetchSalesLedger();
       window.dispatchEvent(new Event('skc-approvals-updated'));
@@ -521,173 +579,230 @@ export const SalesLedger: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. MASTER CONTINUOUS SALES TABLE (MATCHING PHYSICAL 2026-27 SHEET) */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
-        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs excel-table">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-sky-950 text-sky-200 font-bold">
-                <th className="w-16 text-center border-r border-sky-800 p-2.5">
-                  <button 
-                    onClick={() => setSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
-                    className="flex items-center justify-center gap-1 mx-auto hover:text-white font-bold"
-                    title={`Sorted ${sortOrder === 'DESC' ? 'Newest # to Oldest #' : 'Oldest # to Newest #'}. Click to switch.`}
-                  >
-                    Sl.No <ArrowUpDown className="w-3 h-3 text-sky-300" />
-                  </button>
-                </th>
-                <th className="p-2.5 whitespace-nowrap">Date</th>
-                <th className="p-2.5 whitespace-nowrap">Invoice</th>
-                <th className="p-2.5 min-w-[220px]">Department / Client</th>
-                <th className="p-2.5 whitespace-nowrap">GST NO</th>
-                <th className="p-2.5 text-center">Name of work</th>
-                <th className="p-2.5 min-w-[150px]">Item Description</th>
-                <th className="p-2.5 whitespace-nowrap">Part No</th>
-                <th className="p-2.5 text-center whitespace-nowrap">Qty</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Rate (₹)</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Total Value (₹)</th>
-                <th className="p-2.5 whitespace-nowrap">Vehicle No</th>
-                <th className="p-2.5 whitespace-nowrap">E-Way Bill</th>
-                <th className="p-2.5 text-center sticky right-0 bg-sky-950 text-sky-200 z-20 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.2)] min-w-[90px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={14} className="text-center py-12 text-slate-400 font-semibold">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
-                    Loading official sales ledger...
-                  </td>
-                </tr>
-              ) : paginatedSales.length === 0 ? (
-                <tr>
-                  <td colSpan={14} className="text-center py-12 text-slate-400">
-                    No outward sales match the selected filters.
-                  </td>
-                </tr>
-              ) : (
-                paginatedSales.map((sale) => (
-                  <tr 
-                    key={`${sale.sourceType}_${sale.id}`} 
-                    onClick={() => setInspectModalItem(sale)}
-                    className="hover:bg-blue-50/50 cursor-pointer border-b border-slate-200 transition-colors"
-                  >
-                    <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
-                      {sale.slNo}
-                    </td>
-                    <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
-                      {formatDate(sale.date)}
-                    </td>
-                    <td className="font-mono font-bold text-[#1e3a8a] whitespace-nowrap p-2.5">
-                      {sale.invoiceNumber || '-'}
-                    </td>
-                    <td className="font-semibold text-slate-900 p-2.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span>{sale.clientDepartment || '-'}</span>
-                        {sale.sourceType === 'PO' && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-100 text-blue-900 border border-blue-300 whitespace-nowrap">
-                            PO SALE
-                          </span>
-                        )}
-                        {sale.sourceType === 'WORK_ORDER' && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 whitespace-nowrap">
-                            WORK ORDER
-                          </span>
-                        )}
-                        {sale.sourceType === 'INDIVIDUAL' && (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-900 border border-purple-300 whitespace-nowrap">
-                            INDIVIDUAL SALE
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="font-mono font-semibold text-slate-800 uppercase whitespace-nowrap p-2.5">
-                      {sale.clientGst || '-'}
-                    </td>
-                    <td className="text-center p-2.5">
-                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                        sale.sourceType === 'WORK_ORDER' 
-                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                          : sale.sourceType === 'INDIVIDUAL'
-                          ? 'bg-purple-50 text-purple-800 border border-purple-300'
-                          : 'bg-blue-50 text-blue-800 border border-blue-300'
-                      }`}>
-                        {sale.sourceType === 'WORK_ORDER' 
-                          ? `Work Order (${sale.workOrderNumber || 'Direct'})` 
-                          : sale.sourceType === 'INDIVIDUAL'
-                          ? 'Individual Sale'
-                          : `PO Sale (${sale.poNumber || 'PO'})`}
+      {/* 4. MASTER GROUPED SALES LEDGER CONTAINERS (ONE CONTAINER PER INVOICE) */}
+      <div className="space-y-6">
+        {loading ? (
+          <div className="bg-white rounded-2xl border-2 border-slate-200 p-12 text-center text-slate-400 font-semibold text-xs shadow-sm">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
+            Loading official sales ledger...
+          </div>
+        ) : groupedSalesLedger.length === 0 ? (
+          <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center text-slate-400 text-xs shadow-sm">
+            No outward sales match the selected filters.
+          </div>
+        ) : (
+          groupedSalesLedger.map((grp, grpIdx) => {
+            return (
+              <div 
+                key={grp.key}
+                className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden transition-all hover:border-slate-400"
+              >
+                {/* CONTAINER HEADER BANNER */}
+                <div className="bg-gradient-to-r from-slate-50 via-blue-50/40 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                  {/* Left: Metadata badges */}
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    {/* Invoice Pill */}
+                    <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-blue-200" />
+                      <span>INV: #{grp.invoiceNumber}</span>
+                    </div>
+
+                    {/* Source Type Badge */}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                      grp.sourceType === 'WORK_ORDER'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : grp.sourceType === 'INDIVIDUAL'
+                        ? 'bg-purple-100 text-purple-800 border-purple-300'
+                        : 'bg-blue-100 text-blue-800 border-blue-300'
+                    }`}>
+                      {grp.sourceType === 'WORK_ORDER' ? 'WORK ORDER' : grp.sourceType === 'INDIVIDUAL' ? 'INDIVIDUAL SALE' : 'PO SALE'}
+                    </span>
+
+                    {/* Date */}
+                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                      {formatDate(grp.date)}
+                    </div>
+
+                    {/* Client / Department */}
+                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="truncate max-w-[200px]" title={grp.clientDepartment}>{grp.clientDepartment}</span>
+                    </div>
+
+                    {/* GSTIN */}
+                    {grp.clientGst && (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-semibold">
+                        GST: {grp.clientGst}
                       </span>
-                    </td>
-                    <td className="font-medium text-slate-800 p-2.5">
-                      {sale.itemName || '-'}
-                    </td>
-                    <td className="font-mono text-slate-600 whitespace-nowrap p-2.5">
-                      {sale.partNumber || '-'}
-                    </td>
-                    <td className="text-center font-mono font-bold text-slate-900 p-2.5">
-                      {sale.qty} {sale.unit || 'NOS'}
-                    </td>
-                    <td className="text-right font-mono text-slate-700 whitespace-nowrap p-2.5">
-                      {formatCurrency(sale.rate)}
-                    </td>
-                    <td className="text-right font-mono font-black text-blue-950 whitespace-nowrap p-2.5">
-                      {formatCurrency(sale.totalAmount)}
-                    </td>
-                    <td className="font-mono font-bold uppercase text-slate-800 whitespace-nowrap p-2.5">
-                      {sale.vehicleNumber || '-'}
-                    </td>
-                    <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
-                      {sale.eWayBillNumber ? (
-                        <span className="bg-blue-50 text-blue-900 px-1.5 py-0.5 rounded border border-blue-200 font-bold">
-                          {sale.eWayBillNumber}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td 
-                      className="text-center p-2.5 sticky right-0 bg-white/95 backdrop-blur-sm border-l border-slate-200 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.1)]"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          onClick={() => setInspectModalItem(sale)}
-                          className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors"
-                          title="View Full Sale Details"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditInvoice(sale)}
-                          className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg transition-colors border border-amber-300"
-                          title="Edit Full Invoice with All Items"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenInvoice(sale)}
-                          className="px-2 py-1 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold shadow-sm"
-                          title="Download Tax Invoice PDF"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>PDF</span>
-                        </button>
-                        <button
-                          onClick={() => handleDeleteInvoice(sale)}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors border border-rose-300"
-                          title="Delete Invoice (Requires Owner Approval)"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                    )}
+
+                    {/* Vehicle */}
+                    {grp.vehicleNumber && (
+                      <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-bold flex items-center gap-1">
+                        <Truck className="w-3 h-3 text-blue-600" />
+                        {grp.vehicleNumber}
+                      </span>
+                    )}
+
+                    {/* E-Way Bill */}
+                    {grp.eWayBillNumber && (
+                      <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-900 font-mono text-[11px] font-bold">
+                        E-Way: {grp.eWayBillNumber}
+                      </span>
+                    )}
+
+                    {/* Item Count Badge */}
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-bold">
+                      {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
+                    </span>
+                  </div>
+
+                  {/* Right: Invoice Total & Single Action Group */}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Invoice Total</div>
+                      <div className="text-sm sm:text-base font-black font-mono text-[#1e3a8a]">
+                        {formatCurrency(grp.totalAmount)}
                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+
+                    {/* Unified Action Buttons for the Whole Invoice */}
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => setInspectModalItem(grp.firstSale)}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                        title="View Full Sale Details"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditInvoice(grp.firstSale)}
+                        className="px-2.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-lg border border-amber-200 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Edit Full Invoice with All Items"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Edit Invoice</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenInvoice(grp.firstSale)}
+                        className="px-2.5 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-lg transition-colors flex items-center gap-1 text-xs font-bold shadow-xs cursor-pointer"
+                        title="Download Tax Invoice PDF"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>PDF</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInvoice(grp.firstSale)}
+                        className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors border border-rose-300 cursor-pointer"
+                        title="Delete Invoice (Requires Owner Approval)"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP BORDERS) */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                      <tr>
+                        <th className="py-2.5 px-3 text-center w-12 border-r border-slate-200">#</th>
+                        <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200">Part Number</th>
+                        <th className="py-2.5 px-3 min-w-[200px] border-r border-slate-200">Item Description</th>
+                        <th className="py-2.5 px-3 min-w-[140px] border-r border-slate-200">Source / Reference</th>
+                        <th className="py-2.5 px-3 text-center min-w-[90px] border-r border-slate-200 bg-blue-50/60 text-blue-950">Qty &amp; Unit</th>
+                        <th className="py-2.5 px-3 text-right min-w-[90px] border-r border-slate-200">Rate (₹)</th>
+                        <th className="py-2.5 px-3 text-right min-w-[100px] border-r border-slate-200">Basic (₹)</th>
+                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border-r border-slate-200">CGST</th>
+                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border-r border-slate-200">SGST</th>
+                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border-r border-slate-200">IGST</th>
+                        <th className="py-2.5 px-3 text-right min-w-[110px] border-r border-slate-200 bg-blue-50/30 text-[#1e3a8a] font-black">Item Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {grp.items.map((sale, itmIdx) => {
+                        const basic = Number(sale.basicAmount || (sale.qty * sale.rate) || 0);
+
+                        return (
+                          <tr 
+                            key={`${sale.sourceType}_${sale.id}`} 
+                            onClick={() => setInspectModalItem(sale)}
+                            className={`hover:bg-blue-50/30 cursor-pointer transition-colors ${itmIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'}`}
+                          >
+                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-500 bg-slate-50 border-r border-slate-200">
+                              {sale.slNo || (itmIdx + 1)}
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-200">
+                              <span className="font-mono font-bold text-slate-900">
+                                {sale.partNumber || '-'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-200">
+                              <div className="font-bold text-slate-800">{sale.itemName || '-'}</div>
+                              {sale.specifications && <div className="text-[10px] text-slate-500 line-clamp-1">{sale.specifications}</div>}
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-200 text-slate-600 text-[11px]">
+                              {sale.sourceType === 'WORK_ORDER' ? (
+                                <span>WO: <strong className="font-mono text-slate-800">{sale.workOrderNumber || '-'}</strong></span>
+                              ) : sale.sourceType === 'PO' ? (
+                                <span>PO: <strong className="font-mono text-slate-800">{sale.poNumber || '-'}</strong></span>
+                              ) : (
+                                <span>Individual Sale</span>
+                              )}
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-900 bg-blue-50/40 border-r border-slate-200">
+                              {sale.qty} {sale.unit || 'NOS'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-200">
+                              {formatCurrency(sale.rate)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-slate-800 font-semibold border-r border-slate-200">
+                              {formatCurrency(basic)}
+                            </td>
+                            <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                              {sale.cgstAmount ? `${formatCurrency(sale.cgstAmount)} (${sale.cgstPercent}%)` : '-'}
+                            </td>
+                            <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                              {sale.sgstAmount ? `${formatCurrency(sale.sgstAmount)} (${sale.sgstPercent}%)` : '-'}
+                            </td>
+                            <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                              {sale.igstAmount ? `${formatCurrency(sale.igstAmount)} (${sale.igstPercent}%)` : '-'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-50/20 border-r border-slate-200">
+                              {formatCurrency(sale.totalAmount)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* CONTAINER SUMMARY FOOTER */}
+                <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
+                  <div className="flex items-center gap-4">
+                    <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
+                    <span>Total Qty: <strong className="text-blue-900 font-mono font-bold">{grp.totalQty} units</strong></span>
+                  </div>
+                  <div className="flex items-center gap-4 font-mono">
+                    <span>Basic: <strong className="text-slate-800">{formatCurrency(grp.totalBasic)}</strong></span>
+                    <span>Tax: <strong className="text-slate-800">{formatCurrency(grp.totalTax)}</strong></span>
+                    <span className="text-sm font-black text-[#1e3a8a] bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">
+                      Net: {formatCurrency(grp.totalAmount)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
 
         {/* 4.1 PAGINATION BAR */}
         <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
@@ -753,7 +868,6 @@ export const SalesLedger: React.FC = () => {
             </button>
           </div>
         </div>
-      </div>
 
       {/* 5. ROW-CLICK INSPECT SALE MODAL */}
       {inspectModalItem && (

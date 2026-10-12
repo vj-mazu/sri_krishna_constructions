@@ -21,7 +21,9 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
+  Calendar,
+  Truck
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 import { DatePickerDMY } from './DatePickerDMY';
@@ -233,11 +235,75 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     return result;
   }, [workOrders, searchTerm, dateFrom, dateTo, sortOrder]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredWorkOrders.length / pageSize));
-  const paginatedWorkOrders = React.useMemo(() => {
+  // Group work orders by invoice number (or work order number) into distinct containers
+  const groupedWorkOrdersList = React.useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      invoiceNumber: string;
+      invoiceDate: string;
+      workOrderNumber: string;
+      workOrderDate: string;
+      partyName: string;
+      partyAddress: string;
+      partyGstNumber: string;
+      vehicleNumber: string;
+      eWayBillNumber: string;
+      items: WorkOrderItem[];
+      totalAmount: number;
+      totalBasic: number;
+      totalTax: number;
+      totalShipping: number;
+      totalQty: number;
+      firstItem: WorkOrderItem;
+    }>();
+
+    filteredWorkOrders.forEach(wo => {
+      const inv = (wo.invoiceNumber && wo.invoiceNumber !== '-') ? wo.invoiceNumber.trim() : '';
+      const key = inv ? `INV_${inv.toUpperCase()}` : (wo.workOrderNumber ? `WO_${wo.workOrderNumber.trim().toUpperCase()}` : `ID_${wo.id}`);
+
+      let grp = map.get(key);
+      if (!grp) {
+        grp = {
+          key,
+          invoiceNumber: wo.invoiceNumber || '-',
+          invoiceDate: wo.invoiceDate,
+          workOrderNumber: wo.workOrderNumber || '-',
+          workOrderDate: wo.workOrderDate,
+          partyName: wo.partyName || '-',
+          partyAddress: wo.partyAddress || '',
+          partyGstNumber: wo.partyGstNumber || '',
+          vehicleNumber: wo.vehicleNumber || '',
+          eWayBillNumber: wo.eWayBillNumber || '',
+          items: [],
+          totalAmount: 0,
+          totalBasic: 0,
+          totalTax: 0,
+          totalShipping: 0,
+          totalQty: 0,
+          firstItem: wo
+        };
+        map.set(key, grp);
+      }
+      grp.items.push(wo);
+      const basic = (Number(wo.qty) || 0) * (Number(wo.rate) || 0);
+      const taxP = (Number(wo.cgstPercent) || 0) + (Number(wo.sgstPercent) || 0) + (Number(wo.igstPercent) || 0);
+      const tax = basic * (taxP / 100);
+      const ship = Number(wo.shippingCharges || 0);
+      grp.totalBasic += basic;
+      grp.totalTax += tax;
+      grp.totalShipping += ship;
+      grp.totalAmount += Number(wo.totalAmount || (basic + tax + ship));
+      grp.totalQty += Number(wo.qty || 0);
+    });
+
+    return Array.from(map.values());
+  }, [filteredWorkOrders]);
+
+  const totalPages = Math.max(1, Math.ceil(groupedWorkOrdersList.length / pageSize));
+  const paginatedGroupedWorkOrders = React.useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return filteredWorkOrders.slice(start, start + pageSize);
-  }, [filteredWorkOrders, currentPage, pageSize]);
+    return groupedWorkOrdersList.slice(start, start + pageSize);
+  }, [groupedWorkOrdersList, currentPage, pageSize]);
 
   const formatCurrency = (amount: number | string | undefined | null) => {
     if (amount === undefined || amount === null || amount === '') return '₹0';
@@ -414,12 +480,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     let matchingItems: any[] = [];
     if (targetInvNum && targetInvNum !== '-') {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(targetInvNum)}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: targetInvNum } });
         if (res.data?.items && res.data.items.length > 0) {
           matchingItems = res.data.items;
         }
       } catch (err) {
-        console.error('Failed to fetch invoice items for edit:', err);
+        // Fallback gracefully to local matching work orders
       }
     }
 
@@ -494,7 +560,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       });
       if (confirmAll) {
         try {
-          const res = await api.delete(`/work-orders/invoice/${encodeURIComponent(invNum)}`);
+          const res = await api.delete('/work-orders/invoice', { params: { invoiceNumber: invNum }, data: { invoiceNumber: invNum } });
           showToast(res.data?.message || `Work order invoice '${invNum}' deletion request submitted for Owner Approval!`, 'success');
           fetchWorkOrders();
           window.dispatchEvent(new Event('skc-approvals-updated'));
@@ -543,13 +609,13 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const openInvoiceForWorkOrder = async (targetWo: WorkOrderItem) => {
     if (targetWo.invoiceNumber && targetWo.invoiceNumber.trim()) {
       try {
-        const res = await api.get(`/invoices/${encodeURIComponent(targetWo.invoiceNumber.trim())}`);
+        const res = await api.get('/invoices', { params: { invoiceNumber: targetWo.invoiceNumber.trim() } });
         if (res.data?.items && res.data.items.length > 0) {
           setSelectedForInvoice(res.data.items);
           return;
         }
       } catch (err) {
-        console.error('Failed to fetch complete invoice items:', err);
+        // Fallback gracefully
       }
     }
 
@@ -657,7 +723,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     if (isEditingInvoice && originalEditingInvoiceNo) {
       try {
         setSubmitting(true);
-        const res = await api.put(`/work-orders/invoice/${encodeURIComponent(originalEditingInvoiceNo)}`, payload);
+        const res = await api.put('/work-orders/invoice', payload, { params: { invoiceNumber: originalEditingInvoiceNo } });
         showToast(res.data?.message || `Tax Invoice ${invoiceHeader.invoiceNumber} updated with ${validItems.length} items!`, 'success');
         setShowAddModal(false);
         setIsEditingInvoice(false);
@@ -1388,179 +1454,231 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       )}
 
-      {/* 5. WORK ORDERS DATA TABLE */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex-1 flex flex-col">
-        <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
-          <table className="w-full text-left text-xs excel-table">
-            <thead className="sticky top-0 z-10">
-              <tr className="bg-sky-950 text-sky-200 font-bold">
-                <th className="w-10 text-center border-r border-sky-800 p-2.5">
-                  <input
-                    type="checkbox"
-                    checked={paginatedWorkOrders.length > 0 && paginatedWorkOrders.every(wo => selectedWorkOrderIds.includes(wo.id))}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        const allIds = Array.from(new Set([...selectedWorkOrderIds, ...paginatedWorkOrders.map(wo => wo.id)]));
-                        setSelectedWorkOrderIds(allIds);
-                      } else {
-                        const pageIds = new Set(paginatedWorkOrders.map(wo => wo.id));
-                        setSelectedWorkOrderIds(selectedWorkOrderIds.filter(id => !pageIds.has(id)));
-                      }
-                    }}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
-                    title="Select all on this page"
-                  />
-                </th>
-                <th className="w-16 text-center border-r border-sky-800 p-2.5">
-                  <button 
-                    onClick={() => setSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
-                    className="flex items-center justify-center gap-1 mx-auto hover:text-white font-bold"
-                    title={`Sorted ${sortOrder === 'DESC' ? 'Newest to Oldest' : 'Oldest to Newest'}. Click to switch.`}
-                  >
-                    # <ArrowUpDown className="w-3 h-3 text-sky-300" />
-                  </button>
-                </th>
-                <th className="p-2.5 whitespace-nowrap">WO No &amp; Date</th>
-                <th className="p-2.5 whitespace-nowrap">Invoice No &amp; Date</th>
-                <th className="p-2.5 min-w-[200px]">Client / Party Name</th>
-                <th className="p-2.5 whitespace-nowrap">Party GSTIN</th>
-                <th className="p-2.5 min-w-[160px]">Item &amp; Description</th>
-                <th className="p-2.5 whitespace-nowrap">Part No</th>
-                <th className="p-2.5 text-center whitespace-nowrap">Qty</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Rate (₹)</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Shipping (₹)</th>
-                <th className="p-2.5 text-right whitespace-nowrap">Total Value (₹)</th>
-                <th className="p-2.5 whitespace-nowrap">Vehicle / E-Way</th>
-                <th className="p-2.5 text-center sticky right-0 bg-sky-950 text-sky-200 z-20 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.2)] min-w-[110px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={14} className="text-center py-12 text-slate-400 font-semibold">
-                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
-                    Loading work orders...
-                  </td>
-                </tr>
-              ) : paginatedWorkOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={14} className="text-center py-12 text-slate-400">
-                    No work orders match the selected filters.
-                  </td>
-                </tr>
-              ) : (
-                paginatedWorkOrders.map((wo, idx) => {
-                  const isSelected = selectedWorkOrderIds.includes(wo.id);
-                  return (
-                    <tr 
-                      key={wo.id} 
-                      onClick={() => openInvoiceForWorkOrder(wo)}
-                      className={`cursor-pointer border-b border-slate-200 transition-colors ${isSelected ? 'bg-blue-50/80 font-medium' : 'hover:bg-blue-50/40'}`}
-                    >
-                      <td className="text-center border-r border-slate-200 p-2.5" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedWorkOrderIds(prev => [...prev, wo.id]);
-                            } else {
-                              setSelectedWorkOrderIds(prev => prev.filter(id => id !== wo.id));
-                            }
-                          }}
-                          className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
-                        />
-                      </td>
-                      <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300 p-2.5">
-                        {(currentPage - 1) * pageSize + idx + 1}
-                      </td>
-                      <td className="p-2.5">
-                        <div className="font-bold text-[#1e3a8a] font-mono">{wo.workOrderNumber}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{formatDate(wo.workOrderDate)}</div>
-                      </td>
-                      <td className="p-2.5">
-                        <div className="font-bold text-slate-900 font-mono">{wo.invoiceNumber}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{formatDate(wo.invoiceDate)}</div>
-                      </td>
-                      <td className="p-2.5">
-                        <div className="font-bold text-slate-900">{wo.partyName}</div>
-                        {wo.partyAddress && <div className="text-[10px] text-slate-400 truncate max-w-[200px]">{wo.partyAddress}</div>}
-                      </td>
-                      <td className="font-mono font-semibold text-slate-800 uppercase whitespace-nowrap p-2.5">
-                        {wo.partyGstNumber || '-'}
-                      </td>
-                      <td className="p-2.5">
-                        <div className="font-bold text-slate-800">{wo.itemName}</div>
-                        {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
-                      </td>
-                      <td className="font-mono text-slate-600 whitespace-nowrap p-2.5">
-                        <div className="font-bold text-slate-800">{wo.partNumber || '-'}</div>
-                        {wo.kpclCode && wo.kpclCode !== '-' && (
-                          <div className="text-[10px] text-blue-700 font-bold font-mono">KPCL: {wo.kpclCode}</div>
-                        )}
-                      </td>
-                      <td className="text-center font-mono font-bold text-slate-900 p-2.5">
-                        {wo.qty} {wo.unit || 'NOS'}
-                      </td>
-                      <td className="text-right font-mono text-slate-700 whitespace-nowrap p-2.5">
-                        {formatCurrency(wo.rate)}
-                      </td>
-                      <td className="text-right font-mono text-blue-900 whitespace-nowrap p-2.5">
-                        {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
-                      </td>
-                      <td className="text-right font-mono font-black text-blue-950 whitespace-nowrap p-2.5">
-                        {formatCurrency(wo.totalAmount)}
-                      </td>
-                      <td className="font-mono text-slate-700 whitespace-nowrap p-2.5">
-                        <div>{wo.vehicleNumber || '-'}</div>
-                        {wo.eWayBillNumber && <div className="text-[10px] text-blue-700 font-bold">{wo.eWayBillNumber}</div>}
-                      </td>
-                      <td 
-                        className="text-center p-2.5 sticky right-0 bg-white/95 backdrop-blur-sm border-l border-slate-200 z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.1)]"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => openInvoiceForWorkOrder(wo)}
-                            className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm"
-                            title="Print / Download Official Tax Invoice (GST)"
-                          >
-                            <Receipt className="w-3.5 h-3.5" />
-                          </button>
-                          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-                            <>
-                              <button
-                                onClick={() => handleOpenEdit(wo)}
-                                className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-lg transition-colors border border-amber-300"
-                                title="Edit Work Order"
-                              >
-                                <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(wo)}
-                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors border border-rose-300"
-                                title="Delete Work Order"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* 5. WORK ORDERS GROUPED CONTAINERS (ONE CONTAINER PER WORK ORDER / INVOICE) */}
+      <div className="space-y-6">
+        {loading ? (
+          <div className="bg-white rounded-2xl border-2 border-slate-200 p-12 text-center text-slate-400 font-semibold text-xs shadow-sm">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
+            Loading work orders...
+          </div>
+        ) : paginatedGroupedWorkOrders.length === 0 ? (
+          <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center text-slate-400 text-xs shadow-sm">
+            No work orders match the selected filters.
+          </div>
+        ) : (
+          paginatedGroupedWorkOrders.map((grp, grpIdx) => {
+            const grpItemIds = grp.items.map(wo => wo.id);
+            const isAllGrpSelected = grpItemIds.length > 0 && grpItemIds.every(id => selectedWorkOrderIds.includes(id));
+            const isSomeGrpSelected = grpItemIds.some(id => selectedWorkOrderIds.includes(id));
 
-        {/* 4.1 PAGINATION BAR */}
-        <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3 text-slate-600">
-            <span>
-              Showing <strong className="text-slate-900">{filteredWorkOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, filteredWorkOrders.length)}</strong> of <strong className="text-[#1e3a8a]">{filteredWorkOrders.length}</strong> work orders
-            </span>
+            return (
+              <div 
+                key={grp.key}
+                className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden transition-all hover:border-slate-400"
+              >
+                {/* CONTAINER HEADER BANNER */}
+                <div className="bg-gradient-to-r from-slate-50 via-blue-50/40 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                  {/* Left: Metadata badges & Select Checkbox */}
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    <input 
+                      type="checkbox"
+                      checked={isAllGrpSelected}
+                      ref={el => {
+                        if (el) el.indeterminate = isSomeGrpSelected && !isAllGrpSelected;
+                      }}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedWorkOrderIds(prev => Array.from(new Set([...prev, ...grpItemIds])));
+                        } else {
+                          setSelectedWorkOrderIds(prev => prev.filter(id => !grpItemIds.includes(id)));
+                        }
+                      }}
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                      title="Select all items in this work order"
+                    />
+
+                    {/* Work Order Number Pill */}
+                    <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-blue-200" />
+                      <span>WO: {grp.workOrderNumber}</span>
+                    </div>
+
+                    {/* Invoice Number Pill */}
+                    {grp.invoiceNumber && grp.invoiceNumber !== '-' && (
+                      <div className="px-3 py-1 rounded-lg bg-indigo-700 text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>INV: #{grp.invoiceNumber}</span>
+                      </div>
+                    )}
+
+                    {/* Date */}
+                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                      {formatDate(grp.invoiceDate || grp.workOrderDate)}
+                    </div>
+
+                    {/* Client / Party Name */}
+                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="truncate max-w-[200px]" title={grp.partyName}>{grp.partyName}</span>
+                    </div>
+
+                    {/* GSTIN */}
+                    {grp.partyGstNumber && (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-semibold">
+                        GST: {grp.partyGstNumber}
+                      </span>
+                    )}
+
+                    {/* Vehicle */}
+                    {grp.vehicleNumber && (
+                      <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-bold flex items-center gap-1">
+                        <Truck className="w-3 h-3 text-blue-600" />
+                        {grp.vehicleNumber}
+                      </span>
+                    )}
+
+                    {/* Item Count Badge */}
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-bold">
+                      {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
+                    </span>
+                  </div>
+
+                  {/* Right: Work Order Total & Single Action Group */}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Value</div>
+                      <div className="text-sm sm:text-base font-black font-mono text-[#1e3a8a]">
+                        {formatCurrency(grp.totalAmount)}
+                      </div>
+                    </div>
+
+                    {/* Unified Action Buttons for the Whole Work Order */}
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => openInvoiceForWorkOrder(grp.firstItem)}
+                        className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                        title="Print / Download Official Tax Invoice (GST)"
+                      >
+                        <Receipt className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Tax Invoice</span>
+                      </button>
+                      {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(grp.firstItem)}
+                            className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Edit Work Order (All Items)"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Edit WO</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(grp.firstItem)}
+                            className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                            title="Delete Work Order"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">Delete</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP BORDERS) */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                      <tr>
+                        <th className="py-2.5 px-3 text-center w-12 border-r border-slate-200">#</th>
+                        <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200">Part Number</th>
+                        <th className="py-2.5 px-3 min-w-[110px] border-r border-slate-200">KPCL Code</th>
+                        <th className="py-2.5 px-3 min-w-[220px] border-r border-slate-200">Item Name &amp; Description</th>
+                        <th className="py-2.5 px-3 text-center min-w-[90px] border-r border-slate-200 bg-blue-50/60 text-blue-950">Qty &amp; Unit</th>
+                        <th className="py-2.5 px-3 text-right min-w-[90px] border-r border-slate-200">Rate (₹)</th>
+                        <th className="py-2.5 px-3 text-right min-w-[85px] border-r border-slate-200">Shipping (₹)</th>
+                        <th className="py-2.5 px-3 text-right min-w-[110px] border-r border-slate-200 bg-blue-50/30 text-[#1e3a8a] font-black">Item Total (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {grp.items.map((wo, itmIdx) => {
+                        const isSelected = selectedWorkOrderIds.includes(wo.id);
+
+                        return (
+                          <tr 
+                            key={wo.id || itmIdx} 
+                            className={`hover:bg-blue-50/30 transition-colors ${isSelected ? 'bg-blue-50/50' : (itmIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white')}`}
+                          >
+                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-500 bg-slate-50 border-r border-slate-200">
+                              {itmIdx + 1}
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-200">
+                              <span className="font-mono font-bold text-slate-900">
+                                {wo.partNumber || '-'}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-200 font-mono text-slate-700">
+                              {wo.kpclCode && wo.kpclCode !== '-' ? (
+                                <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                  {wo.kpclCode}
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className="py-2 px-3 border-r border-slate-200">
+                              <div className="font-bold text-slate-800">{wo.itemName}</div>
+                              {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
+                            </td>
+                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-900 bg-blue-50/40 border-r border-slate-200">
+                              {wo.qty} {wo.unit || 'NOS'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-200">
+                              {formatCurrency(wo.rate)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-blue-900 border-r border-slate-200">
+                              {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-50/20 border-r border-slate-200">
+                              {formatCurrency(wo.totalAmount)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* CONTAINER SUMMARY FOOTER */}
+                <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
+                  <div className="flex items-center gap-4">
+                    <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
+                    <span>Total Qty: <strong className="text-blue-900 font-mono font-bold">{grp.totalQty} units</strong></span>
+                    {grp.totalShipping > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.totalShipping}</strong></span>}
+                  </div>
+                  <div className="flex items-center gap-4 font-mono">
+                    <span>Basic: <strong className="text-slate-800">{formatCurrency(grp.totalBasic)}</strong></span>
+                    <span>Tax: <strong className="text-slate-800">{formatCurrency(grp.totalTax)}</strong></span>
+                    <span className="text-sm font-black text-[#1e3a8a] bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">
+                      Net: {formatCurrency(grp.totalAmount)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* 4.1 PAGINATION BAR */}
+      <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-xs">
+        <div className="flex items-center gap-3 text-slate-600">
+          <span>
+            Showing <strong className="text-slate-900">{groupedWorkOrdersList.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="text-slate-900">{Math.min(currentPage * pageSize, groupedWorkOrdersList.length)}</strong> of <strong className="text-[#1e3a8a]">{groupedWorkOrdersList.length}</strong> work orders / invoices
+          </span>
             <div className="flex items-center gap-1.5 ml-2">
               <span className="text-slate-500">Rows per page:</span>
               <select
@@ -1619,7 +1737,6 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             </button>
           </div>
         </div>
-      </div>
 
       {/* 5. EDIT WORK ORDER MODAL (Replaced by multi-item invoice modal above) */}
       {false && (

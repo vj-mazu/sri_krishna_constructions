@@ -1638,12 +1638,14 @@ app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANA
   }
 });
 
-// PUT /api/purchases/invoice/:invoiceNumber - Update entire inward receipt/invoice with all items
-app.put('/api/purchases/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// PUT /api/purchases/invoice - Update entire inward receipt/invoice with all items
+app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/api/purchases/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { invoiceNumber } = req.params;
-    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.partyInvoiceNumber || req.body?.invoiceNumber || '';
+    let cleanInv = (rawInv || '').trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.toUpperCase();
     const d = req.body;
     const items = Array.isArray(d.items) ? d.items : [];
     if (items.length === 0) {
@@ -1742,12 +1744,14 @@ app.put('/api/purchases/invoice/:invoiceNumber', authenticateToken, requireRoles
   }
 });
 
-// DELETE /api/purchases/invoice/:invoiceNumber - Request deletion of entire inward invoice/DC (Requires Owner Approval)
-app.delete('/api/purchases/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// DELETE /api/purchases/invoice - Request deletion of entire inward invoice/DC (Requires Owner Approval)
+app.delete(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/api/purchases/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { invoiceNumber } = req.params;
-    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.partyInvoiceNumber || req.body?.invoiceNumber || '';
+    let cleanInv = (rawInv || '').trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.toUpperCase();
     const { reason } = req.body || {};
 
     const existing = await client.query(`
@@ -2049,12 +2053,14 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
   }
 });
 
-// PUT /api/sales/invoice/:invoiceNumber - Update entire sale invoice with all items
-app.put('/api/sales/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// PUT /api/sales/invoice - Update entire sale invoice with all items
+app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { invoiceNumber } = req.params;
-    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
+    let cleanInv = (rawInv || '').trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.toUpperCase();
     const d = req.body;
     const items = Array.isArray(d.items) ? d.items : [];
     if (items.length === 0) {
@@ -2436,12 +2442,14 @@ app.delete('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER'
   }
 });
 
-// DELETE /api/sales/invoice/:invoiceNumber - Request deletion of entire sale invoice (Requires Owner Approval)
-app.delete('/api/sales/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// DELETE /api/sales/invoice - Request deletion of entire sale invoice (Requires Owner Approval)
+app.delete(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { invoiceNumber } = req.params;
-    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
+    let cleanInv = (rawInv || '').trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.toUpperCase();
     const { reason } = req.body || {};
 
     const existing = await client.query(`
@@ -4403,12 +4411,14 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// PUT /api/work-orders/invoice/:invoiceNumber - Update entire work order invoice with ALL items
-app.put('/api/work-orders/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// PUT /api/work-orders/invoice - Update entire work order invoice with ALL items
+app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', '/api/work-orders/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { invoiceNumber } = req.params;
-    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
+    let cleanInv = (rawInv || '').trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.toUpperCase();
     const d = req.body;
     const items = Array.isArray(d.items) ? d.items : [];
     if (items.length === 0) {
@@ -4784,12 +4794,14 @@ app.delete('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MA
   }
 });
 
-// DELETE /api/work-orders/invoice/:invoiceNumber - Request deletion of entire Work Order invoice (Requires Owner Approval)
-app.delete('/api/work-orders/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+// DELETE /api/work-orders/invoice - Request deletion of entire Work Order invoice (Requires Owner Approval)
+app.delete(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', '/api/work-orders/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const { invoiceNumber } = req.params;
-    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
+    let cleanInv = (rawInv || '').trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.toUpperCase();
     const { reason } = req.body || {};
 
     const existing = await client.query(`SELECT * FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)`, [cleanInv]);
@@ -4847,14 +4859,16 @@ app.delete('/api/work-orders/invoice/:invoiceNumber', authenticateToken, require
   }
 });
 
-// GET /api/invoices/:invoiceNumber - Fetch all line items matching an invoice number across Sales, Work Orders, Inwards, and Individual Stocks
-app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
+// GET /api/invoices - Fetch all line items matching an invoice number across Sales, Work Orders, Inwards, and Individual Stocks
+app.get(['/api/invoices', '/api/invoices/:invoiceNumber', '/api/invoices/*'], authenticateToken, async (req, res) => {
   try {
-    const { invoiceNumber } = req.params;
-    if (!invoiceNumber || !invoiceNumber.trim()) {
+    const rawInv = req.query.invoiceNumber || req.query.number || req.query.inv || req.query.q || req.params.invoiceNumber || req.params[0] || '';
+    if (!rawInv || !rawInv.trim() || rawInv.trim() === '-') {
       return res.json({ items: [] });
     }
-    const cleanInv = decodeURIComponent(invoiceNumber.trim());
+    let cleanInv = rawInv.trim();
+    try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
+    cleanInv = cleanInv.trim();
 
     // 1. Search PO Sales
     const { rows: saleRows } = await pool.query(`
