@@ -418,6 +418,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // Grouped Inward Invoice Edit Modal State
   const [editInwardInvoiceModal, setEditInwardInvoiceModal] = useState<any | null>(null);
+  const [originalInwardInvoiceNumber, setOriginalInwardInvoiceNumber] = useState<string>('');
   const [editInwardInvoiceItems, setEditInwardInvoiceItems] = useState<any[]>([]);
   const [editInwardInvoiceHeader, setEditInwardInvoiceHeader] = useState<{
     partyInvoiceNumber: string;
@@ -441,6 +442,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // Grouped Sale Invoice Edit Modal State
   const [editSaleInvoiceModal, setEditSaleInvoiceModal] = useState<any | null>(null);
+  const [originalSaleInvoiceNumber, setOriginalSaleInvoiceNumber] = useState<string>('');
   const [editSaleInvoiceItems, setEditSaleInvoiceItems] = useState<any[]>([]);
   const [editSaleInvoiceHeader, setEditSaleInvoiceHeader] = useState<{
     invoiceNumber: string;
@@ -1112,38 +1114,44 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   };
 
-  // Open Grouped Inward Invoice Edit Modal
-  const handleOpenEditInwardInvoice = async (pur: any) => {
-    const invNum = (pur.partyInvoiceNumber || '').trim();
-    let items: any[] = [];
-    if (invNum && invNum !== '-') {
-      try {
-        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
-        if (res.data?.items && res.data.items.length > 0) {
-          items = res.data.items.filter((it: any) => it.type === 'INWARD' || it.invoiceType === 'INWARD' || it.partyInvoiceNumber === invNum);
-        }
-      } catch (e) {
-        // Fallback to local purchases gracefully
-      }
+  // Remove individual item row from Inward Invoice edit modal
+  const handleRemoveInwardItem = (index: number) => {
+    if (editInwardInvoiceItems.length <= 1) {
+      showToast('An inward invoice must have at least 1 item. To delete the whole invoice, use Delete Invoice.', 'info');
+      return;
     }
-    if (items.length === 0) {
-      items = invNum ? poPurchases.filter(p => p.partyInvoiceNumber === invNum) : [pur];
+    setEditInwardInvoiceItems(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  // Open Grouped Inward Invoice Edit Modal
+  const handleOpenEditInwardInvoice = async (pur: any, initialItems?: any[]) => {
+    const invNum = (pur.partyInvoiceNumber || '').trim();
+    setOriginalInwardInvoiceNumber(invNum);
+
+    // Populate immediately from group items or local cache so popup opens instantly
+    let items: any[] = [];
+    if (initialItems && initialItems.length > 0) {
+      items = initialItems;
+    } else if (invNum && invNum !== '-') {
+      items = poPurchases.filter(p => (p.partyInvoiceNumber || '').trim().toLowerCase() === invNum.toLowerCase());
     }
     if (items.length === 0) items = [pur];
 
-    setEditInwardInvoiceItems(items.map(p => ({
+    const mapInwardItems = (rawItems: any[]) => rawItems.map(p => ({
       id: p.id,
       purchaseOrderItemId: p.purchaseOrderItemId,
       partNumber: p.receivedPartNumber || p.purchaseOrderItem?.partNumber || p.item?.partNumber || p.partNumber || '-',
       itemName: p.receivedItemName || p.purchaseOrderItem?.itemName || p.item?.itemName || p.itemName || '-',
       unit: p.purchaseOrderItem?.unit || p.unit || "NOS",
-      qty: p.qty || 0,
-      rate: p.rate || 0,
+      qty: p.qty || p.quantity || 0,
+      rate: p.rate || p.unitPrice || 0,
       cgstPercent: p.cgstPercent || 0,
       sgstPercent: p.sgstPercent || 0,
       igstPercent: p.igstPercent || 0,
       shippingCharges: p.shippingCharges || 0
-    })));
+    }));
+
+    setEditInwardInvoiceItems(mapInwardItems(items));
 
     setEditInwardInvoiceHeader({
       partyInvoiceNumber: invNum,
@@ -1157,21 +1165,55 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     });
 
     setEditInwardInvoiceModal(pur);
+
+    // Asynchronously fetch extra items from server if invoice has more lines across pages
+    if (invNum && invNum !== '-') {
+      try {
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
+        if (res.data?.items && res.data.items.length > 0) {
+          const matched = res.data.items.filter((it: any) => 
+            it.sourceType === 'INWARD' || it.type === 'INWARD' || it.invoiceType === 'INWARD' || 
+            ((it.partyInvoiceNumber || '').trim().toLowerCase() === invNum.toLowerCase())
+          );
+          if (matched.length > 0) {
+            setEditInwardInvoiceItems(mapInwardItems(matched));
+          }
+        }
+      } catch (_) {
+        // Fallback already active
+      }
+    }
   };
 
   // Save Grouped Inward Invoice Edit
   const handleSaveInwardInvoiceEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editInwardInvoiceModal || isSubmitting) return;
+    if (editInwardInvoiceItems.length === 0) {
+      showToast('At least one item is required in the inward invoice', 'error');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const invNum = editInwardInvoiceHeader.partyInvoiceNumber;
+      const originalInv = originalInwardInvoiceNumber || invNum;
       const payload = {
         ...editInwardInvoiceHeader,
-        items: editInwardInvoiceItems
+        originalInvoiceNumber: originalInv,
+        items: editInwardInvoiceItems.map(it => ({
+          ...it,
+          receivedItemName: it.itemName,
+          receivedPartNumber: it.partNumber,
+          qty: parseFloat(it.qty) || 0,
+          rate: parseFloat(it.rate) || 0,
+          cgstPercent: parseFloat(it.cgstPercent) || 0,
+          sgstPercent: parseFloat(it.sgstPercent) || 0,
+          igstPercent: parseFloat(it.igstPercent) || 0,
+          shippingCharges: parseFloat(it.shippingCharges) || 0
+        }))
       };
-      await api.put('/purchases/invoice', payload, { params: { invoiceNumber: invNum } });
-      showToast(`Inward invoice '${invNum}' updated successfully (${editInwardInvoiceItems.length} items)!`, 'success');
+      const res = await api.put('/purchases/invoice', payload, { params: { invoiceNumber: originalInv } });
+      showToast(res.data?.message || `Inward invoice '${invNum}' updated successfully (${editInwardInvoiceItems.length} items)!`, 'success');
       setEditInwardInvoiceModal(null);
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoPurchases(selectedPo.id, purchasesCursor);
@@ -1297,38 +1339,44 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   };
 
-  // Open Grouped Sale Invoice Edit Modal
-  const handleOpenEditSaleInvoice = async (sale: any) => {
-    const invNum = (sale.invoiceNumber || '').trim();
-    let items: any[] = [];
-    if (invNum && invNum !== '-') {
-      try {
-        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
-        if (res.data?.items && res.data.items.length > 0) {
-          items = res.data.items.filter((it: any) => it.type === 'SALE' || it.invoiceType === 'SALE' || it.invoiceNumber === invNum);
-        }
-      } catch (e) {
-        // Fallback to local sales gracefully
-      }
+  // Remove individual item row from Sale Invoice edit modal
+  const handleRemoveSaleItem = (index: number) => {
+    if (editSaleInvoiceItems.length <= 1) {
+      showToast('A tax invoice must have at least 1 item. To delete the whole invoice, use Delete Invoice.', 'info');
+      return;
     }
-    if (items.length === 0) {
-      items = invNum ? poSales.filter(s => s.invoiceNumber === invNum) : [sale];
+    setEditSaleInvoiceItems(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  // Open Grouped Sale Invoice Edit Modal
+  const handleOpenEditSaleInvoice = async (sale: any, initialItems?: any[]) => {
+    const invNum = (sale.invoiceNumber || '').trim();
+    setOriginalSaleInvoiceNumber(invNum);
+
+    // Populate immediately from group items or local cache so popup opens instantly
+    let items: any[] = [];
+    if (initialItems && initialItems.length > 0) {
+      items = initialItems;
+    } else if (invNum && invNum !== '-') {
+      items = poSales.filter(s => (s.invoiceNumber || '').trim().toLowerCase() === invNum.toLowerCase());
     }
     if (items.length === 0) items = [sale];
 
-    setEditSaleInvoiceItems(items.map(s => ({
+    const mapSaleItems = (rawItems: any[]) => rawItems.map(s => ({
       id: s.id,
       purchaseOrderItemId: s.purchaseOrderItemId,
       partNumber: s.purchaseOrderItem?.partNumber || s.item?.partNumber || s.partNumber || '-',
       itemName: s.purchaseOrderItem?.itemName || s.item?.itemName || s.itemName || '-',
       unit: s.purchaseOrderItem?.unit || s.unit || "NOS",
-      qty: s.qty || 0,
-      rate: s.rate || 0,
+      qty: s.qty || s.quantity || 0,
+      rate: s.rate || s.unitPrice || 0,
       cgstPercent: s.cgstPercent || 0,
       sgstPercent: s.sgstPercent || 0,
       igstPercent: s.igstPercent || 0,
       shippingCharges: s.shippingCharges || 0
-    })));
+    }));
+
+    setEditSaleInvoiceItems(mapSaleItems(items));
 
     setEditSaleInvoiceHeader({
       invoiceNumber: invNum,
@@ -1345,21 +1393,53 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     });
 
     setEditSaleInvoiceModal(sale);
+
+    // Asynchronously fetch extra items from server if invoice has more lines across pages
+    if (invNum && invNum !== '-') {
+      try {
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
+        if (res.data?.items && res.data.items.length > 0) {
+          const matched = res.data.items.filter((it: any) => 
+            it.sourceType === 'PO' || it.sourceType === 'SALE' || it.type === 'SALE' || it.invoiceType === 'SALE' || 
+            ((it.invoiceNumber || '').trim().toLowerCase() === invNum.toLowerCase())
+          );
+          if (matched.length > 0) {
+            setEditSaleInvoiceItems(mapSaleItems(matched));
+          }
+        }
+      } catch (_) {
+        // Fallback already active
+      }
+    }
   };
 
   // Save Grouped Sale Invoice Edit
   const handleSaveSaleInvoiceEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editSaleInvoiceModal || isSubmitting) return;
+    if (editSaleInvoiceItems.length === 0) {
+      showToast('At least one item is required in the sale invoice', 'error');
+      return;
+    }
     setIsSubmitting(true);
     try {
       const invNum = editSaleInvoiceHeader.invoiceNumber;
+      const originalInv = originalSaleInvoiceNumber || invNum;
       const payload = {
         ...editSaleInvoiceHeader,
-        items: editSaleInvoiceItems
+        originalInvoiceNumber: originalInv,
+        items: editSaleInvoiceItems.map(it => ({
+          ...it,
+          qty: parseFloat(it.qty) || 0,
+          rate: parseFloat(it.rate) || 0,
+          cgstPercent: parseFloat(it.cgstPercent) || 0,
+          sgstPercent: parseFloat(it.sgstPercent) || 0,
+          igstPercent: parseFloat(it.igstPercent) || 0,
+          shippingCharges: parseFloat(it.shippingCharges) || 0
+        }))
       };
-      await api.put('/sales/invoice', payload, { params: { invoiceNumber: invNum } });
-      showToast(`Tax invoice '${invNum}' updated (${editSaleInvoiceItems.length} items) and submitted for Owner Approval!`, 'success');
+      const res = await api.put('/sales/invoice', payload, { params: { invoiceNumber: originalInv } });
+      showToast(res.data?.message || `Tax invoice '${invNum}' updated (${editSaleInvoiceItems.length} items) and submitted for Owner Approval!`, 'success');
       setEditSaleInvoiceModal(null);
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoSales(selectedPo.id, salesCursor);
@@ -3128,15 +3208,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           <thead className="bg-slate-800 text-slate-200 sticky top-0 z-10 text-[11px]">
                             <tr>
                               <th className="p-2 w-10 text-center">Sl No</th>
-                              <th className="p-2 min-w-[140px]">Part Number</th>
-                              <th className="p-2 min-w-[200px]">Item Name</th>
-                              <th className="p-2 w-28 text-center">Unit</th>
+                              <th className="p-2 min-w-[130px]">Part Number</th>
+                              <th className="p-2 min-w-[180px]">Item Name</th>
+                              <th className="p-2 w-24 text-center">Unit</th>
                               <th className="p-2 w-24 text-center">Inward Qty *</th>
                               <th className="p-2 w-28 text-right">Inward Rate (₹) *</th>
                               <th className="p-2 w-20 text-center">CGST %</th>
                               <th className="p-2 w-20 text-center">SGST %</th>
                               <th className="p-2 w-20 text-center">IGST %</th>
                               <th className="p-2 w-28 text-right">Total (₹)</th>
+                              <th className="p-2 w-12 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-200">
@@ -3149,8 +3230,31 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               return (
                                 <tr key={item.id || idx} className="hover:bg-slate-50">
                                   <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
-                                  <td className="p-2 font-mono font-bold text-[#1e3a8a]">{item.partNumber}</td>
-                                  <td className="p-2 font-semibold text-slate-800">{item.itemName}</td>
+                                  <td className="p-1">
+                                    <input
+                                      type="text"
+                                      value={item.partNumber || ''}
+                                      onChange={e => {
+                                        const val = e.target.value.toUpperCase();
+                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, partNumber: val } : it));
+                                      }}
+                                      placeholder="Part No"
+                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs uppercase outline-none focus:border-emerald-500 text-[#1e3a8a]"
+                                    />
+                                  </td>
+                                  <td className="p-1">
+                                    <input
+                                      type="text"
+                                      required
+                                      value={item.itemName || ''}
+                                      onChange={e => {
+                                        const val = e.target.value;
+                                        setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, itemName: val } : it));
+                                      }}
+                                      placeholder="Item Name"
+                                      className="w-full p-1.5 border border-slate-300 rounded font-semibold text-xs outline-none focus:border-emerald-500 text-slate-900"
+                                    />
+                                  </td>
                                   <td className="p-1">
                                     <select
                                       value={item.unit || 'NOS'}
@@ -3243,6 +3347,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   </td>
                                   <td className="p-2 font-mono font-bold text-right text-emerald-900 bg-emerald-50/50">
                                     {formatCurrency(total)}
+                                  </td>
+                                  <td className="p-1 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveInwardItem(idx)}
+                                      disabled={editInwardInvoiceItems.length <= 1}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
+                                      title={editInwardInvoiceItems.length <= 1 ? "At least 1 item is required" : "Remove this item from inward invoice"}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </td>
                                 </tr>
                               );
@@ -3437,6 +3552,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <th className="p-2 w-20 text-center">SGST %</th>
                               <th className="p-2 w-20 text-center">IGST %</th>
                               <th className="p-2 w-28 text-right">Total (₹)</th>
+                              <th className="p-2 w-12 text-center">Action</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-200">
@@ -3543,6 +3659,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   </td>
                                   <td className="p-2 font-mono font-bold text-right text-blue-900 bg-blue-50/50">
                                     {formatCurrency(total)}
+                                  </td>
+                                  <td className="p-1 text-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSaleItem(idx)}
+                                      disabled={editSaleInvoiceItems.length <= 1}
+                                      className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
+                                      title={editSaleInvoiceItems.length <= 1 ? "At least 1 item is required" : "Remove this item from tax invoice"}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                   </td>
                                 </tr>
                               );
@@ -4838,7 +4965,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   <>
                                     <button
                                       type="button"
-                                      onClick={() => handleOpenEditInwardInvoice(grp.firstPur)}
+                                      onClick={() => handleOpenEditInwardInvoice(grp.firstPur, grp.items)}
                                       className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
                                       title="Edit Inward Invoice / DC (All Items)"
                                     >
@@ -5653,7 +5780,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   <>
                                     <button
                                       type="button"
-                                      onClick={() => handleOpenEditSaleInvoice(grp.firstSale)}
+                                      onClick={() => handleOpenEditSaleInvoice(grp.firstSale, grp.items)}
                                       className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
                                       title="Edit Sale Invoice (All Items)"
                                     >

@@ -1642,32 +1642,62 @@ app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANA
 app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/api/purchases/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.partyInvoiceNumber || req.body?.invoiceNumber || '';
+    const rawInv = req.body?.originalInvoiceNumber || req.query.originalInvoiceNumber || req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.partyInvoiceNumber || req.body?.invoiceNumber || '';
     let cleanInv = (rawInv || '').trim();
     try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
     cleanInv = cleanInv.toUpperCase();
     const d = req.body;
     const items = Array.isArray(d.items) ? d.items : [];
     if (items.length === 0) {
-      return res.status(400).json({ error: 'At least one item is required' });
+      return res.status(400).json({ error: 'At least one item is required in the inward invoice' });
     }
 
     await client.query('BEGIN');
 
-    const existing = await client.query('SELECT * FROM "Purchase" WHERE LOWER(TRIM("partyInvoiceNumber")) = LOWER($1)', [cleanInv]);
-    if (existing.rows.length === 0) {
+    const itemIds = items.map(it => it.id || it.purchaseId).filter(Boolean);
+    let existing;
+    if (cleanInv && cleanInv !== '-') {
+      existing = await client.query('SELECT * FROM "Purchase" WHERE LOWER(TRIM(COALESCE("partyInvoiceNumber", \'\'))) = LOWER($1)', [cleanInv]);
+    }
+    if ((!existing || existing.rows.length === 0) && itemIds.length > 0) {
+      existing = await client.query('SELECT * FROM "Purchase" WHERE id = ANY($1)', [itemIds]);
+    }
+    if (!existing || existing.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'No purchases found for this invoice' });
     }
 
-    const targetPartyInv = (d.partyInvoiceNumber || cleanInv).trim().toUpperCase();
-    const purDate = d.date ? new Date(d.date) : existing.rows[0].date;
-    const partyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : existing.rows[0].partyName;
-    const supplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : existing.rows[0].supplierAddress;
-    const gstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : existing.rows[0].gstNumber;
-    const supplierInvoiceDate = d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : existing.rows[0].supplierInvoiceDate;
-    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : existing.rows[0].vehicleNumber;
-    const remarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : existing.rows[0].remarks;
+    const firstPur = existing.rows[0];
+    const targetPartyInv = (d.partyInvoiceNumber || cleanInv || firstPur.partyInvoiceNumber || '').trim().toUpperCase();
+    const purDate = d.date ? new Date(d.date) : firstPur.date;
+    const partyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : firstPur.partyName;
+    const supplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : firstPur.supplierAddress;
+    const gstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : firstPur.gstNumber;
+    const supplierInvoiceDate = d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : firstPur.supplierInvoiceDate;
+    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : firstPur.vehicleNumber;
+    const remarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : firstPur.remarks;
+
+    // Check for removed items from this inward invoice and delete them safely
+    const submittedPurIds = new Set(itemIds);
+    const removedPurchases = existing.rows.filter(p => !submittedPurIds.has(p.id));
+
+    for (const rem of removedPurchases) {
+      // Validate that this inward item was not already sold/dispatched
+      const soldRes = await client.query(`
+        SELECT 
+          COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = $1), 0)::float as "totalInward",
+          COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "sold"
+      `, [rem.purchaseOrderItemId]);
+      const totalInward = soldRes.rows[0]?.totalInward || 0;
+      const sold = soldRes.rows[0]?.sold || 0;
+      if (totalInward - rem.qty < sold) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+          error: `Cannot remove item "${rem.receivedItemName || 'Item'}" (Qty: ${rem.qty}). Inward stock has already been sold/dispatched (Total sold: ${sold}, remaining inward would be only ${totalInward - rem.qty}).` 
+        });
+      }
+      await client.query('DELETE FROM "Purchase" WHERE id = $1', [rem.id]);
+    }
 
     const updatedPurchases = [];
 
@@ -1686,6 +1716,9 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
       const igstAmount = basicAmount * (igstPercent / 100);
       const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
 
+      const receivedItemName = item.receivedItemName || item.itemName || null;
+      const receivedPartNumber = item.receivedPartNumber || item.partNumber || null;
+
       if (purId) {
         const exP = existing.rows.find(p => p.id === purId);
         if (exP) {
@@ -1703,6 +1736,10 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
             return res.status(400).json({ 
               error: `Cannot reduce inward quantity of item to ${qty}. Total sold: ${sold}. Available inward would be only ${otherPurchased + qty}.` 
             });
+          }
+
+          if (item.unit && item.unit.trim()) {
+            await client.query('UPDATE "PurchaseOrderItem" SET "unit" = $1 WHERE "id" = $2', [item.unit.trim().toUpperCase(), itemId]);
           }
         }
 
@@ -1724,7 +1761,7 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
           cgstAmount, sgstAmount, igstAmount, totalAmount,
           partyName, supplierAddress, gstNumber,
           supplierInvoiceDate, vehicleNumber, remarks, shippingCharges,
-          item.receivedItemName || null, item.receivedPartNumber || null,
+          receivedItemName, receivedPartNumber,
           purId
         ]);
         if (uRes.rows[0]) {
@@ -1734,11 +1771,14 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
     }
 
     await client.query('COMMIT');
-    res.json({ message: `Inward Invoice #${targetPartyInv} updated (${updatedPurchases.length} items) successfully`, purchases: updatedPurchases });
+    const msg = removedPurchases.length > 0 
+      ? `Inward Invoice #${targetPartyInv} updated (${updatedPurchases.length} items saved, ${removedPurchases.length} items removed) successfully`
+      : `Inward Invoice #${targetPartyInv} updated (${updatedPurchases.length} items) successfully`;
+    res.json({ message: msg, purchases: updatedPurchases, removedCount: removedPurchases.length });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('Error updating purchase invoice:', err);
-    res.status(500).json({ error: 'Failed to update purchase invoice' });
+    res.status(500).json({ error: 'Failed to update purchase invoice: ' + (err.message || 'Database error') });
   } finally {
     client.release();
   }
@@ -2057,36 +2097,50 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
 app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
+    const rawInv = req.body?.originalInvoiceNumber || req.query.originalInvoiceNumber || req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
     let cleanInv = (rawInv || '').trim();
     try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
     cleanInv = cleanInv.toUpperCase();
     const d = req.body;
     const items = Array.isArray(d.items) ? d.items : [];
     if (items.length === 0) {
-      return res.status(400).json({ error: 'At least one item is required' });
+      return res.status(400).json({ error: 'At least one item is required in the sale invoice' });
     }
 
     await client.query('BEGIN');
 
-    // Fetch existing sales for this invoice
-    const existing = await client.query('SELECT * FROM "Sale" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
-    if (existing.rows.length === 0) {
+    const itemIds = items.map(it => it.id || it.saleId).filter(Boolean);
+    let existing;
+    if (cleanInv && cleanInv !== '-') {
+      existing = await client.query('SELECT * FROM "Sale" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
+    }
+    if ((!existing || existing.rows.length === 0) && itemIds.length > 0) {
+      existing = await client.query('SELECT * FROM "Sale" WHERE id = ANY($1)', [itemIds]);
+    }
+    if (!existing || existing.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'No sales found for this invoice' });
     }
 
-    const targetInvNum = (d.invoiceNumber || cleanInv).trim().toUpperCase();
-    const invDate = d.invoiceDate ? new Date(d.invoiceDate) : existing.rows[0].invoiceDate;
-    const partyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : existing.rows[0].partyName;
-    const supplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : existing.rows[0].supplierAddress;
-    const gstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : existing.rows[0].gstNumber;
-    const companyGstNumber = d.companyGstNumber !== undefined ? (d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null) : existing.rows[0].companyGstNumber;
-    const partyInvoiceNumber = d.partyInvoiceNumber !== undefined ? (d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null) : existing.rows[0].partyInvoiceNumber;
-    const supplierInvoiceDate = d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : existing.rows[0].supplierInvoiceDate;
-    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : existing.rows[0].vehicleNumber;
-    const eWayBillNumber = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : existing.rows[0].eWayBillNumber;
-    const remarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : existing.rows[0].remarks;
+    const firstSale = existing.rows[0];
+    const targetInvNum = (d.invoiceNumber || cleanInv || firstSale.invoiceNumber || '').trim().toUpperCase();
+    const invDate = d.invoiceDate ? new Date(d.invoiceDate) : firstSale.invoiceDate;
+    const partyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : firstSale.partyName;
+    const supplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : firstSale.supplierAddress;
+    const gstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : firstSale.gstNumber;
+    const companyGstNumber = d.companyGstNumber !== undefined ? (d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null) : firstSale.companyGstNumber;
+    const partyInvoiceNumber = d.partyInvoiceNumber !== undefined ? (d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null) : firstSale.partyInvoiceNumber;
+    const supplierInvoiceDate = d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : firstSale.supplierInvoiceDate;
+    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : firstSale.vehicleNumber;
+    const eWayBillNumber = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : firstSale.eWayBillNumber;
+    const remarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : firstSale.remarks;
+
+    // Remove deleted sales from this invoice (frees stock back to inventory)
+    const submittedSaleIds = new Set(itemIds);
+    const removedSales = existing.rows.filter(s => !submittedSaleIds.has(s.id));
+    for (const rem of removedSales) {
+      await client.query('DELETE FROM "Sale" WHERE id = $1', [rem.id]);
+    }
 
     const updatedSales = [];
     const itemsPayload = [];
@@ -2109,6 +2163,24 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
       grandTotal += totalAmount;
 
       if (saleId) {
+        const exSale = existing.rows.find(s => s.id === saleId);
+        if (exSale) {
+          const stockRes = await client.query(`
+            SELECT 
+              COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = $1), 0)::float as "totalInward",
+              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.id != $2 AND s.status = 'APPROVED'), 0)::float as "otherSold"
+          `, [exSale.purchaseOrderItemId, saleId]);
+          const totalInward = stockRes.rows[0]?.totalInward || 0;
+          const otherSold = stockRes.rows[0]?.otherSold || 0;
+          const availableStock = Math.max(0, totalInward - otherSold);
+          if (qty > availableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: `Cannot set sale quantity of '${item.itemName || 'item'}' to ${qty}. Maximum available inward stock is ${availableStock} (Total inward: ${totalInward}, other sold: ${otherSold}).`
+            });
+          }
+        }
+
         const uRes = await client.query(`
           UPDATE "Sale"
           SET "invoiceNumber" = $1, "invoiceDate" = $2, "qty" = $3, "rate" = $4,
@@ -2149,8 +2221,8 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
       DELETE FROM "ApprovalRequest"
       WHERE ("type" = 'SALE_ENTRY' OR "type" = 'SALE_EDIT')
         AND "status" = 'PENDING'
-        AND payload::text ILIKE $1
-    `, [`%"invoiceNumber":"${cleanInv}"%`]);
+        AND (payload::text ILIKE $1 OR payload::text ILIKE $2)
+    `, [`%"invoiceNumber":"${cleanInv}"%`, `%"invoiceNumber":"${targetInvNum}"%`]);
 
     // Create single approval request for the updated invoice
     await client.query(`
@@ -2176,17 +2248,21 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
         partNumber: itemsPayload.map(i => i.partNumber).filter(Boolean).join(', ') || '-',
         itemName: itemsPayload.map(i => i.itemName).filter(Boolean).join(', ') || '-',
         qty: itemsPayload.reduce((sum, i) => sum + (i.qty || 0), 0),
-        totalAmount: grandTotal
+        totalAmount: grandTotal,
+        removedCount: removedSales.length
       }),
-      `Sale Invoice #${targetInvNum} (${updatedSales.length} items, total ₹${grandTotal.toLocaleString('en-IN')}) edited by ${req.user.fullName || req.user.username}`
+      `Sale Invoice #${targetInvNum} (${updatedSales.length} items, total ₹${grandTotal.toLocaleString('en-IN')}${removedSales.length > 0 ? `, ${removedSales.length} removed` : ''}) edited by ${req.user.fullName || req.user.username}`
     ]);
 
     await client.query('COMMIT');
-    res.json({ message: `Sale invoice #${targetInvNum} updated (${updatedSales.length} items) and submitted for Owner Approval`, sales: updatedSales });
+    const msg = removedSales.length > 0
+      ? `Sale invoice #${targetInvNum} updated (${updatedSales.length} items saved, ${removedSales.length} items removed) and submitted for Owner Approval`
+      : `Sale invoice #${targetInvNum} updated (${updatedSales.length} items) and submitted for Owner Approval`;
+    res.json({ message: msg, sales: updatedSales, removedCount: removedSales.length });
   } catch (err) {
     try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('Error updating sale invoice:', err);
-    res.status(500).json({ error: 'Failed to update sale invoice' });
+    res.status(500).json({ error: 'Failed to update sale invoice: ' + (err.message || 'Database error') });
   } finally {
     client.release();
   }
@@ -4415,27 +4491,27 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
 app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', '/api/work-orders/invoice/*'], authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
   try {
-    const rawInv = req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
+    const rawInv = req.body?.originalInvoiceNumber || req.query.originalInvoiceNumber || req.params.invoiceNumber || req.params[0] || req.query.invoiceNumber || req.body?.invoiceNumber || '';
     let cleanInv = (rawInv || '').trim();
     try { cleanInv = decodeURIComponent(cleanInv); } catch (_) {}
     cleanInv = cleanInv.toUpperCase();
     const d = req.body;
     const items = Array.isArray(d.items) ? d.items : [];
     if (items.length === 0) {
-      return res.status(400).json({ error: 'At least one item is required' });
+      return res.status(400).json({ error: 'At least one item is required in the work order invoice' });
     }
 
     await client.query('BEGIN');
 
     // 1. Fetch existing work orders for this invoice
-    const existing = await client.query('SELECT * FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
+    const existing = await client.query('SELECT * FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1) OR LOWER(TRIM("workOrderNumber")) = LOWER($1)', [cleanInv]);
     if (existing.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'No work orders found for this invoice' });
     }
 
     const firstWo = existing.rows[0];
-    const targetInvNum = (d.invoiceNumber || cleanInv).trim().toUpperCase();
+    const targetInvNum = (d.invoiceNumber || cleanInv || firstWo.invoiceNumber).trim().toUpperCase();
     const targetWoNum = (d.workOrderNumber || firstWo.workOrderNumber).trim().toUpperCase();
     const woDate = d.workOrderDate ? new Date(d.workOrderDate) : firstWo.workOrderDate;
     const invDate = d.invoiceDate ? new Date(d.invoiceDate) : firstWo.invoiceDate;
@@ -4449,7 +4525,7 @@ app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', 
     const remarks = d.remarks !== undefined ? d.remarks : firstWo.remarks;
 
     // Delete existing rows for this invoice and replace with clean updated rows
-    await client.query('DELETE FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
+    await client.query('DELETE FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1) OR LOWER(TRIM("workOrderNumber")) = LOWER($1)', [cleanInv]);
 
     const createdOrders = [];
     let grandTotal = 0;

@@ -493,25 +493,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     setOriginalEditingInvoiceNo(targetInvNum);
     setEditItem(null);
 
-    // Fetch all items belonging to this invoice
-    let matchingItems: any[] = [];
-    if (targetInvNum && targetInvNum !== '-') {
-      try {
-        const res = await api.get('/invoices', { params: { invoiceNumber: targetInvNum } });
-        if (res.data?.items && res.data.items.length > 0) {
-          matchingItems = res.data.items;
-        }
-      } catch (err) {
-        // Fallback gracefully to local matching work orders
-      }
-    }
-
-    if (matchingItems.length === 0) {
-      matchingItems = workOrders.filter(w => 
-        (targetInvNum && (w.invoiceNumber === targetInvNum || w.workOrderNumber === targetInvNum)) || 
-        w.id === item.id
-      );
-    }
+    // 1. Immediately populate from in-memory work orders so the modal opens instantaneously
+    let matchingItems = workOrders.filter(w => 
+      (targetInvNum && (w.invoiceNumber === targetInvNum || w.workOrderNumber === targetInvNum)) || 
+      w.id === item.id
+    );
+    if (matchingItems.length === 0) matchingItems = [item];
 
     const first = matchingItems[0] || item;
     setInvoiceHeader({
@@ -521,7 +508,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       invoiceDate: first.invoiceDate ? new Date(first.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
       partyName: first.partyName || item.partyName || '',
       partyAddress: first.partyAddress || item.partyAddress || '',
-      partyGstNumber: first.partyGstNumber || first.gstNumber || item.partyGstNumber || '',
+      partyGstNumber: first.partyGstNumber || (first as any).gstNumber || item.partyGstNumber || '',
       companyName: first.companyName || item.companyName || 'Sri Krishna Constructions',
       companyGstNumber: first.companyGstNumber || item.companyGstNumber || '29DWKPP3582H1ZV',
       vehicleNumber: first.vehicleNumber || item.vehicleNumber || '',
@@ -533,33 +520,36 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       shippingCharges: (first.shippingCharges !== undefined ? first.shippingCharges : 0).toString()
     });
 
-    if (matchingItems.length > 0) {
-      setInvoiceItems(matchingItems.map((m, idx) => ({
-        id: m.id || (idx + 1).toString(),
-        kpclCode: m.kpclCode || m.item?.kpclCode || '-',
-        itemName: m.itemName || m.item?.itemName || '',
-        description: m.description || m.item?.specifications || '',
-        partNumber: m.partNumber || m.item?.partNumber || '',
-        unit: m.unit || m.item?.unit || 'NOS',
-        qty: (m.qty !== undefined ? m.qty : (m.quantity !== undefined ? m.quantity : 1)).toString(),
-        rate: (m.rate !== undefined ? m.rate : (m.unitPrice !== undefined ? m.unitPrice : 0)).toString()
-      })));
-    } else {
-      setInvoiceItems([
-        {
-          id: item.id || '1',
-          kpclCode: item.kpclCode || '-',
-          itemName: item.itemName,
-          description: item.description || '',
-          partNumber: item.partNumber || '',
-          unit: item.unit || 'NOS',
-          qty: item.qty.toString(),
-          rate: item.rate.toString()
-        }
-      ]);
-    }
+    const mapWoItems = (itemsList: any[]) => itemsList.map((m, idx) => ({
+      id: m.id || (idx + 1).toString(),
+      kpclCode: m.kpclCode || m.item?.kpclCode || '-',
+      itemName: m.itemName || m.item?.itemName || '',
+      description: m.description || m.item?.specifications || '',
+      partNumber: m.partNumber || m.item?.partNumber || '',
+      unit: m.unit || m.item?.unit || 'NOS',
+      qty: (m.qty !== undefined ? m.qty : (m.quantity !== undefined ? m.quantity : 1)).toString(),
+      rate: (m.rate !== undefined ? m.rate : (m.unitPrice !== undefined ? m.unitPrice : 0)).toString()
+    }));
 
+    setInvoiceItems(mapWoItems(matchingItems));
     setShowAddModal(true);
+
+    // 2. Silently fetch from server to enhance/merge if there are items from other pages
+    if (targetInvNum && targetInvNum !== '-') {
+      try {
+        const res = await api.get('/invoices', { params: { invoiceNumber: targetInvNum } });
+        if (res.data?.items && res.data.items.length > 0) {
+          const fetchedItems = res.data.items.filter((it: any) => 
+            it.sourceType === 'WORK_ORDER' || it.invoiceNumber === targetInvNum || it.workOrderNumber === targetInvNum
+          );
+          if (fetchedItems.length > 0) {
+            setInvoiceItems(mapWoItems(fetchedItems));
+          }
+        }
+      } catch (_) {
+        // Fallback already displayed
+      }
+    }
   };
 
   const handleDelete = async (targetWo: WorkOrderItem) => {
@@ -712,6 +702,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       workOrderNumber: invoiceHeader.workOrderNumber.trim().toUpperCase(),
       workOrderDate: invoiceHeader.workOrderDate,
       invoiceNumber: invoiceHeader.invoiceNumber.trim().toUpperCase(),
+      originalInvoiceNumber: originalEditingInvoiceNo || invoiceHeader.invoiceNumber.trim().toUpperCase(),
       invoiceDate: invoiceHeader.invoiceDate,
       partyName: invoiceHeader.partyName.trim(),
       partyAddress: invoiceHeader.partyAddress.trim(),

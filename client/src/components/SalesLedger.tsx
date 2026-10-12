@@ -295,15 +295,20 @@ export const SalesLedger: React.FC = () => {
       return;
     }
     try {
-      const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
-      const items = res.data?.items || [];
+      let items: any[] = [];
+      try {
+        const res = await api.get('/invoices', { params: { invoiceNumber: invNum } });
+        items = res.data?.items || [];
+      } catch (_) {
+        // Fallback to current row
+      }
       if (items.length === 0) {
-        showToast('No items found for this invoice', 'error');
-        return;
+        items = [sale];
       }
       const first = items[0];
       setEditInvoiceData({
-        sourceType: sale.sourceType,
+        sourceType: sale.sourceType || first.sourceType,
+        originalInvoiceNumber: invNum,
         workOrderNumber: first.workOrderNumber || first.poNumber || '',
         workOrderDate: first.workOrderDate || first.poDate || '',
         invoiceNumber: invNum,
@@ -344,16 +349,34 @@ export const SalesLedger: React.FC = () => {
     setEditInvoiceData({ ...editInvoiceData, items: updated });
   };
 
+  const handleRemoveInvoiceItem = (index: number) => {
+    if (!editInvoiceData) return;
+    if (editInvoiceData.items.length <= 1) {
+      showToast('An invoice must have at least 1 item. To delete the whole invoice, use Delete Invoice.', 'info');
+      return;
+    }
+    setEditInvoiceData({
+      ...editInvoiceData,
+      items: editInvoiceData.items.filter((_: any, idx: number) => idx !== index)
+    });
+  };
+
   const handleSaveInvoiceEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editInvoiceData) return;
+    if (editInvoiceData.items.length === 0) {
+      showToast('At least one item is required in the invoice', 'error');
+      return;
+    }
     try {
       setSavingEdit(true);
       const isWO = editInvoiceData.sourceType === 'WORK_ORDER';
       const endpoint = isWO ? '/work-orders/invoice' : '/sales/invoice';
+      const originalInv = editInvoiceData.originalInvoiceNumber || editInvoiceData.invoiceNumber;
       
       const payload = {
         ...editInvoiceData,
+        originalInvoiceNumber: originalInv,
         items: editInvoiceData.items.map((it: any) => ({
           ...it,
           qty: parseFloat(it.qty) || 0,
@@ -365,8 +388,8 @@ export const SalesLedger: React.FC = () => {
         }))
       };
 
-      await api.put(endpoint, payload, { params: { invoiceNumber: editInvoiceData.invoiceNumber } });
-      showToast(`Invoice #${editInvoiceData.invoiceNumber} (${editInvoiceData.items.length} items) updated and submitted for Owner approval!`, 'success');
+      const res = await api.put(endpoint, payload, { params: { invoiceNumber: originalInv } });
+      showToast(res.data?.message || `Invoice #${editInvoiceData.invoiceNumber} (${editInvoiceData.items.length} items) updated and submitted for Owner approval!`, 'success');
       setEditInvoiceData(null);
       fetchSalesLedger();
       window.dispatchEvent(new Event('skc-approvals-updated'));
@@ -1003,6 +1026,7 @@ export const SalesLedger: React.FC = () => {
                         <th className="p-2 w-20 text-center">CGST %</th>
                         <th className="p-2 w-20 text-center">SGST %</th>
                         <th className="p-2 w-28 text-right">Total (₹)</th>
+                        <th className="p-2 w-12 text-center">Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1084,6 +1108,17 @@ export const SalesLedger: React.FC = () => {
                             </td>
                             <td className="p-2 text-right font-mono font-bold text-slate-900">
                               ₹{rowTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="p-1 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveInvoiceItem(idx)}
+                                disabled={editInvoiceData.items.length <= 1}
+                                className="p-1.5 text-slate-400 hover:text-rose-600 rounded disabled:opacity-25 disabled:hover:text-slate-400 cursor-pointer transition-colors"
+                                title={editInvoiceData.items.length <= 1 ? "At least 1 item is required" : "Remove this item from invoice"}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </td>
                           </tr>
                         );
