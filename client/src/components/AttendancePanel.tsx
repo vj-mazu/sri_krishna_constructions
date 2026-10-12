@@ -82,6 +82,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+  const [pendingCorrectionsMap, setPendingCorrectionsMap] = useState<Record<string, any>>({});
 
   // Fetch current user details to check for single supervisor division restriction
   useEffect(() => {
@@ -172,7 +173,17 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
       const fetchedWorkers = workersRes.data.workers || [];
       const fetchedAttendance = attendanceRes.data.attendances || attendanceRes.data.attendance || [];
+      const fetchedPending = attendanceRes.data.pendingCorrections || [];
       const fetchedHolidays = holidaysRes.data.holidays || [];
+
+      // Map pending corrections by workerId
+      const pendMap: Record<string, any> = {};
+      if (Array.isArray(fetchedPending)) {
+        fetchedPending.forEach((p: any) => {
+          pendMap[p.workerId] = p;
+        });
+      }
+      setPendingCorrectionsMap(pendMap);
 
       // Check if selected date is an official declared holiday
       const currentHoliday = fetchedHolidays.find((h: any) => {
@@ -235,6 +246,12 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
 
   useEffect(() => {
     fetchWorkersAndAttendance();
+
+    const handleApprovalsSync = () => {
+      fetchWorkersAndAttendance();
+    };
+    window.addEventListener('skc-approvals-updated', handleApprovalsSync);
+    return () => window.removeEventListener('skc-approvals-updated', handleApprovalsSync);
   }, [selectedDate, selectedDivisionId]);
 
   const handleClearAllAttendance = async () => {
@@ -477,7 +494,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
         window.dispatchEvent(new Event('skc-approvals-updated'));
       } else {
         // Supervisor workflow: submit correction request for approval
-        await api.post('/attendance/correction-requests', {
+        const res = await api.post('/attendance/correction-requests', {
           workerId: worker.id,
           date: selectedDate,
           oldStatus: state.status || 'UNMARKED',
@@ -489,8 +506,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
           newOvertimeHours: editForm.newOvertimeHours,
           reason: editForm.reason
         });
-        showToast('Attendance edit request sent to Manager/Admin for approval!', 'success');
+        showToast(res.data?.message || 'Attendance edit request submitted for approval!', 'success');
         setInlineEditWorkerId(null);
+        await fetchWorkersAndAttendance();
         window.dispatchEvent(new Event('skc-approvals-updated'));
       }
     } catch (err: any) {
@@ -936,6 +954,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           <span className="text-[10px] text-[#1e3a8a] font-mono font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">{w.workerId}</span>
                           <span className="text-[10px] text-slate-600 font-bold uppercase truncate max-w-[100px]">{w.designation || 'Worker'}</span>
                         </div>
+                        {pendingCorrectionsMap[w.id] && (
+                          <div className="mt-1 px-1.5 py-0.5 bg-amber-100 border border-amber-400 rounded text-[10px] text-amber-950 font-bold flex items-center gap-1 shadow-2xs">
+                            <span>⏳ Approval Pending:</span>
+                            <span className="font-extrabold text-amber-900">{pendingCorrectionsMap[w.id].newStatus}</span>
+                            <span className="text-amber-800">({pendingCorrectionsMap[w.id].newDivisionName || 'Site'})</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
@@ -949,24 +974,27 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           if (inlineEditWorkerId === w.id) {
                             setInlineEditWorkerId(null);
                           } else {
+                            const pend = pendingCorrectionsMap[w.id];
                             setInlineEditWorkerId(w.id);
                             setEditForm({
-                              newStatus: (state.status as any) || 'PRESENT',
+                              newStatus: (pend ? pend.newStatus : (state.status as any)) || 'PRESENT',
                               newLeaveType: state.leaveType || 'CASUAL',
-                              newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
-                              newOvertimeHours: state.overtimeHours || '0',
-                              reason: ''
+                              newDivisionId: (pend ? pend.newDivisionId : (selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''))),
+                              newOvertimeHours: pend?.newOvertimeHours !== undefined ? String(pend.newOvertimeHours) : (state.overtimeHours || '0'),
+                              reason: pend?.reason || ''
                             });
                           }
                         }}
                         className={`px-2 py-1 rounded-lg text-[10px] font-bold shadow-2xs flex items-center gap-1 transition-all active:scale-95 ${
                           inlineEditWorkerId === w.id
                             ? 'bg-amber-600 text-white border border-amber-700'
+                            : pendingCorrectionsMap[w.id]
+                            ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-2 border-amber-400 font-extrabold'
                             : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300'
                         }`}
-                        title={inlineEditWorkerId === w.id ? "Close inline correction" : "Request Attendance Edit / Correction"}
+                        title={inlineEditWorkerId === w.id ? "Close inline correction" : pendingCorrectionsMap[w.id] ? "Update Pending Approval Request" : "Request Attendance Edit / Correction"}
                       >
-                        <span>{inlineEditWorkerId === w.id ? '✖ Close' : '✏️ Edit'}</span>
+                        <span>{inlineEditWorkerId === w.id ? '✖ Close' : pendingCorrectionsMap[w.id] ? '⏳ Pending' : '✏️ Edit'}</span>
                       </button>
                     </div>
                   </div>
@@ -976,7 +1004,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                     <div className="mt-1.5 pt-2 border-t-2 border-amber-300 bg-amber-50/60 rounded-xl p-3 space-y-2.5 animate-fadeIn">
                       <div className="flex items-center justify-between pb-1 border-b border-amber-200">
                         <span className="font-bold text-slate-800 text-xs flex items-center gap-1">
-                          <span>✏️</span> {isPrivileged ? 'Edit Attendance (Direct Update)' : 'Request Correction'}
+                          <span>✏️</span> {isPrivileged ? 'Edit Attendance (Direct Update)' : pendingCorrectionsMap[w.id] ? 'Update Pending Approval Request' : 'Request Correction'}
                         </span>
                         <button
                           type="button"
@@ -986,6 +1014,22 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           ✕ Close
                         </button>
                       </div>
+
+                      {pendingCorrectionsMap[w.id] && (
+                        <div className="p-2 bg-amber-100/90 border border-amber-400 rounded-lg text-amber-950 text-[11px] space-y-0.5">
+                          <div className="font-extrabold flex items-center gap-1 text-amber-900">
+                            <span>⏳</span> Approval Request Already Pending with Manager/Owner!
+                          </div>
+                          <div>
+                            Currently pending: <strong>{pendingCorrectionsMap[w.id].newStatus}</strong> at <strong>{pendingCorrectionsMap[w.id].newDivisionName}</strong>
+                            {Number(pendingCorrectionsMap[w.id].newOvertimeHours) > 0 ? ` (${pendingCorrectionsMap[w.id].newOvertimeHours}h OT)` : ''}
+                            {pendingCorrectionsMap[w.id].requestedByName ? ` by ${pendingCorrectionsMap[w.id].requestedByName}` : ''}.
+                          </div>
+                          <div className="text-[10px] text-amber-900 font-bold">
+                            💡 Submitting will update this existing pending request (no duplicates created).
+                          </div>
+                        </div>
+                      )}
 
                       <div>
                         <label className="block font-bold text-slate-700 mb-1 text-[10px] uppercase tracking-wider">Site / Division *</label>
@@ -1095,9 +1139,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                           type="button"
                           disabled={editSubmitting}
                           onClick={(e) => handleInlineEditSubmit(e, w)}
-                          className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1"
+                          className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1 disabled:opacity-50"
                         >
-                          {editSubmitting ? 'Saving...' : isPrivileged ? 'Save Changes Directly' : 'Send to Manager'}
+                          {editSubmitting ? 'Saving...' : isPrivileged ? 'Save Changes Directly' : pendingCorrectionsMap[w.id] ? 'Update Pending Request' : 'Send to Manager'}
                         </button>
                       </div>
                     </div>
@@ -1249,6 +1293,13 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                   📍 Worked at {state.divisionName || divisions.find(d => d.id === state.divisionId)?.name || 'Other Division'}
                                 </div>
                               )}
+                              {pendingCorrectionsMap[w.id] && (
+                                <div className="mt-1 px-1.5 py-0.5 bg-amber-100 border border-amber-400 rounded text-[9px] text-amber-950 font-bold flex items-center gap-1 shadow-2xs">
+                                  <span>⏳ Approval Pending:</span>
+                                  <span className="font-extrabold text-amber-900">{pendingCorrectionsMap[w.id].newStatus}</span>
+                                  <span className="text-amber-800 font-mono">({pendingCorrectionsMap[w.id].newDivisionName || 'Site'})</span>
+                                </div>
+                              )}
                             </td>
                             
                             <td className="px-3 py-2 text-center whitespace-nowrap">
@@ -1382,24 +1433,27 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                 if (isEditing) {
                                   setInlineEditWorkerId(null);
                                 } else {
+                                  const pend = pendingCorrectionsMap[w.id];
                                   setInlineEditWorkerId(w.id);
                                   setEditForm({
-                                    newStatus: (state.status as any) || 'PRESENT',
+                                    newStatus: (pend ? pend.newStatus : (state.status as any)) || 'PRESENT',
                                     newLeaveType: state.leaveType || 'CASUAL',
-                                    newDivisionId: selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''),
-                                    newOvertimeHours: state.overtimeHours || '0',
-                                    reason: ''
+                                    newDivisionId: (pend ? pend.newDivisionId : (selectedDivisionId !== 'ALL' ? selectedDivisionId : (w.divisionId || divisions[0]?.id || ''))),
+                                    newOvertimeHours: pend?.newOvertimeHours !== undefined ? String(pend.newOvertimeHours) : (state.overtimeHours || '0'),
+                                    reason: pend?.reason || ''
                                   });
                                 }
                               }}
                               className={`px-2.5 py-1 rounded-lg text-[10px] font-bold shadow-2xs flex items-center justify-center gap-1 mx-auto transition-all ${
                                 isEditing
                                   ? 'bg-amber-600 text-white border border-amber-700'
+                                  : pendingCorrectionsMap[w.id]
+                                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-2 border-amber-400 font-extrabold'
                                   : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300'
                               }`}
-                              title={isEditing ? 'Close inline editor' : 'Request Attendance Edit / Correction'}
+                              title={isEditing ? 'Close inline editor' : pendingCorrectionsMap[w.id] ? 'Update Pending Approval Request' : 'Request Attendance Edit / Correction'}
                             >
-                              <span>{isEditing ? '✖ Close' : '✏️ Edit'}</span>
+                              <span>{isEditing ? '✖ Close' : pendingCorrectionsMap[w.id] ? '⏳ Pending' : '✏️ Edit'}</span>
                             </button>
                           </td>
                         </tr>
@@ -1413,7 +1467,7 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm">✏️</span>
                                     <span className="font-bold text-slate-800 text-xs">
-                                      {isPrivileged ? 'Edit Attendance Directly for' : 'Request Attendance Correction for'} <strong className="text-[#1e3a8a]">{w.fullName}</strong>
+                                      {isPrivileged ? 'Edit Attendance Directly for' : pendingCorrectionsMap[w.id] ? 'Update Pending Approval Request for' : 'Request Attendance Correction for'} <strong className="text-[#1e3a8a]">{w.fullName}</strong>
                                     </span>
                                     <span className="text-[11px] text-slate-500 font-mono">({w.workerId} • {formatDateDMY(selectedDate)})</span>
                                   </div>
@@ -1425,6 +1479,22 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                     ✕ Close
                                   </button>
                                 </div>
+
+                                {pendingCorrectionsMap[w.id] && (
+                                  <div className="p-2.5 rounded-xl bg-amber-100/90 border-2 border-amber-400 text-amber-950 text-xs space-y-1">
+                                    <div className="font-extrabold flex items-center gap-1.5 text-amber-900">
+                                      <span>⏳</span> Correction Request Already Pending with Manager/Owner!
+                                    </div>
+                                    <div className="text-[11px] text-amber-800">
+                                      Currently pending approval: <strong>{pendingCorrectionsMap[w.id].newStatus}</strong> at <strong>{pendingCorrectionsMap[w.id].newDivisionName}</strong>
+                                      {Number(pendingCorrectionsMap[w.id].newOvertimeHours) > 0 ? ` with ${pendingCorrectionsMap[w.id].newOvertimeHours}h OT` : ''}
+                                      {pendingCorrectionsMap[w.id].requestedByName ? ` (requested by ${pendingCorrectionsMap[w.id].requestedByName})` : ''}.
+                                      <span className="block mt-0.5 text-amber-950 font-bold">
+                                        💡 Submitting again will update this existing pending request. It will NOT create duplicate approvals.
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                                   {/* Division */}
@@ -1541,9 +1611,9 @@ export const AttendancePanel: React.FC<AttendancePanelProps> = ({ currentUserRol
                                       type="button"
                                       disabled={editSubmitting}
                                       onClick={(e) => handleInlineEditSubmit(e, w)}
-                                      className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1"
+                                      className="px-4 py-1.5 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow-xs flex items-center gap-1 disabled:opacity-50"
                                     >
-                                      {editSubmitting ? 'Saving...' : isPrivileged ? 'Save Changes Directly' : 'Send Request to Manager'}
+                                      {editSubmitting ? 'Saving...' : isPrivileged ? 'Save Changes Directly' : pendingCorrectionsMap[w.id] ? 'Update Pending Request' : 'Send Request to Manager'}
                                     </button>
                                   </div>
                                 </div>

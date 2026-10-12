@@ -6501,7 +6501,19 @@ app.get('/api/attendance', authenticateToken, async (req, res) => {
 
     const { rows: attendances } = await pool.query(query, params);
 
-    res.json({ attendances });
+    // Fetch pending correction requests for this date so the UI can highlight pending status
+    const { rows: pendingCorrections } = await pool.query(
+      `SELECT r."id", r."workerId", r."date", r."oldStatus", r."oldDivisionName",
+              r."newStatus", r."newOvertimeHours", r."reason", r."createdAt",
+              d."name" as "newDivisionName", u."fullName" as "requestedByName"
+       FROM "AttendanceCorrectionRequest" r
+       JOIN "Division" d ON r."newDivisionId" = d."id"
+       LEFT JOIN "User" u ON r."requestedById" = u."id"
+       WHERE r."date"::date = $1::date AND r."status" = 'PENDING'`,
+      [date]
+    );
+
+    res.json({ attendances, pendingCorrections });
   } catch (err) {
     console.error('Fetch attendance error:', err);
     res.status(500).json({ error: 'Failed to load attendance records' });
@@ -6615,14 +6627,30 @@ app.post('/api/attendance', authenticateToken, async (req, res) => {
         });
 
         if (modifiedRequests.length > 0) {
-          // Insert into AttendanceCorrectionRequest so it appears in Approvals -> Attendance Corrections tab!
+          // Upsert into AttendanceCorrectionRequest so it appears in Approvals -> Attendance Corrections tab without duplicate rows!
           for (const reqItem of modifiedRequests) {
-            await pool.query(
-              `INSERT INTO "AttendanceCorrectionRequest" 
-               ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "reason", "status", "requestedById", "createdAt", "updatedAt")
-               VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5::"AttendanceStatus", $6, $7, $8, 'PENDING', $9, NOW(), NOW())`,
-              [reqItem.workerId, reqItem.date, reqItem.oldStatus, reqItem.oldDivisionName, reqItem.newStatus, reqItem.newDivisionId, reqItem.newOvertimeHours, reqItem.reason, req.user.id]
+            const { rows: existingPending } = await pool.query(
+              `SELECT id FROM "AttendanceCorrectionRequest" 
+               WHERE "workerId" = $1 AND "date"::date = $2::date AND "status" = 'PENDING'`,
+              [reqItem.workerId, reqItem.date]
             );
+
+            if (existingPending.length > 0) {
+              await pool.query(
+                `UPDATE "AttendanceCorrectionRequest" 
+                 SET "oldStatus" = $1, "oldDivisionName" = $2, "newStatus" = $3::"AttendanceStatus", 
+                     "newDivisionId" = $4, "newOvertimeHours" = $5, "reason" = $6, "requestedById" = $7, "updatedAt" = NOW()
+                 WHERE id = $8`,
+                [reqItem.oldStatus, reqItem.oldDivisionName, reqItem.newStatus, reqItem.newDivisionId, reqItem.newOvertimeHours, reqItem.reason, req.user.id, existingPending[0].id]
+              );
+            } else {
+              await pool.query(
+                `INSERT INTO "AttendanceCorrectionRequest" 
+                 ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "reason", "status", "requestedById", "createdAt", "updatedAt")
+                 VALUES (gen_random_uuid()::text, $1, $2::timestamp, $3, $4, $5::"AttendanceStatus", $6, $7, $8, 'PENDING', $9, NOW(), NOW())`,
+                [reqItem.workerId, reqItem.date, reqItem.oldStatus, reqItem.oldDivisionName, reqItem.newStatus, reqItem.newDivisionId, reqItem.newOvertimeHours, reqItem.reason, req.user.id]
+              );
+            }
           }
 
           return res.status(202).json({
@@ -6709,7 +6737,7 @@ app.get('/api/attendance/correction-requests', authenticateToken, async (req, re
        JOIN "Division" d ON r."newDivisionId" = d."id"
        JOIN "User" u ON r."requestedById" = u."id"
        LEFT JOIN "User" a ON r."approvedById" = a."id"
-       ORDER BY r."createdAt" ASC, r."id" ASC`
+       ORDER BY (CASE WHEN r."status" = 'PENDING' THEN 0 ELSE 1 END) ASC, r."createdAt" DESC, r."id" DESC`
     );
     res.json({ requests: rows });
   } catch (err) {
@@ -6727,6 +6755,31 @@ app.post('/api/attendance/correction-requests', authenticateToken, async (req, r
 
     const lType = (leaveType === 'MEDICAL' || leaveType === 'CASUAL') ? leaveType : 'CASUAL';
 
+    // Check if a PENDING correction request already exists for this worker on this date
+    const { rows: existingPending } = await pool.query(
+      `SELECT id FROM "AttendanceCorrectionRequest" 
+       WHERE "workerId" = $1 AND "date"::date = $2::date AND "status" = 'PENDING'`,
+      [workerId, date]
+    );
+
+    if (existingPending.length > 0) {
+      const { rows } = await pool.query(
+        `UPDATE "AttendanceCorrectionRequest"
+         SET "oldStatus" = $1, "oldDivisionName" = $2, "newStatus" = $3::"AttendanceStatus",
+             "newDivisionId" = $4, "newOvertimeHours" = $5, "leaveType" = $6, "reason" = $7,
+             "requestedById" = $8, "updatedAt" = NOW()
+         WHERE id = $9
+         RETURNING *`,
+        [oldStatus || null, oldDivisionName || null, newStatus, newDivisionId, parseFloat(newOvertimeHours) || 0, lType, reason, req.user.id, existingPending[0].id]
+      );
+
+      return res.json({ 
+        message: 'Pending attendance correction request updated with your latest changes!', 
+        request: rows[0],
+        isUpdated: true 
+      });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO "AttendanceCorrectionRequest" 
        ("id", "workerId", "date", "oldStatus", "oldDivisionName", "newStatus", "newDivisionId", "newOvertimeHours", "leaveType", "reason", "status", "requestedById", "createdAt", "updatedAt")
@@ -6735,7 +6788,7 @@ app.post('/api/attendance/correction-requests', authenticateToken, async (req, r
       [workerId, date, oldStatus || null, oldDivisionName || null, newStatus, newDivisionId, parseFloat(newOvertimeHours) || 0, lType, reason, req.user.id]
     );
 
-    res.json({ message: 'Attendance correction request submitted to Manager/Admin for approval!', request: rows[0] });
+    res.json({ message: 'Attendance correction request submitted to Manager/Admin for approval!', request: rows[0], isUpdated: false });
   } catch (err) {
     console.error('Submit correction request error:', err);
     res.status(500).json({ error: 'Failed to submit attendance correction request' });
@@ -6801,12 +6854,19 @@ app.put('/api/attendance/correction-requests/:id/review', authenticateToken, req
     }
 
     // 2. Update the correction request record status
-
     await client.query(
       `UPDATE "AttendanceCorrectionRequest"
        SET "status" = $1::text, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW()
        WHERE "id" = $4`,
       [action, req.user.id, rejectionReason || null, id]
+    );
+
+    // Also auto-resolve any lingering duplicate pending requests for the same worker and date
+    await client.query(
+      `UPDATE "AttendanceCorrectionRequest"
+       SET "status" = $1::text, "approvedById" = $2, "rejectionReason" = COALESCE($3, 'Resolved along with approved request'), "updatedAt" = NOW()
+       WHERE "workerId" = $4 AND "date"::date = $5::date AND "status" = 'PENDING' AND "id" != $6`,
+      [action, req.user.id, rejectionReason || null, corrReq.workerId, corrReq.date, id]
     );
 
     await client.query('COMMIT');

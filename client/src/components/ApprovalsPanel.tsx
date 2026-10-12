@@ -87,7 +87,26 @@ export const ApprovalsPanel: React.FC = () => {
     return `${date.getDate().toString().padStart(2, '0')}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getFullYear()}`;
   };
 
-  const pendingAttendanceCount = attendanceRequests.filter(r => r.status === 'PENDING').length;
+  // Deduplicate attendanceRequests so each worker has at most 1 unique pending request per date
+  const uniqueAttendanceRequests = React.useMemo(() => {
+    const seenPending = new Set<string>();
+    const result: any[] = [];
+    for (const req of attendanceRequests) {
+      if (req.status === 'PENDING') {
+        const dateStr = req.date ? new Date(req.date).toISOString().split('T')[0] : '';
+        const key = `${req.workerId}_${dateStr}`;
+        if (!seenPending.has(key)) {
+          seenPending.add(key);
+          result.push(req);
+        }
+      } else {
+        result.push(req);
+      }
+    }
+    return result;
+  }, [attendanceRequests]);
+
+  const pendingAttendanceCount = uniqueAttendanceRequests.filter(r => r.status === 'PENDING').length;
   const invoiceApprovals = approvals.filter(a => a.type !== 'EDIT_ATTENDANCE');
 
   // Group pending invoice approvals by invoiceNumber so multi-item invoices appear as 1 grouped card/row
@@ -215,10 +234,10 @@ export const ApprovalsPanel: React.FC = () => {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={9} className="text-center py-8 text-slate-400">Loading requests...</td></tr>
-                ) : attendanceRequests.length === 0 ? (
+                ) : uniqueAttendanceRequests.length === 0 ? (
                   <tr><td colSpan={9} className="text-center py-8 text-slate-400">No attendance edit requests submitted.</td></tr>
                 ) : (
-                  attendanceRequests.map((req, idx) => (
+                  uniqueAttendanceRequests.map((req, idx) => (
                     <tr key={req.id} className="hover:bg-slate-50 border-b border-slate-200">
                       <td className="p-2.5 text-center font-mono font-bold bg-slate-50">{idx + 1}</td>
                       <td className="p-2.5 font-mono font-bold text-slate-800">{formatDate(req.date)}</td>
