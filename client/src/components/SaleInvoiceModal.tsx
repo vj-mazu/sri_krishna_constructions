@@ -765,7 +765,7 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 2. TAX INVOICE TITLE BOX */}
-            <div className="border-x border-b border-black py-1.5 text-center font-sans font-black text-lg uppercase tracking-wider bg-white">
+            <div className="border-x border-b border-black py-2 text-center font-sans font-black text-xl sm:text-2xl uppercase tracking-wider bg-white">
               {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
             </div>
 
@@ -773,11 +773,11 @@ export const SaleInvoiceModal: React.FC<{
             <div className="border-x border-b border-black grid grid-cols-2 text-[11px] font-sans">
               {/* Left Column */}
               <div className="border-r border-black divide-y divide-black">
-                <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-bold">{invoiceNo}</span>
+                <div className="p-2 font-bold text-xs sm:text-sm">
+                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-black text-sm sm:text-base font-mono tracking-wide">{invoiceNo}</span>
                 </div>
-                <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-bold">{invoiceDate}</span>
+                <div className="p-2 font-bold text-xs sm:text-sm">
+                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-bold text-xs sm:text-sm">{invoiceDate}</span>
                 </div>
                 <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
                   <div>
@@ -797,11 +797,11 @@ export const SaleInvoiceModal: React.FC<{
 
               {/* Right Column */}
               <div className="divide-y divide-black">
-                <div className="p-1.5 font-bold">
-                  {refLabel}: <span className="font-bold">{refNumber}</span>
+                <div className="p-2 font-bold text-xs sm:text-sm">
+                  {refLabel}: <span className="font-black text-xs sm:text-sm">{refNumber}</span>
                 </div>
-                <div className="p-1.5 font-bold">
-                  {dateLabel}: <span className="font-bold">{refDate}</span>
+                <div className="p-2 font-bold text-xs sm:text-sm">
+                  {dateLabel}: <span className="font-bold text-xs sm:text-sm">{refDate}</span>
                 </div>
                 <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
                   <div>

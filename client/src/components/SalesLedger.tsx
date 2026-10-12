@@ -145,22 +145,40 @@ export const SalesLedger: React.FC = () => {
     }>();
 
     filteredSales.forEach(sale => {
-      const inv = (sale.invoiceNumber && sale.invoiceNumber !== '-') ? sale.invoiceNumber.trim() : '';
-      const key = inv ? `INV_${inv.toUpperCase()}` : `${sale.sourceType}_${sale.id}`;
+      // Group strictly by invoice number: strip '#', trim, uppercase
+      const rawInv = (sale.invoiceNumber || '').toString().trim();
+      const cleanInv = rawInv.replace(/^#+/, '').trim().toUpperCase();
+      const hasValidInv = cleanInv && cleanInv !== '-' && cleanInv !== 'N/A' && cleanInv !== 'NA' && cleanInv !== 'NULL';
+
+      const rawWo = (sale.workOrderNumber || '').toString().trim();
+      const cleanWo = rawWo.replace(/^#+/, '').trim().toUpperCase();
+      const hasValidWo = cleanWo && cleanWo !== '-' && cleanWo !== 'N/A' && cleanWo !== 'NA' && cleanWo !== 'NULL';
+
+      const rawPo = (sale.poNumber || '').toString().trim();
+      const cleanPo = rawPo.replace(/^#+/, '').trim().toUpperCase();
+      const hasValidPo = cleanPo && cleanPo !== '-' && cleanPo !== 'N/A' && cleanPo !== 'NA' && cleanPo !== 'NULL';
+
+      const key = hasValidInv 
+        ? cleanInv 
+        : (hasValidWo 
+            ? cleanWo 
+            : (hasValidPo 
+                ? cleanPo 
+                : `NO_REF_${(sale.clientDepartment || 'CLIENT').trim().toUpperCase()}_${(sale.date || '').slice(0, 10)}`));
 
       let grp = map.get(key);
       if (!grp) {
         grp = {
           key,
-          invoiceNumber: sale.invoiceNumber || '-',
+          invoiceNumber: cleanInv || sale.invoiceNumber || '-',
           date: sale.date,
           clientDepartment: sale.clientDepartment || '-',
           clientGst: sale.clientGst || '',
           vehicleNumber: sale.vehicleNumber || '',
           eWayBillNumber: sale.eWayBillNumber || '',
           sourceType: sale.sourceType,
-          poNumber: sale.poNumber || '',
-          workOrderNumber: sale.workOrderNumber,
+          poNumber: cleanPo || sale.poNumber || '',
+          workOrderNumber: cleanWo || sale.workOrderNumber,
           items: [],
           totalAmount: 0,
           totalBasic: 0,
@@ -177,6 +195,12 @@ export const SalesLedger: React.FC = () => {
       grp.totalTax += t;
       grp.totalAmount += Number(sale.totalAmount || 0);
       grp.totalQty += Number(sale.qty || 0);
+    });
+
+    map.forEach(grp => {
+      grp.totalBasic = Math.round((grp.totalBasic + Number.EPSILON) * 100) / 100;
+      grp.totalTax = Math.round((grp.totalTax + Number.EPSILON) * 100) / 100;
+      grp.totalAmount = Math.round((grp.totalAmount + Number.EPSILON) * 100) / 100;
     });
 
     return Array.from(map.values());
@@ -595,65 +619,65 @@ export const SalesLedger: React.FC = () => {
             return (
               <div 
                 key={grp.key}
-                className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden transition-all hover:border-slate-400"
+                className="bg-white rounded-2xl border-2 border-slate-700 shadow-md overflow-hidden transition-all mb-6"
               >
                 {/* CONTAINER HEADER BANNER */}
-                <div className="bg-gradient-to-r from-slate-50 via-blue-50/40 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                <div className="bg-gradient-to-r from-slate-100 via-blue-50/60 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-600 flex flex-wrap items-center justify-between gap-3">
                   {/* Left: Metadata badges */}
                   <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
-                    {/* Invoice Pill */}
-                    <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
-                      <FileText className="w-3.5 h-3.5 text-blue-200" />
+                    {/* Invoice Pill - BIGGER FONT */}
+                    <div className="px-3.5 py-1.5 rounded-xl bg-[#1e3a8a] text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-blue-200" />
                       <span>INV: #{grp.invoiceNumber}</span>
                     </div>
 
                     {/* Source Type Badge */}
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
                       grp.sourceType === 'WORK_ORDER'
-                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        ? 'bg-emerald-100 text-emerald-900 border-emerald-400'
                         : grp.sourceType === 'INDIVIDUAL'
-                        ? 'bg-purple-100 text-purple-800 border-purple-300'
-                        : 'bg-blue-100 text-blue-800 border-blue-300'
+                        ? 'bg-purple-100 text-purple-900 border-purple-400'
+                        : 'bg-blue-100 text-blue-900 border-blue-400'
                     }`}>
                       {grp.sourceType === 'WORK_ORDER' ? 'WORK ORDER' : grp.sourceType === 'INDIVIDUAL' ? 'INDIVIDUAL SALE' : 'PO SALE'}
                     </span>
 
                     {/* Date */}
-                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
                       {formatDate(grp.date)}
                     </div>
 
                     {/* Client / Department */}
-                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                      <span className="truncate max-w-[200px]" title={grp.clientDepartment}>{grp.clientDepartment}</span>
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-900 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                      <Building2 className="w-3.5 h-3.5 text-blue-700" />
+                      <span className="truncate max-w-[220px]" title={grp.clientDepartment}>{grp.clientDepartment}</span>
                     </div>
 
                     {/* GSTIN */}
                     {grp.clientGst && (
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-semibold">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-400 text-slate-700 font-mono text-xs font-bold">
                         GST: {grp.clientGst}
                       </span>
                     )}
 
                     {/* Vehicle */}
                     {grp.vehicleNumber && (
-                      <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-bold flex items-center gap-1">
-                        <Truck className="w-3 h-3 text-blue-600" />
+                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-400 text-blue-900 font-mono text-xs font-bold flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-blue-700" />
                         {grp.vehicleNumber}
                       </span>
                     )}
 
                     {/* E-Way Bill */}
                     {grp.eWayBillNumber && (
-                      <span className="px-2 py-0.5 rounded bg-amber-50 border border-amber-200 text-amber-900 font-mono text-[11px] font-bold">
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-400 text-amber-900 font-mono text-xs font-bold">
                         E-Way: {grp.eWayBillNumber}
                       </span>
                     )}
 
                     {/* Item Count Badge */}
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-bold">
+                    <span className="px-3 py-1 rounded-full bg-blue-100 border border-blue-400 text-blue-900 text-xs font-black">
                       {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
                     </span>
                   </div>
@@ -661,14 +685,14 @@ export const SalesLedger: React.FC = () => {
                   {/* Right: Invoice Total & Single Action Group */}
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Invoice Total</div>
-                      <div className="text-sm sm:text-base font-black font-mono text-[#1e3a8a]">
+                      <div className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Invoice Total</div>
+                      <div className="text-base sm:text-xl font-black font-mono text-[#1e3a8a]">
                         {formatCurrency(grp.totalAmount)}
                       </div>
                     </div>
 
                     {/* Unified Action Buttons for the Whole Invoice */}
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-300 shadow-xs">
                       <button
                         type="button"
                         onClick={() => setInspectModalItem(grp.firstSale)}
@@ -707,25 +731,25 @@ export const SalesLedger: React.FC = () => {
                   </div>
                 </div>
 
-                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP BORDERS) */}
+                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP DARK BORDERS) */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                  <table className="w-full text-left text-xs border-collapse border-2 border-slate-600">
+                    <thead className="bg-slate-800 text-white font-bold border-b-2 border-slate-600 text-xs uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3 text-center w-12 border-r border-slate-200">#</th>
-                        <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200">Part Number</th>
-                        <th className="py-2.5 px-3 min-w-[200px] border-r border-slate-200">Item Description</th>
-                        <th className="py-2.5 px-3 min-w-[140px] border-r border-slate-200">Source / Reference</th>
-                        <th className="py-2.5 px-3 text-center min-w-[90px] border-r border-slate-200 bg-blue-50/60 text-blue-950">Qty &amp; Unit</th>
-                        <th className="py-2.5 px-3 text-right min-w-[90px] border-r border-slate-200">Rate (₹)</th>
-                        <th className="py-2.5 px-3 text-right min-w-[100px] border-r border-slate-200">Basic (₹)</th>
-                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border-r border-slate-200">CGST</th>
-                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border-r border-slate-200">SGST</th>
-                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border-r border-slate-200">IGST</th>
-                        <th className="py-2.5 px-3 text-right min-w-[110px] border-r border-slate-200 bg-blue-50/30 text-[#1e3a8a] font-black">Item Total (₹)</th>
+                        <th className="py-2.5 px-3 text-center w-12 border border-slate-500 text-white">#</th>
+                        <th className="py-2.5 px-3 min-w-[130px] border border-slate-500 text-white">Part Number</th>
+                        <th className="py-2.5 px-3 min-w-[200px] border border-slate-500 text-white">Item Description</th>
+                        <th className="py-2.5 px-3 min-w-[140px] border border-slate-500 text-white">Source / Reference</th>
+                        <th className="py-2.5 px-3 text-center min-w-[90px] border border-slate-500 bg-blue-900 text-blue-100 font-bold">Qty &amp; Unit</th>
+                        <th className="py-2.5 px-3 text-right min-w-[90px] border border-slate-500 text-white">Rate (₹)</th>
+                        <th className="py-2.5 px-3 text-right min-w-[100px] border border-slate-500 text-white">Basic (₹)</th>
+                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border border-slate-500 text-white">CGST</th>
+                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border border-slate-500 text-white">SGST</th>
+                        <th className="py-2.5 px-2.5 text-right min-w-[80px] border border-slate-500 text-white">IGST</th>
+                        <th className="py-2.5 px-3 text-right min-w-[110px] border border-slate-500 bg-blue-900 text-blue-100 font-black">Item Total (₹)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200">
+                    <tbody className="divide-y divide-slate-400">
                       {grp.items.map((sale, itmIdx) => {
                         const basic = Number(sale.basicAmount || (sale.qty * sale.rate) || 0);
 
@@ -733,48 +757,48 @@ export const SalesLedger: React.FC = () => {
                           <tr 
                             key={`${sale.sourceType}_${sale.id}`} 
                             onClick={() => setInspectModalItem(sale)}
-                            className={`hover:bg-blue-50/30 cursor-pointer transition-colors ${itmIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'}`}
+                            className={`hover:bg-blue-100/40 cursor-pointer border-b border-slate-400 transition-colors ${itmIdx % 2 === 1 ? 'bg-slate-50' : 'bg-white'}`}
                           >
-                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-500 bg-slate-50 border-r border-slate-200">
+                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-700 bg-slate-100 border border-slate-400">
                               {sale.slNo || (itmIdx + 1)}
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-200">
+                            <td className="py-2 px-3 border border-slate-400">
                               <span className="font-mono font-bold text-slate-900">
                                 {sale.partNumber || '-'}
                               </span>
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-200">
-                              <div className="font-bold text-slate-800">{sale.itemName || '-'}</div>
+                            <td className="py-2 px-3 border border-slate-400">
+                              <div className="font-bold text-slate-900">{sale.itemName || '-'}</div>
                               {sale.specifications && <div className="text-[10px] text-slate-500 line-clamp-1">{sale.specifications}</div>}
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-200 text-slate-600 text-[11px]">
+                            <td className="py-2 px-3 border border-slate-400 text-slate-700 text-[11px]">
                               {sale.sourceType === 'WORK_ORDER' ? (
-                                <span>WO: <strong className="font-mono text-slate-800">{sale.workOrderNumber || '-'}</strong></span>
+                                <span>WO: <strong className="font-mono text-slate-900 font-bold">{sale.workOrderNumber || '-'}</strong></span>
                               ) : sale.sourceType === 'PO' ? (
-                                <span>PO: <strong className="font-mono text-slate-800">{sale.poNumber || '-'}</strong></span>
+                                <span>PO: <strong className="font-mono text-slate-900 font-bold">{sale.poNumber || '-'}</strong></span>
                               ) : (
-                                <span>Individual Sale</span>
+                                <span className="font-medium text-purple-900">Individual Sale</span>
                               )}
                             </td>
-                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-900 bg-blue-50/40 border-r border-slate-200">
+                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-950 bg-blue-50/70 border border-slate-400">
                               {sale.qty} {sale.unit || 'NOS'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-200">
+                            <td className="py-2 px-3 text-right font-mono text-slate-900 font-medium border border-slate-400">
                               {formatCurrency(sale.rate)}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-800 font-semibold border-r border-slate-200">
+                            <td className="py-2 px-3 text-right font-mono text-slate-900 font-bold border border-slate-400">
                               {formatCurrency(basic)}
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                            <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
                               {sale.cgstAmount ? `${formatCurrency(sale.cgstAmount)} (${sale.cgstPercent}%)` : '-'}
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                            <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
                               {sale.sgstAmount ? `${formatCurrency(sale.sgstAmount)} (${sale.sgstPercent}%)` : '-'}
                             </td>
-                            <td className="py-2 px-2.5 text-right font-mono text-slate-600 border-r border-slate-200">
+                            <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
                               {sale.igstAmount ? `${formatCurrency(sale.igstAmount)} (${sale.igstPercent}%)` : '-'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-50/20 border-r border-slate-200">
+                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-100/50 border border-slate-400">
                               {formatCurrency(sale.totalAmount)}
                             </td>
                           </tr>
@@ -785,15 +809,15 @@ export const SalesLedger: React.FC = () => {
                 </div>
 
                 {/* CONTAINER SUMMARY FOOTER */}
-                <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
+                <div className="bg-slate-100 px-4 py-3 border-t-2 border-slate-600 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700 font-medium">
                   <div className="flex items-center gap-4">
                     <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
                     <span>Total Qty: <strong className="text-blue-900 font-mono font-bold">{grp.totalQty} units</strong></span>
                   </div>
                   <div className="flex items-center gap-4 font-mono">
-                    <span>Basic: <strong className="text-slate-800">{formatCurrency(grp.totalBasic)}</strong></span>
-                    <span>Tax: <strong className="text-slate-800">{formatCurrency(grp.totalTax)}</strong></span>
-                    <span className="text-sm font-black text-[#1e3a8a] bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">
+                    <span>Basic: <strong className="text-slate-900">{formatCurrency(grp.totalBasic)}</strong></span>
+                    <span>Tax: <strong className="text-slate-900">{formatCurrency(grp.totalTax)}</strong></span>
+                    <span className="text-sm sm:text-base font-black text-[#1e3a8a] bg-blue-100 px-3 py-1 rounded-lg border border-blue-300">
                       Net: {formatCurrency(grp.totalAmount)}
                     </span>
                   </div>
@@ -824,6 +848,8 @@ export const SalesLedger: React.FC = () => {
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
               </select>
             </div>
           </div>

@@ -258,16 +258,29 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     }>();
 
     filteredWorkOrders.forEach(wo => {
-      const inv = (wo.invoiceNumber && wo.invoiceNumber !== '-') ? wo.invoiceNumber.trim() : '';
-      const key = inv ? `INV_${inv.toUpperCase()}` : (wo.workOrderNumber ? `WO_${wo.workOrderNumber.trim().toUpperCase()}` : `ID_${wo.id}`);
+      // Group strictly by invoice number: strip '#', trim, uppercase
+      const rawInv = (wo.invoiceNumber || '').toString().trim();
+      const cleanInv = rawInv.replace(/^#+/, '').trim().toUpperCase();
+      const hasValidInv = cleanInv && cleanInv !== '-' && cleanInv !== 'N/A' && cleanInv !== 'NA' && cleanInv !== 'NULL';
+
+      const rawWo = (wo.workOrderNumber || '').toString().trim();
+      const cleanWo = rawWo.replace(/^#+/, '').trim().toUpperCase();
+      const hasValidWo = cleanWo && cleanWo !== '-' && cleanWo !== 'N/A' && cleanWo !== 'NA' && cleanWo !== 'NULL';
+
+      // Group simply by invoice number first if available; otherwise group by work order number
+      const key = hasValidInv 
+        ? cleanInv 
+        : (hasValidWo 
+            ? cleanWo 
+            : `NO_REF_${(wo.partyName || 'CLIENT').trim().toUpperCase()}_${(wo.invoiceDate || wo.workOrderDate || '').slice(0, 10)}`);
 
       let grp = map.get(key);
       if (!grp) {
         grp = {
           key,
-          invoiceNumber: wo.invoiceNumber || '-',
+          invoiceNumber: cleanInv || wo.invoiceNumber || '-',
           invoiceDate: wo.invoiceDate,
-          workOrderNumber: wo.workOrderNumber || '-',
+          workOrderNumber: cleanWo || wo.workOrderNumber || '-',
           workOrderDate: wo.workOrderDate,
           partyName: wo.partyName || '-',
           partyAddress: wo.partyAddress || '',
@@ -288,12 +301,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       const basic = (Number(wo.qty) || 0) * (Number(wo.rate) || 0);
       const taxP = (Number(wo.cgstPercent) || 0) + (Number(wo.sgstPercent) || 0) + (Number(wo.igstPercent) || 0);
       const tax = basic * (taxP / 100);
-      const ship = Number(wo.shippingCharges || 0);
       grp.totalBasic += basic;
       grp.totalTax += tax;
-      grp.totalShipping += ship;
-      grp.totalAmount += Number(wo.totalAmount || (basic + tax + ship));
+      grp.totalShipping = Math.max(grp.totalShipping, Number(wo.shippingCharges || 0));
       grp.totalQty += Number(wo.qty || 0);
+    });
+
+    map.forEach(grp => {
+      grp.totalBasic = Math.round((grp.totalBasic + Number.EPSILON) * 100) / 100;
+      grp.totalTax = Math.round((grp.totalTax + Number.EPSILON) * 100) / 100;
+      grp.totalAmount = Math.round((grp.totalBasic + grp.totalTax + grp.totalShipping + Number.EPSILON) * 100) / 100;
     });
 
     return Array.from(map.values());
@@ -1474,10 +1491,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             return (
               <div 
                 key={grp.key}
-                className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden transition-all hover:border-slate-400"
+                className="bg-white rounded-2xl border-2 border-slate-700 shadow-md overflow-hidden transition-all mb-6"
               >
                 {/* CONTAINER HEADER BANNER */}
-                <div className="bg-gradient-to-r from-slate-50 via-blue-50/40 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-3">
+                <div className="bg-gradient-to-r from-slate-100 via-blue-50/60 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-600 flex flex-wrap items-center justify-between gap-3">
                   {/* Left: Metadata badges & Select Checkbox */}
                   <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
                     <input 
@@ -1493,53 +1510,53 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           setSelectedWorkOrderIds(prev => prev.filter(id => !grpItemIds.includes(id)));
                         }
                       }}
-                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-400 cursor-pointer"
                       title="Select all items in this work order"
                     />
 
-                    {/* Work Order Number Pill */}
-                    <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
-                      <FileSpreadsheet className="w-3.5 h-3.5 text-blue-200" />
+                    {/* Work Order Number Pill - BIGGER FONT */}
+                    <div className="px-3.5 py-1.5 rounded-xl bg-[#1e3a8a] text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-blue-200" />
                       <span>WO: {grp.workOrderNumber}</span>
                     </div>
 
-                    {/* Invoice Number Pill */}
+                    {/* Invoice Number Pill - BIGGER FONT */}
                     {grp.invoiceNumber && grp.invoiceNumber !== '-' && (
-                      <div className="px-3 py-1 rounded-lg bg-indigo-700 text-white font-mono font-bold text-xs tracking-wide shadow-sm flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5 text-indigo-200" />
+                      <div className="px-3.5 py-1.5 rounded-xl bg-indigo-700 text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-indigo-200" />
                         <span>INV: #{grp.invoiceNumber}</span>
                       </div>
                     )}
 
                     {/* Date */}
-                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
                       {formatDate(grp.invoiceDate || grp.workOrderDate)}
                     </div>
 
                     {/* Client / Party Name */}
-                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-800 text-xs font-bold flex items-center gap-1">
-                      <Building2 className="w-3.5 h-3.5 text-blue-600" />
-                      <span className="truncate max-w-[200px]" title={grp.partyName}>{grp.partyName}</span>
+                    <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-900 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                      <Building2 className="w-3.5 h-3.5 text-blue-700" />
+                      <span className="truncate max-w-[220px]" title={grp.partyName}>{grp.partyName}</span>
                     </div>
 
                     {/* GSTIN */}
                     {grp.partyGstNumber && (
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-600 font-mono text-[11px] font-semibold">
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-400 text-slate-700 font-mono text-xs font-bold">
                         GST: {grp.partyGstNumber}
                       </span>
                     )}
 
                     {/* Vehicle */}
                     {grp.vehicleNumber && (
-                      <span className="px-2 py-0.5 rounded bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-bold flex items-center gap-1">
-                        <Truck className="w-3 h-3 text-blue-600" />
+                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-400 text-blue-900 font-mono text-xs font-bold flex items-center gap-1">
+                        <Truck className="w-3.5 h-3.5 text-blue-700" />
                         {grp.vehicleNumber}
                       </span>
                     )}
 
                     {/* Item Count Badge */}
-                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-blue-900 text-[11px] font-bold">
+                    <span className="px-3 py-1 rounded-full bg-blue-100 border border-blue-400 text-blue-900 text-xs font-black">
                       {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
                     </span>
                   </div>
@@ -1547,14 +1564,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   {/* Right: Work Order Total & Single Action Group */}
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Value</div>
-                      <div className="text-sm sm:text-base font-black font-mono text-[#1e3a8a]">
+                      <div className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Total Value</div>
+                      <div className="text-base sm:text-xl font-black font-mono text-[#1e3a8a]">
                         {formatCurrency(grp.totalAmount)}
                       </div>
                     </div>
 
                     {/* Unified Action Buttons for the Whole Work Order */}
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-300 shadow-xs">
                       <button
                         type="button"
                         onClick={() => openInvoiceForWorkOrder(grp.firstItem)}
@@ -1590,59 +1607,59 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   </div>
                 </div>
 
-                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP BORDERS) */}
+                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP DARK BORDERS) */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider">
+                  <table className="w-full text-left text-xs border-collapse border-2 border-slate-600">
+                    <thead className="bg-slate-800 text-white font-bold border-b-2 border-slate-600 text-xs uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3 text-center w-12 border-r border-slate-200">#</th>
-                        <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200">Part Number</th>
-                        <th className="py-2.5 px-3 min-w-[110px] border-r border-slate-200">KPCL Code</th>
-                        <th className="py-2.5 px-3 min-w-[220px] border-r border-slate-200">Item Name &amp; Description</th>
-                        <th className="py-2.5 px-3 text-center min-w-[90px] border-r border-slate-200 bg-blue-50/60 text-blue-950">Qty &amp; Unit</th>
-                        <th className="py-2.5 px-3 text-right min-w-[90px] border-r border-slate-200">Rate (₹)</th>
-                        <th className="py-2.5 px-3 text-right min-w-[85px] border-r border-slate-200">Shipping (₹)</th>
-                        <th className="py-2.5 px-3 text-right min-w-[110px] border-r border-slate-200 bg-blue-50/30 text-[#1e3a8a] font-black">Item Total (₹)</th>
+                        <th className="py-2.5 px-3 text-center w-12 border border-slate-500 text-white">#</th>
+                        <th className="py-2.5 px-3 min-w-[130px] border border-slate-500 text-white">Part Number</th>
+                        <th className="py-2.5 px-3 min-w-[110px] border border-slate-500 text-white">KPCL Code</th>
+                        <th className="py-2.5 px-3 min-w-[220px] border border-slate-500 text-white">Item Name &amp; Description</th>
+                        <th className="py-2.5 px-3 text-center min-w-[90px] border border-slate-500 bg-blue-900 text-blue-100 font-bold">Qty &amp; Unit</th>
+                        <th className="py-2.5 px-3 text-right min-w-[90px] border border-slate-500 text-white">Rate (₹)</th>
+                        <th className="py-2.5 px-3 text-right min-w-[85px] border border-slate-500 text-white">Shipping (₹)</th>
+                        <th className="py-2.5 px-3 text-right min-w-[110px] border border-slate-500 bg-blue-900 text-blue-100 font-black">Item Total (₹)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200">
+                    <tbody className="divide-y divide-slate-400">
                       {grp.items.map((wo, itmIdx) => {
                         const isSelected = selectedWorkOrderIds.includes(wo.id);
 
                         return (
                           <tr 
                             key={wo.id || itmIdx} 
-                            className={`hover:bg-blue-50/30 transition-colors ${isSelected ? 'bg-blue-50/50' : (itmIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white')}`}
+                            className={`hover:bg-blue-100/40 border-b border-slate-400 transition-colors ${isSelected ? 'bg-blue-50/60' : (itmIdx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}`}
                           >
-                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-500 bg-slate-50 border-r border-slate-200">
+                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-700 bg-slate-100 border border-slate-400">
                               {itmIdx + 1}
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-200">
+                            <td className="py-2 px-3 border border-slate-400">
                               <span className="font-mono font-bold text-slate-900">
                                 {wo.partNumber || '-'}
                               </span>
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-200 font-mono text-slate-700">
+                            <td className="py-2 px-3 border border-slate-400 font-mono text-slate-700">
                               {wo.kpclCode && wo.kpclCode !== '-' ? (
-                                <span className="font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">
+                                <span className="font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                                   {wo.kpclCode}
                                 </span>
                               ) : '-'}
                             </td>
-                            <td className="py-2 px-3 border-r border-slate-200">
-                              <div className="font-bold text-slate-800">{wo.itemName}</div>
+                            <td className="py-2 px-3 border border-slate-400">
+                              <div className="font-bold text-slate-900">{wo.itemName}</div>
                               {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
                             </td>
-                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-900 bg-blue-50/40 border-r border-slate-200">
+                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-950 bg-blue-50/70 border border-slate-400">
                               {wo.qty} {wo.unit || 'NOS'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-700 border-r border-slate-200">
+                            <td className="py-2 px-3 text-right font-mono text-slate-900 font-medium border border-slate-400">
                               {formatCurrency(wo.rate)}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono text-blue-900 border-r border-slate-200">
+                            <td className="py-2 px-3 text-right font-mono text-slate-800 border border-slate-400">
                               {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-50/20 border-r border-slate-200">
+                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-100/50 border border-slate-400">
                               {formatCurrency(wo.totalAmount)}
                             </td>
                           </tr>
@@ -1653,16 +1670,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 </div>
 
                 {/* CONTAINER SUMMARY FOOTER */}
-                <div className="bg-slate-50 px-4 py-2.5 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 font-medium">
+                <div className="bg-slate-100 px-4 py-3 border-t-2 border-slate-600 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700 font-medium">
                   <div className="flex items-center gap-4">
                     <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
                     <span>Total Qty: <strong className="text-blue-900 font-mono font-bold">{grp.totalQty} units</strong></span>
                     {grp.totalShipping > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.totalShipping}</strong></span>}
                   </div>
                   <div className="flex items-center gap-4 font-mono">
-                    <span>Basic: <strong className="text-slate-800">{formatCurrency(grp.totalBasic)}</strong></span>
-                    <span>Tax: <strong className="text-slate-800">{formatCurrency(grp.totalTax)}</strong></span>
-                    <span className="text-sm font-black text-[#1e3a8a] bg-blue-100/70 px-2.5 py-0.5 rounded border border-blue-200">
+                    <span>Basic: <strong className="text-slate-900">{formatCurrency(grp.totalBasic)}</strong></span>
+                    <span>Tax: <strong className="text-slate-900">{formatCurrency(grp.totalTax)}</strong></span>
+                    <span className="text-sm sm:text-base font-black text-[#1e3a8a] bg-blue-100 px-3 py-1 rounded-lg border border-blue-300">
                       Net: {formatCurrency(grp.totalAmount)}
                     </span>
                   </div>
@@ -1693,6 +1710,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
+                <option value={200}>200</option>
+                <option value={500}>500</option>
               </select>
             </div>
           </div>
