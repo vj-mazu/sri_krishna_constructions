@@ -112,8 +112,8 @@ export const SalaryLedger: React.FC = () => {
     setSelectedWorkerForHike(worker);
     const lastHike = worker.hikeHistory[worker.hikeHistory.length - 1];
 
-    // Standard 31 days base paid: (Daily Wage + Daily Allowance) * 31
-    const defaultMonthlyBase = Math.round(((Number(worker.dailyWage) || 0) + (Number(worker.dailyAllowance) || 0)) * 31);
+    // Standard 31 days base wages paid: Daily Wage * 31
+    const defaultMonthlyBase = Math.round((Number(worker.dailyWage) || 0) * 31);
 
     setNewHikeBase(lastHike ? String(lastHike.basePaid) : String(defaultMonthlyBase));
     setNewHikeExtra(lastHike && lastHike.hikeAmount ? String(lastHike.hikeAmount) : String(worker.extraAmount || '0'));
@@ -525,9 +525,9 @@ export const SalaryLedger: React.FC = () => {
                     <tr className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
                       <th className="p-3 text-center w-12">#</th>
                       <th className="p-3">Hike Effective Date</th>
-                      <th className="p-3 text-right">Base Paid Wage</th>
+                      <th className="p-3 text-right">Paid (31 Days Wages)</th>
                       <th className="p-3 text-right">Hike (+₹)</th>
-                      <th className="p-3 text-right">Total Remuneration</th>
+                      <th className="p-3 text-right">Total (31 Days Wages + Extra)</th>
                       <th className="p-3">Revision Notes</th>
                       <th className="p-3 text-center w-16">Action</th>
                     </tr>
@@ -620,19 +620,19 @@ export const SalaryLedger: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Base Paid Wage (₹) *
+                    Paid / 31-Day Wages (₹) *
                   </label>
                   <input
                     type="number"
                     step="any"
                     value={newHikeBase}
                     onChange={(e) => setNewHikeBase(e.target.value)}
-                    placeholder="e.g. 15686"
+                    placeholder="e.g. 15500"
                     required
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                   <div className="text-[10px] text-slate-500 mt-1 font-semibold">
-                    31-Day Base: (Wage ₹{selectedWorkerForHike.dailyWage || 0} + Allowance ₹{selectedWorkerForHike.dailyAllowance || 0}) × 31 = ₹{Math.round(((Number(selectedWorkerForHike.dailyWage) || 0) + (Number(selectedWorkerForHike.dailyAllowance) || 0)) * 31)}
+                    31-Day Wages: ₹{selectedWorkerForHike.dailyWage || 0} × 31 = ₹{Math.round((Number(selectedWorkerForHike.dailyWage) || 0) * 31)}
                   </div>
                 </div>
 
@@ -652,7 +652,7 @@ export const SalaryLedger: React.FC = () => {
               </div>
 
               <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 flex justify-between items-center">
-                <span className="text-xs font-bold text-slate-600 uppercase">Calculated Total Remuneration:</span>
+                <span className="text-xs font-bold text-slate-600 uppercase">Calculated Total (31 Days Wages + Extra):</span>
                 <span className="text-base font-black text-emerald-700 font-mono">
                   {formatCurrency((parseFloat(newHikeBase) || 0) + (parseFloat(newHikeExtra) || 0))}
                 </span>

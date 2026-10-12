@@ -5829,12 +5829,12 @@ app.post('/api/workers', authenticateToken, async (req, res) => {
       );
     }
 
-    // Auto-create initial Wage History baseline milestone for Salary Hike Ledger
-    const initialBase = Math.round((numDailyWage + numAllowance) * 31);
+    // Auto-create initial Wage History baseline milestone for Salary Hike Ledger (31 Days Wages)
+    const initialBase = Math.round(numDailyWage * 31);
     const initialEffectiveDate = (advanceTakenDate ? new Date(advanceTakenDate) : (createdWorker.createdAt || new Date())).toISOString().split('T')[0];
     await pool.query(
       `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Wage Registration', $6, NOW(), NOW())
+       VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Wage Registration (31 Days Wages)', $6, NOW(), NOW())
        ON CONFLICT ("workerId", "effectiveDate") DO UPDATE SET
          "basePaid" = EXCLUDED."basePaid",
          "hikeAmount" = EXCLUDED."hikeAmount",
@@ -5958,8 +5958,8 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
       const currentMonth = now.getMonth() + 1;
       const currentYear = now.getFullYear();
       const dateStr = now.toISOString().split('T')[0];
-      const monthlyBase = Math.round((newDailyWage + newAllowance) * 31);
-      const prevMonthlyBase = Math.round((oldDailyWage + oldAllowance) * 31);
+      const monthlyBase = Math.round(newDailyWage * 31);
+      const prevMonthlyBase = Math.round(oldDailyWage * 31);
 
       // Check if worker has existing baseline in WorkerWageHistory; if not, insert initial first
       const { rows: histCheck } = await pool.query(`SELECT id FROM "WorkerWageHistory" WHERE "workerId" = $1`, [id]);
@@ -5968,7 +5968,7 @@ app.put('/api/workers/:id', authenticateToken, async (req, res) => {
         if (initialDate !== dateStr) {
           await pool.query(
             `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
-             VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Baseline Setup', $6, NOW() - INTERVAL '1 day', NOW())
+             VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Baseline Setup (31 Days Wages)', $6, NOW() - INTERVAL '1 day', NOW())
              ON CONFLICT ("workerId", "effectiveDate") DO NOTHING`,
             [id, initialDate, prevMonthlyBase, oldExtra, prevMonthlyBase + oldExtra, req.user.id]
           );
@@ -8058,19 +8058,18 @@ app.get('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'MA
 
     const result = workers.map(w => {
       let workerHistory = historyMap[w.id] || [];
-      // If no history exists yet, provide default initial row from worker master: (dailyWage + dailyAllowance) * 31 days
+      // If no history exists yet, provide default initial row from worker master: dailyWage * 31 days
       if (workerHistory.length === 0) {
         const initialDate = w.wageRevisedDate ? new Date(w.wageRevisedDate).toISOString().split('T')[0] : '2024-08-01';
         const dailyWage = parseFloat(w.dailyWage) || 0;
-        const dailyAllowance = parseFloat(w.dailyAllowance) || 0;
-        const base = Math.round((dailyWage + dailyAllowance) * 31);
+        const base = Math.round(dailyWage * 31);
         const hike = parseFloat(w.extraAmount) || 0;
         workerHistory = [{
           effectiveDate: initialDate,
           basePaid: base,
           hikeAmount: hike,
           totalAmount: base + hike,
-          notes: 'Master Registration (31 Days)'
+          notes: 'Master Registration (31 Days Wages)'
         }];
       }
 
@@ -8105,13 +8104,12 @@ app.post('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'M
     if (histCheck.length === 0) {
       const initialDate = worker.wageRevisedDate ? new Date(worker.wageRevisedDate).toISOString().split('T')[0] : (worker.createdAt ? new Date(worker.createdAt).toISOString().split('T')[0] : '2024-08-01');
       const dailyWage = parseFloat(worker.dailyWage) || 0;
-      const dailyAllowance = parseFloat(worker.dailyAllowance) || 0;
-      const prevBase = Math.round((dailyWage + dailyAllowance) * 31);
+      const prevBase = Math.round(dailyWage * 31);
       const prevHike = parseFloat(worker.extraAmount) || 0;
       if (initialDate !== effectiveDate) {
         await pool.query(
           `INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "recordedById", "createdAt", "updatedAt")
-           VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Baseline Setup', $6, NOW() - INTERVAL '1 day', NOW())
+           VALUES (gen_random_uuid()::text, $1, $2::date, $3, $4, $5, 'Initial Baseline Setup (31 Days Wages)', $6, NOW() - INTERVAL '1 day', NOW())
            ON CONFLICT ("workerId", "effectiveDate") DO NOTHING`,
           [workerId, initialDate, prevBase, prevHike, prevBase + prevHike, req.user.id]
         );

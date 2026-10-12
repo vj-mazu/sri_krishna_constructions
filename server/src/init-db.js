@@ -724,16 +724,16 @@ export const initializeDatabaseTables = async () => {
       CREATE INDEX IF NOT EXISTS "idx_workerwagehist_worker" ON "WorkerWageHistory"("workerId");
       CREATE INDEX IF NOT EXISTS "idx_workerwagehist_date" ON "WorkerWageHistory"("effectiveDate");
 
-      -- Auto-backfill existing workers into WorkerWageHistory baseline if not present
+      -- Auto-backfill existing workers into WorkerWageHistory baseline if not present (31 Days Wages)
       INSERT INTO "WorkerWageHistory" ("id", "workerId", "effectiveDate", "basePaid", "hikeAmount", "totalAmount", "notes", "createdAt", "updatedAt")
       SELECT 
         gen_random_uuid()::text,
         w."id",
         COALESCE(w."wageRevisedDate"::date, w."createdAt"::date, '2024-08-01'::date),
-        ROUND(((COALESCE(w."dailyWage", 0) + COALESCE(w."dailyAllowance", 0)) * 31)::numeric, 2),
+        ROUND((COALESCE(w."dailyWage", 0) * 31)::numeric, 2),
         COALESCE(w."extraAmount", 0),
-        ROUND(((COALESCE(w."dailyWage", 0) + COALESCE(w."dailyAllowance", 0)) * 31 + COALESCE(w."extraAmount", 0))::numeric, 2),
-        'Initial Wage Baseline (31 Days)',
+        ROUND((COALESCE(w."dailyWage", 0) * 31 + COALESCE(w."extraAmount", 0))::numeric, 2),
+        'Initial Wage Baseline (31 Days Wages)',
         NOW(),
         NOW()
       FROM "Worker" w
