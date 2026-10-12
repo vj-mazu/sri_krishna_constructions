@@ -90,6 +90,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isEditingInvoice, setIsEditingInvoice] = useState(false);
+  const [originalEditingInvoiceNo, setOriginalEditingInvoiceNo] = useState<string | null>(null);
   const [editItem, setEditItem] = useState<WorkOrderItem | null>(null);
   const [inspectItem, setInspectItem] = useState<WorkOrderItem | null>(null);
   const [selectedForInvoice, setSelectedForInvoice] = useState<any | null>(null);
@@ -125,7 +127,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       itemName: '',
       description: '',
       partNumber: '',
-      unit: 'NOS',
+      unit: '',
       qty: '1',
       rate: ''
     }
@@ -338,6 +340,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   }, [invoiceItems, invoiceHeader]);
 
   const handleOpenAdd = async () => {
+    setIsEditingInvoice(false);
+    setOriginalEditingInvoiceNo(null);
     setEditItem(null);
     setNextInvoiceLoading(true);
     let nextInv = '';
@@ -381,7 +385,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         itemName: '',
         description: '',
         partNumber: '',
-        unit: 'NOS',
+        unit: '',
         qty: '1',
         rate: ''
       }
@@ -400,50 +404,138 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     setInvoiceItems(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it));
   };
 
-  const handleOpenEdit = (item: WorkOrderItem) => {
-    setEditItem(item);
-    setEditFormData({
-      workOrderNumber: item.workOrderNumber,
-      workOrderDate: item.workOrderDate ? new Date(item.workOrderDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      invoiceNumber: item.invoiceNumber,
-      invoiceDate: item.invoiceDate ? new Date(item.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      partyName: item.partyName,
-      partyAddress: item.partyAddress || '',
-      partyGstNumber: item.partyGstNumber || '',
-      companyName: item.companyName || 'Sri Krishna Constructions',
-      companyGstNumber: item.companyGstNumber || '29DWKPP3582H1ZV',
-      kpclCode: item.kpclCode || '',
-      itemName: item.itemName,
-      description: item.description || '',
-      partNumber: item.partNumber || '',
-      unit: item.unit || 'NOS',
-      qty: item.qty.toString(),
-      rate: item.rate.toString(),
-      cgstPercent: item.cgstPercent.toString(),
-      sgstPercent: item.sgstPercent.toString(),
-      igstPercent: item.igstPercent.toString(),
-      shippingCharges: item.shippingCharges ? item.shippingCharges.toString() : '',
-      vehicleNumber: item.vehicleNumber || '',
-      eWayBillNumber: item.eWayBillNumber || '',
-      remarks: item.remarks || ''
+  const handleOpenEdit = async (item: WorkOrderItem) => {
+    const targetInvNum = (item.invoiceNumber || item.workOrderNumber || '').trim();
+    setIsEditingInvoice(true);
+    setOriginalEditingInvoiceNo(targetInvNum);
+    setEditItem(null);
+
+    // Fetch all items belonging to this invoice
+    let matchingItems: any[] = [];
+    if (targetInvNum && targetInvNum !== '-') {
+      try {
+        const res = await api.get(`/invoices/${encodeURIComponent(targetInvNum)}`);
+        if (res.data?.items && res.data.items.length > 0) {
+          matchingItems = res.data.items;
+        }
+      } catch (err) {
+        console.error('Failed to fetch invoice items for edit:', err);
+      }
+    }
+
+    if (matchingItems.length === 0) {
+      matchingItems = workOrders.filter(w => 
+        (targetInvNum && (w.invoiceNumber === targetInvNum || w.workOrderNumber === targetInvNum)) || 
+        w.id === item.id
+      );
+    }
+
+    const first = matchingItems[0] || item;
+    setInvoiceHeader({
+      workOrderNumber: first.workOrderNumber || item.workOrderNumber || '',
+      workOrderDate: first.workOrderDate ? new Date(first.workOrderDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      invoiceNumber: first.invoiceNumber || targetInvNum || '',
+      invoiceDate: first.invoiceDate ? new Date(first.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      partyName: first.partyName || item.partyName || '',
+      partyAddress: first.partyAddress || item.partyAddress || '',
+      partyGstNumber: first.partyGstNumber || first.gstNumber || item.partyGstNumber || '',
+      companyName: first.companyName || item.companyName || 'Sri Krishna Constructions',
+      companyGstNumber: first.companyGstNumber || item.companyGstNumber || '29DWKPP3582H1ZV',
+      vehicleNumber: first.vehicleNumber || item.vehicleNumber || '',
+      eWayBillNumber: first.eWayBillNumber || item.eWayBillNumber || '',
+      remarks: first.remarks || item.remarks || '',
+      cgstPercent: (first.cgstPercent !== undefined ? first.cgstPercent : 9).toString(),
+      sgstPercent: (first.sgstPercent !== undefined ? first.sgstPercent : 9).toString(),
+      igstPercent: (first.igstPercent !== undefined ? first.igstPercent : 0).toString(),
+      shippingCharges: (first.shippingCharges !== undefined ? first.shippingCharges : 0).toString()
     });
+
+    if (matchingItems.length > 0) {
+      setInvoiceItems(matchingItems.map((m, idx) => ({
+        id: m.id || (idx + 1).toString(),
+        kpclCode: m.kpclCode || m.item?.kpclCode || '-',
+        itemName: m.itemName || m.item?.itemName || '',
+        description: m.description || m.item?.specifications || '',
+        partNumber: m.partNumber || m.item?.partNumber || '',
+        unit: m.unit || m.item?.unit || 'NOS',
+        qty: (m.qty !== undefined ? m.qty : (m.quantity !== undefined ? m.quantity : 1)).toString(),
+        rate: (m.rate !== undefined ? m.rate : (m.unitPrice !== undefined ? m.unitPrice : 0)).toString()
+      })));
+    } else {
+      setInvoiceItems([
+        {
+          id: item.id || '1',
+          kpclCode: item.kpclCode || '-',
+          itemName: item.itemName,
+          description: item.description || '',
+          partNumber: item.partNumber || '',
+          unit: item.unit || 'NOS',
+          qty: item.qty.toString(),
+          rate: item.rate.toString()
+        }
+      ]);
+    }
+
     setShowAddModal(true);
   };
 
-  const handleDelete = async (id: string, woNumber: string) => {
+  const handleDelete = async (targetWo: WorkOrderItem) => {
+    const invNum = (targetWo.invoiceNumber || '').trim();
+    const sameInvoiceItems = invNum && invNum !== '-' 
+      ? workOrders.filter(w => w.invoiceNumber === invNum)
+      : [targetWo];
+
+    if (sameInvoiceItems.length > 1) {
+      const confirmAll = await showConfirm({
+        title: `Delete Work Order Invoice #${invNum}`,
+        message: `This Work Order Invoice has ${sameInvoiceItems.length} items grouped together.\n\nDo you want to submit a deletion request for the ENTIRE invoice (${sameInvoiceItems.length} items)?\n(Click Cancel if you want to delete only this 1 item).`,
+        confirmText: `Delete Entire Invoice (${sameInvoiceItems.length} items)`,
+        type: 'danger'
+      });
+      if (confirmAll) {
+        try {
+          const res = await api.delete(`/work-orders/invoice/${encodeURIComponent(invNum)}`);
+          showToast(res.data?.message || `Work order invoice '${invNum}' deletion request submitted for Owner Approval!`, 'success');
+          fetchWorkOrders();
+          window.dispatchEvent(new Event('skc-approvals-updated'));
+        } catch (err: any) {
+          showToast(err.response?.data?.error || 'Failed to submit work order deletion request', 'error');
+        }
+        return;
+      }
+
+      const confirmSingle = await showConfirm({
+        title: 'Delete Single Work Order Item',
+        message: `Do you want to submit a deletion request for ONLY this single item (${targetWo.itemName})?`,
+        confirmText: 'Delete Single Item',
+        type: 'danger'
+      });
+      if (!confirmSingle) return;
+      try {
+        const res = await api.delete(`/work-orders/${targetWo.id}`);
+        showToast(res.data?.message || 'Work Order item deletion request submitted for Owner Approval!', 'success');
+        fetchWorkOrders();
+        window.dispatchEvent(new Event('skc-approvals-updated'));
+      } catch (err: any) {
+        showToast(err.response?.data?.error || 'Failed to submit work order delete request', 'error');
+      }
+      return;
+    }
+
     const confirmed = await showConfirm({
       title: 'Delete Work Order',
-      message: `Are you sure you want to delete Work Order '${woNumber}'?`,
-      confirmText: 'Delete',
+      message: `Submit deletion request for Work Order '${targetWo.workOrderNumber || targetWo.invoiceNumber}' for Owner Approval?`,
+      confirmText: 'Submit Deletion Request',
       type: 'danger'
     });
     if (!confirmed) return;
     try {
-      await api.delete(`/work-orders/${id}`);
-      showToast(`Work Order '${woNumber}' deleted successfully!`, 'success');
+      const res = await api.delete(`/work-orders/${targetWo.id}`);
+      showToast(res.data?.message || 'Work Order deletion request submitted for Owner Approval!', 'success');
       fetchWorkOrders();
+      window.dispatchEvent(new Event('skc-approvals-updated'));
     } catch (err: any) {
-      showToast(err.response?.data?.error || 'Failed to delete work order', 'error');
+      showToast(err.response?.data?.error || 'Failed to submit work order delete request', 'error');
     }
   };
 
@@ -499,59 +591,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     setSelectedForInvoice(invoicePayload);
   };
 
-  // Save Direct Interactive Invoice (or Edit Single Item)
+  // Save Direct Interactive Invoice (Multi-Item Create or Edit)
   const handleSaveInvoice = async (e: React.FormEvent, openPdfDirectly = false) => {
     e.preventDefault();
 
-    if (editItem) {
-      // Edit mode
-      if (!editFormData.workOrderNumber.trim()) {
-        showToast('Work Order Number is required', 'error');
-        return;
-      }
-      if (!editFormData.invoiceNumber.trim()) {
-        showToast('Invoice Number is required', 'error');
-        return;
-      }
-      if (!editFormData.partyName.trim()) {
-        showToast('Party Name is required', 'error');
-        return;
-      }
-      if (!editFormData.itemName.trim()) {
-        showToast('Item Name is required', 'error');
-        return;
-      }
-      if (parseFloat(editFormData.qty) <= 0) {
-        showToast('Quantity must be greater than 0', 'error');
-        return;
-      }
-
-      try {
-        setSubmitting(true);
-        const payload = {
-          ...editFormData,
-          qty: parseFloat(editFormData.qty) || 0,
-          rate: parseFloat(editFormData.rate) || 0,
-          cgstPercent: parseFloat(editFormData.cgstPercent) || 0,
-          sgstPercent: parseFloat(editFormData.sgstPercent) || 0,
-          igstPercent: parseFloat(editFormData.igstPercent) || 0,
-          shippingCharges: parseFloat(editFormData.shippingCharges) || 0
-        };
-        const res = await api.put(`/work-orders/${editItem.id}`, payload);
-        showToast(res.data?.message || 'Work Order updated and submitted for Owner approval!', 'success');
-        setShowAddModal(false);
-        setEditItem(null);
-        fetchWorkOrders();
-        window.dispatchEvent(new Event('skc-approvals-updated'));
-      } catch (err: any) {
-        showToast(err.response?.data?.error || 'Failed to update work order', 'error');
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    // Direct Invoice Creation Mode
     if (!invoiceHeader.workOrderNumber.trim()) {
       showToast('Work Order Number is required', 'error');
       return;
@@ -600,6 +643,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       igstPercent: parseFloat(invoiceHeader.igstPercent) || 0,
       shippingCharges: parseFloat(invoiceHeader.shippingCharges) || 0,
       items: validItems.map(it => ({
+        id: it.id,
         kpclCode: it.kpclCode || '-',
         itemName: it.itemName.trim(),
         description: it.description.trim(),
@@ -609,6 +653,25 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         rate: parseFloat(it.rate) || 0
       }))
     };
+
+    if (isEditingInvoice && originalEditingInvoiceNo) {
+      try {
+        setSubmitting(true);
+        const res = await api.put(`/work-orders/invoice/${encodeURIComponent(originalEditingInvoiceNo)}`, payload);
+        showToast(res.data?.message || `Tax Invoice ${invoiceHeader.invoiceNumber} updated with ${validItems.length} items!`, 'success');
+        setShowAddModal(false);
+        setIsEditingInvoice(false);
+        setOriginalEditingInvoiceNo(null);
+        fetchWorkOrders();
+        window.dispatchEvent(new Event('skc-approvals-updated'));
+        return;
+      } catch (err: any) {
+        showToast(err.response?.data?.error || 'Failed to update work order invoice', 'error');
+        return;
+      } finally {
+        setSubmitting(false);
+      }
+    }
 
     try {
       setSubmitting(true);
@@ -866,11 +929,11 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       </div>
 
-      {/* 4. DIRECT INTERACTIVE TAX INVOICE CREATOR MODAL */}
-      {showAddModal && !editItem && (
+      {/* 4. DIRECT INTERACTIVE TAX INVOICE CREATOR & MULTI-ITEM EDIT MODAL */}
+      {showAddModal && (
         <div 
           className="fixed inset-0 z-[99998] bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAddModal(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setIsEditingInvoice(false); setOriginalEditingInvoiceNo(null); } }}
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 overflow-hidden my-auto max-h-[96vh] flex flex-col animate-fadeIn">
             {/* INVOICE MODAL HEADER */}
@@ -882,20 +945,20 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-base sm:text-lg font-black tracking-tight uppercase text-white">
-                      Direct Tax Invoice &amp; Work Order Sale
+                      {isEditingInvoice ? `Edit Work Order Tax Invoice • ${originalEditingInvoiceNo || invoiceHeader.invoiceNumber}` : 'Direct Tax Invoice & Work Order Sale'}
                     </h2>
                     <span className="bg-emerald-400 text-emerald-950 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                      Continuous Unified Ledger
+                      {isEditingInvoice ? `Editing ${invoiceItems.length} Items` : 'Continuous Unified Ledger'}
                     </span>
                   </div>
                   <p className="text-xs text-blue-100">
-                    Create direct sales contracts with real-time multi-item tax calculation &amp; continuous invoice sequencing
+                    {isEditingInvoice ? `Review and modify all items, taxes, party and shipping details for this invoice` : `Create direct sales contracts with real-time multi-item tax calculation & continuous invoice sequencing`}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowAddModal(false)}
+                onClick={() => { setShowAddModal(false); setIsEditingInvoice(false); setOriginalEditingInvoiceNo(null); }}
                 className="text-white/80 hover:text-white p-2 rounded-xl hover:bg-white/10 transition-colors"
                 title="Close"
               >
@@ -1120,12 +1183,21 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                             <select
                               value={row.unit}
                               onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value)}
-                              className="w-full p-1.5 border border-slate-300 rounded font-medium text-xs bg-white outline-none focus:border-blue-500"
+                              className="w-full p-1.5 border border-slate-300 rounded font-medium text-xs bg-white outline-none focus:border-blue-500 font-bold"
                             >
+                              <option value="">-- Select Unit --</option>
                               <option value="NOS">NOS</option>
+                              <option value="PCS">PCS</option>
                               <option value="SET">SET</option>
+                              <option value="BOX">BOX</option>
                               <option value="MTR">MTR</option>
-                              <option value="KG">KG</option>
+                              <option value="KGS">KGS</option>
+                              <option value="LTR">LTR</option>
+                              <option value="SQM">SQM</option>
+                              <option value="ROLL">ROLL</option>
+                              <option value="BAG">BAG</option>
+                              <option value="PAIRS">PAIRS</option>
+                              <option value="PKT">PKT</option>
                               <option value="LOT">LOT</option>
                               <option value="JOB">JOB</option>
                               <option value="HRS">HRS</option>
@@ -1292,12 +1364,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   {submitting ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Saving...</span>
+                      <span>{isEditingInvoice ? 'Updating...' : 'Saving...'}</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>Save &amp; Submit</span>
+                      <span>{isEditingInvoice ? 'Update & Submit for Approval' : 'Save & Submit'}</span>
                     </>
                   )}
                 </button>
@@ -1308,7 +1380,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   className="px-6 py-2.5 bg-[#1e3a8a] hover:bg-[#1e40af] active:scale-95 text-white font-black rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-blue-900/20 transition-all disabled:opacity-50"
                 >
                   <Receipt className="w-4 h-4" />
-                  <span>Save &amp; View Tax Invoice</span>
+                  <span>{isEditingInvoice ? 'Update & View Tax Invoice' : 'Save & View Tax Invoice'}</span>
                 </button>
               </div>
             </form>
@@ -1465,7 +1537,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                                 <Edit className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => handleDelete(wo.id, wo.workOrderNumber)}
+                                onClick={() => handleDelete(wo)}
                                 className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors border border-rose-300"
                                 title="Delete Work Order"
                               >
@@ -1549,8 +1621,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       </div>
 
-      {/* 5. EDIT WORK ORDER MODAL (Only when editing an existing item) */}
-      {showAddModal && editItem && (
+      {/* 5. EDIT WORK ORDER MODAL (Replaced by multi-item invoice modal above) */}
+      {false && (
         <div 
           className="fixed inset-0 z-[99998] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fadeIn"
           onClick={(e) => { if (e.target === e.currentTarget) { setShowAddModal(false); setEditItem(null); } }}

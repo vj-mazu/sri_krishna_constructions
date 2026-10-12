@@ -1563,15 +1563,266 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
   }
 });
 
-// DELETE /api/purchases/:id - Delete purchase
+// DELETE /api/purchases/:id - Request deletion of purchase/inward item (Requires Owner Approval)
 app.delete('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    await pool.query(`DELETE FROM "Purchase" WHERE id = $1`, [id]);
-    res.json({ message: 'Purchase record deleted successfully' });
+    const { reason } = req.body || {};
+
+    const existing = await client.query(`
+      SELECT p.*, poi."itemName", poi."partNumber", poi."kpclCode", poi."unit"
+      FROM "Purchase" p
+      LEFT JOIN "PurchaseOrderItem" poi ON p."purchaseOrderItemId" = poi.id
+      WHERE p.id = $1
+    `, [id]);
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Purchase/Inward record not found' });
+    }
+
+    const pur = existing.rows[0];
+
+    // Check if item has already been sold
+    const stockRes = await client.query(`
+      SELECT 
+        COALESCE((SELECT SUM(p.qty) FROM "Purchase" p WHERE p."purchaseOrderItemId" = $1 AND p.id != $2), 0)::float as "otherPurchased",
+        COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "sold"
+    `, [pur.purchaseOrderItemId, pur.id]);
+    const otherPurchased = stockRes.rows[0]?.otherPurchased || 0;
+    const sold = stockRes.rows[0]?.sold || 0;
+    if (otherPurchased < sold) {
+      return res.status(400).json({
+        error: `Cannot request deletion: Items have already been sold/dispatched (${sold} units sold, but only ${otherPurchased} units will remain inwarded).`
+      });
+    }
+
+    const payload = {
+      purchaseId: pur.id,
+      targetIds: [pur.id],
+      isGrouped: false,
+      invoiceNumber: pur.partyInvoiceNumber || '-',
+      partyInvoiceNumber: pur.partyInvoiceNumber || '-',
+      invoiceDate: pur.supplierInvoiceDate || pur.date,
+      partyName: pur.partyName || 'Supplier',
+      itemCount: 1,
+      qty: pur.qty,
+      totalAmount: pur.totalAmount || (pur.qty * pur.rate),
+      items: [{
+        purchaseId: pur.id,
+        partNumber: pur.partNumber || '-',
+        itemName: pur.itemName || '-',
+        unit: pur.unit || 'NOS',
+        qty: pur.qty,
+        rate: pur.rate,
+        totalAmount: pur.totalAmount
+      }]
+    };
+
+    const reqReason = reason || `Inward item deletion requested by ${req.user.fullName || req.user.username}`;
+
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'INWARD_DELETE', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [req.user.id, JSON.stringify(payload), reqReason]);
+
+    res.json({
+      message: `Inward deletion request for item '${pur.partNumber || pur.itemName}' submitted for Owner Approval!`,
+      requiresApproval: true
+    });
   } catch (err) {
-    console.error('Error deleting purchase:', err);
-    res.status(500).json({ error: 'Failed to delete purchase' });
+    console.error('Error submitting purchase delete request:', err);
+    res.status(500).json({ error: 'Failed to submit inward deletion request' });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /api/purchases/invoice/:invoiceNumber - Update entire inward receipt/invoice with all items
+app.put('/api/purchases/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoiceNumber } = req.params;
+    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const d = req.body;
+    const items = Array.isArray(d.items) ? d.items : [];
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
+
+    await client.query('BEGIN');
+
+    const existing = await client.query('SELECT * FROM "Purchase" WHERE LOWER(TRIM("partyInvoiceNumber")) = LOWER($1)', [cleanInv]);
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No purchases found for this invoice' });
+    }
+
+    const targetPartyInv = (d.partyInvoiceNumber || cleanInv).trim().toUpperCase();
+    const purDate = d.date ? new Date(d.date) : existing.rows[0].date;
+    const partyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : existing.rows[0].partyName;
+    const supplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : existing.rows[0].supplierAddress;
+    const gstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : existing.rows[0].gstNumber;
+    const supplierInvoiceDate = d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : existing.rows[0].supplierInvoiceDate;
+    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : existing.rows[0].vehicleNumber;
+    const remarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : existing.rows[0].remarks;
+
+    const updatedPurchases = [];
+
+    for (const item of items) {
+      const purId = item.id || item.purchaseId;
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const cgstPercent = parseFloat(item.cgstPercent !== undefined ? item.cgstPercent : (d.cgstPercent || 0));
+      const sgstPercent = parseFloat(item.sgstPercent !== undefined ? item.sgstPercent : (d.sgstPercent || 0));
+      const igstPercent = parseFloat(item.igstPercent !== undefined ? item.igstPercent : (d.igstPercent || 0));
+      const shippingCharges = parseFloat(item.shippingCharges || 0);
+
+      const basicAmount = qty * rate;
+      const cgstAmount = basicAmount * (cgstPercent / 100);
+      const sgstAmount = basicAmount * (sgstPercent / 100);
+      const igstAmount = basicAmount * (igstPercent / 100);
+      const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
+
+      if (purId) {
+        const exP = existing.rows.find(p => p.id === purId);
+        if (exP) {
+          const itemId = exP.purchaseOrderItemId;
+          const stockRes = await client.query(`
+            SELECT 
+              COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = $1 AND pur.id != $2), 0)::float as "otherPurchased",
+              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "sold"
+          `, [itemId, purId]);
+
+          const otherPurchased = stockRes.rows[0]?.otherPurchased || 0;
+          const sold = stockRes.rows[0]?.sold || 0;
+          if (otherPurchased + qty < sold) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+              error: `Cannot reduce inward quantity of item to ${qty}. Total sold: ${sold}. Available inward would be only ${otherPurchased + qty}.` 
+            });
+          }
+        }
+
+        const uRes = await client.query(`
+          UPDATE "Purchase"
+          SET "partyInvoiceNumber" = $1, "date" = $2, "qty" = $3, "rate" = $4,
+              "basicAmount" = $5, "cgstPercent" = $6, "sgstPercent" = $7, "igstPercent" = $8,
+              "cgstAmount" = $9, "sgstAmount" = $10, "igstAmount" = $11, "totalAmount" = $12,
+              "partyName" = $13, "supplierAddress" = $14, "gstNumber" = $15,
+              "supplierInvoiceDate" = $16, "vehicleNumber" = $17, "remarks" = $18,
+              "shippingCharges" = $19,
+              "receivedItemName" = COALESCE($20, "receivedItemName"),
+              "receivedPartNumber" = COALESCE($21, "receivedPartNumber")
+          WHERE "id" = $22
+          RETURNING *
+        `, [
+          targetPartyInv, purDate, qty, rate,
+          basicAmount, cgstPercent, sgstPercent, igstPercent,
+          cgstAmount, sgstAmount, igstAmount, totalAmount,
+          partyName, supplierAddress, gstNumber,
+          supplierInvoiceDate, vehicleNumber, remarks, shippingCharges,
+          item.receivedItemName || null, item.receivedPartNumber || null,
+          purId
+        ]);
+        if (uRes.rows[0]) {
+          updatedPurchases.push(uRes.rows[0]);
+        }
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: `Inward Invoice #${targetPartyInv} updated (${updatedPurchases.length} items) successfully`, purchases: updatedPurchases });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('Error updating purchase invoice:', err);
+    res.status(500).json({ error: 'Failed to update purchase invoice' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/purchases/invoice/:invoiceNumber - Request deletion of entire inward invoice/DC (Requires Owner Approval)
+app.delete('/api/purchases/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoiceNumber } = req.params;
+    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const { reason } = req.body || {};
+
+    const existing = await client.query(`
+      SELECT p.*, poi."itemName", poi."partNumber", poi."kpclCode", poi."unit"
+      FROM "Purchase" p
+      LEFT JOIN "PurchaseOrderItem" poi ON p."purchaseOrderItemId" = poi.id
+      WHERE LOWER(TRIM(p."partyInvoiceNumber")) = LOWER($1)
+    `, [cleanInv]);
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'No purchases found for this inward invoice/DC number' });
+    }
+
+    // Verify deleting won't violate already sold stock for each item
+    for (const pur of existing.rows) {
+      const stockRes = await client.query(`
+        SELECT 
+          COALESCE((SELECT SUM(p.qty) FROM "Purchase" p WHERE p."purchaseOrderItemId" = $1 AND p.id != $2), 0)::float as "otherPurchased",
+          COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "sold"
+      `, [pur.purchaseOrderItemId, pur.id]);
+      const otherPurchased = stockRes.rows[0]?.otherPurchased || 0;
+      const sold = stockRes.rows[0]?.sold || 0;
+      if (otherPurchased < sold) {
+        return res.status(400).json({
+          error: `Cannot request inward deletion: Items have already been sold/dispatched (${sold} units sold, but only ${otherPurchased} units will remain inwarded).`
+        });
+      }
+    }
+
+    const targetIds = existing.rows.map(r => r.id);
+    const totalQty = existing.rows.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
+    const grandTotal = existing.rows.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+    const first = existing.rows[0];
+
+    const itemsPayload = existing.rows.map(r => ({
+      purchaseId: r.id,
+      partNumber: r.partNumber || '-',
+      itemName: r.itemName || '-',
+      unit: r.unit || 'NOS',
+      qty: r.qty,
+      rate: r.rate,
+      totalAmount: r.totalAmount
+    }));
+
+    const payload = {
+      targetIds,
+      isGrouped: true,
+      invoiceNumber: cleanInv,
+      partyInvoiceNumber: cleanInv,
+      invoiceDate: first.supplierInvoiceDate || first.date,
+      partyName: first.partyName || 'Supplier',
+      supplierAddress: first.supplierAddress || '-',
+      vehicleNumber: first.vehicleNumber || '-',
+      itemCount: existing.rows.length,
+      qty: totalQty,
+      totalAmount: grandTotal,
+      items: itemsPayload
+    };
+
+    const reqReason = reason || `Inward DC/invoice deletion (${existing.rows.length} items) requested by ${req.user.fullName || req.user.username}`;
+
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'INWARD_DELETE', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [req.user.id, JSON.stringify(payload), reqReason]);
+
+    res.json({
+      message: `Inward deletion request for DC '${cleanInv}' (${existing.rows.length} items) submitted for Owner Approval!`,
+      requiresApproval: true
+    });
+  } catch (err) {
+    console.error('Error submitting inward invoice delete request:', err);
+    res.status(500).json({ error: 'Failed to submit inward invoice deletion request' });
+  } finally {
+    client.release();
   }
 });
 
@@ -1642,6 +1893,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
     await client.query('BEGIN');
 
     const createdSales = [];
+    const itemsForPayload = [];
 
     for (const d of itemsToProcess) {
       const itemId = d.purchaseOrderItemId || d.itemId;
@@ -1726,41 +1978,58 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
       );
 
       createdSales.push(rows[0]);
+      itemsForPayload.push({
+        saleId: saleId,
+        partNumber: partNumber,
+        itemName: itemName,
+        qty: qty,
+        rate: rate,
+        basicAmount: basicAmount,
+        cgstPercent: cgstPercent,
+        sgstPercent: sgstPercent,
+        igstPercent: igstPercent,
+        cgstAmount: cgstAmount,
+        sgstAmount: sgstAmount,
+        igstAmount: igstAmount,
+        shippingCharges: shippingCharges,
+        totalAmount: totalAmount
+      });
+    }
 
-      // Approval Request for each item
+    // Create ONE Single Grouped Approval Request for the entire invoice (supports 1 to 20+ items)
+    if (createdSales.length > 0) {
+      const invNum = (body.invoiceNumber || createdSales[0].invoiceNumber || '-');
+      const invDate = (body.invoiceDate || createdSales[0].invoiceDate || new Date());
+      const grandTotal = itemsForPayload.reduce((sum, it) => sum + (it.totalAmount || 0), 0);
+      const totalQty = itemsForPayload.reduce((sum, it) => sum + (it.qty || 0), 0);
+
       await client.query(
         `INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
          VALUES (gen_random_uuid()::text, 'SALE_ENTRY', 'PENDING', $1, $2, $3, NOW(), NOW())`,
         [
           req.user.id,
           JSON.stringify({
-            saleId: saleId,
-            partNumber: partNumber,
-            itemName: itemName,
-            invoiceNumber: invNum || '-',
+            saleIds: createdSales.map(s => s.id),
+            saleId: createdSales[0].id,
+            invoiceNumber: invNum,
             invoiceDate: invDate,
-            qty: qty,
-            rate: rate,
-            basicAmount: basicAmount,
-            cgstPercent: cgstPercent,
-            sgstPercent: sgstPercent,
-            igstPercent: igstPercent,
-            cgstAmount: cgstAmount,
-            sgstAmount: sgstAmount,
-            igstAmount: igstAmount,
-            shippingCharges: shippingCharges,
-            totalAmount: totalAmount,
-            partyName: (d.partyName || body.partyName || '-'),
-            supplierAddress: (d.supplierAddress || body.supplierAddress || '-'),
-            companyGstNumber: (d.companyGstNumber || body.companyGstNumber || '-'),
-            gstNumber: (d.gstNumber || body.gstNumber || '-'),
-            partyInvoiceNumber: (d.partyInvoiceNumber || body.partyInvoiceNumber || '-'),
-            supplierInvoiceDate: (d.supplierInvoiceDate || body.supplierInvoiceDate || null),
-            vehicleNumber: (d.vehicleNumber || body.vehicleNumber || '-'),
-            eWayBillNumber: (d.eWayBillNumber || body.eWayBillNumber || '-'),
-            remarks: (d.remarks || body.remarks || '-')
+            itemCount: createdSales.length,
+            qty: totalQty,
+            totalAmount: grandTotal,
+            partyName: (body.partyName || createdSales[0].partyName || '-'),
+            supplierAddress: (body.supplierAddress || createdSales[0].supplierAddress || '-'),
+            companyGstNumber: (body.companyGstNumber || createdSales[0].companyGstNumber || '-'),
+            gstNumber: (body.gstNumber || createdSales[0].gstNumber || '-'),
+            partyInvoiceNumber: (body.partyInvoiceNumber || createdSales[0].partyInvoiceNumber || '-'),
+            supplierInvoiceDate: (body.supplierInvoiceDate || createdSales[0].supplierInvoiceDate || null),
+            vehicleNumber: (body.vehicleNumber || createdSales[0].vehicleNumber || '-'),
+            eWayBillNumber: (body.eWayBillNumber || createdSales[0].eWayBillNumber || '-'),
+            remarks: (body.remarks || createdSales[0].remarks || '-'),
+            items: itemsForPayload,
+            partNumber: itemsForPayload.map(i => i.partNumber).filter(Boolean).join(', ') || '-',
+            itemName: itemsForPayload.map(i => i.itemName).filter(Boolean).join(', ') || '-'
           }),
-          `Sale Invoice #${invNum || '-'} (${qty} units of ${partNumber}) submitted for Owner Approval`
+          `Sale Invoice #${invNum} (${createdSales.length} items, total ₹${grandTotal.toLocaleString('en-IN')}) submitted for Owner Approval`
         ]
       );
     }
@@ -1775,6 +2044,143 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
     try { await client.query('ROLLBACK'); } catch (_) {}
     console.error('Error recording sale:', err);
     res.status(500).json({ error: 'Failed to record sale' });
+  } finally {
+    client.release();
+  }
+});
+
+// PUT /api/sales/invoice/:invoiceNumber - Update entire sale invoice with all items
+app.put('/api/sales/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoiceNumber } = req.params;
+    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const d = req.body;
+    const items = Array.isArray(d.items) ? d.items : [];
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
+
+    await client.query('BEGIN');
+
+    // Fetch existing sales for this invoice
+    const existing = await client.query('SELECT * FROM "Sale" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No sales found for this invoice' });
+    }
+
+    const targetInvNum = (d.invoiceNumber || cleanInv).trim().toUpperCase();
+    const invDate = d.invoiceDate ? new Date(d.invoiceDate) : existing.rows[0].invoiceDate;
+    const partyName = d.partyName !== undefined ? (d.partyName ? d.partyName.trim() : null) : existing.rows[0].partyName;
+    const supplierAddress = d.supplierAddress !== undefined ? (d.supplierAddress ? d.supplierAddress.trim() : null) : existing.rows[0].supplierAddress;
+    const gstNumber = d.gstNumber !== undefined ? (d.gstNumber ? d.gstNumber.trim().toUpperCase() : null) : existing.rows[0].gstNumber;
+    const companyGstNumber = d.companyGstNumber !== undefined ? (d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : null) : existing.rows[0].companyGstNumber;
+    const partyInvoiceNumber = d.partyInvoiceNumber !== undefined ? (d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null) : existing.rows[0].partyInvoiceNumber;
+    const supplierInvoiceDate = d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : existing.rows[0].supplierInvoiceDate;
+    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : existing.rows[0].vehicleNumber;
+    const eWayBillNumber = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : existing.rows[0].eWayBillNumber;
+    const remarks = d.remarks !== undefined ? (d.remarks ? d.remarks.trim() : null) : existing.rows[0].remarks;
+
+    const updatedSales = [];
+    const itemsPayload = [];
+    let grandTotal = 0;
+
+    for (const item of items) {
+      const saleId = item.id || item.saleId;
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const cgstPercent = parseFloat(item.cgstPercent !== undefined ? item.cgstPercent : (d.cgstPercent || 0));
+      const sgstPercent = parseFloat(item.sgstPercent !== undefined ? item.sgstPercent : (d.sgstPercent || 0));
+      const igstPercent = parseFloat(item.igstPercent !== undefined ? item.igstPercent : (d.igstPercent || 0));
+      const shippingCharges = parseFloat(item.shippingCharges || 0);
+
+      const basicAmount = qty * rate;
+      const cgstAmount = basicAmount * (cgstPercent / 100);
+      const sgstAmount = basicAmount * (sgstPercent / 100);
+      const igstAmount = basicAmount * (igstPercent / 100);
+      const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
+      grandTotal += totalAmount;
+
+      if (saleId) {
+        const uRes = await client.query(`
+          UPDATE "Sale"
+          SET "invoiceNumber" = $1, "invoiceDate" = $2, "qty" = $3, "rate" = $4,
+              "basicAmount" = $5, "cgstPercent" = $6, "sgstPercent" = $7, "igstPercent" = $8,
+              "cgstAmount" = $9, "sgstAmount" = $10, "igstAmount" = $11, "totalAmount" = $12,
+              "partyName" = $13, "supplierAddress" = $14, "gstNumber" = $15, "companyGstNumber" = $16,
+              "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18, "vehicleNumber" = $19,
+              "eWayBillNumber" = $20, "remarks" = $21, "shippingCharges" = $22,
+              "status" = 'PENDING', "approvedById" = null, "approvedAt" = null
+          WHERE "id" = $23
+          RETURNING *
+        `, [
+          targetInvNum, invDate, qty, rate,
+          basicAmount, cgstPercent, sgstPercent, igstPercent,
+          cgstAmount, sgstAmount, igstAmount, totalAmount,
+          partyName, supplierAddress, gstNumber, companyGstNumber,
+          partyInvoiceNumber, supplierInvoiceDate, vehicleNumber,
+          eWayBillNumber, remarks, shippingCharges,
+          saleId
+        ]);
+        if (uRes.rows[0]) {
+          updatedSales.push(uRes.rows[0]);
+          itemsPayload.push({
+            saleId: saleId,
+            partNumber: item.partNumber || item.item?.partNumber || '-',
+            itemName: item.itemName || item.item?.itemName || '-',
+            qty: qty,
+            rate: rate,
+            basicAmount: basicAmount,
+            totalAmount: totalAmount
+          });
+        }
+      }
+    }
+
+    // Cancel / remove previous pending approvals for this invoice
+    await client.query(`
+      DELETE FROM "ApprovalRequest"
+      WHERE ("type" = 'SALE_ENTRY' OR "type" = 'SALE_EDIT')
+        AND "status" = 'PENDING'
+        AND payload::text ILIKE $1
+    `, [`%"invoiceNumber":"${cleanInv}"%`]);
+
+    // Create single approval request for the updated invoice
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'SALE_EDIT', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [
+      req.user.id,
+      JSON.stringify({
+        saleIds: updatedSales.map(s => s.id),
+        invoiceNumber: targetInvNum,
+        invoiceDate: invDate,
+        partyName: partyName,
+        supplierAddress: supplierAddress,
+        companyGstNumber: companyGstNumber,
+        gstNumber: gstNumber,
+        partyInvoiceNumber: partyInvoiceNumber,
+        supplierInvoiceDate: supplierInvoiceDate,
+        vehicleNumber: vehicleNumber,
+        eWayBillNumber: eWayBillNumber,
+        remarks: remarks,
+        itemCount: updatedSales.length,
+        items: itemsPayload,
+        partNumber: itemsPayload.map(i => i.partNumber).filter(Boolean).join(', ') || '-',
+        itemName: itemsPayload.map(i => i.itemName).filter(Boolean).join(', ') || '-',
+        qty: itemsPayload.reduce((sum, i) => sum + (i.qty || 0), 0),
+        totalAmount: grandTotal
+      }),
+      `Sale Invoice #${targetInvNum} (${updatedSales.length} items, total ₹${grandTotal.toLocaleString('en-IN')}) edited by ${req.user.fullName || req.user.username}`
+    ]);
+
+    await client.query('COMMIT');
+    res.json({ message: `Sale invoice #${targetInvNum} updated (${updatedSales.length} items) and submitted for Owner Approval`, sales: updatedSales });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('Error updating sale invoice:', err);
+    res.status(500).json({ error: 'Failed to update sale invoice' });
   } finally {
     client.release();
   }
@@ -1967,14 +2373,136 @@ app.put('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']),
   }
 });
 
-// DELETE /api/sales/:id - Delete sale
+// DELETE /api/sales/:id - Request deletion of single sale item (Requires Owner Approval)
 app.delete('/api/sales/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
   try {
-    await pool.query(`DELETE FROM "Sale" WHERE id = $1`, [req.params.id]);
-    res.json({ message: 'Sale invoice record deleted successfully' });
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    const existing = await client.query(`
+      SELECT s.*, poi."itemName", poi."partNumber", poi."kpclCode", poi."unit"
+      FROM "Sale" s
+      LEFT JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+      WHERE s.id = $1
+    `, [id]);
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Sale record not found' });
+    }
+
+    const sale = existing.rows[0];
+
+    const payload = {
+      saleId: sale.id,
+      targetIds: [sale.id],
+      isGrouped: false,
+      invoiceNumber: sale.invoiceNumber || '-',
+      invoiceDate: sale.invoiceDate,
+      partyName: sale.partyName || 'Customer',
+      supplierAddress: sale.supplierAddress || '-',
+      vehicleNumber: sale.vehicleNumber || '-',
+      eWayBillNumber: sale.eWayBillNumber || '-',
+      itemCount: 1,
+      qty: sale.qty,
+      totalAmount: sale.totalAmount,
+      items: [{
+        saleId: sale.id,
+        partNumber: sale.partNumber || '-',
+        itemName: sale.itemName || '-',
+        unit: sale.unit || 'NOS',
+        qty: sale.qty,
+        rate: sale.rate,
+        totalAmount: sale.totalAmount
+      }]
+    };
+
+    const reqReason = reason || `Sale item deletion requested by ${req.user.fullName || req.user.username}`;
+
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'SALE_DELETE', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [req.user.id, JSON.stringify(payload), reqReason]);
+
+    res.json({
+      message: `Sale deletion request for item '${sale.partNumber || sale.itemName}' submitted for Owner Approval!`,
+      requiresApproval: true
+    });
   } catch (err) {
-    console.error('Error deleting sale:', err);
-    res.status(500).json({ error: 'Failed to delete sale' });
+    console.error('Error submitting sale delete request:', err);
+    res.status(500).json({ error: 'Failed to submit sale deletion request' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/sales/invoice/:invoiceNumber - Request deletion of entire sale invoice (Requires Owner Approval)
+app.delete('/api/sales/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoiceNumber } = req.params;
+    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const { reason } = req.body || {};
+
+    const existing = await client.query(`
+      SELECT s.*, poi."itemName", poi."partNumber", poi."kpclCode", poi."unit"
+      FROM "Sale" s
+      LEFT JOIN "PurchaseOrderItem" poi ON s."purchaseOrderItemId" = poi.id
+      WHERE LOWER(TRIM(s."invoiceNumber")) = LOWER($1)
+    `, [cleanInv]);
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'No sales found for this invoice number' });
+    }
+
+    const targetIds = existing.rows.map(r => r.id);
+    const totalQty = existing.rows.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
+    const grandTotal = existing.rows.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+    const first = existing.rows[0];
+
+    const itemsPayload = existing.rows.map(r => ({
+      saleId: r.id,
+      partNumber: r.partNumber || '-',
+      itemName: r.itemName || '-',
+      unit: r.unit || 'NOS',
+      qty: r.qty,
+      rate: r.rate,
+      totalAmount: r.totalAmount
+    }));
+
+    const payload = {
+      targetIds,
+      isGrouped: true,
+      invoiceNumber: cleanInv,
+      invoiceDate: first.invoiceDate,
+      partyName: first.partyName || 'Customer',
+      supplierAddress: first.supplierAddress || '-',
+      gstNumber: first.gstNumber || '-',
+      companyGstNumber: first.companyGstNumber || '29DWKPP3582H1ZV',
+      vehicleNumber: first.vehicleNumber || '-',
+      eWayBillNumber: first.eWayBillNumber || '-',
+      itemCount: existing.rows.length,
+      qty: totalQty,
+      totalAmount: grandTotal,
+      items: itemsPayload
+    };
+
+    const reqReason = reason || `Tax invoice deletion (${existing.rows.length} items) requested by ${req.user.fullName || req.user.username}`;
+
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'SALE_DELETE', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [req.user.id, JSON.stringify(payload), reqReason]);
+
+    res.json({
+      message: `Tax invoice #${cleanInv} deletion request (${existing.rows.length} items) submitted for Owner Approval!`,
+      requiresApproval: true
+    });
+  } catch (err) {
+    console.error('Error submitting sale invoice delete request:', err);
+    res.status(500).json({ error: 'Failed to submit sale invoice deletion request' });
+  } finally {
+    client.release();
   }
 });
 
@@ -3225,6 +3753,189 @@ app.delete('/api/holidays/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
   }
 });
 
+app.post('/api/approvals/batch-action', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { ids, status, rejectionReason } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required and cannot be empty' });
+    }
+    if (!['APPROVED', 'REJECTED'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be APPROVED or REJECTED' });
+    }
+
+    let successCount = 0;
+    for (const id of ids) {
+      const checkRes = await pool.query(`SELECT * FROM "ApprovalRequest" WHERE id = $1`, [id]);
+      if (checkRes.rows.length === 0 || checkRes.rows[0].status !== 'PENDING') continue;
+      const approval = checkRes.rows[0];
+
+      if (approval.type === 'INDIVIDUAL_SALE') {
+        const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+        const txId = payload.transactionId;
+        const stockId = payload.stockId;
+
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          if (status === 'APPROVED') {
+            await client.query(
+              `UPDATE "IndividualStockTransaction" SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() WHERE id = $2`,
+              [req.user.id, txId]
+            );
+            await client.query(
+              `UPDATE "IndividualStock"
+               SET "currentStock" = GREATEST(0, (
+                 "openingStock" + 
+                 COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0) -
+                 COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = $1 AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)
+               )),
+               "updatedAt" = NOW()
+               WHERE id = $1`,
+              [stockId]
+            );
+          } else if (status === 'REJECTED') {
+            await client.query(
+              `UPDATE "IndividualStockTransaction" SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() WHERE id = $3`,
+              [rejectionReason || 'Rejected by Approver', req.user.id, txId]
+            );
+          }
+          await client.query(
+            `UPDATE "ApprovalRequest" SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+            [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+          );
+          await client.query('COMMIT');
+          successCount++;
+        } catch (err) {
+          await client.query('ROLLBACK');
+        } finally {
+          client.release();
+        }
+      } else if (approval.type === 'SALE_ENTRY' || approval.type === 'SALE_EDIT') {
+        if (req.user.role !== 'OWNER') continue;
+        const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+        const saleIds = payload.saleIds || (payload.saleId ? [payload.saleId] : (payload.id ? [payload.id] : []));
+        if (saleIds.length > 0) {
+          if (status === 'APPROVED') {
+            await pool.query(
+              `UPDATE "Sale" SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() WHERE id = ANY($2::text[])`,
+              [req.user.id, saleIds]
+            );
+          } else if (status === 'REJECTED') {
+            await pool.query(
+              `UPDATE "Sale" SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() WHERE id = ANY($3::text[])`,
+              [rejectionReason || 'Rejected by Owner', req.user.id, saleIds]
+            );
+          }
+        }
+        await pool.query(
+          `UPDATE "ApprovalRequest" SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+          [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+        );
+        successCount++;
+      } else if (approval.type === 'WORK_ORDER_SALE' || approval.type === 'WORK_ORDER' || approval.type === 'WORK_ORDER_EDIT') {
+        if (req.user.role !== 'OWNER') continue;
+        const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+        const workOrderIds = payload.workOrderIds || (payload.workOrderId ? [payload.workOrderId] : (payload.id ? [payload.id] : []));
+        if (workOrderIds.length > 0) {
+          if (status === 'APPROVED') {
+            await pool.query(
+              `UPDATE "WorkOrder" SET "status" = 'APPROVED', "approvedById" = $1, "approvedAt" = NOW() WHERE id = ANY($2::text[])`,
+              [req.user.id, workOrderIds]
+            );
+          } else if (status === 'REJECTED') {
+            await pool.query(
+              `UPDATE "WorkOrder" SET "status" = 'REJECTED', "rejectionReason" = $1, "approvedById" = $2, "approvedAt" = NOW() WHERE id = ANY($3::text[])`,
+              [rejectionReason || 'Rejected by Owner', req.user.id, workOrderIds]
+            );
+          }
+        }
+        await pool.query(
+          `UPDATE "ApprovalRequest" SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+          [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+        );
+        successCount++;
+      } else if (approval.type === 'INWARD_DELETE' || approval.type === 'PURCHASE_DELETE') {
+        if (req.user.role !== 'OWNER') continue;
+        const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+        const targetIds = payload.targetIds || (payload.purchaseId ? [payload.purchaseId] : (payload.id ? [payload.id] : []));
+        if (targetIds.length > 0 && status === 'APPROVED') {
+          let canDelete = true;
+          for (const purId of targetIds) {
+            const pRow = await pool.query(`SELECT "purchaseOrderItemId", qty FROM "Purchase" WHERE id = $1`, [purId]);
+            if (pRow.rows.length > 0) {
+              const poiId = pRow.rows[0].purchaseOrderItemId;
+              const stockRes = await pool.query(`
+                SELECT 
+                  COALESCE((SELECT SUM(p.qty) FROM "Purchase" p WHERE p."purchaseOrderItemId" = $1 AND p.id != ALL($2::text[])), 0)::float as "otherPurchased",
+                  COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "sold"
+              `, [poiId, targetIds]);
+              const otherPurchased = stockRes.rows[0]?.otherPurchased || 0;
+              const sold = stockRes.rows[0]?.sold || 0;
+              if (otherPurchased < sold) {
+                canDelete = false;
+                break;
+              }
+            }
+          }
+          if (canDelete) {
+            await pool.query(`DELETE FROM "Purchase" WHERE id = ANY($1::text[])`, [targetIds]);
+          }
+        }
+        await pool.query(
+          `UPDATE "ApprovalRequest" SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+          [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+        );
+        successCount++;
+      } else if (approval.type === 'SALE_DELETE') {
+        if (req.user.role !== 'OWNER') continue;
+        const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+        const targetIds = payload.targetIds || (payload.saleId ? [payload.saleId] : (payload.id ? [payload.id] : []));
+        if (targetIds.length > 0 && status === 'APPROVED') {
+          await pool.query(`DELETE FROM "Sale" WHERE id = ANY($1::text[])`, [targetIds]);
+          if (payload.invoiceNumber && payload.invoiceNumber !== '-') {
+            await pool.query(`
+              DELETE FROM "ApprovalRequest"
+              WHERE id != $1 AND ("type" = 'SALE_ENTRY' OR "type" = 'SALE_EDIT')
+                AND "status" = 'PENDING'
+                AND payload::text ILIKE $2
+            `, [id, `%"invoiceNumber":"${payload.invoiceNumber}"%`]);
+          }
+        }
+        await pool.query(
+          `UPDATE "ApprovalRequest" SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+          [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+        );
+        successCount++;
+      } else if (approval.type === 'WORK_ORDER_DELETE') {
+        if (req.user.role !== 'OWNER') continue;
+        const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+        const targetIds = payload.targetIds || (payload.workOrderId ? [payload.workOrderId] : (payload.id ? [payload.id] : []));
+        if (targetIds.length > 0 && status === 'APPROVED') {
+          await pool.query(`DELETE FROM "WorkOrder" WHERE id = ANY($1::text[])`, [targetIds]);
+          if (payload.invoiceNumber && payload.invoiceNumber !== '-') {
+            await pool.query(`
+              DELETE FROM "ApprovalRequest"
+              WHERE id != $1 AND ("type" = 'WORK_ORDER_SALE' OR "type" = 'WORK_ORDER' OR "type" = 'WORK_ORDER_EDIT')
+                AND "status" = 'PENDING'
+                AND payload::text ILIKE $2
+            `, [id, `%"invoiceNumber":"${payload.invoiceNumber}"%`]);
+          }
+        }
+        await pool.query(
+          `UPDATE "ApprovalRequest" SET "status" = $1, "approvedById" = $2, "rejectionReason" = $3, "updatedAt" = NOW() WHERE id = $4`,
+          [status, req.user.id, status === 'REJECTED' ? rejectionReason : null, id]
+        );
+        successCount++;
+      }
+    }
+
+    res.json({ message: `${successCount} requests ${status.toLowerCase()} successfully`, successCount });
+  } catch (err) {
+    console.error('Error in batch approval action:', err);
+    res.status(500).json({ error: 'Failed to process batch approval' });
+  }
+});
+
 app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -3353,6 +4064,70 @@ app.patch('/api/approvals/:id/action', authenticateToken, requireRoles(['OWNER',
              WHERE id = ANY($3::text[])`,
             [rejectionReason || 'Rejected by Owner', req.user.id, workOrderIds]
           );
+        }
+      }
+    } else if (approval.type === 'INWARD_DELETE' || approval.type === 'PURCHASE_DELETE') {
+      if (req.user.role !== 'OWNER') {
+        return res.status(403).json({ error: 'Inward deletion approvals must be reviewed and approved by the OWNER only.' });
+      }
+      const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+      const targetIds = payload.targetIds || (payload.purchaseId ? [payload.purchaseId] : (payload.id ? [payload.id] : []));
+
+      if (targetIds.length > 0 && status === 'APPROVED') {
+        for (const purId of targetIds) {
+          const pRow = await pool.query(`SELECT "purchaseOrderItemId", qty FROM "Purchase" WHERE id = $1`, [purId]);
+          if (pRow.rows.length > 0) {
+            const poiId = pRow.rows[0].purchaseOrderItemId;
+            const stockRes = await pool.query(`
+              SELECT 
+                COALESCE((SELECT SUM(p.qty) FROM "Purchase" p WHERE p."purchaseOrderItemId" = $1 AND p.id != ALL($2::text[])), 0)::float as "otherPurchased",
+                COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "sold"
+            `, [poiId, targetIds]);
+            const otherPurchased = stockRes.rows[0]?.otherPurchased || 0;
+            const sold = stockRes.rows[0]?.sold || 0;
+            if (otherPurchased < sold) {
+              return res.status(400).json({
+                error: `Cannot approve inward deletion: Items have already been sold/dispatched (${sold} units sold, but only ${otherPurchased} units will remain).`
+              });
+            }
+          }
+        }
+        await pool.query(`DELETE FROM "Purchase" WHERE id = ANY($1::text[])`, [targetIds]);
+      }
+    } else if (approval.type === 'SALE_DELETE') {
+      if (req.user.role !== 'OWNER') {
+        return res.status(403).json({ error: 'Sale deletion approvals must be reviewed and approved by the OWNER only.' });
+      }
+      const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+      const targetIds = payload.targetIds || (payload.saleId ? [payload.saleId] : (payload.id ? [payload.id] : []));
+
+      if (targetIds.length > 0 && status === 'APPROVED') {
+        await pool.query(`DELETE FROM "Sale" WHERE id = ANY($1::text[])`, [targetIds]);
+        if (payload.invoiceNumber && payload.invoiceNumber !== '-') {
+          await pool.query(`
+            DELETE FROM "ApprovalRequest"
+            WHERE id != $1 AND ("type" = 'SALE_ENTRY' OR "type" = 'SALE_EDIT')
+              AND "status" = 'PENDING'
+              AND payload::text ILIKE $2
+          `, [id, `%"invoiceNumber":"${payload.invoiceNumber}"%`]);
+        }
+      }
+    } else if (approval.type === 'WORK_ORDER_DELETE') {
+      if (req.user.role !== 'OWNER') {
+        return res.status(403).json({ error: 'Work order deletion approvals must be reviewed and approved by the OWNER only.' });
+      }
+      const payload = typeof approval.payload === 'string' ? JSON.parse(approval.payload) : approval.payload;
+      const targetIds = payload.targetIds || (payload.workOrderId ? [payload.workOrderId] : (payload.id ? [payload.id] : []));
+
+      if (targetIds.length > 0 && status === 'APPROVED') {
+        await pool.query(`DELETE FROM "WorkOrder" WHERE id = ANY($1::text[])`, [targetIds]);
+        if (payload.invoiceNumber && payload.invoiceNumber !== '-') {
+          await pool.query(`
+            DELETE FROM "ApprovalRequest"
+            WHERE id != $1 AND ("type" = 'WORK_ORDER_SALE' OR "type" = 'WORK_ORDER' OR "type" = 'WORK_ORDER_EDIT')
+              AND "status" = 'PENDING'
+              AND payload::text ILIKE $2
+          `, [id, `%"invoiceNumber":"${payload.invoiceNumber}"%`]);
         }
       }
     } else if (status === 'APPROVED' && approval.type === 'EDIT_ATTENDANCE') {
@@ -3628,6 +4403,141 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
+// PUT /api/work-orders/invoice/:invoiceNumber - Update entire work order invoice with ALL items
+app.put('/api/work-orders/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoiceNumber } = req.params;
+    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const d = req.body;
+    const items = Array.isArray(d.items) ? d.items : [];
+    if (items.length === 0) {
+      return res.status(400).json({ error: 'At least one item is required' });
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Fetch existing work orders for this invoice
+    const existing = await client.query('SELECT * FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
+    if (existing.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'No work orders found for this invoice' });
+    }
+
+    const firstWo = existing.rows[0];
+    const targetInvNum = (d.invoiceNumber || cleanInv).trim().toUpperCase();
+    const targetWoNum = (d.workOrderNumber || firstWo.workOrderNumber).trim().toUpperCase();
+    const woDate = d.workOrderDate ? new Date(d.workOrderDate) : firstWo.workOrderDate;
+    const invDate = d.invoiceDate ? new Date(d.invoiceDate) : firstWo.invoiceDate;
+    const partyName = (d.partyName || firstWo.partyName).trim();
+    const partyAddress = d.partyAddress !== undefined ? d.partyAddress : firstWo.partyAddress;
+    const partyGstNumber = d.partyGstNumber !== undefined ? (d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null) : firstWo.partyGstNumber;
+    const companyName = d.companyName || firstWo.companyName || 'Sri Krishna Constructions';
+    const companyGstNumber = d.companyGstNumber || firstWo.companyGstNumber || '29DWKPP3582H1ZV';
+    const vehicleNumber = d.vehicleNumber !== undefined ? (d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null) : firstWo.vehicleNumber;
+    const eWayBillNumber = d.eWayBillNumber !== undefined ? (d.eWayBillNumber ? d.eWayBillNumber.trim().toUpperCase() : null) : firstWo.eWayBillNumber;
+    const remarks = d.remarks !== undefined ? d.remarks : firstWo.remarks;
+
+    // Delete existing rows for this invoice and replace with clean updated rows
+    await client.query('DELETE FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)', [cleanInv]);
+
+    const createdOrders = [];
+    let grandTotal = 0;
+
+    for (const item of items) {
+      if (!item.itemName || !item.itemName.trim()) continue;
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const shippingCharges = parseFloat(item.shippingCharges || 0);
+      const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
+      const cgstP = item.cgstPercent !== undefined ? parseFloat(item.cgstPercent) : (parseFloat(d.cgstPercent) || 0);
+      const sgstP = item.sgstPercent !== undefined ? parseFloat(item.sgstPercent) : (parseFloat(d.sgstPercent) || 0);
+      const igstP = item.igstPercent !== undefined ? parseFloat(item.igstPercent) : (parseFloat(d.igstPercent) || 0);
+      const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
+      const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
+      const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
+      const totalAmount = Math.round((basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges + Number.EPSILON) * 100) / 100;
+      grandTotal += totalAmount;
+
+      const insRes = await client.query(`
+        INSERT INTO "WorkOrder" (
+          "id", "workOrderNumber", "workOrderDate", "invoiceNumber", "invoiceDate",
+          "partyName", "partyAddress", "partyGstNumber", "companyName", "companyGstNumber",
+          "kpclCode", "itemName", "description", "partNumber", "unit", "qty", "rate", "basicAmount",
+          "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
+          "shippingCharges", "totalAmount", "vehicleNumber", "eWayBillNumber", "remarks", "status", "approvedById", "approvedAt", "addedById", "createdAt", "updatedAt"
+        ) VALUES (
+          gen_random_uuid()::text, $1, $2, $3, $4,
+          $5, $6, $7, $8, $9,
+          $10, $11, $12, $13, $14, $15, $16, $17,
+          $18, $19, $20, $21, $22, $23,
+          $24, $25, $26, $27, $28, 'PENDING', null, null, $29, NOW(), NOW()
+        ) RETURNING *
+      `, [
+        targetWoNum, woDate, targetInvNum, invDate,
+        partyName, partyAddress, partyGstNumber, companyName, companyGstNumber,
+        item.kpclCode || '-', item.itemName.trim(), item.description || null, item.partNumber || null,
+        item.unit ? item.unit.trim().toUpperCase() : 'NOS',
+        qty, rate, basicAmount, cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount, shippingCharges, totalAmount,
+        vehicleNumber, eWayBillNumber, remarks, req.user.id
+      ]);
+      createdOrders.push(insRes.rows[0]);
+    }
+
+    // Cancel / remove previous pending approvals for this invoice number
+    await client.query(`
+      DELETE FROM "ApprovalRequest"
+      WHERE ("type" = 'WORK_ORDER_SALE' OR "type" = 'WORK_ORDER_EDIT' OR "type" = 'WORK_ORDER')
+        AND "status" = 'PENDING'
+        AND payload::text ILIKE $1
+    `, [`%"invoiceNumber":"${cleanInv}"%`]);
+
+    // Create single approval request with all items
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'WORK_ORDER_EDIT', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [
+      req.user.id,
+      JSON.stringify({
+        workOrderIds: createdOrders.map(o => o.id),
+        workOrderNumber: targetWoNum,
+        invoiceNumber: targetInvNum,
+        invoiceDate: invDate,
+        partyName: partyName,
+        partyAddress: partyAddress,
+        partyGstNumber: partyGstNumber,
+        companyGstNumber: companyGstNumber,
+        vehicleNumber: vehicleNumber,
+        eWayBillNumber: eWayBillNumber,
+        itemCount: createdOrders.length,
+        items: createdOrders.map(o => ({
+          id: o.id,
+          itemName: o.itemName,
+          partNumber: o.partNumber,
+          kpclCode: o.kpclCode,
+          unit: o.unit,
+          qty: o.qty,
+          rate: o.rate,
+          basicAmount: o.basicAmount,
+          totalAmount: o.totalAmount
+        })),
+        totalAmount: grandTotal,
+        remarks: remarks
+      }),
+      `Work Order Invoice #${targetInvNum} (${createdOrders.length} items) edited by ${req.user.fullName || req.user.username} (₹${grandTotal.toLocaleString('en-IN')})`
+    ]);
+
+    await client.query('COMMIT');
+    res.json({ message: `Work Order invoice #${targetInvNum} updated (${createdOrders.length} items) and submitted for Owner Approval`, workOrders: createdOrders });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('Error updating work order invoice:', err);
+    res.status(500).json({ error: 'Failed to update work order invoice' });
+  } finally {
+    client.release();
+  }
+});
+
 // PUT /api/work-orders/:id - Update Work Order (With Owner Approval Workflow)
 app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   const client = await pool.connect();
@@ -3816,16 +4726,124 @@ app.put('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAG
   }
 });
 
-// DELETE /api/work-orders/:id - Delete Work Order
+// DELETE /api/work-orders/:id - Request deletion of single Work Order item (Requires Owner Approval)
 app.delete('/api/work-orders/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { rows } = await pool.query(`DELETE FROM "WorkOrder" WHERE "id" = $1 RETURNING *`, [id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Work Order not found' });
-    res.json({ message: 'Work Order deleted successfully' });
+    const { reason } = req.body || {};
+
+    const existing = await client.query(`SELECT * FROM "WorkOrder" WHERE id = $1`, [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Work Order not found' });
+    }
+
+    const wo = existing.rows[0];
+
+    const payload = {
+      workOrderId: wo.id,
+      targetIds: [wo.id],
+      isGrouped: false,
+      invoiceNumber: wo.invoiceNumber || '-',
+      workOrderNumber: wo.workOrderNumber || '-',
+      invoiceDate: wo.invoiceDate,
+      partyName: wo.partyName || 'Client',
+      partyAddress: wo.partyAddress || '-',
+      vehicleNumber: wo.vehicleNumber || '-',
+      eWayBillNumber: wo.eWayBillNumber || '-',
+      itemCount: 1,
+      qty: wo.qty,
+      totalAmount: wo.totalAmount,
+      items: [{
+        workOrderId: wo.id,
+        partNumber: wo.partNumber || '-',
+        itemName: wo.itemName || '-',
+        unit: wo.unit || 'NOS',
+        qty: wo.qty,
+        rate: wo.rate,
+        totalAmount: wo.totalAmount
+      }]
+    };
+
+    const reqReason = reason || `Work Order item deletion requested by ${req.user.fullName || req.user.username}`;
+
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'WORK_ORDER_DELETE', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [req.user.id, JSON.stringify(payload), reqReason]);
+
+    res.json({
+      message: `Work Order deletion request for item '${wo.itemName}' submitted for Owner Approval!`,
+      requiresApproval: true
+    });
   } catch (err) {
-    console.error('Error deleting work order:', err);
-    res.status(500).json({ error: 'Failed to delete work order' });
+    console.error('Error submitting work order delete request:', err);
+    res.status(500).json({ error: 'Failed to submit work order deletion request' });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/work-orders/invoice/:invoiceNumber - Request deletion of entire Work Order invoice (Requires Owner Approval)
+app.delete('/api/work-orders/invoice/:invoiceNumber', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { invoiceNumber } = req.params;
+    const cleanInv = decodeURIComponent(invoiceNumber.trim()).toUpperCase();
+    const { reason } = req.body || {};
+
+    const existing = await client.query(`SELECT * FROM "WorkOrder" WHERE LOWER(TRIM("invoiceNumber")) = LOWER($1)`, [cleanInv]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'No Work Orders found for this invoice number' });
+    }
+
+    const targetIds = existing.rows.map(r => r.id);
+    const totalQty = existing.rows.reduce((sum, r) => sum + (parseFloat(r.qty) || 0), 0);
+    const grandTotal = existing.rows.reduce((sum, r) => sum + (parseFloat(r.totalAmount) || 0), 0);
+    const first = existing.rows[0];
+
+    const itemsPayload = existing.rows.map(r => ({
+      workOrderId: r.id,
+      partNumber: r.partNumber || '-',
+      itemName: r.itemName || '-',
+      unit: r.unit || 'NOS',
+      qty: r.qty,
+      rate: r.rate,
+      totalAmount: r.totalAmount
+    }));
+
+    const payload = {
+      targetIds,
+      isGrouped: true,
+      invoiceNumber: cleanInv,
+      workOrderNumber: first.workOrderNumber || cleanInv,
+      invoiceDate: first.invoiceDate,
+      partyName: first.partyName || 'Client',
+      partyAddress: first.partyAddress || '-',
+      vehicleNumber: first.vehicleNumber || '-',
+      eWayBillNumber: first.eWayBillNumber || '-',
+      itemCount: existing.rows.length,
+      qty: totalQty,
+      totalAmount: grandTotal,
+      items: itemsPayload
+    };
+
+    const reqReason = reason || `Work Order invoice deletion (${existing.rows.length} items) requested by ${req.user.fullName || req.user.username}`;
+
+    await client.query(`
+      INSERT INTO "ApprovalRequest" ("id", "type", "status", "requestedById", "payload", "reason", "createdAt", "updatedAt")
+      VALUES (gen_random_uuid()::text, 'WORK_ORDER_DELETE', 'PENDING', $1, $2, $3, NOW(), NOW())
+    `, [req.user.id, JSON.stringify(payload), reqReason]);
+
+    res.json({
+      message: `Work Order invoice #${cleanInv} deletion request (${existing.rows.length} items) submitted for Owner Approval!`,
+      requiresApproval: true
+    });
+  } catch (err) {
+    console.error('Error submitting work order invoice delete request:', err);
+    res.status(500).json({ error: 'Failed to submit work order invoice deletion request' });
+  } finally {
+    client.release();
   }
 });
 
@@ -7453,6 +8471,13 @@ const server = app.listen(PORT, async () => {
   try {
     // 1. Automatically create all PostgreSQL tables via raw SQL if they do not exist
     await initializeDatabaseTables();
+
+    // Ensure deletion approval types exist in enum
+    for (const val of ['PURCHASE_DELETE', 'INWARD_DELETE', 'SALE_DELETE', 'WORK_ORDER_DELETE']) {
+      try {
+        await pool.query(`ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS '${val}'`);
+      } catch (_) {}
+    }
 
     // 2. Run seed baseline data to ensure default owner exists
     await seedBaselineData();

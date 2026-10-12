@@ -90,12 +90,16 @@ export const initializeDatabaseTables = async () => {
         WHEN duplicate_object THEN null;
       END $$;
 
-      -- Add SALE_ENTRY, INDIVIDUAL_SALE, WORK_ORDER_SALE, WORK_ORDER_EDIT, SALE_EDIT to ApprovalType enum if not already present
+      -- Add SALE_ENTRY, INDIVIDUAL_SALE, WORK_ORDER_SALE, WORK_ORDER_EDIT, SALE_EDIT, DELETIONS to ApprovalType enum if not already present
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_ENTRY';
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_EDIT';
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'INDIVIDUAL_SALE';
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_SALE';
       ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_EDIT';
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'INWARD_DELETE';
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'PURCHASE_DELETE';
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'SALE_DELETE';
+      ALTER TYPE "ApprovalType" ADD VALUE IF NOT EXISTS 'WORK_ORDER_DELETE';
 
       DO $$ BEGIN
         CREATE TYPE "ApprovalStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');

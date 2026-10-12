@@ -283,22 +283,22 @@ export const SaleInvoiceModal: React.FC<{
 
       // Title text: Company Name (Bold Red)
       doc.setTextColor(218, 18, 18);
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(16);
       doc.text(customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS'), pageWidth / 2, targetY + 6.5, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(8.2);
       doc.text(customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170'), pageWidth / 2, targetY + 11.5, { align: 'center' });
       
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(8.2);
       doc.text(customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
 
       // GST and Mobile Bar
-      doc.setFont('helvetica', 'bold');
+      doc.setFont('times', 'bold');
       doc.setFontSize(8);
       doc.text(`GST NO: ${customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}`, margin + 2, targetY + 21.5);
       doc.text(`Mobile No: ${customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}`, pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
@@ -311,7 +311,7 @@ export const SaleInvoiceModal: React.FC<{
     // 2. BOXED TAX INVOICE TITLE
     doc.rect(margin, y, contentWidth, 7);
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 5.2, { align: 'center' });
     y += 7;
 
@@ -323,7 +323,7 @@ export const SaleInvoiceModal: React.FC<{
     doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
 
     // Left Column items
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.setFontSize(8);
     let ly = y + 4.5;
     doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
@@ -336,7 +336,7 @@ export const SaleInvoiceModal: React.FC<{
     ly += 5.5;
     const supplyToText = primarySale.placeOfWork || partyName || '-';
     doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, ly);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     doc.setFontSize(7.5);
     
     if (partyAddress) {
@@ -346,7 +346,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.text(`Party: ${partyName}`, margin + 2, ly + 4.5);
     }
     
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.setFontSize(8);
     doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, ly + 20);
     doc.line(margin, ly + 22, margin + colHalf, ly + 22);
@@ -356,7 +356,7 @@ export const SaleInvoiceModal: React.FC<{
 
     // Right Column items
     let ry = y + 4.5;
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.setFontSize(8);
     doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
     doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
@@ -367,7 +367,7 @@ export const SaleInvoiceModal: React.FC<{
 
     ry += 5.5;
     doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, ry);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     doc.setFontSize(7.5);
 
     const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
@@ -380,7 +380,7 @@ export const SaleInvoiceModal: React.FC<{
     const hasVehicle = vehicleNo && vehicleNo !== '-';
     const hasEway = eWayBillNo && eWayBillNo !== '-';
 
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.setTextColor(0, 0, 0);
 
     if (hasVehicle && hasEway) {
@@ -428,7 +428,7 @@ export const SaleInvoiceModal: React.FC<{
       theme: 'grid',
       rowPageBreak: 'avoid', // PREVENTS ROWS FROM SPLITTING HALFWAY ACROSS PAGES
       styles: {
-        font: 'helvetica',
+        font: 'times',
         fontSize: 7.5,
         lineColor: [0, 0, 0],
         lineWidth: 0.35,
@@ -437,7 +437,7 @@ export const SaleInvoiceModal: React.FC<{
         valign: 'middle'
       },
       headStyles: {
-        font: 'helvetica',
+        font: 'times',
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontStyle: 'bold',
@@ -482,19 +482,19 @@ export const SaleInvoiceModal: React.FC<{
     doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
 
     // Left Box: Total Invoice amount in words + Bank Details
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.setFontSize(7.5);
     doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
     const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
     doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
 
     doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
 
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.text('Bank Details :', margin + 2, fy + 16.5);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     doc.text(`Account Holder Name : ${customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}`, margin + 2, fy + 20.5);
     doc.text(`Bank Name : ${customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 24.5);
     doc.text(`Bank Account No: ${customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}`, margin + 2, fy + 28.5);
@@ -527,7 +527,7 @@ export const SaleInvoiceModal: React.FC<{
     const rowHeight = bottomBoxHeight / summaryRows.length;
     summaryRows.forEach((row, rIdx) => {
       const rowY = fy + (rIdx * rowHeight);
-      doc.setFont('helvetica', row.isBold ? 'bold' : 'normal');
+      doc.setFont('times', row.isBold ? 'bold' : 'normal');
       doc.setFontSize(row.isBold ? 8 : 7.2);
       doc.text(row.label, rightX + 2, rowY + (rowHeight * 0.72));
       doc.text(row.value, valX, rowY + (rowHeight * 0.72), { align: 'right' });
@@ -543,13 +543,13 @@ export const SaleInvoiceModal: React.FC<{
       drawHeaderBox(8);
       sigY = 38;
     }
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('times', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(0, 0, 0);
     doc.text('Your Faithfully', pageWidth - margin - 22, sigY, { align: 'center' });
     
     // Royal Blue for company signature & Proprietor designation
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.setTextColor(30, 64, 175); // #1e40af
     doc.text(customSettings.signatoryTitle || 'For Sri Krishna Constructions', pageWidth - margin - 22, sigY + 5.5, { align: 'center' });
     
@@ -560,7 +560,7 @@ export const SaleInvoiceModal: React.FC<{
 
     // Proprietor designation in Royal Blue
     doc.setTextColor(30, 64, 175); // #1e40af
-    doc.setFont('helvetica', 'bold');
+    doc.setFont('times', 'bold');
     doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 19, { align: 'center' });
 
     // 7. Render exact, synchronized page count on every page (e.g., Page 1 of 3, Page 2 of 3, Page 3 of 3)
@@ -570,7 +570,7 @@ export const SaleInvoiceModal: React.FC<{
 
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
       doc.setTextColor(0, 0, 0);
       doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 290, { align: 'center' });
@@ -664,6 +664,7 @@ export const SaleInvoiceModal: React.FC<{
             margin: 0 !important;
             max-width: 100% !important;
             width: 100% !important;
+            font-family: 'Times New Roman', Times, serif !important;
           }
           .no-print {
             display: none !important;
@@ -735,8 +736,8 @@ export const SaleInvoiceModal: React.FC<{
         {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
         <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center invoice-sheet-container">
           <div 
-            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-sans invoice-sheet"
-            style={{ fontFamily: "Arial, 'Segoe UI', Roboto, Helvetica, sans-serif" }}
+            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-serif invoice-sheet"
+            style={{ fontFamily: "'Times New Roman', Times, serif" }}
           >
             
             {/* 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO */}
