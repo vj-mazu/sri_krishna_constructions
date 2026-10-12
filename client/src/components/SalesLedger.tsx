@@ -19,7 +19,8 @@ import {
   ArrowUpDown,
   Trash2,
   Calendar,
-  Truck
+  Truck,
+  Plus
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 import { showToast } from '../toast';
@@ -362,6 +363,28 @@ export const SalesLedger: React.FC = () => {
     setEditInvoiceData({
       ...editInvoiceData,
       items: editInvoiceData.items.filter((_: any, idx: number) => idx !== index)
+    });
+  };
+
+  const handleAddInvoiceItem = () => {
+    if (!editInvoiceData) return;
+    const newItem = {
+      id: `new_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      purchaseOrderItemId: '',
+      partNumber: '',
+      itemName: '',
+      kpclCode: '',
+      unit: 'NOS',
+      qty: 1,
+      rate: 0,
+      cgstPercent: 9,
+      sgstPercent: 9,
+      igstPercent: 0,
+      shippingCharges: 0
+    };
+    setEditInvoiceData({
+      ...editInvoiceData,
+      items: [...editInvoiceData.items, newItem]
     });
   };
 
@@ -942,13 +965,21 @@ export const SalesLedger: React.FC = () => {
                       <div className="space-y-2">
                         <div className="font-bold text-slate-800 text-xs flex items-center justify-between">
                           <span className="flex items-center gap-1.5"><Package className="w-4 h-4 text-[#1e3a8a]" /> Items in Invoice ({editInvoiceData.items.length})</span>
+                          <button
+                            type="button"
+                            onClick={handleAddInvoiceItem}
+                            className="px-2.5 py-1 bg-sky-800 hover:bg-sky-900 text-white rounded text-xs font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            + Add Item Row
+                          </button>
                         </div>
                         <div className="border border-slate-200 rounded-xl overflow-x-auto bg-white shadow-xs">
                           <table className="w-full text-left text-xs excel-table">
                             <thead>
                               <tr className="bg-sky-950 text-sky-200">
                                 <th className="p-2 text-center w-8">SL</th>
-                                <th className="p-2">Part No / Description</th>
+                                <th className="p-2 min-w-[200px]">Part No / Description</th>
                                 <th className="p-2 w-28">Unit</th>
                                 <th className="p-2 w-24 text-center">Qty *</th>
                                 <th className="p-2 w-28 text-right">Rate (₹) *</th>
@@ -968,9 +999,21 @@ export const SalesLedger: React.FC = () => {
                                 return (
                                   <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50">
                                     <td className="p-2 text-center font-mono font-bold bg-slate-50 text-slate-600">{idx + 1}</td>
-                                    <td className="p-2">
-                                      <div className="font-bold text-slate-800">{it.partNumber}</div>
-                                      <div className="text-[10px] text-slate-500">{it.itemName} {it.kpclCode && it.kpclCode !== '-' ? `(KPCL: ${it.kpclCode})` : ''}</div>
+                                    <td className="p-1 min-w-[200px]">
+                                      <input
+                                        type="text"
+                                        value={it.partNumber || ''}
+                                        onChange={(e) => handleEditItemChange(idx, 'partNumber', e.target.value.toUpperCase())}
+                                        placeholder="Part Number"
+                                        className="w-full p-1 border border-slate-300 rounded font-mono font-bold text-xs uppercase text-[#1e3a8a] outline-none focus:border-blue-500"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={it.itemName || ''}
+                                        onChange={(e) => handleEditItemChange(idx, 'itemName', e.target.value)}
+                                        placeholder="Item Description"
+                                        className="w-full p-1 mt-1 border border-slate-200 rounded text-[11px] text-slate-800 font-semibold outline-none focus:border-blue-500 bg-slate-50 focus:bg-white"
+                                      />
                                     </td>
                                     <td className="p-2">
                                       <select
@@ -1054,6 +1097,16 @@ export const SalesLedger: React.FC = () => {
                               })}
                             </tbody>
                           </table>
+                        </div>
+                        <div className="p-2 bg-slate-50 border border-slate-200 rounded-xl flex justify-center">
+                          <button
+                            type="button"
+                            onClick={handleAddInvoiceItem}
+                            className="w-full py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold border border-dashed border-sky-300 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            + Add Another Item Row
+                          </button>
                         </div>
                       </div>
 

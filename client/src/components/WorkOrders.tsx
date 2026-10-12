@@ -1494,10 +1494,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             return (
               <div 
                 key={grp.key}
-                className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden transition-all mb-5"
+                className="bg-white rounded-2xl border-2 border-slate-300 shadow-md hover:shadow-lg overflow-hidden transition-all mb-8 ring-1 ring-slate-900/10"
               >
                 {/* CONTAINER HEADER BANNER */}
-                <div className="bg-slate-50/90 p-3 sm:p-3.5 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="bg-gradient-to-r from-slate-100 via-sky-50/50 to-slate-100 p-3 sm:p-3.5 border-b-2 border-slate-300 flex flex-wrap items-center justify-between gap-2.5 border-t-4 border-t-[#1e3a8a]">
                   {/* Left: Metadata badges & Select Checkbox */}
                   <div className="flex flex-wrap items-center gap-2">
                     <input 
@@ -1677,7 +1677,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 </div>
 
                 {/* CONTAINER SUMMARY FOOTER */}
-                <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
+                <div className="bg-slate-100/90 px-3.5 py-2.5 border-t-2 border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-700 font-medium">
                   <div className="flex items-center gap-4">
                     <span>Total Items: <strong className="text-slate-800 font-mono font-semibold">{grp.items.length}</strong></span>
                     <span>Total Qty: <strong className="text-blue-900 font-mono font-semibold">{grp.totalQty} units</strong></span>

@@ -267,6 +267,27 @@ const runTests = async () => {
       `Sale item 1 updated: Qty=12, Rate=₹700, Party="Royal Construction Works", Total=₹${dbSaleRes.rows[0].totalAmount}`
     );
 
+    // 2.3 TEST ATTEMPTING OVER-SALE (e.g. Inward was 45, trying to edit sale to 46 or 20 -> 21):
+    // Must be rejected with 400 and clear error message
+    const overSaleRes = await fetch(`${BASE_URL}/sales/invoice?invoiceNumber=${testSaleInv}`, {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify({
+        originalInvoiceNumber: testSaleInv,
+        invoiceNumber: testSaleInv,
+        items: [
+          {
+            id: saleId1,
+            qty: 101, // Exceeds inward balance of 100!
+            rate: 700
+          }
+        ]
+      })
+    });
+    const overSaleData = await overSaleRes.json();
+    assert(overSaleRes.status === 400, `Editing sale beyond inward stock is correctly rejected with 400: "${overSaleData.error}"`);
+    assert(overSaleData.error && overSaleData.error.includes('Maximum available inward stock'), `Error message clearly informs user of available stock limit: "${overSaleData.error}"`);
+
     // =========================================================================
     // TEST SUITE 3: WORK ORDERS INLINE EDIT & ITEM ROW DELETION
     // =========================================================================

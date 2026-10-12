@@ -1123,8 +1123,53 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     setEditInwardInvoiceItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
+  const handleAddInwardItemRow = () => {
+    const existingPoItemIds = new Set(editInwardInvoiceItems.map(it => it.purchaseOrderItemId).filter(Boolean));
+    const available = allItemsForSelection.find(i => !existingPoItemIds.has(i.id)) || allItemsForSelection[0];
+    const defaultQty = available ? Math.max(1, (available.qty || 0) - (available.purchasedQty || 0)) : 1;
+
+    const newItem = {
+      id: `new_${Date.now()}_${Math.random()}`,
+      purchaseOrderItemId: available?.id || '',
+      partNumber: available?.partNumber || '',
+      itemName: available?.itemName || '',
+      unit: available?.unit || 'NOS',
+      qty: defaultQty,
+      rate: available?.rate || 0,
+      cgstPercent: available?.cgstPercent !== undefined ? Number(available.cgstPercent) : 9,
+      sgstPercent: available?.sgstPercent !== undefined ? Number(available.sgstPercent) : 9,
+      igstPercent: available?.igstPercent !== undefined ? Number(available.igstPercent) : 0,
+      shippingCharges: 0
+    };
+    setEditInwardInvoiceItems(prev => [...prev, newItem]);
+  };
+
+  const handleSelectInwardItemPoId = (idx: number, poItemId: string) => {
+    const chosen = allItemsForSelection.find(i => i.id === poItemId);
+    if (!chosen) return;
+    const balance = Math.max(1, (chosen.qty || 0) - (chosen.purchasedQty || 0));
+    setEditInwardInvoiceItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it;
+      return {
+        ...it,
+        purchaseOrderItemId: chosen.id,
+        partNumber: chosen.partNumber || '',
+        itemName: chosen.itemName || '',
+        unit: chosen.unit || 'NOS',
+        rate: chosen.rate || 0,
+        qty: balance,
+        cgstPercent: chosen.cgstPercent !== undefined ? Number(chosen.cgstPercent) : it.cgstPercent,
+        sgstPercent: chosen.sgstPercent !== undefined ? Number(chosen.sgstPercent) : it.sgstPercent,
+        igstPercent: chosen.igstPercent !== undefined ? Number(chosen.igstPercent) : it.igstPercent
+      };
+    }));
+  };
+
   // Open Grouped Inward Invoice Edit Modal (or Toggle Inline)
   const handleOpenEditInwardInvoice = async (pur: any, initialItems?: any[]) => {
+    if (selectedPo?.id) {
+      fetchAllItemsForDropdown(selectedPo.id);
+    }
     const invNum = (pur.partyInvoiceNumber || '').trim();
     if (editInwardInvoiceModal && (editInwardInvoiceModal.partyInvoiceNumber || '').trim() === invNum) {
       setEditInwardInvoiceModal(null);
@@ -1352,8 +1397,58 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     setEditSaleInvoiceItems(prev => prev.filter((_, idx) => idx !== index));
   };
 
+  const handleAddSaleItemRow = () => {
+    const existingPoItemIds = new Set(editSaleInvoiceItems.map(it => it.purchaseOrderItemId).filter(Boolean));
+    const available = allItemsForSelection.find(i => !existingPoItemIds.has(i.id) && ((i.availableForSale !== undefined ? i.availableForSale : ((i.purchasedQty || 0) - (i.soldQty || 0))) > 0)) ||
+                      allItemsForSelection.find(i => !existingPoItemIds.has(i.id)) ||
+                      allItemsForSelection[0];
+
+    const availStock = available ? (available.availableForSale !== undefined ? available.availableForSale : ((available.purchasedQty || 0) - (available.soldQty || 0))) : 1;
+    const defaultQty = Math.max(1, availStock || 1);
+
+    const newItem = {
+      id: `new_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      purchaseOrderItemId: available?.id || '',
+      partNumber: available?.partNumber || '',
+      itemName: available?.itemName || '',
+      unit: available?.unit || 'NOS',
+      qty: defaultQty,
+      rate: available?.rate || 0,
+      cgstPercent: available?.cgstPercent !== undefined ? Number(available.cgstPercent) : 9,
+      sgstPercent: available?.sgstPercent !== undefined ? Number(available.sgstPercent) : 9,
+      igstPercent: available?.igstPercent !== undefined ? Number(available.igstPercent) : 0,
+      shippingCharges: 0
+    };
+    setEditSaleInvoiceItems(prev => [...prev, newItem]);
+  };
+
+  const handleSelectSaleItemPoId = (idx: number, poItemId: string) => {
+    const chosen = allItemsForSelection.find(i => i.id === poItemId);
+    if (!chosen) return;
+    const availStock = (chosen.availableForSale !== undefined ? chosen.availableForSale : ((chosen.purchasedQty || 0) - (chosen.soldQty || 0))) || 1;
+    const defaultQty = Math.max(1, availStock);
+    setEditSaleInvoiceItems(prev => prev.map((it, i) => {
+      if (i !== idx) return it;
+      return {
+        ...it,
+        purchaseOrderItemId: chosen.id,
+        partNumber: chosen.partNumber || '',
+        itemName: chosen.itemName || '',
+        unit: chosen.unit || 'NOS',
+        rate: chosen.rate || 0,
+        qty: defaultQty,
+        cgstPercent: chosen.cgstPercent !== undefined ? Number(chosen.cgstPercent) : it.cgstPercent,
+        sgstPercent: chosen.sgstPercent !== undefined ? Number(chosen.sgstPercent) : it.sgstPercent,
+        igstPercent: chosen.igstPercent !== undefined ? Number(chosen.igstPercent) : it.igstPercent
+      };
+    }));
+  };
+
   // Open Grouped Sale Invoice Edit Modal (or Toggle Inline)
   const handleOpenEditSaleInvoice = async (sale: any, initialItems?: any[]) => {
+    if (selectedPo?.id) {
+      fetchAllItemsForDropdown(selectedPo.id);
+    }
     const invNum = (sale.invoiceNumber || '').trim();
     if (editSaleInvoiceModal && (editSaleInvoiceModal.invoiceNumber || '').trim() === invNum) {
       setEditSaleInvoiceModal(null);
@@ -4581,13 +4676,21 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
                                   <div className="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-800 text-xs flex justify-between items-center">
                                     <span>Inward Line Items ({editInwardInvoiceItems.length})</span>
+                                    <button
+                                      type="button"
+                                      onClick={handleAddInwardItemRow}
+                                      className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded text-xs font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      + Add Item from PO
+                                    </button>
                                   </div>
                                   <div className="overflow-x-auto">
                                     <table className="w-full text-xs text-left">
                                       <thead className="bg-slate-800 text-slate-200 text-[11px]">
                                         <tr>
                                           <th className="p-2 w-10 text-center">Sl No</th>
-                                          <th className="p-2 min-w-[130px]">Part Number</th>
+                                          <th className="p-2 min-w-[200px]">Part Number / PO Item</th>
                                           <th className="p-2 min-w-[180px]">Item Name</th>
                                           <th className="p-2 w-24 text-center">Unit</th>
                                           <th className="p-2 w-24 text-center">Inward Qty *</th>
@@ -4610,16 +4713,63 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                             <tr key={item.id || idx} className="hover:bg-slate-50">
                                               <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
                                               <td className="p-1">
-                                                <input
-                                                  type="text"
-                                                  value={item.partNumber || ''}
-                                                  onChange={e => {
-                                                    const val = e.target.value.toUpperCase();
-                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, partNumber: val } : it));
-                                                  }}
-                                                  placeholder="Part No"
-                                                  className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-xs uppercase outline-none focus:border-emerald-500 text-[#1e3a8a]"
-                                                />
+                                                <div className="flex flex-col gap-1 min-w-[210px]">
+                                                  <select
+                                                    value={item.purchaseOrderItemId || ''}
+                                                    onChange={e => handleSelectInwardItemPoId(idx, e.target.value)}
+                                                    className="w-full p-1 border border-slate-300 rounded font-mono text-[11px] bg-white text-[#1e3a8a] outline-none focus:border-emerald-500 font-bold cursor-pointer"
+                                                  >
+                                                    <option value="">-- Select PO Item ({allItemsForSelection.length}) --</option>
+                                                    {allItemsForSelection.map(poItm => {
+                                                      const bal = Math.max(0, (poItm.qty || 0) - (poItm.purchasedQty || 0));
+                                                      const kpcl = poItm.kpclCode && poItm.kpclCode !== '-' ? `[KPCL: ${poItm.kpclCode}] ` : '';
+                                                      const part = poItm.partNumber ? `[PN: ${poItm.partNumber}] ` : '';
+                                                      return (
+                                                        <option key={poItm.id} value={poItm.id}>
+                                                          {part}{kpcl}{poItm.itemName} (Bal: {bal})
+                                                        </option>
+                                                      );
+                                                    })}
+                                                  </select>
+                                                  <div className="relative">
+                                                    <input
+                                                      type="text"
+                                                      list={`inward-part-dl-${idx}`}
+                                                      value={item.partNumber || ''}
+                                                      onChange={e => {
+                                                        const val = e.target.value.trim().toLowerCase();
+                                                        const matched = allItemsForSelection.find(p => 
+                                                          (p.partNumber || '').trim().toLowerCase() === val ||
+                                                          (p.kpclCode || '').trim().toLowerCase() === val ||
+                                                          (p.itemName || '').trim().toLowerCase() === val
+                                                        );
+                                                        if (matched) {
+                                                          handleSelectInwardItemPoId(idx, matched.id);
+                                                        } else {
+                                                          setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, partNumber: e.target.value.toUpperCase() } : it));
+                                                        }
+                                                      }}
+                                                      placeholder="Search Part No / KPCL / Item"
+                                                      className="w-full p-1 border border-slate-200 rounded font-mono text-xs uppercase outline-none focus:border-emerald-500 text-slate-700 bg-slate-50"
+                                                    />
+                                                    <datalist id={`inward-part-dl-${idx}`}>
+                                                      {allItemsForSelection.map(poItm => (
+                                                        <React.Fragment key={poItm.id}>
+                                                          {poItm.partNumber && (
+                                                            <option value={poItm.partNumber}>
+                                                              {poItm.kpclCode && poItm.kpclCode !== '-' ? `KPCL: ${poItm.kpclCode} • ` : ''}{poItm.itemName}
+                                                            </option>
+                                                          )}
+                                                          {poItm.kpclCode && poItm.kpclCode !== '-' && poItm.kpclCode !== poItm.partNumber && (
+                                                            <option value={poItm.kpclCode}>
+                                                              Part: {poItm.partNumber || '-'} • {poItm.itemName}
+                                                            </option>
+                                                          )}
+                                                        </React.Fragment>
+                                                      ))}
+                                                    </datalist>
+                                                  </div>
+                                                </div>
                                               </td>
                                               <td className="p-1">
                                                 <input
@@ -4743,6 +4893,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         })}
                                       </tbody>
                                     </table>
+                                  </div>
+                                  <div className="p-2 bg-slate-50 border-t border-slate-200 flex justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={handleAddInwardItemRow}
+                                      className="w-full py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold border border-dashed border-emerald-300 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      + Add Another Line Item from PO
+                                    </button>
                                   </div>
                                 </div>
 
@@ -5720,13 +5880,21 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs bg-white">
                                   <div className="bg-slate-100 p-2.5 border-b border-slate-200 font-bold text-slate-800 text-xs flex justify-between items-center">
                                     <span>Invoice Line Items ({editSaleInvoiceItems.length})</span>
+                                    <button
+                                      type="button"
+                                      onClick={handleAddSaleItemRow}
+                                      className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white rounded text-xs font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      + Add Item from PO
+                                    </button>
                                   </div>
                                   <div className="overflow-x-auto">
                                     <table className="w-full text-xs text-left">
                                       <thead className="bg-slate-800 text-slate-200 text-[11px]">
                                         <tr>
                                           <th className="p-2 w-10 text-center">Sl No</th>
-                                          <th className="p-2 min-w-[140px]">Part Number</th>
+                                          <th className="p-2 min-w-[200px]">Part Number / PO Item</th>
                                           <th className="p-2 min-w-[200px]">Item Name</th>
                                           <th className="p-2 w-28 text-center">Unit</th>
                                           <th className="p-2 w-24 text-center">Sale Qty *</th>
@@ -5748,8 +5916,78 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           return (
                                             <tr key={item.id || idx} className="hover:bg-slate-50">
                                               <td className="p-2 text-center font-mono font-bold text-slate-500 bg-slate-50">{idx + 1}</td>
-                                              <td className="p-2 font-mono font-bold text-[#1e3a8a]">{item.partNumber}</td>
-                                              <td className="p-2 font-semibold text-slate-800">{item.itemName}</td>
+                                              <td className="p-1">
+                                                <div className="flex flex-col gap-1 min-w-[210px]">
+                                                  <select
+                                                    value={item.purchaseOrderItemId || ''}
+                                                    onChange={e => handleSelectSaleItemPoId(idx, e.target.value)}
+                                                    className="w-full p-1 border border-slate-300 rounded font-mono text-[11px] bg-white text-[#1e3a8a] outline-none focus:border-blue-500 font-bold cursor-pointer"
+                                                  >
+                                                    <option value="">-- Choose PO Item ({allItemsForSelection.length}) --</option>
+                                                    {allItemsForSelection.map(poItm => {
+                                                      const avail = poItm.availableForSale !== undefined ? poItm.availableForSale : ((poItm.purchasedQty || 0) - (poItm.soldQty || 0));
+                                                      const kpcl = poItm.kpclCode && poItm.kpclCode !== '-' ? `[KPCL: ${poItm.kpclCode}] ` : '';
+                                                      const part = poItm.partNumber ? `[PN: ${poItm.partNumber}] ` : '';
+                                                      return (
+                                                        <option key={poItm.id} value={poItm.id}>
+                                                          {part}{kpcl}{poItm.itemName} (Avail: {avail})
+                                                        </option>
+                                                      );
+                                                    })}
+                                                  </select>
+                                                  <div className="relative">
+                                                    <input
+                                                      type="text"
+                                                      list={`sale-part-dl-${idx}`}
+                                                      value={item.partNumber || ''}
+                                                      onChange={e => {
+                                                        const val = e.target.value.trim().toLowerCase();
+                                                        const matched = allItemsForSelection.find(p => 
+                                                          (p.partNumber || '').trim().toLowerCase() === val ||
+                                                          (p.kpclCode || '').trim().toLowerCase() === val ||
+                                                          (p.itemName || '').trim().toLowerCase() === val
+                                                        );
+                                                        if (matched) {
+                                                          handleSelectSaleItemPoId(idx, matched.id);
+                                                        } else {
+                                                          setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, partNumber: e.target.value.toUpperCase() } : it));
+                                                        }
+                                                      }}
+                                                      placeholder="Search Part No / KPCL / Item"
+                                                      className="w-full p-1 border border-slate-200 rounded font-mono text-xs uppercase outline-none focus:border-blue-500 text-slate-700 bg-slate-50"
+                                                    />
+                                                    <datalist id={`sale-part-dl-${idx}`}>
+                                                      {allItemsForSelection.map(poItm => (
+                                                        <React.Fragment key={poItm.id}>
+                                                          {poItm.partNumber && (
+                                                            <option value={poItm.partNumber}>
+                                                              {poItm.kpclCode && poItm.kpclCode !== '-' ? `KPCL: ${poItm.kpclCode} • ` : ''}{poItm.itemName}
+                                                            </option>
+                                                          )}
+                                                          {poItm.kpclCode && poItm.kpclCode !== '-' && poItm.kpclCode !== poItm.partNumber && (
+                                                            <option value={poItm.kpclCode}>
+                                                              Part: {poItm.partNumber || '-'} • {poItm.itemName}
+                                                            </option>
+                                                          )}
+                                                        </React.Fragment>
+                                                      ))}
+                                                    </datalist>
+                                                  </div>
+                                                </div>
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="text"
+                                                  required
+                                                  value={item.itemName || ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value;
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, itemName: val } : it));
+                                                  }}
+                                                  placeholder="Item Name"
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-semibold text-xs outline-none focus:border-blue-500 text-slate-900"
+                                                />
+                                              </td>
                                               <td className="p-1">
                                                 <select
                                                   value={item.unit || 'NOS'}
@@ -5859,6 +6097,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         })}
                                       </tbody>
                                     </table>
+                                  </div>
+                                  <div className="p-2 bg-slate-50 border-t border-slate-200 flex justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={handleAddSaleItemRow}
+                                      className="w-full py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 font-bold border border-dashed border-blue-300 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                      + Add Another Line Item from PO
+                                    </button>
                                   </div>
                                 </div>
 

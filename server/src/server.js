@@ -1769,6 +1769,54 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
         if (uRes.rows[0]) {
           updatedPurchases.push(uRes.rows[0]);
         }
+      } else {
+        // Newly added item row to this inward invoice!
+        let poItemId = item.purchaseOrderItemId || item.itemId;
+        if (!poItemId && (receivedPartNumber || receivedItemName) && existing.rows[0]) {
+          const poMatch = await client.query(`
+            SELECT poi.id 
+            FROM "PurchaseOrderItem" poi
+            WHERE poi."purchaseOrderId" = (
+              SELECT "purchaseOrderId" FROM "PurchaseOrderItem" WHERE id = $1
+            ) AND (
+              UPPER(poi."partNumber") = UPPER($2) 
+              OR (poi."kpclCode" IS NOT NULL AND UPPER(poi."kpclCode") = UPPER($2))
+              OR UPPER(poi."itemName") = UPPER($3)
+            )
+            LIMIT 1
+          `, [existing.rows[0].purchaseOrderItemId, receivedPartNumber || '', receivedItemName || '']);
+          if (poMatch.rows[0]) poItemId = poMatch.rows[0].id;
+        }
+
+        if (poItemId) {
+          const insRes = await client.query(`
+            INSERT INTO "Purchase" (
+              "id", "purchaseOrderItemId", "partyInvoiceNumber", "date", "qty", "rate",
+              "basicAmount", "cgstPercent", "sgstPercent", "igstPercent",
+              "cgstAmount", "sgstAmount", "igstAmount", "totalAmount",
+              "partyName", "supplierAddress", "gstNumber",
+              "supplierInvoiceDate", "vehicleNumber", "remarks", "shippingCharges",
+              "receivedItemName", "receivedPartNumber", "addedById", "createdAt", "updatedAt"
+            ) VALUES (
+              gen_random_uuid()::text, $1, $2, $3, $4, $5,
+              $6, $7, $8, $9,
+              $10, $11, $12, $13,
+              $14, $15, $16,
+              $17, $18, $19, $20,
+              $21, $22, $23, NOW(), NOW()
+            ) RETURNING *
+          `, [
+            poItemId, targetPartyInv, purDate, qty, rate,
+            basicAmount, cgstPercent, sgstPercent, igstPercent,
+            cgstAmount, sgstAmount, igstAmount, totalAmount,
+            partyName, supplierAddress, gstNumber,
+            supplierInvoiceDate, vehicleNumber, remarks, shippingCharges,
+            receivedItemName, receivedPartNumber, req.user.id
+          ]);
+          if (insRes.rows[0]) {
+            updatedPurchases.push(insRes.rows[0]);
+          }
+        }
       }
     }
 
@@ -2214,6 +2262,81 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
             basicAmount: basicAmount,
             totalAmount: totalAmount
           });
+        }
+      } else {
+        // Newly added item row to this sales invoice
+        let poItemId = item.purchaseOrderItemId || item.itemId;
+        if (!poItemId && (item.partNumber || item.receivedPartNumber || item.kpclCode || item.itemName) && existing.rows[0]) {
+          const partToMatch = item.partNumber || item.receivedPartNumber || item.kpclCode || '';
+          const nameToMatch = item.itemName || item.receivedItemName || '';
+          const poMatch = await client.query(`
+            SELECT poi.id 
+            FROM "PurchaseOrderItem" poi
+            WHERE poi."purchaseOrderId" = (
+              SELECT "purchaseOrderId" FROM "PurchaseOrderItem" WHERE id = $1
+            ) AND (
+              UPPER(poi."partNumber") = UPPER($2)
+              OR (poi."kpclCode" IS NOT NULL AND UPPER(poi."kpclCode") = UPPER($2))
+              OR UPPER(poi."itemName") = UPPER($3)
+            )
+            LIMIT 1
+          `, [existing.rows[0].purchaseOrderItemId, partToMatch, nameToMatch]);
+          if (poMatch.rows[0]) poItemId = poMatch.rows[0].id;
+        }
+
+        if (poItemId) {
+          // Check available stock
+          const stockRes = await client.query(`
+            SELECT 
+              COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = $1), 0)::float as "totalInward",
+              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "otherSold"
+          `, [poItemId]);
+          const totalInward = stockRes.rows[0]?.totalInward || 0;
+          const otherSold = stockRes.rows[0]?.otherSold || 0;
+          const availableStock = Math.max(0, totalInward - otherSold);
+          if (qty > availableStock) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: `Cannot add sale quantity of '${item.itemName || 'item'}' (${qty}). Maximum available inward stock is ${availableStock} (Total inward: ${totalInward}, already sold: ${otherSold}).`
+            });
+          }
+
+          const insRes = await client.query(`
+            INSERT INTO "Sale" (
+              "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate",
+              "basicAmount", "cgstPercent", "sgstPercent", "igstPercent",
+              "cgstAmount", "sgstAmount", "igstAmount", "totalAmount",
+              "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
+              "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber",
+              "eWayBillNumber", "remarks", "shippingCharges", "status", "addedById", "createdAt", "updatedAt"
+            ) VALUES (
+              gen_random_uuid()::text, $1, $2, $3, $4, $5,
+              $6, $7, $8, $9,
+              $10, $11, $12, $13,
+              $14, $15, $16, $17,
+              $18, $19, $20,
+              $21, $22, $23, 'PENDING', $24, NOW(), NOW()
+            ) RETURNING *
+          `, [
+            poItemId, targetInvNum, invDate, qty, rate,
+            basicAmount, cgstPercent, sgstPercent, igstPercent,
+            cgstAmount, sgstAmount, igstAmount, totalAmount,
+            partyName, supplierAddress, gstNumber, companyGstNumber,
+            partyInvoiceNumber, supplierInvoiceDate, vehicleNumber,
+            eWayBillNumber, remarks, shippingCharges, req.user.id
+          ]);
+          if (insRes.rows[0]) {
+            updatedSales.push(insRes.rows[0]);
+            itemsPayload.push({
+              saleId: insRes.rows[0].id,
+              partNumber: item.partNumber || item.item?.partNumber || '-',
+              itemName: item.itemName || item.item?.itemName || '-',
+              qty: qty,
+              rate: rate,
+              basicAmount: basicAmount,
+              totalAmount: totalAmount
+            });
+          }
         }
       }
     }
