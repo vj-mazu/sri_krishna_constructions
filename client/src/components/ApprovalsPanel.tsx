@@ -335,7 +335,7 @@ export const ApprovalsPanel: React.FC = () => {
                         {isInwardDelete ? '🗑️ INWARD DELETION' : isSaleDelete ? '🗑️ SALE DELETION' : isWorkOrderDelete ? '🗑️ WORK ORDER DELETION' : isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (grp.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : isSaleEdit ? 'PO SALE EDIT' : 'PO SALE'}
                       </span>
                       <div className="font-mono font-bold text-xs text-[#1e3a8a] mt-0.5">
-                        Inv #{grp.invoiceNumber || '-'}
+                        Inv: {grp.invoiceNumber || '-'}
                       </div>
                     </div>
                   </div>
@@ -597,7 +597,7 @@ export const ApprovalsPanel: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-bold text-slate-800">
-                    Invoice #{inspectModal.invoiceNumber || '-'} • ({inspectModal.items?.length || 1} Items)
+                    Invoice: {inspectModal.invoiceNumber || '-'} • ({inspectModal.items?.length || 1} Items)
                   </h3>
                   <p className="text-[11px] text-slate-500">
                     Requested by <strong className="text-slate-800">{inspectModal.requestedBy?.fullName}</strong> on {new Date(inspectModal.createdAt).toLocaleString('en-GB')}

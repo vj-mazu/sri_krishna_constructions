@@ -2627,7 +2627,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
                 <table className="w-full text-left border-collapse text-xs">
                   <thead className="bg-[#1e3a8a] text-white text-[10px] uppercase font-bold">
                     <tr>
-                      <th className="py-2.5 px-2 text-center w-12 border-r border-blue-900">#</th>
+                      <th className="py-2.5 px-2 text-center w-12 border-r border-blue-900">Sl No</th>
                       <th className="py-2.5 px-2.5 border-r border-blue-900">Worker Code</th>
                       <th className="py-2.5 px-3 border-r border-blue-900">Employee Name</th>
                       <th className="py-2.5 px-3 border-r border-blue-900">Father Name</th>
@@ -2966,7 +2966,7 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
             <table className={`w-full text-left border-collapse ${tableViewMode === 'fit' ? 'text-[10px] xl:text-[11px] table-auto' : 'text-xs min-w-[1350px]'}`}>
             <thead className="sticky top-0 z-20 shadow">
               <tr className="bg-[#1e3a8a] text-white text-[9px] xl:text-[10px] uppercase font-bold tracking-wider">
-                <th className="w-7 text-center py-2.5 px-1">#</th>
+                <th className="w-10 text-center py-2.5 px-1">Sl No</th>
                 <th className={`${tableViewMode === 'fit' ? 'min-w-[120px] max-w-[140px]' : 'min-w-[180px]'} py-2.5 px-1.5`}>Worker Name</th>
                 <th className="text-right py-2.5 px-1">Basic</th>
                 <th className="text-center py-2.5 px-1 bg-[#172554]">Days</th>

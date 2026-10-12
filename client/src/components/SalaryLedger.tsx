@@ -523,7 +523,7 @@ export const SalaryLedger: React.FC = () => {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
-                      <th className="p-3 text-center w-12">#</th>
+                      <th className="p-3 text-center w-12">Sl No</th>
                       <th className="p-3">Hike Effective Date</th>
                       <th className="p-3 text-right">Paid (31 Days Wages)</th>
                       <th className="p-3 text-right">Hike (+₹)</th>

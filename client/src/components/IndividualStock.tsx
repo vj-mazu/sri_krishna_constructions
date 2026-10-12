@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   Package, ShoppingCart, Plus, Trash2, 
   Search, ChevronLeft, ChevronRight, Edit, 
-  ArrowDownToLine, Receipt, Eye,
+  ArrowDownToLine, Receipt,
   CheckCircle2, AlertCircle, FileSpreadsheet, 
   Download, RefreshCw, Layers, Truck, Building2, X
 } from 'lucide-react';

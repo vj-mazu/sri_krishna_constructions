@@ -1207,7 +1207,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="bg-slate-800 text-slate-200 font-bold">
-                        <th className="p-2 w-10 text-center">#</th>
+                        <th className="p-2 w-12 text-center">Sl No</th>
                         <th className="p-2 w-28">KPCL Code</th>
                         <th className="p-2 min-w-[200px]">Item Name &amp; Specification *</th>
                         <th className="p-2 min-w-[150px]">Description / Scope</th>
@@ -1491,12 +1491,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             return (
               <div 
                 key={grp.key}
-                className="bg-white rounded-2xl border-2 border-slate-700 shadow-md overflow-hidden transition-all mb-6"
+                className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden transition-all mb-5"
               >
                 {/* CONTAINER HEADER BANNER */}
-                <div className="bg-gradient-to-r from-slate-100 via-blue-50/60 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-600 flex flex-wrap items-center justify-between gap-3">
+                <div className="bg-slate-50/90 p-3 sm:p-3.5 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
                   {/* Left: Metadata badges & Select Checkbox */}
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
                     <input 
                       type="checkbox"
                       checked={isAllGrpSelected}
@@ -1514,68 +1514,68 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       title="Select all items in this work order"
                     />
 
-                    {/* Work Order Number Pill - BIGGER FONT */}
-                    <div className="px-3.5 py-1.5 rounded-xl bg-[#1e3a8a] text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4 text-blue-200" />
+                    {/* Work Order Number Pill */}
+                    <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs sm:text-sm tracking-wide shadow-2xs flex items-center gap-1.5">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-blue-200" />
                       <span>WO: {grp.workOrderNumber}</span>
                     </div>
 
-                    {/* Invoice Number Pill - BIGGER FONT */}
+                    {/* Invoice Number Pill */}
                     {grp.invoiceNumber && grp.invoiceNumber !== '-' && (
-                      <div className="px-3.5 py-1.5 rounded-xl bg-indigo-700 text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-indigo-200" />
-                        <span>INV: #{grp.invoiceNumber}</span>
+                      <div className="px-3 py-1 rounded-lg bg-indigo-700 text-white font-mono font-bold text-xs sm:text-sm tracking-wide shadow-2xs flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-200" />
+                        <span>INV: {grp.invoiceNumber}</span>
                       </div>
                     )}
 
                     {/* Date */}
-                    <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
-                      <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                      <Calendar className="w-3.5 h-3.5 text-slate-500" />
                       {formatDate(grp.invoiceDate || grp.workOrderDate)}
                     </div>
 
                     {/* Client / Party Name */}
-                    <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-900 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                    <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-semibold flex items-center gap-1 shadow-2xs">
                       <Building2 className="w-3.5 h-3.5 text-blue-700" />
                       <span className="truncate max-w-[220px]" title={grp.partyName}>{grp.partyName}</span>
                     </div>
 
                     {/* GSTIN */}
                     {grp.partyGstNumber && (
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-400 text-slate-700 font-mono text-xs font-bold">
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 font-mono text-[11px] font-medium">
                         GST: {grp.partyGstNumber}
                       </span>
                     )}
 
                     {/* Vehicle */}
                     {grp.vehicleNumber && (
-                      <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-400 text-blue-900 font-mono text-xs font-bold flex items-center gap-1">
+                      <span className="px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-medium flex items-center gap-1">
                         <Truck className="w-3.5 h-3.5 text-blue-700" />
                         {grp.vehicleNumber}
                       </span>
                     )}
 
                     {/* Item Count Badge */}
-                    <span className="px-3 py-1 rounded-full bg-blue-100 border border-blue-400 text-blue-900 text-xs font-black">
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-100 border border-blue-300 text-blue-900 text-xs font-semibold">
                       {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
                     </span>
                   </div>
 
-                  {/* Right: Work Order Total & Single Action Group */}
+                  {/* Right: Work Order Total & Action Buttons */}
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Total Value</div>
-                      <div className="text-base sm:text-xl font-black font-mono text-[#1e3a8a]">
+                      <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Total Value</div>
+                      <div className="text-sm sm:text-base font-bold font-mono text-[#1e3a8a]">
                         {formatCurrency(grp.totalAmount)}
                       </div>
                     </div>
 
                     {/* Unified Action Buttons for the Whole Work Order */}
-                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-300 shadow-xs">
+                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-300 shadow-2xs">
                       <button
                         type="button"
                         onClick={() => openInvoiceForWorkOrder(grp.firstItem)}
-                        className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                        className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-md border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
                         title="Print / Download Official Tax Invoice (GST)"
                       >
                         <Receipt className="w-3.5 h-3.5" />
@@ -1586,7 +1586,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           <button
                             type="button"
                             onClick={() => handleOpenEdit(grp.firstItem)}
-                            className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
                             title="Edit Work Order (All Items)"
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -1595,7 +1595,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           <button
                             type="button"
                             onClick={() => handleDelete(grp.firstItem)}
-                            className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-md border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
                             title="Delete Work Order"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1607,59 +1607,59 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   </div>
                 </div>
 
-                {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP DARK BORDERS) */}
+                {/* INNER ITEMS TABLE */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse border-2 border-slate-600">
-                    <thead className="bg-slate-800 text-white font-bold border-b-2 border-slate-600 text-xs uppercase tracking-wider">
+                  <table className="w-full text-left text-xs border-collapse border border-slate-300">
+                    <thead className="bg-slate-700 text-slate-100 font-semibold border-b border-slate-400 text-xs uppercase tracking-wider">
                       <tr>
-                        <th className="py-2.5 px-3 text-center w-12 border border-slate-500 text-white">#</th>
-                        <th className="py-2.5 px-3 min-w-[130px] border border-slate-500 text-white">Part Number</th>
-                        <th className="py-2.5 px-3 min-w-[110px] border border-slate-500 text-white">KPCL Code</th>
-                        <th className="py-2.5 px-3 min-w-[220px] border border-slate-500 text-white">Item Name &amp; Description</th>
-                        <th className="py-2.5 px-3 text-center min-w-[90px] border border-slate-500 bg-blue-900 text-blue-100 font-bold">Qty &amp; Unit</th>
-                        <th className="py-2.5 px-3 text-right min-w-[90px] border border-slate-500 text-white">Rate (₹)</th>
-                        <th className="py-2.5 px-3 text-right min-w-[85px] border border-slate-500 text-white">Shipping (₹)</th>
-                        <th className="py-2.5 px-3 text-right min-w-[110px] border border-slate-500 bg-blue-900 text-blue-100 font-black">Item Total (₹)</th>
+                        <th className="py-2 px-2.5 text-center w-12 border border-slate-400 text-white font-semibold">Sl No</th>
+                        <th className="py-2 px-2.5 min-w-[130px] border border-slate-400 text-white font-semibold">Part Number</th>
+                        <th className="py-2 px-2.5 min-w-[110px] border border-slate-400 text-white font-semibold">KPCL Code</th>
+                        <th className="py-2 px-2.5 min-w-[200px] border border-slate-400 text-white font-semibold">Item Name &amp; Description</th>
+                        <th className="py-2 px-2.5 text-center min-w-[85px] border border-slate-400 bg-blue-900 text-blue-100 font-semibold">Qty &amp; Unit</th>
+                        <th className="py-2 px-2.5 text-right min-w-[90px] border border-slate-400 text-white font-semibold">Rate (₹)</th>
+                        <th className="py-2 px-2.5 text-right min-w-[80px] border border-slate-400 text-white font-semibold">Shipping (₹)</th>
+                        <th className="py-2 px-2.5 text-right min-w-[105px] border border-slate-400 bg-blue-900 text-blue-100 font-bold">Item Total (₹)</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-400">
+                    <tbody className="divide-y divide-slate-200">
                       {grp.items.map((wo, itmIdx) => {
                         const isSelected = selectedWorkOrderIds.includes(wo.id);
 
                         return (
                           <tr 
                             key={wo.id || itmIdx} 
-                            className={`hover:bg-blue-100/40 border-b border-slate-400 transition-colors ${isSelected ? 'bg-blue-50/60' : (itmIdx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}`}
+                            className={`hover:bg-blue-50/50 border-b border-slate-300 transition-colors ${isSelected ? 'bg-blue-50/60' : (itmIdx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white')}`}
                           >
-                            <td className="py-2 px-3 text-center font-mono font-bold text-slate-700 bg-slate-100 border border-slate-400">
+                            <td className="py-1.5 px-2.5 text-center font-mono text-xs text-slate-600 bg-slate-50 border border-slate-300">
                               {itmIdx + 1}
                             </td>
-                            <td className="py-2 px-3 border border-slate-400">
-                              <span className="font-mono font-bold text-slate-900">
+                            <td className="py-1.5 px-2.5 border border-slate-300">
+                              <span className="font-mono text-xs font-semibold text-slate-800">
                                 {wo.partNumber || '-'}
                               </span>
                             </td>
-                            <td className="py-2 px-3 border border-slate-400 font-mono text-slate-700">
+                            <td className="py-1.5 px-2.5 border border-slate-300 font-mono text-xs text-slate-700">
                               {wo.kpclCode && wo.kpclCode !== '-' ? (
-                                <span className="font-bold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                <span className="font-semibold text-blue-800 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
                                   {wo.kpclCode}
                                 </span>
                               ) : '-'}
                             </td>
-                            <td className="py-2 px-3 border border-slate-400">
-                              <div className="font-bold text-slate-900">{wo.itemName}</div>
+                            <td className="py-1.5 px-2.5 border border-slate-300">
+                              <div className="text-xs font-medium text-slate-900">{wo.itemName}</div>
                               {wo.description && <div className="text-[10px] text-slate-500 line-clamp-1">{wo.description}</div>}
                             </td>
-                            <td className="py-2 px-3 text-center font-mono font-bold text-blue-950 bg-blue-50/70 border border-slate-400">
+                            <td className="py-1.5 px-2.5 text-center font-mono text-xs font-semibold text-blue-900 bg-blue-50/40 border border-slate-300">
                               {wo.qty} {wo.unit || 'NOS'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-900 font-medium border border-slate-400">
+                            <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-700 border border-slate-300">
                               {formatCurrency(wo.rate)}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono text-slate-800 border border-slate-400">
+                            <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-600 border border-slate-300">
                               {wo.shippingCharges ? formatCurrency(wo.shippingCharges) : '-'}
                             </td>
-                            <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-100/50 border border-slate-400">
+                            <td className="py-1.5 px-2.5 text-right font-mono text-xs font-bold text-blue-900 bg-blue-50/60 border border-slate-300">
                               {formatCurrency(wo.totalAmount)}
                             </td>
                           </tr>
@@ -1670,16 +1670,16 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                 </div>
 
                 {/* CONTAINER SUMMARY FOOTER */}
-                <div className="bg-slate-100 px-4 py-3 border-t-2 border-slate-600 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700 font-medium">
+                <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
                   <div className="flex items-center gap-4">
-                    <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
-                    <span>Total Qty: <strong className="text-blue-900 font-mono font-bold">{grp.totalQty} units</strong></span>
-                    {grp.totalShipping > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.totalShipping}</strong></span>}
+                    <span>Total Items: <strong className="text-slate-800 font-mono font-semibold">{grp.items.length}</strong></span>
+                    <span>Total Qty: <strong className="text-blue-900 font-mono font-semibold">{grp.totalQty} units</strong></span>
+                    {grp.totalShipping > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-semibold">₹{grp.totalShipping}</strong></span>}
                   </div>
                   <div className="flex items-center gap-4 font-mono">
-                    <span>Basic: <strong className="text-slate-900">{formatCurrency(grp.totalBasic)}</strong></span>
-                    <span>Tax: <strong className="text-slate-900">{formatCurrency(grp.totalTax)}</strong></span>
-                    <span className="text-sm sm:text-base font-black text-[#1e3a8a] bg-blue-100 px-3 py-1 rounded-lg border border-blue-300">
+                    <span>Basic: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalBasic)}</strong></span>
+                    <span>Tax: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalTax)}</strong></span>
+                    <span className="text-xs sm:text-sm font-bold text-[#1e3a8a] bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
                       Net: {formatCurrency(grp.totalAmount)}
                     </span>
                   </div>

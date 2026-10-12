@@ -3127,7 +3127,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <table className="w-full text-xs text-left">
                           <thead className="bg-slate-800 text-slate-200 sticky top-0 z-10 text-[11px]">
                             <tr>
-                              <th className="p-2 w-8 text-center">#</th>
+                              <th className="p-2 w-10 text-center">Sl No</th>
                               <th className="p-2 min-w-[140px]">Part Number</th>
                               <th className="p-2 min-w-[200px]">Item Name</th>
                               <th className="p-2 w-28 text-center">Unit</th>
@@ -3427,7 +3427,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <table className="w-full text-xs text-left">
                           <thead className="bg-slate-800 text-slate-200 sticky top-0 z-10 text-[11px]">
                             <tr>
-                              <th className="p-2 w-8 text-center">#</th>
+                              <th className="p-2 w-10 text-center">Sl No</th>
                               <th className="p-2 min-w-[140px]">Part Number</th>
                               <th className="p-2 min-w-[200px]">Item Name</th>
                               <th className="p-2 w-28 text-center">Unit</th>
@@ -4129,7 +4129,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="Search Invoice #, Party Name, GSTIN, Vehicle, Part No..."
+                        placeholder="Search Invoice No, Party Name, GSTIN, Vehicle, Part No..."
                         value={purchasesSearch}
                         onChange={(e) => { setPurchasesSearch(e.target.value.toUpperCase()); setPurchasesCursor(null); setPurchasesHistory([]); }}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500 uppercase font-mono"
@@ -4201,33 +4201,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <Receipt className="w-3.5 h-3.5" /> View & Download Inward Receipt ({selectedPurchaseIds.length} Selected)
                       </button>
                     )}
-                    {/* View Mode Toggle: Fit Screen vs Wide Scroll */}
-                    <div className="flex items-center bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
-                      <button
-                        type="button"
-                        onClick={() => setPurchasesTableViewMode('fit')}
-                        className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
-                          purchasesTableViewMode === 'fit'
-                            ? 'bg-[#1e3a8a] text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                        title="Fit all columns on screen without horizontal scroll"
-                      >
-                        Fit Screen
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPurchasesTableViewMode('scroll')}
-                        className={`px-2.5 py-1 text-[11px] font-bold rounded-md transition-all ${
-                          purchasesTableViewMode === 'scroll'
-                            ? 'bg-[#1e3a8a] text-white shadow-sm'
-                            : 'text-slate-600 hover:text-slate-900'
-                        }`}
-                        title="Expanded scrollable ledger view"
-                      >
-                        Wide View
-                      </button>
-                    </div>
 
                     <button 
                       onClick={() => exportToExcel(poPurchases, `PO_${selectedPo.poNumber}_Purchases`)}
@@ -4779,12 +4752,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       return (
                         <div 
                           key={grp.invoiceNumber + '_' + grpIdx}
-                          className="bg-white rounded-2xl border-2 border-slate-700 shadow-md overflow-hidden transition-all mb-6"
+                          className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden transition-all mb-5"
                         >
                           {/* CONTAINER HEADER BANNER */}
-                          <div className="bg-gradient-to-r from-slate-100 via-blue-50/60 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-600 flex flex-wrap items-center justify-between gap-3">
+                          <div className="bg-slate-50/90 p-3 sm:p-3.5 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
                             {/* Left: Metadata badges & Select All Checkbox */}
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                            <div className="flex flex-wrap items-center gap-2">
                               <input 
                                 type="checkbox"
                                 checked={isAllGrpSelected}
@@ -4802,41 +4775,41 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 title="Select all items in this invoice"
                               />
 
-                              {/* Invoice / DC Number Pill - BIGGER FONT */}
-                              <div className="px-3.5 py-1.5 rounded-xl bg-[#1e3a8a] text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-blue-200" />
+                              {/* Invoice / DC Number Pill */}
+                              <div className="px-3 py-1 rounded-lg bg-[#1e3a8a] text-white font-mono font-bold text-xs sm:text-sm tracking-wide shadow-2xs flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5 text-blue-200" />
                                 <span>DC / INV: {grp.invoiceNumber}</span>
                               </div>
 
                               {/* Date */}
-                              <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
-                                <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
                                 {formatDate(grp.date)}
                               </div>
 
                               {/* Party / Supplier */}
-                              <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-900 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-semibold flex items-center gap-1 shadow-2xs">
                                 <Building2 className="w-3.5 h-3.5 text-blue-700" />
                                 <span className="truncate max-w-[220px]" title={grp.partyName}>{grp.partyName}</span>
                               </div>
 
                               {/* GSTIN */}
                               {grp.gstNumber && (
-                                <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-400 text-slate-700 font-mono text-xs font-bold">
+                                <span className="px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 font-mono text-[11px] font-medium">
                                   GST: {grp.gstNumber}
                                 </span>
                               )}
 
                               {/* Vehicle */}
                               {grp.vehicleNumber && (
-                                <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-400 text-blue-900 font-mono text-xs font-bold flex items-center gap-1">
+                                <span className="px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-medium flex items-center gap-1">
                                   <Truck className="w-3.5 h-3.5 text-blue-700" />
                                   {grp.vehicleNumber}
                                 </span>
                               )}
 
                               {/* Item Count Badge */}
-                              <span className="px-3 py-1 rounded-full bg-emerald-100 border border-emerald-400 text-emerald-900 text-xs font-black">
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-900 text-xs font-semibold">
                                 {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
                               </span>
                             </div>
@@ -4844,18 +4817,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             {/* Right: Invoice Grand Total & Single Action Group */}
                             <div className="flex items-center gap-3">
                               <div className="text-right">
-                                <div className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Invoice Total</div>
-                                <div className="text-base sm:text-xl font-black font-mono text-[#1e3a8a]">
+                                <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Invoice Total</div>
+                                <div className="text-sm sm:text-base font-bold font-mono text-[#1e3a8a]">
                                   {formatCurrency(grp.totalAmount)}
                                 </div>
                               </div>
 
                               {/* Unified Action Buttons for the Whole Invoice */}
-                              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-300 shadow-xs">
+                              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-300 shadow-2xs">
                                 <button
                                   type="button"
                                   onClick={() => handleOpenInwardReceipt(grp.firstPur)}
-                                  className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-md border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
                                   title="View & Download Inward Material Receipt"
                                 >
                                   <Receipt className="w-3.5 h-3.5" />
@@ -4866,7 +4839,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       type="button"
                                       onClick={() => handleOpenEditInwardInvoice(grp.firstPur)}
-                                      className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
                                       title="Edit Inward Invoice / DC (All Items)"
                                     >
                                       <Edit className="w-3.5 h-3.5" />
@@ -4875,7 +4848,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteInwardGrouped(grp.firstPur)}
-                                      className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-md border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
                                       title="Delete Inward Purchase Log (All Items)"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -4887,26 +4860,26 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             </div>
                           </div>
 
-                          {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP DARK BORDERS) */}
+                          {/* INNER ITEMS TABLE */}
                           <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs border-collapse border-2 border-slate-600">
-                              <thead className="bg-slate-800 text-white font-bold border-b-2 border-slate-600 text-xs uppercase tracking-wider">
+                            <table className="w-full text-left text-xs border-collapse border border-slate-300">
+                              <thead className="bg-slate-700 text-slate-100 font-semibold border-b border-slate-400 text-xs uppercase tracking-wider">
                                 <tr>
-                                  <th className="py-2.5 px-3 text-center w-12 border border-slate-500 text-white">#</th>
-                                  <th className="py-2.5 px-3 min-w-[130px] border border-slate-500 text-white">Part Number</th>
-                                  <th className="py-2.5 px-3 min-w-[200px] border border-slate-500 text-white">Item Name &amp; Description</th>
-                                  <th className="py-2.5 px-3 text-center min-w-[90px] border border-slate-500 bg-emerald-900 text-emerald-100 font-bold">Inward Qty</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[90px] border border-slate-500 text-white">Rate (₹)</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[100px] border border-slate-500 text-white">Basic (₹)</th>
-                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border border-slate-500 text-white">CGST</th>
-                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border border-slate-500 text-white">SGST</th>
-                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border border-slate-500 text-white">IGST</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[85px] border border-slate-500 text-white">Shipping (₹)</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[110px] border border-slate-500 bg-blue-900 text-blue-100 font-black">Total (₹)</th>
-                                  <th className="py-2.5 px-3 min-w-[120px] border border-slate-500 text-white">Remarks</th>
+                                  <th className="py-2 px-2.5 text-center w-12 border border-slate-400 text-white font-semibold">Sl No</th>
+                                  <th className="py-2 px-2.5 min-w-[130px] border border-slate-400 text-white font-semibold">Part Number</th>
+                                  <th className="py-2 px-2.5 min-w-[200px] border border-slate-400 text-white font-semibold">Item Name &amp; Description</th>
+                                  <th className="py-2 px-2.5 text-center min-w-[85px] border border-slate-400 bg-emerald-900 text-emerald-100 font-semibold">Inward Qty</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[90px] border border-slate-400 text-white font-semibold">Rate (₹)</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[95px] border border-slate-400 text-white font-semibold">Basic (₹)</th>
+                                  <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">CGST</th>
+                                  <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">SGST</th>
+                                  <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">IGST</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[80px] border border-slate-400 text-white font-semibold">Shipping (₹)</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[105px] border border-slate-400 bg-blue-900 text-blue-100 font-bold">Total (₹)</th>
+                                  <th className="py-2 px-2.5 min-w-[110px] border border-slate-400 text-white font-semibold">Remarks</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-slate-400">
+                              <tbody className="divide-y divide-slate-200">
                                 {grp.items.map((pur, itmIdx) => {
                                   const basic = (pur.qty || 0) * (pur.rate || 0);
                                   const cgst = basic * ((pur.cgstPercent || 0) / 100);
@@ -4919,56 +4892,56 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   return (
                                     <tr 
                                       key={pur.id || itmIdx} 
-                                      className={`hover:bg-blue-100/40 border-b border-slate-400 transition-colors ${isSelected ? 'bg-emerald-50/50' : (itmIdx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}`}
+                                      className={`hover:bg-blue-50/50 border-b border-slate-300 transition-colors ${isSelected ? 'bg-emerald-50/50' : (itmIdx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white')}`}
                                     >
-                                      <td className="py-2 px-3 text-center font-mono font-bold text-slate-700 bg-slate-100 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-center font-mono text-xs text-slate-600 bg-slate-50 border border-slate-300">
                                         {itmIdx + 1}
                                       </td>
-                                      <td className="py-2 px-3 border border-slate-400">
-                                        <div className="font-mono font-bold text-slate-900">
+                                      <td className="py-1.5 px-2.5 border border-slate-300">
+                                        <div className="font-mono text-xs font-semibold text-slate-800">
                                           {pur.receivedPartNumber || pur.purchaseOrderItem?.partNumber || pur.item?.partNumber || '-'}
                                         </div>
                                         {pur.receivedPartNumber && pur.receivedPartNumber !== (pur.purchaseOrderItem?.partNumber || pur.item?.partNumber) && (
-                                          <div className="text-[10px] text-slate-500 font-mono font-semibold">
+                                          <div className="text-[10px] text-slate-500 font-mono">
                                             PO: {pur.purchaseOrderItem?.partNumber || pur.item?.partNumber}
                                           </div>
                                         )}
                                       </td>
-                                      <td className="py-2 px-3 border border-slate-400">
-                                        <div className="font-bold text-slate-900">
+                                      <td className="py-1.5 px-2.5 border border-slate-300">
+                                        <div className="text-xs font-medium text-slate-900">
                                           {pur.receivedItemName || pur.purchaseOrderItem?.itemName || pur.item?.itemName || '-'}
                                         </div>
                                         {pur.receivedItemName && pur.receivedItemName !== (pur.purchaseOrderItem?.itemName || pur.item?.itemName) && (
-                                          <div className="text-[10px] text-slate-500 font-semibold">
+                                          <div className="text-[10px] text-slate-500">
                                             PO: {pur.purchaseOrderItem?.itemName || pur.item?.itemName}
                                           </div>
                                         )}
                                       </td>
-                                      <td className="py-2 px-3 text-center font-mono font-bold text-emerald-950 bg-emerald-50/70 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-center font-mono text-xs font-semibold text-emerald-800 bg-emerald-50/40 border border-slate-300">
                                         {pur.qty}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono text-slate-900 font-medium border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-700 border border-slate-300">
                                         {formatCurrency(pur.rate)}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono text-slate-900 font-bold border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs font-medium text-slate-800 border border-slate-300">
                                         {formatCurrency(basic)}
                                       </td>
-                                      <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2 text-right font-mono text-[11px] text-slate-600 border border-slate-300">
                                         {cgst > 0 ? `${formatCurrency(cgst)} (${pur.cgstPercent}%)` : '-'}
                                       </td>
-                                      <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2 text-right font-mono text-[11px] text-slate-600 border border-slate-300">
                                         {sgst > 0 ? `${formatCurrency(sgst)} (${pur.sgstPercent}%)` : '-'}
                                       </td>
-                                      <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2 text-right font-mono text-[11px] text-slate-600 border border-slate-300">
                                         {igst > 0 ? `${formatCurrency(igst)} (${pur.igstPercent}%)` : '-'}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-600 border border-slate-300">
                                         {ship > 0 ? formatCurrency(ship) : '-'}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono font-black text-blue-950 bg-blue-100/50 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs font-bold text-blue-900 bg-blue-50/60 border border-slate-300">
                                         {formatCurrency(itemTotal)}
                                       </td>
-                                      <td className="py-2 px-3 text-slate-800 text-[11px] truncate max-w-[150px] border border-slate-400" title={pur.remarks || '-'}>
+                                      <td className="py-1.5 px-2.5 text-slate-600 text-xs truncate max-w-[150px] border border-slate-300" title={pur.remarks || '-'}>
                                         {pur.remarks || '-'}
                                       </td>
                                     </tr>
@@ -4979,16 +4952,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           </div>
 
                           {/* CONTAINER SUMMARY FOOTER */}
-                          <div className="bg-slate-100 px-4 py-3 border-t-2 border-slate-600 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700 font-medium">
+                          <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
                             <div className="flex items-center gap-4">
-                              <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
-                              <span>Total Inward Qty: <strong className="text-emerald-900 font-mono font-bold">{grp.totalQty} units</strong></span>
-                              {grp.shippingCharges > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.shippingCharges}</strong></span>}
+                              <span>Total Items: <strong className="text-slate-800 font-mono font-semibold">{grp.items.length}</strong></span>
+                              <span>Total Inward Qty: <strong className="text-emerald-800 font-mono font-semibold">{grp.totalQty} units</strong></span>
+                              {grp.shippingCharges > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-semibold">₹{grp.shippingCharges}</strong></span>}
                             </div>
                             <div className="flex items-center gap-4 font-mono">
-                              <span>Basic: <strong className="text-slate-900">{formatCurrency(grp.totalBasic)}</strong></span>
-                              <span>Tax: <strong className="text-slate-900">{formatCurrency(grp.totalTax)}</strong></span>
-                              <span className="text-sm sm:text-base font-black text-[#1e3a8a] bg-blue-100 px-3 py-1 rounded-lg border border-blue-300">
+                              <span>Basic: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalBasic)}</strong></span>
+                              <span>Tax: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalTax)}</strong></span>
+                              <span className="text-xs sm:text-sm font-bold text-[#1e3a8a] bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
                                 Net: {formatCurrency(grp.totalAmount)}
                               </span>
                             </div>
@@ -5044,7 +5017,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="Search Invoice #, Party Name, GSTIN, Vehicle, E-Way Bill, Part No..."
+                        placeholder="Search Invoice No, Party Name, GSTIN, Vehicle, E-Way Bill, Part No..."
                         value={salesSearch}
                         onChange={(e) => { setSalesSearch(e.target.value.toUpperCase()); setSalesCursor(null); setSalesHistory([]); }}
                         className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-amber-500 uppercase font-mono"
@@ -5585,12 +5558,12 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                       return (
                         <div 
                           key={grp.invoiceNumber + '_' + grpIdx}
-                          className="bg-white rounded-2xl border-2 border-slate-700 shadow-md overflow-hidden transition-all mb-6"
+                          className="bg-white rounded-xl border border-slate-300 shadow-xs overflow-hidden transition-all mb-5"
                         >
                           {/* CONTAINER HEADER BANNER */}
-                          <div className="bg-gradient-to-r from-slate-100 via-amber-50/60 to-slate-100 p-3.5 sm:p-4 border-b-2 border-slate-600 flex flex-wrap items-center justify-between gap-3">
+                          <div className="bg-slate-50/90 p-3 sm:p-3.5 border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
                             {/* Left: Metadata badges & Select Checkbox */}
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                            <div className="flex flex-wrap items-center gap-2">
                               <input 
                                 type="checkbox"
                                 checked={isAllGrpSelected}
@@ -5608,50 +5581,50 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 title="Select all items in this invoice"
                               />
 
-                              {/* Tax Invoice Pill - BIGGER FONT */}
-                              <div className="px-3.5 py-1.5 rounded-xl bg-amber-700 text-white font-mono font-black text-sm sm:text-base tracking-wide shadow-md flex items-center gap-2">
-                                <FileText className="w-4 h-4 text-amber-200" />
-                                <span>TAX INV: #{grp.invoiceNumber}</span>
+                              {/* Tax Invoice Pill */}
+                              <div className="px-3 py-1 rounded-lg bg-amber-700 text-white font-mono font-bold text-xs sm:text-sm tracking-wide shadow-2xs flex items-center gap-1.5">
+                                <FileText className="w-3.5 h-3.5 text-amber-200" />
+                                <span>TAX INV: {grp.invoiceNumber}</span>
                               </div>
 
                               {/* Date */}
-                              <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-800 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
-                                <Calendar className="w-3.5 h-3.5 text-slate-600" />
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                <Calendar className="w-3.5 h-3.5 text-slate-500" />
                                 {formatDate(grp.invoiceDate)}
                               </div>
 
                               {/* Customer / Party Name */}
-                              <div className="px-3 py-1.5 rounded-xl bg-white border border-slate-400 text-slate-900 text-xs sm:text-sm font-bold flex items-center gap-1.5 shadow-xs">
+                              <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-900 text-xs font-semibold flex items-center gap-1 shadow-2xs">
                                 <Building2 className="w-3.5 h-3.5 text-amber-700" />
                                 <span className="truncate max-w-[220px]" title={grp.partyName}>{grp.partyName}</span>
                               </div>
 
                               {/* GSTIN */}
                               {grp.gstNumber && (
-                                <span className="px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-400 text-slate-700 font-mono text-xs font-bold">
+                                <span className="px-2 py-1 rounded-lg bg-slate-100 border border-slate-300 text-slate-700 font-mono text-[11px] font-medium">
                                   GST: {grp.gstNumber}
                                 </span>
                               )}
 
                               {/* Vehicle */}
                               {grp.vehicleNumber && (
-                                <span className="px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-400 text-blue-900 font-mono text-xs font-bold flex items-center gap-1">
+                                <span className="px-2 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 font-mono text-[11px] font-medium flex items-center gap-1">
                                   <Truck className="w-3.5 h-3.5 text-blue-700" />
                                   {grp.vehicleNumber}
                                 </span>
                               )}
 
                               {/* Approval Status Badge */}
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
-                                isApproved ? 'bg-emerald-100 text-emerald-900 border-emerald-400' :
-                                isPending ? 'bg-amber-100 text-amber-900 border-amber-400' :
-                                'bg-rose-100 text-rose-900 border-rose-400'
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                                isApproved ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                                isPending ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                                'bg-rose-100 text-rose-900 border-rose-300'
                               }`}>
                                 {grp.status}
                               </span>
 
                               {/* Item Count Badge */}
-                              <span className="px-3 py-1 rounded-full bg-slate-200 border border-slate-400 text-slate-900 text-xs font-black">
+                              <span className="px-2.5 py-0.5 rounded-full bg-slate-200 border border-slate-300 text-slate-800 text-xs font-semibold">
                                 {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'}
                               </span>
                             </div>
@@ -5659,18 +5632,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             {/* Right: Invoice Grand Total & Single Action Group */}
                             <div className="flex items-center gap-3">
                               <div className="text-right">
-                                <div className="text-[10px] uppercase font-bold text-slate-600 tracking-wider">Invoice Total</div>
-                                <div className="text-base sm:text-xl font-black font-mono text-amber-950">
+                                <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-wider">Invoice Total</div>
+                                <div className="text-sm sm:text-base font-bold font-mono text-amber-900">
                                   {formatCurrency(grp.totalAmount)}
                                 </div>
                               </div>
 
                               {/* Unified Action Buttons for the Whole Invoice */}
-                              <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-300 shadow-xs">
+                              <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-300 shadow-2xs">
                                 <button
                                   type="button"
                                   onClick={() => handleOpenSaleInvoice(grp.firstSale)}
-                                  className="px-2.5 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-lg border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
+                                  className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-md border border-emerald-200 transition-all flex items-center gap-1 cursor-pointer"
                                   title="View & Download Official Tax Invoice"
                                 >
                                   <Receipt className="w-3.5 h-3.5" />
@@ -5681,7 +5654,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       type="button"
                                       onClick={() => handleOpenEditSaleInvoice(grp.firstSale)}
-                                      className="px-2.5 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-lg border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      className="px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-[#1e3a8a] hover:text-white rounded-md border border-blue-200 transition-all flex items-center gap-1 cursor-pointer"
                                       title="Edit Sale Invoice (All Items)"
                                     >
                                       <Edit className="w-3.5 h-3.5" />
@@ -5690,7 +5663,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     <button
                                       type="button"
                                       onClick={() => handleDeleteSaleGrouped(grp.firstSale)}
-                                      className="px-2.5 py-1.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-lg border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
+                                      className="px-2.5 py-1 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-md border border-rose-200 transition-all flex items-center gap-1 cursor-pointer"
                                       title="Delete Tax Invoice (All Items)"
                                     >
                                       <Trash2 className="w-3.5 h-3.5" />
@@ -5702,26 +5675,26 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             </div>
                           </div>
 
-                          {/* INNER ITEMS TABLE (SHOWS ALL ITEMS ONE BY ONE WITH CRISP DARK BORDERS) */}
+                          {/* INNER ITEMS TABLE */}
                           <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs border-collapse border-2 border-slate-600">
-                              <thead className="bg-slate-800 text-white font-bold border-b-2 border-slate-600 text-xs uppercase tracking-wider">
+                            <table className="w-full text-left text-xs border-collapse border border-slate-300">
+                              <thead className="bg-slate-700 text-slate-100 font-semibold border-b border-slate-400 text-xs uppercase tracking-wider">
                                 <tr>
-                                  <th className="py-2.5 px-3 text-center w-12 border border-slate-500 text-white">#</th>
-                                  <th className="py-2.5 px-3 min-w-[130px] border border-slate-500 text-white">Part Number</th>
-                                  <th className="py-2.5 px-3 min-w-[200px] border border-slate-500 text-white">Item Name</th>
-                                  <th className="py-2.5 px-3 text-center min-w-[90px] border border-slate-500 bg-amber-900 text-amber-100 font-bold">Sold Qty</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[90px] border border-slate-500 text-white">Rate (₹)</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[100px] border border-slate-500 text-white">Basic (₹)</th>
-                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border border-slate-500 text-white">CGST</th>
-                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border border-slate-500 text-white">SGST</th>
-                                  <th className="py-2.5 px-2.5 text-right min-w-[75px] border border-slate-500 text-white">IGST</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[85px] border border-slate-500 text-white">Shipping (₹)</th>
-                                  <th className="py-2.5 px-3 text-right min-w-[110px] border border-slate-500 bg-amber-900 text-amber-100 font-black">Total (₹)</th>
-                                  <th className="py-2.5 px-3 min-w-[120px] border border-slate-500 text-white">Remarks</th>
+                                  <th className="py-2 px-2.5 text-center w-12 border border-slate-400 text-white font-semibold">Sl No</th>
+                                  <th className="py-2 px-2.5 min-w-[130px] border border-slate-400 text-white font-semibold">Part Number</th>
+                                  <th className="py-2 px-2.5 min-w-[200px] border border-slate-400 text-white font-semibold">Item Name</th>
+                                  <th className="py-2 px-2.5 text-center min-w-[85px] border border-slate-400 bg-amber-900 text-amber-100 font-semibold">Sold Qty</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[90px] border border-slate-400 text-white font-semibold">Rate (₹)</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[95px] border border-slate-400 text-white font-semibold">Basic (₹)</th>
+                                  <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">CGST</th>
+                                  <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">SGST</th>
+                                  <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">IGST</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[80px] border border-slate-400 text-white font-semibold">Shipping (₹)</th>
+                                  <th className="py-2 px-2.5 text-right min-w-[105px] border border-slate-400 bg-amber-900 text-amber-100 font-bold">Total (₹)</th>
+                                  <th className="py-2 px-2.5 min-w-[110px] border border-slate-400 text-white font-semibold">Remarks</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-slate-400">
+                              <tbody className="divide-y divide-slate-200">
                                 {grp.items.map((sale, itmIdx) => {
                                   const basic = (sale.qty || 0) * (sale.rate || 0);
                                   const cgst = basic * ((sale.cgstPercent || 0) / 100);
@@ -5734,44 +5707,44 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   return (
                                     <tr 
                                       key={sale.id || itmIdx} 
-                                      className={`hover:bg-amber-100/40 border-b border-slate-400 transition-colors ${isSelected ? 'bg-amber-50/60' : (itmIdx % 2 === 1 ? 'bg-slate-50' : 'bg-white')}`}
+                                      className={`hover:bg-amber-50/50 border-b border-slate-300 transition-colors ${isSelected ? 'bg-amber-50/60' : (itmIdx % 2 === 1 ? 'bg-slate-50/50' : 'bg-white')}`}
                                     >
-                                      <td className="py-2 px-3 text-center font-mono font-bold text-slate-700 bg-slate-100 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-center font-mono text-xs text-slate-600 bg-slate-50 border border-slate-300">
                                         {itmIdx + 1}
                                       </td>
-                                      <td className="py-2 px-3 border border-slate-400">
-                                        <span className="font-mono font-bold text-slate-900">
+                                      <td className="py-1.5 px-2.5 border border-slate-300">
+                                        <span className="font-mono text-xs font-semibold text-slate-800">
                                           {sale.purchaseOrderItem?.partNumber || sale.item?.partNumber || '-'}
                                         </span>
                                       </td>
-                                      <td className="py-2 px-3 font-semibold text-slate-900 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-xs font-medium text-slate-900 border border-slate-300">
                                         {sale.purchaseOrderItem?.itemName || sale.item?.itemName || '-'}
                                       </td>
-                                      <td className="py-2 px-3 text-center font-mono font-bold text-amber-950 bg-amber-50/70 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-center font-mono text-xs font-semibold text-amber-900 bg-amber-50/40 border border-slate-300">
                                         {sale.qty}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono text-slate-900 font-medium border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-700 border border-slate-300">
                                         {formatCurrency(sale.rate)}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono text-slate-900 font-bold border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs font-medium text-slate-800 border border-slate-300">
                                         {formatCurrency(basic)}
                                       </td>
-                                      <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2 text-right font-mono text-[11px] text-slate-600 border border-slate-300">
                                         {cgst > 0 ? `${formatCurrency(cgst)} (${sale.cgstPercent}%)` : '-'}
                                       </td>
-                                      <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2 text-right font-mono text-[11px] text-slate-600 border border-slate-300">
                                         {sgst > 0 ? `${formatCurrency(sgst)} (${sale.sgstPercent}%)` : '-'}
                                       </td>
-                                      <td className="py-2 px-2.5 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2 text-right font-mono text-[11px] text-slate-600 border border-slate-300">
                                         {igst > 0 ? `${formatCurrency(igst)} (${sale.igstPercent}%)` : '-'}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono text-slate-800 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-600 border border-slate-300">
                                         {ship > 0 ? formatCurrency(ship) : '-'}
                                       </td>
-                                      <td className="py-2 px-3 text-right font-mono font-black text-amber-950 bg-amber-100/50 border border-slate-400">
+                                      <td className="py-1.5 px-2.5 text-right font-mono text-xs font-bold text-amber-900 bg-amber-50/60 border border-slate-300">
                                         {formatCurrency(itemTotal)}
                                       </td>
-                                      <td className="py-2 px-3 text-slate-800 text-[11px] truncate max-w-[150px] border border-slate-400" title={sale.remarks || '-'}>
+                                      <td className="py-1.5 px-2.5 text-slate-600 text-xs truncate max-w-[150px] border border-slate-300" title={sale.remarks || '-'}>
                                         {sale.remarks || '-'}
                                       </td>
                                     </tr>
@@ -5782,16 +5755,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           </div>
 
                           {/* CONTAINER SUMMARY FOOTER */}
-                          <div className="bg-slate-100 px-4 py-3 border-t-2 border-slate-600 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700 font-medium">
+                          <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
                             <div className="flex items-center gap-4">
-                              <span>Total Items: <strong className="text-slate-900 font-mono font-bold">{grp.items.length}</strong></span>
-                              <span>Total Sold Qty: <strong className="text-amber-950 font-mono font-bold">{grp.totalQty} units</strong></span>
-                              {grp.shippingCharges > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-bold">₹{grp.shippingCharges}</strong></span>}
+                              <span>Total Items: <strong className="text-slate-800 font-mono font-semibold">{grp.items.length}</strong></span>
+                              <span>Total Sold Qty: <strong className="text-amber-900 font-mono font-semibold">{grp.totalQty} units</strong></span>
+                              {grp.shippingCharges > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-semibold">₹{grp.shippingCharges}</strong></span>}
                             </div>
                             <div className="flex items-center gap-4 font-mono">
-                              <span>Basic: <strong className="text-slate-900">{formatCurrency(grp.totalBasic)}</strong></span>
-                              <span>Tax: <strong className="text-slate-900">{formatCurrency(grp.totalTax)}</strong></span>
-                              <span className="text-sm sm:text-base font-black text-amber-950 bg-amber-100 px-3 py-1 rounded-lg border border-amber-300">
+                              <span>Basic: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalBasic)}</strong></span>
+                              <span>Tax: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalTax)}</strong></span>
+                              <span className="text-xs sm:text-sm font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
                                 Net: {formatCurrency(grp.totalAmount)}
                               </span>
                             </div>
@@ -5957,10 +5930,9 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                     <td>
                       <button 
                         onClick={() => handleOpenPoDetails(po.id)}
-                        className="text-[#1e3a8a] hover:text-[#1e40af] font-mono font-bold underline flex items-center gap-1.5 group"
+                        className="text-[#1e3a8a] hover:text-[#1e40af] font-mono font-bold underline"
                       >
                         {po.poNumber}
-                        <Eye className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
                       </button>
                     </td>
                     <td>

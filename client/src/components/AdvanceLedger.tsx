@@ -601,7 +601,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
           <table className="w-full text-left text-xs border-collapse border border-slate-300">
             <thead>
               <tr className="bg-slate-100 text-slate-900 font-extrabold border-b-2 border-slate-400 divide-x divide-slate-300">
-                <th className="p-2 text-center w-12 bg-slate-200">#</th>
+                <th className="p-2 text-center w-12 bg-slate-200">Sl No</th>
                 <th className="p-2 min-w-[150px]">Badge ID / Worker Name</th>
                 <th className="p-2 min-w-[120px]">Division / Trade</th>
                 <th className="p-2 text-right w-24">Daily Wage</th>
@@ -1005,7 +1005,7 @@ export const AdvanceLedger: React.FC<AdvanceLedgerProps> = ({ currentUserRole = 
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
                           <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-300">
-                            <th className="p-2.5 text-center w-12 border-r border-slate-200">#</th>
+                            <th className="p-2.5 text-center w-12 border-r border-slate-200">Sl No</th>
                             <th className="p-2.5 border-r border-slate-200 w-28">Date</th>
                             <th className="p-2.5 border-r border-slate-200 w-44">Transaction Type</th>
                             <th className="p-2.5 border-r border-slate-200">Reason / Reference / Remarks</th>
