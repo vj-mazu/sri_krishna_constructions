@@ -1999,15 +1999,73 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   };
 
   // Format helpers & auto-uppercase fields
+  // Format helpers & auto-uppercase fields
   const handleItemChange = (field: string, val: string | number) => {
     const upperFields = ['kpclCode', 'partNumber', 'hsnCode', 'make', 'unit'];
     const finalVal = (typeof val === 'string' && upperFields.includes(field)) ? val.toUpperCase() : val;
+    
+    // Strict GST Rule: Either (SGST + CGST) OR (IGST)
+    if (field === 'cgstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setItemForm(prev => ({ ...prev, cgstPercent: num, sgstPercent: num, igstPercent: 0 }));
+      return;
+    }
+    if (field === 'sgstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setItemForm(prev => ({ ...prev, sgstPercent: num, cgstPercent: num, igstPercent: 0 }));
+      return;
+    }
+    if (field === 'igstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setItemForm(prev => ({ ...prev, igstPercent: num, cgstPercent: 0, sgstPercent: 0 }));
+      return;
+    }
+
     setItemForm(prev => ({ ...prev, [field]: finalVal }));
   };
-  const handlePurchaseChange = (field: string, val: string | number) => setPurchaseForm(prev => ({ ...prev, [field]: val }));
+
+  const handlePurchaseChange = (field: string, val: string | number) => {
+    // Strict GST Rule: Either (SGST + CGST) OR (IGST)
+    if (field === 'cgstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setPurchaseForm(prev => ({ ...prev, cgstPercent: num, sgstPercent: num, igstPercent: 0 }));
+      return;
+    }
+    if (field === 'sgstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setPurchaseForm(prev => ({ ...prev, sgstPercent: num, cgstPercent: num, igstPercent: 0 }));
+      return;
+    }
+    if (field === 'igstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setPurchaseForm(prev => ({ ...prev, igstPercent: num, cgstPercent: 0, sgstPercent: 0 }));
+      return;
+    }
+
+    setPurchaseForm(prev => ({ ...prev, [field]: val }));
+  };
+
   const handleSaleChange = (field: string, val: string | number) => {
     const upperFields = ['invoiceNumber'];
     const finalVal = (typeof val === 'string' && upperFields.includes(field)) ? val.toUpperCase() : val;
+
+    // Strict GST Rule: Either (SGST + CGST) OR (IGST)
+    if (field === 'cgstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setSaleForm(prev => ({ ...prev, cgstPercent: num, sgstPercent: num, igstPercent: 0 }));
+      return;
+    }
+    if (field === 'sgstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setSaleForm(prev => ({ ...prev, sgstPercent: num, cgstPercent: num, igstPercent: 0 }));
+      return;
+    }
+    if (field === 'igstPercent') {
+      const num = val === '' ? 0 : Number(val);
+      setSaleForm(prev => ({ ...prev, igstPercent: num, cgstPercent: 0, sgstPercent: 0 }));
+      return;
+    }
+
     setSaleForm(prev => ({ ...prev, [field]: finalVal }));
   };
 
@@ -2515,13 +2573,18 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                     {/* 7. Unit */}
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Unit</label>
-                      <select
+                      <label className="block font-semibold text-slate-700 mb-1">Unit (Pick or Type Custom)</label>
+                      <input
+                        type="text"
+                        list="common-units-list-edit"
                         value={editItemForm.unit || 'NOS'}
                         onChange={e => setEditItemForm(prev => ({ ...prev, unit: e.target.value.toUpperCase() }))}
-                        className="w-full p-2 border border-slate-300 rounded uppercase bg-white font-medium focus:ring-2 focus:ring-blue-500"
-                      >
+                        className="w-full p-2 border border-slate-300 rounded uppercase bg-white font-bold text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                        placeholder="e.g. LUMPS, NOS"
+                      />
+                      <datalist id="common-units-list-edit">
                         <option value="NOS">NOS (Numbers)</option>
+                        <option value="LUMPS">LUMPS (Lumpsum / LS)</option>
                         <option value="PCS">PCS (Pieces)</option>
                         <option value="SET">SET (Set)</option>
                         <option value="BOX">BOX (Box)</option>
@@ -2536,7 +2599,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         <option value="LOT">LOT (Lot)</option>
                         <option value="JOB">JOB (Job / Service)</option>
                         <option value="HRS">HRS (Hours)</option>
-                      </select>
+                      </datalist>
                     </div>
 
                     {/* 8. Quantity */}
@@ -2652,7 +2715,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         type="number"
                         step="0.01"
                         value={editItemForm.cgstPercent ?? ''}
-                        onChange={e => setEditItemForm(prev => ({ ...prev, cgstPercent: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setEditItemForm(prev => ({ ...prev, cgstPercent: val, sgstPercent: val, igstPercent: 0 }));
+                        }}
                         className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
                       />
                       {(() => {
@@ -2672,7 +2738,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         type="number"
                         step="0.01"
                         value={editItemForm.sgstPercent ?? ''}
-                        onChange={e => setEditItemForm(prev => ({ ...prev, sgstPercent: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setEditItemForm(prev => ({ ...prev, sgstPercent: val, cgstPercent: val, igstPercent: 0 }));
+                        }}
                         className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
                       />
                       {(() => {
@@ -2692,7 +2761,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         type="number"
                         step="0.01"
                         value={editItemForm.igstPercent ?? ''}
-                        onChange={e => setEditItemForm(prev => ({ ...prev, igstPercent: e.target.value === '' ? 0 : Number(e.target.value) }))}
+                        onChange={e => {
+                          const val = e.target.value === '' ? 0 : Number(e.target.value);
+                          setEditItemForm(prev => ({ ...prev, igstPercent: val, cgstPercent: 0, sgstPercent: 0 }));
+                        }}
                         className="w-full p-2 border border-slate-300 rounded font-mono font-bold"
                       />
                       {(() => {
@@ -2885,7 +2957,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           type="number"
                           step="0.01"
                           value={editPurchaseForm.cgstPercent ?? ''}
-                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, cgstPercent: Number(e.target.value) }))}
+                          onChange={e => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                            setEditPurchaseForm(prev => ({ ...prev, cgstPercent: val, sgstPercent: val, igstPercent: 0 }));
+                          }}
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
@@ -2895,7 +2970,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           type="number"
                           step="0.01"
                           value={editPurchaseForm.sgstPercent ?? ''}
-                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, sgstPercent: Number(e.target.value) }))}
+                          onChange={e => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                            setEditPurchaseForm(prev => ({ ...prev, sgstPercent: val, cgstPercent: val, igstPercent: 0 }));
+                          }}
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
@@ -2905,7 +2983,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           type="number"
                           step="0.01"
                           value={editPurchaseForm.igstPercent ?? ''}
-                          onChange={e => setEditPurchaseForm(prev => ({ ...prev, igstPercent: Number(e.target.value) }))}
+                          onChange={e => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                            setEditPurchaseForm(prev => ({ ...prev, igstPercent: val, cgstPercent: 0, sgstPercent: 0 }));
+                          }}
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
@@ -3126,7 +3207,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           type="number"
                           step="0.01"
                           value={editSaleForm.cgstPercent ?? ''}
-                          onChange={e => setEditSaleForm(prev => ({ ...prev, cgstPercent: Number(e.target.value) }))}
+                          onChange={e => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                            setEditSaleForm(prev => ({ ...prev, cgstPercent: val, sgstPercent: val, igstPercent: 0 }));
+                          }}
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
@@ -3136,7 +3220,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           type="number"
                           step="0.01"
                           value={editSaleForm.sgstPercent ?? ''}
-                          onChange={e => setEditSaleForm(prev => ({ ...prev, sgstPercent: Number(e.target.value) }))}
+                          onChange={e => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                            setEditSaleForm(prev => ({ ...prev, sgstPercent: val, cgstPercent: val, igstPercent: 0 }));
+                          }}
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
@@ -3146,7 +3233,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                           type="number"
                           step="0.01"
                           value={editSaleForm.igstPercent ?? ''}
-                          onChange={e => setEditSaleForm(prev => ({ ...prev, igstPercent: Number(e.target.value) }))}
+                          onChange={e => {
+                            const val = e.target.value === '' ? 0 : Number(e.target.value);
+                            setEditSaleForm(prev => ({ ...prev, igstPercent: val, cgstPercent: 0, sgstPercent: 0 }));
+                          }}
                           className="w-full p-2 border border-slate-300 rounded font-mono font-bold text-xs"
                         />
                       </div>
@@ -3327,15 +3417,19 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
                           {/* 6. Unit */}
                           <div>
-                            <label className="block font-bold text-slate-700 mb-1">Unit *</label>
-                            <select
+                            <label className="block font-bold text-slate-700 mb-1">Unit * (Pick or Type Custom)</label>
+                            <input
                               required
-                              className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase font-medium focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                              type="text"
+                              list="common-units-list"
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                               value={itemForm.unit || ''}
-                              onChange={e => handleItemChange('unit', e.target.value)}
-                            >
-                              <option value="">-- Select Unit --</option>
+                              onChange={e => handleItemChange('unit', e.target.value.toUpperCase())}
+                              placeholder="e.g. LUMPS, NOS, SET"
+                            />
+                            <datalist id="common-units-list">
                               <option value="NOS">NOS (Numbers)</option>
+                              <option value="LUMPS">LUMPS (Lumpsum / LS)</option>
                               <option value="PCS">PCS (Pieces)</option>
                               <option value="SET">SET (Set)</option>
                               <option value="BOX">BOX (Box)</option>
@@ -3350,7 +3444,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               <option value="LOT">LOT (Lot)</option>
                               <option value="JOB">JOB (Job / Service)</option>
                               <option value="HRS">HRS (Hours)</option>
-                            </select>
+                            </datalist>
                           </div>
 
                           {/* 7. Detailed Specifications */}

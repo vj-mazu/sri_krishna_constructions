@@ -119,6 +119,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [poDivisionId, setPoDivisionId] = useState('');
   const [poDate, setPoDate] = useState(new Date().toISOString().split('T')[0]);
   const [poAmount, setPoAmount] = useState('');
+  const [poCalcQty, setPoCalcQty] = useState('');
+  const [poCalcRate, setPoCalcRate] = useState('');
   
   // Edit PO State
   const [editingPO, setEditingPO] = useState<any>(null);
@@ -127,6 +129,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editPODate, setEditPODate] = useState('');
   const [editPOAmount, setEditPOAmount] = useState('');
   const [editPOActive, setEditPOActive] = useState<boolean>(true);
+  const [editPoCalcQty, setEditPoCalcQty] = useState('');
+  const [editPoCalcRate, setEditPoCalcRate] = useState('');
   // --- HOLIDAYS (CALENDAR) STATE ---
   const [holidays, setHolidays] = useState<any[]>([]);
   const [holidayDate, setHolidayDate] = useState(new Date().toISOString().split('T')[0]);
@@ -3035,8 +3039,48 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">
-                      Amount (₹) <span className="text-slate-400 font-normal text-[11px]">(Optional • Auto-calculated from items)</span>
+                      Amount (₹) <span className="text-emerald-600 font-bold text-[11px]">(Live Calculated from Rate & Qty)</span>
                     </label>
+                    <div className="grid grid-cols-2 gap-2 mb-2 p-2 bg-indigo-50/70 rounded-lg border border-indigo-100">
+                      <div>
+                        <span className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Est. Qty</span>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="e.g. 40"
+                          value={editPoCalcQty}
+                          onChange={(e) => {
+                            const q = e.target.value;
+                            setEditPoCalcQty(q);
+                            const r = parseFloat(editPoCalcRate) || 0;
+                            const qtyNum = parseFloat(q) || 0;
+                            if (qtyNum > 0 && r > 0) {
+                              setEditPOAmount((qtyNum * r).toFixed(2));
+                            }
+                          }}
+                          className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold outline-none focus:border-[#1e3a8a]"
+                        />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Unit Rate (₹)</span>
+                        <input
+                          type="number"
+                          step="any"
+                          placeholder="e.g. 1500"
+                          value={editPoCalcRate}
+                          onChange={(e) => {
+                            const r = e.target.value;
+                            setEditPoCalcRate(r);
+                            const q = parseFloat(editPoCalcQty) || 0;
+                            const rateNum = parseFloat(r) || 0;
+                            if (q > 0 && rateNum > 0) {
+                              setEditPOAmount((q * rateNum).toFixed(2));
+                            }
+                          }}
+                          className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold outline-none focus:border-[#1e3a8a]"
+                        />
+                      </div>
+                    </div>
                     <input
                       type="number"
                       step="0.01"
@@ -3115,22 +3159,63 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  PO Amount (Rs) <span className="text-slate-400 font-normal text-[11px]">(Optional • Auto-calculated from items)</span>
+                  PO Amount (₹) <span className="text-emerald-600 font-bold text-[11px]">(Live Calculated from Rate & Qty)</span>
                 </label>
+                <div className="grid grid-cols-2 gap-2 mb-2 p-2 bg-indigo-50/70 rounded-lg border border-indigo-100">
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Est. Qty</span>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="e.g. 40"
+                      value={poCalcQty}
+                      onChange={(e) => {
+                        const q = e.target.value;
+                        setPoCalcQty(q);
+                        const r = parseFloat(poCalcRate) || 0;
+                        const qtyNum = parseFloat(q) || 0;
+                        if (qtyNum > 0 && r > 0) {
+                          setPoAmount((qtyNum * r).toFixed(2));
+                        }
+                      }}
+                      className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold outline-none focus:border-[#667eea]"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Unit Rate (₹)</span>
+                    <input
+                      type="number"
+                      step="any"
+                      placeholder="e.g. 1500"
+                      value={poCalcRate}
+                      onChange={(e) => {
+                        const r = e.target.value;
+                        setPoCalcRate(r);
+                        const q = parseFloat(poCalcQty) || 0;
+                        const rateNum = parseFloat(r) || 0;
+                        if (q > 0 && rateNum > 0) {
+                          setPoAmount((q * rateNum).toFixed(2));
+                        }
+                      }}
+                      className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold outline-none focus:border-[#667eea]"
+                    />
+                  </div>
+                </div>
                 <input
                   type="number"
+                  step="0.01"
                   value={poAmount}
                   onChange={(e) => setPoAmount(e.target.value)}
-                  placeholder="Auto-calculated from line items"
-                  className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono font-bold"
+                  placeholder="Auto-calculated (Qty × Rate)"
+                  className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono font-bold text-slate-900 bg-white"
                 />
                 {poAmount ? (
-                  <div className="text-[11px] font-bold text-[#667eea] mt-1 font-mono bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
-                    Preview: {formatIndianCurrency(poAmount)}
+                  <div className="text-[11px] font-bold text-emerald-700 mt-1 font-mono bg-emerald-50 px-2 py-0.5 rounded w-fit border border-emerald-200">
+                    Live Total: {formatIndianCurrency(poAmount)}
                   </div>
                 ) : (
                   <div className="text-[10px] text-slate-500 mt-1 italic">
-                    Automatically summed from registered PO line items.
+                    Type Qty & Rate above to calculate automatically, or enter total.
                   </div>
                 )}
               </div>

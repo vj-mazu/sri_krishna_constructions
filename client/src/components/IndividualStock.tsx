@@ -1742,20 +1742,29 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Unit</label>
-                  <select
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Unit (Pick or Type)</label>
+                  <input
+                    type="text"
+                    list="stock-units-list"
                     value={itemForm.unit}
-                    onChange={(e) => setItemForm(prev => ({ ...prev, unit: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold"
-                  >
+                    onChange={(e) => setItemForm(prev => ({ ...prev, unit: e.target.value.toUpperCase() }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase"
+                    placeholder="e.g. LUMPS, NOS"
+                  />
+                  <datalist id="stock-units-list">
                     <option value="NOS">NOS</option>
+                    <option value="LUMPS">LUMPS (Lumpsum)</option>
                     <option value="SET">SET</option>
+                    <option value="PCS">PCS</option>
+                    <option value="BOX">BOX</option>
                     <option value="KGS">KGS</option>
                     <option value="MTR">MTR</option>
                     <option value="LTR">LTR</option>
                     <option value="BAGS">BAGS</option>
                     <option value="SQM">SQM</option>
-                  </select>
+                    <option value="LOT">LOT</option>
+                    <option value="JOB">JOB</option>
+                  </datalist>
                 </div>
 
                 <div>
@@ -1926,20 +1935,29 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Unit</label>
-                  <select
+                  <label className="text-xs font-bold text-slate-700 block mb-1">Unit (Pick or Type)</label>
+                  <input
+                    type="text"
+                    list="stock-units-list-edit"
                     value={editingItem.unit || 'NOS'}
-                    onChange={(e) => setEditingItem((prev: any) => ({ ...prev, unit: e.target.value }))}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold"
-                  >
+                    onChange={(e) => setEditingItem((prev: any) => ({ ...prev, unit: e.target.value.toUpperCase() }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-bold uppercase"
+                    placeholder="e.g. LUMPS, NOS"
+                  />
+                  <datalist id="stock-units-list-edit">
                     <option value="NOS">NOS</option>
+                    <option value="LUMPS">LUMPS (Lumpsum)</option>
                     <option value="SET">SET</option>
+                    <option value="PCS">PCS</option>
+                    <option value="BOX">BOX</option>
                     <option value="KGS">KGS</option>
                     <option value="MTR">MTR</option>
                     <option value="LTR">LTR</option>
                     <option value="BAGS">BAGS</option>
                     <option value="SQM">SQM</option>
-                  </select>
+                    <option value="LOT">LOT</option>
+                    <option value="JOB">JOB</option>
+                  </datalist>
                 </div>
 
                 <div>

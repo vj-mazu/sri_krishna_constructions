@@ -408,7 +408,7 @@ export const SaleInvoiceModal: React.FC<{
 
     autoTable(doc, {
       startY: y,
-      margin: { top: 34, left: margin, right: margin, bottom: 16 },
+      margin: { top: 32, left: margin, right: margin, bottom: 16 },
       head: [
         [
           { content: 'SI\nNO', styles: { halign: 'center' } },
@@ -426,11 +426,11 @@ export const SaleInvoiceModal: React.FC<{
       rowPageBreak: 'avoid', // PREVENTS ANY ROW FROM SPLITTING HALFWAY ACROSS PAGES
       styles: {
         font: 'times',
-        fontSize: 7.2,
+        fontSize: 8.0,
         lineColor: [0, 0, 0],
-        lineWidth: 0.35,
+        lineWidth: 0.4,
         textColor: [0, 0, 0],
-        cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
+        cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
         valign: 'middle'
       },
       headStyles: {
@@ -438,8 +438,9 @@ export const SaleInvoiceModal: React.FC<{
         fillColor: [255, 255, 255],
         textColor: [0, 0, 0],
         fontStyle: 'bold',
+        fontSize: 8.2,
         valign: 'middle',
-        lineWidth: 0.35,
+        lineWidth: 0.4,
         lineColor: [0, 0, 0]
       },
       alternateRowStyles: {
@@ -450,10 +451,10 @@ export const SaleInvoiceModal: React.FC<{
         1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
         2: { halign: 'left', cellWidth: 38, fontStyle: 'bold' },
         3: { halign: 'left', cellWidth: 59, fontStyle: 'normal' },
-        4: { halign: 'center', cellWidth: 11 },
+        4: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
         5: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
         6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
-        7: { halign: 'right', cellWidth: 22, fontStyle: 'bold' } // WIDE ENOUGH TO NEVER WRAP 'AMOUNT'
+        7: { halign: 'right', cellWidth: 22, fontStyle: 'bold' }
       },
       didDrawPage: (data) => {
         // Draw top header banner on all subsequent pages (page 2, 3...)
@@ -466,43 +467,48 @@ export const SaleInvoiceModal: React.FC<{
     const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
 
     // Check if space is sufficient on current page for totals box & signatures (needs ~68mm)
-    let fy = finalTableY + 1.5;
+    let fy = finalTableY;
     if (fy + 68 > 278) {
       doc.addPage();
       drawHeaderBox(8);
-      fy = 34;
+      fy = 32;
     }
 
-    // 5. BOTTOM TOTALS BOX & BANK DETAILS
-    const leftBoxWidth = 122;
+    // 5. BOTTOM TOTALS BOX & BANK DETAILS (MATCHING KPCL 128mm / 40mm / 22mm COLUMNS)
+    const leftBoxWidth = 128; // cols 0..3 (9+22+38+59 = 128mm)
+    const middleWidth = 40;   // cols 4..6 (11+11+18 = 40mm)
+    const rightColWidth = 22; // col 7 (22mm)
     const bottomBoxHeight = 35;
 
-    // Outer Box border
+    // Outer Box border & Vertical Dividers
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.4);
     doc.rect(margin, fy, contentWidth, bottomBoxHeight);
-    doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // vertical divider
+    doc.line(margin + leftBoxWidth, fy, margin + leftBoxWidth, fy + bottomBoxHeight); // Vertical Line 1 (col 4 border)
+    doc.line(margin + leftBoxWidth + middleWidth, fy, margin + leftBoxWidth + middleWidth, fy + bottomBoxHeight); // Vertical Line 2 (col 7 border)
 
     // Left Box: Total Invoice amount in words + Bank Details
     doc.setFont('times', 'bold');
-    doc.setFontSize(7.5);
-    doc.text('Total Invoice amount in words: ', margin + 2, fy + 4);
-    doc.setFont('times', 'bold');
+    doc.setFontSize(8.2);
+    doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.2);
     const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
     const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
-    doc.text(wordsLines.slice(0, 2), margin + 2, fy + 7.8);
+    doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.2);
 
-    doc.line(margin, fy + 12, margin + leftBoxWidth, fy + 12);
+    doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
 
     doc.setFont('times', 'bold');
-    doc.text('Bank Details :', margin + 2, fy + 15.5);
+    doc.text('Bank Details :', margin + 2, fy + 16.5);
     doc.setFont('times', 'normal');
-    doc.text(`Account Holder Name : ${customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}`, margin + 2, fy + 19.5);
-    doc.text(`Bank Name : ${customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 23.5);
-    doc.text(`Bank Account No: ${customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}`, margin + 2, fy + 27.5);
-    doc.text(`IFSC Code:${customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}`, margin + 2, fy + 31.5);
+    doc.setFontSize(8);
+    doc.text(`Account Holder Name : ${customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}`, margin + 2, fy + 20.5);
+    doc.text(`Bank Name : ${customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 24.5);
+    doc.text(`Bank Account No: ${customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}`, margin + 2, fy + 28.5);
+    doc.text(`IFSC Code:${customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}`, margin + 2, fy + 32.5);
 
     // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
-    const rightX = margin + leftBoxWidth;
-    const valX = margin + contentWidth - 2;
+    const labelX = margin + leftBoxWidth + 2;
+    const numberX = margin + contentWidth - 2;
 
     const summaryRows: Array<{ label: string; value: string; isBold?: boolean }> = [];
     summaryRows.push({ label: 'Basic Cost', value: fmt(totalBasic) });
@@ -528,11 +534,11 @@ export const SaleInvoiceModal: React.FC<{
     summaryRows.forEach((row, rIdx) => {
       const rowY = fy + (rIdx * rowHeight);
       doc.setFont('times', row.isBold ? 'bold' : 'normal');
-      doc.setFontSize(row.isBold ? 7.8 : 7.2);
-      doc.text(row.label, rightX + 2, rowY + (rowHeight * 0.72));
-      doc.text(row.value, valX, rowY + (rowHeight * 0.72), { align: 'right' });
+      doc.setFontSize(row.isBold ? 8.5 : 8.0);
+      doc.text(row.label, labelX, rowY + (rowHeight * 0.70));
+      doc.text(row.value, numberX, rowY + (rowHeight * 0.70), { align: 'right' });
       if (rIdx < summaryRows.length - 1) {
-        doc.line(rightX, rowY + rowHeight, margin + contentWidth, rowY + rowHeight);
+        doc.line(margin + leftBoxWidth, rowY + rowHeight, margin + contentWidth, rowY + rowHeight);
       }
     });
 
@@ -850,7 +856,7 @@ export const SaleInvoiceModal: React.FC<{
                           <div className="font-bold mt-0.5">P.No: {r.partNumber}</div>
                         )}
                       </td>
-                      <td className="p-1.5 text-center border-r border-black">{r.unit}</td>
+                      <td className="p-1.5 text-center font-bold border-r border-black">{r.unit}</td>
                       <td className="p-1.5 text-center font-bold border-r border-black">{r.qty}</td>
                       <td className="p-1.5 text-right font-bold border-r border-black px-2">{fmt(r.rate)}</td>
                       <td className="p-1.5 text-right font-bold px-2 whitespace-nowrap">{fmt(r.amount)}</td>
@@ -861,18 +867,18 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 5. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 mt-0 border-x border-b border-black">
-              {/* Left Box: Amount in words & Bank info */}
-              <div className="p-2 text-[11px] space-y-1.5 border-b sm:border-b-0 sm:border-r border-black flex flex-col justify-between">
+            <div className="grid grid-cols-1 sm:grid-cols-12 mt-0 border-x border-b border-black">
+              {/* Left Box: Amount in words & Bank info (Takes ~8 of 12 cols, matching 128mm) */}
+              <div className="sm:col-span-8 p-2 text-[11px] border-b sm:border-b-0 sm:border-r border-black flex flex-col justify-between">
                 <div>
-                  <span className="font-bold block text-black">Total Invoice amount in words: </span>
-                  <span className="font-bold text-black text-[11px] block mt-0.5">
+                  <span className="font-bold block text-black text-[11.5px]">Total Invoice amount in words: </span>
+                  <span className="font-bold text-black text-[11.5px] block mt-0.5">
                     {amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim()}
                   </span>
                 </div>
-                <div className="pt-2 border-t border-black">
-                  <span className="font-bold block text-black">Bank Details :</span>
-                  <div className="text-[10.5px] text-black space-y-0.5 mt-0.5">
+                <div className="pt-2 border-t border-black mt-2">
+                  <span className="font-bold block text-black text-[11.5px]">Bank Details :</span>
+                  <div className="text-[11px] text-black space-y-0.5 mt-0.5">
                     <div>Account Holder Name : <strong>{customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}</strong></div>
                     <div>Bank Name : <strong>{customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}</strong></div>
                     <div>Bank Account No: <strong className="font-bold">{customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}</strong></div>
@@ -881,49 +887,49 @@ export const SaleInvoiceModal: React.FC<{
                 </div>
               </div>
 
-              {/* Right Box: Tax Breakdown Summary */}
-              <div className="divide-y divide-black text-[11px]">
-                <div className="p-1.5 px-2 flex justify-between font-normal">
-                  <span>Basic Cost</span>
-                  <span className="font-bold">{fmt(totalBasic)}</span>
+              {/* Right Box: 2-Column Grid (Labels | Values) with Vertical Line Divider (4 of 12 cols, matching 40mm + 22mm) */}
+              <div className="sm:col-span-4 divide-y divide-black text-[11px]">
+                <div className="grid grid-cols-12">
+                  <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">Basic Cost</div>
+                  <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalBasic)}</div>
                 </div>
                 {(totalSgst > 0 || totalCgst > 0) && (
                   <>
-                    <div className="p-1.5 px-2 flex justify-between font-normal">
-                      <span>SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}</span>
-                      <span className="font-bold">{fmt(totalSgst)}</span>
+                    <div className="grid grid-cols-12">
+                      <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}</div>
+                      <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalSgst)}</div>
                     </div>
-                    <div className="p-1.5 px-2 flex justify-between font-normal">
-                      <span>CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}</span>
-                      <span className="font-bold">{fmt(totalCgst)}</span>
+                    <div className="grid grid-cols-12">
+                      <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}</div>
+                      <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalCgst)}</div>
                     </div>
                   </>
                 )}
                 {totalIgst > 0 && (
-                  <div className="p-1.5 px-2 flex justify-between font-normal">
-                    <span>IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}</span>
-                    <span className="font-bold">{fmt(totalIgst)}</span>
+                  <div className="grid grid-cols-12">
+                    <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}</div>
+                    <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalIgst)}</div>
                   </div>
                 )}
                 {totalCgst === 0 && totalSgst === 0 && totalIgst === 0 && (
-                  <div className="p-1.5 px-2 flex justify-between font-normal">
-                    <span>GST (0%)</span>
-                    <span className="font-bold">0</span>
+                  <div className="grid grid-cols-12">
+                    <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">GST (0%)</div>
+                    <div className="col-span-5 p-1.5 px-2 text-right font-bold">0</div>
                   </div>
                 )}
                 {totalShipping > 0 && (
-                  <div className="p-1.5 px-2 flex justify-between font-normal">
-                    <span>Shipping Charges</span>
-                    <span className="font-bold">{fmt(totalShipping)}</span>
+                  <div className="grid grid-cols-12">
+                    <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">Shipping Charges</div>
+                    <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalShipping)}</div>
                   </div>
                 )}
-                <div className="p-1.5 px-2 flex justify-between font-bold">
-                  <span>TOTAL TAX AMOUNT</span>
-                  <span className="font-bold">{fmt(totalCgst + totalSgst + totalIgst)}</span>
+                <div className="grid grid-cols-12 font-bold">
+                  <div className="col-span-7 p-1.5 px-2 border-r border-black">TOTAL TAX AMOUNT</div>
+                  <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalCgst + totalSgst + totalIgst)}</div>
                 </div>
-                <div className="p-2 px-2 flex justify-between font-bold text-xs bg-slate-50/50">
-                  <span>TOTAL AMOUNT</span>
-                  <span className="text-sm font-black">{fmt(totalInvoiceAmount)}</span>
+                <div className="grid grid-cols-12 font-bold bg-slate-50">
+                  <div className="col-span-7 p-2 px-2 border-r border-black text-xs font-black">TOTAL AMOUNT</div>
+                  <div className="col-span-5 p-2 px-2 text-right text-sm font-black">{fmt(totalInvoiceAmount)}</div>
                 </div>
               </div>
             </div>

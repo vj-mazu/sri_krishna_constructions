@@ -958,6 +958,20 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
       const cgstPercent = parseFloat(d.cgstPercent !== undefined ? d.cgstPercent : (body.cgstPercent || 0));
       const sgstPercent = parseFloat(d.sgstPercent !== undefined ? d.sgstPercent : (body.sgstPercent || 0));
       const igstPercent = parseFloat(d.igstPercent !== undefined ? d.igstPercent : (body.igstPercent || 0));
+
+      // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+      const hasSgst = sgstPercent > 0;
+      const hasCgst = cgstPercent > 0;
+      const hasIgst = igstPercent > 0;
+      if ((hasSgst || hasCgst) && hasIgst) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+      }
+      if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+      }
+
       const shippingCharges = parseFloat(d.shippingCharges !== undefined ? d.shippingCharges : (body.shippingCharges || 0));
 
       const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
@@ -1309,6 +1323,18 @@ app.post('/api/purchase-order-items', authenticateToken, requireRoles(['OWNER', 
     const cgstPercent = parseFloat(d.cgstPercent) || 0;
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
+
+    // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+    const hasSgst = sgstPercent > 0;
+    const hasCgst = cgstPercent > 0;
+    const hasIgst = igstPercent > 0;
+    if ((hasSgst || hasCgst) && hasIgst) {
+      return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+    }
+    if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+      return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+    }
+
     const cgstAmount = parseFloat(d.cgstAmount) || (basicAmount * (cgstPercent / 100));
     const sgstAmount = parseFloat(d.sgstAmount) || (basicAmount * (sgstPercent / 100));
     const igstAmount = parseFloat(d.igstAmount) || (basicAmount * (igstPercent / 100));
@@ -1365,6 +1391,18 @@ app.put('/api/purchase-order-items/:id', authenticateToken, requireRoles(['OWNER
     const cgstPercent = parseFloat(d.cgstPercent) || 0;
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
+
+    // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+    const hasSgst = sgstPercent > 0;
+    const hasCgst = cgstPercent > 0;
+    const hasIgst = igstPercent > 0;
+    if ((hasSgst || hasCgst) && hasIgst) {
+      return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+    }
+    if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+      return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+    }
+
     const taxableAmount = Math.max(0, basicAmount - discount + freight + pAndF);
     const cgstAmount = taxableAmount * (cgstPercent / 100);
     const sgstAmount = taxableAmount * (sgstPercent / 100);
@@ -1479,6 +1517,17 @@ app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER
     const sgstPercent = parseFloat(d.sgstPercent) || 0;
     const igstPercent = parseFloat(d.igstPercent) || 0;
     const shippingCharges = parseFloat(d.shippingCharges) || 0;
+
+    // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+    const hasSgst = sgstPercent > 0;
+    const hasCgst = cgstPercent > 0;
+    const hasIgst = igstPercent > 0;
+    if ((hasSgst || hasCgst) && hasIgst) {
+      return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+    }
+    if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+      return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+    }
 
     if (qty <= 0) {
       return res.status(400).json({ error: 'Inward quantity must be greater than zero' });
@@ -2010,6 +2059,20 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
       const cgstPercent = parseFloat(d.cgstPercent !== undefined ? d.cgstPercent : (body.cgstPercent || 0));
       const sgstPercent = parseFloat(d.sgstPercent !== undefined ? d.sgstPercent : (body.sgstPercent || 0));
       const igstPercent = parseFloat(d.igstPercent !== undefined ? d.igstPercent : (body.igstPercent || 0));
+
+      // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+      const hasSgst = sgstPercent > 0;
+      const hasCgst = cgstPercent > 0;
+      const hasIgst = igstPercent > 0;
+      if ((hasSgst || hasCgst) && hasIgst) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+      }
+      if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+      }
+
       const shippingCharges = parseFloat(d.shippingCharges || 0);
 
       const basicAmount = qty * rate;
@@ -2217,6 +2280,20 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
       const cgstPercent = parseFloat(item.cgstPercent !== undefined ? item.cgstPercent : (d.cgstPercent || 0));
       const sgstPercent = parseFloat(item.sgstPercent !== undefined ? item.sgstPercent : (d.sgstPercent || 0));
       const igstPercent = parseFloat(item.igstPercent !== undefined ? item.igstPercent : (d.igstPercent || 0));
+
+      // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+      const hasSgst = sgstPercent > 0;
+      const hasCgst = cgstPercent > 0;
+      const hasIgst = igstPercent > 0;
+      if ((hasSgst || hasCgst) && hasIgst) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+      }
+      if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+      }
+
       const shippingCharges = parseFloat(item.shippingCharges || 0);
 
       const basicAmount = qty * rate;
@@ -4515,6 +4592,20 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
       const cgstP = item.cgstPercent !== undefined ? parseFloat(item.cgstPercent) : (parseFloat(d.cgstPercent) || 0);
       const sgstP = item.sgstPercent !== undefined ? parseFloat(item.sgstPercent) : (parseFloat(d.sgstPercent) || 0);
       const igstP = item.igstPercent !== undefined ? parseFloat(item.igstPercent) : (parseFloat(d.igstPercent) || 0);
+
+      // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+      const hasSgst = sgstP > 0;
+      const hasCgst = cgstP > 0;
+      const hasIgst = igstP > 0;
+      if ((hasSgst || hasCgst) && hasIgst) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+      }
+      if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+      }
+
       const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
       const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
       const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;
@@ -4682,6 +4773,20 @@ app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', 
       const cgstP = item.cgstPercent !== undefined ? parseFloat(item.cgstPercent) : (parseFloat(d.cgstPercent) || 0);
       const sgstP = item.sgstPercent !== undefined ? parseFloat(item.sgstPercent) : (parseFloat(d.sgstPercent) || 0);
       const igstP = item.igstPercent !== undefined ? parseFloat(item.igstPercent) : (parseFloat(d.igstPercent) || 0);
+
+      // Strict GST Rule: Either (SGST + CGST) OR (IGST) - Never all three, never partial intra-state
+      const hasSgst = sgstP > 0;
+      const hasCgst = cgstP > 0;
+      const hasIgst = igstP > 0;
+      if ((hasSgst || hasCgst) && hasIgst) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Provide either (SGST + CGST) for Intra-State OR (IGST) for Inter-State, not both.' });
+      }
+      if ((hasSgst && !hasCgst) || (!hasSgst && hasCgst)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Invalid GST: Intra-State tax requires both SGST and CGST at equal rates.' });
+      }
+
       const cgstAmount = Math.round((basicAmount * (cgstP / 100) + Number.EPSILON) * 100) / 100;
       const sgstAmount = Math.round((basicAmount * (sgstP / 100) + Number.EPSILON) * 100) / 100;
       const igstAmount = Math.round((basicAmount * (igstP / 100) + Number.EPSILON) * 100) / 100;

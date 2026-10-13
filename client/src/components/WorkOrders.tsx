@@ -1271,13 +1271,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                             />
                           </td>
                           <td className="p-1.5">
-                            <select
+                            <input
+                              type="text"
+                              list="wo-units-list"
+                              placeholder="Unit"
                               value={row.unit}
-                              onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value)}
-                              className="w-full p-1.5 border border-slate-300 rounded font-medium text-xs bg-white outline-none focus:border-blue-500 font-bold"
-                            >
-                              <option value="">-- Select Unit --</option>
+                              onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value.toUpperCase())}
+                              className="w-full p-1.5 border border-slate-300 rounded font-bold text-xs bg-white outline-none focus:border-blue-500 uppercase"
+                            />
+                            <datalist id="wo-units-list">
                               <option value="NOS">NOS</option>
+                              <option value="LUMPS">LUMPS (Lumpsum)</option>
                               <option value="PCS">PCS</option>
                               <option value="SET">SET</option>
                               <option value="BOX">BOX</option>
@@ -1292,7 +1296,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                               <option value="LOT">LOT</option>
                               <option value="JOB">JOB</option>
                               <option value="HRS">HRS</option>
-                            </select>
+                            </datalist>
                           </td>
                           <td className="p-1.5">
                             <input
@@ -1365,7 +1369,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="number"
                       step="any"
                       value={invoiceHeader.cgstPercent}
-                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, cgstPercent: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceHeader({ ...invoiceHeader, cgstPercent: val, sgstPercent: val, igstPercent: '0' });
+                      }}
                       className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
@@ -1375,7 +1382,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="number"
                       step="any"
                       value={invoiceHeader.sgstPercent}
-                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, sgstPercent: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceHeader({ ...invoiceHeader, sgstPercent: val, cgstPercent: val, igstPercent: '0' });
+                      }}
                       className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
@@ -1385,7 +1395,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="number"
                       step="any"
                       value={invoiceHeader.igstPercent}
-                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, igstPercent: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setInvoiceHeader({ ...invoiceHeader, igstPercent: val, cgstPercent: '0', sgstPercent: '0' });
+                      }}
                       className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
@@ -1955,13 +1968,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                                     />
                                   </td>
                                   <td className="p-1.5">
-                                    <select
+                                    <input
+                                      type="text"
+                                      list="wo-units-list-edit"
+                                      placeholder="Unit"
                                       value={row.unit}
-                                      onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value)}
-                                      className="w-full p-1.5 border border-slate-300 rounded font-medium text-xs bg-white outline-none focus:border-blue-500 font-bold"
-                                    >
-                                      <option value="">-- Select Unit --</option>
+                                      onChange={(e) => handleItemRowChange(row.id, 'unit', e.target.value.toUpperCase())}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-bold text-xs bg-white outline-none focus:border-blue-500 uppercase"
+                                    />
+                                    <datalist id="wo-units-list-edit">
                                       <option value="NOS">NOS</option>
+                                      <option value="LUMPS">LUMPS (Lumpsum)</option>
                                       <option value="PCS">PCS</option>
                                       <option value="SET">SET</option>
                                       <option value="BOX">BOX</option>
@@ -1976,7 +1993,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                                       <option value="LOT">LOT</option>
                                       <option value="JOB">JOB</option>
                                       <option value="HRS">HRS</option>
-                                    </select>
+                                    </datalist>
                                   </td>
                                   <td className="p-1.5">
                                     <input
@@ -2392,20 +2409,27 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-700 mb-1">Unit *</label>
-                    <select
+                    <label className="block font-bold text-slate-700 mb-1">Unit * (Pick or Type)</label>
+                    <input
+                      type="text"
+                      list="wo-single-units-list"
+                      placeholder="e.g. LUMPS, NOS"
                       value={editFormData.unit}
-                      onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value })}
-                      className="w-full p-2.5 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none text-xs"
-                    >
+                      onChange={(e) => setEditFormData({ ...editFormData, unit: e.target.value.toUpperCase() })}
+                      className="w-full p-2.5 border border-slate-300 rounded-lg font-bold bg-white focus:ring-2 focus:ring-blue-400 outline-none text-xs uppercase"
+                    />
+                    <datalist id="wo-single-units-list">
                       <option value="NOS">NOS</option>
+                      <option value="LUMPS">LUMPS (Lumpsum)</option>
+                      <option value="PCS">PCS</option>
                       <option value="SET">SET</option>
+                      <option value="BOX">BOX</option>
                       <option value="MTR">MTR</option>
                       <option value="KG">KG</option>
                       <option value="LOT">LOT</option>
                       <option value="JOB">JOB</option>
                       <option value="HRS">HRS</option>
-                    </select>
+                    </datalist>
                   </div>
                   <div className="sm:col-span-2 md:col-span-4">
                     <label className="block font-bold text-slate-700 mb-1">Item Description / Work Scope</label>
@@ -2452,7 +2476,10 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="number"
                       step="any"
                       value={editFormData.cgstPercent}
-                      onChange={(e) => setEditFormData({ ...editFormData, cgstPercent: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditFormData({ ...editFormData, cgstPercent: val, sgstPercent: val, igstPercent: '0' });
+                      }}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
@@ -2462,7 +2489,23 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       type="number"
                       step="any"
                       value={editFormData.sgstPercent}
-                      onChange={(e) => setEditFormData({ ...editFormData, sgstPercent: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditFormData({ ...editFormData, sgstPercent: val, cgstPercent: val, igstPercent: '0' });
+                      }}
+                      className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">IGST %</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={editFormData.igstPercent}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditFormData({ ...editFormData, igstPercent: val, cgstPercent: '0', sgstPercent: '0' });
+                      }}
                       className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
