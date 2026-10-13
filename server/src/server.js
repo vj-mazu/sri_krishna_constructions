@@ -538,7 +538,20 @@ app.get('/api/purchase-orders', authenticateToken, async (req, res) => {
     queryParams.push(limitNum + 1);
     const querySql = `
       SELECT 
-        po.*,
+        po.id,
+        po."poNumber",
+        po."date",
+        po."divisionId",
+        po."remarks",
+        po."addedById",
+        po."createdAt",
+        po."updatedAt",
+        po."isActive",
+        CASE 
+          WHEN COALESCE((SELECT SUM(poi."totalAmount") FROM "PurchaseOrderItem" poi WHERE poi."purchaseOrderId" = po.id), 0) > 0 
+          THEN (SELECT SUM(poi."totalAmount") FROM "PurchaseOrderItem" poi WHERE poi."purchaseOrderId" = po.id)
+          ELSE po."poAmount"
+        END as "poAmount",
         json_build_object('name', d.name) as division,
         json_build_object('fullName', u."fullName") as "addedBy",
         json_build_object('items', COALESCE((SELECT COUNT(*)::int FROM "PurchaseOrderItem" poi WHERE poi."purchaseOrderId" = po.id), 0)) as "_count"
@@ -570,7 +583,20 @@ app.get('/api/purchase-orders/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const poRes = await pool.query(`
       SELECT 
-        po.*,
+        po.id,
+        po."poNumber",
+        po."date",
+        po."divisionId",
+        po."remarks",
+        po."addedById",
+        po."createdAt",
+        po."updatedAt",
+        po."isActive",
+        CASE 
+          WHEN COALESCE((SELECT SUM(poi."totalAmount") FROM "PurchaseOrderItem" poi WHERE poi."purchaseOrderId" = po.id), 0) > 0 
+          THEN (SELECT SUM(poi."totalAmount") FROM "PurchaseOrderItem" poi WHERE poi."purchaseOrderId" = po.id)
+          ELSE po."poAmount"
+        END as "poAmount",
         json_build_object('name', d.name) as division,
         json_build_object('fullName', u."fullName") as "addedBy",
         json_build_object('items', COALESCE((SELECT COUNT(*)::int FROM "PurchaseOrderItem" poi WHERE poi."purchaseOrderId" = po.id), 0)) as "_count"
@@ -586,6 +612,7 @@ app.get('/api/purchase-orders/:id', authenticateToken, async (req, res) => {
     const kpiRes = await pool.query(`
       SELECT 
         COALESCE(SUM(poi.qty), 0)::float as "totalOrderedQty",
+        COALESCE(SUM(poi."totalAmount"), 0)::float as "calculatedPoTotal",
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1)), 0)::float as "totalInwardQty",
         COALESCE((SELECT SUM(pur."totalAmount") FROM "Purchase" pur WHERE pur."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1)), 0)::float as "totalInwardValue",
         COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" IN (SELECT id FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1) AND s.status = 'APPROVED'), 0)::float as "totalSoldQty",
@@ -604,8 +631,11 @@ app.get('/api/purchase-orders/:id', authenticateToken, async (req, res) => {
     const totalSoldQty = kpiRow.totalSoldQty || 0;
     const availableForSaleQty = Math.max(0, totalInwardQty - totalSoldQty);
 
+    const calculatedPoTotal = kpiRow.calculatedPoTotal || 0;
+    const effectivePoAmount = calculatedPoTotal > 0 ? calculatedPoTotal : (purchaseOrder.poAmount || 0);
+
     const kpi = {
-      totalPoAmount: purchaseOrder.poAmount || 0,
+      totalPoAmount: effectivePoAmount,
       totalInwardValue: kpiRow.totalInwardValue || 0,
       totalSalesValue: kpiRow.totalSalesValue || 0,
       totalOrderedQty,
@@ -1296,13 +1326,23 @@ app.post('/api/purchase-order-items', authenticateToken, requireRoles(['OWNER', 
         $18, $19, $20, $21, $22, NOW(), NOW()
       ) RETURNING *`,
       [
-        d.purchaseOrderId, d.kpclCode, d.itemName, d.specifications || null, d.partNumber, d.make || null, d.hsnCode || null, d.unit || 'NOS',
+        d.purchaseOrderId, d.kpclCode || '-', d.itemName, d.specifications || null, d.partNumber, d.make || null, d.hsnCode || null, d.unit || 'NOS',
         qty, rate, basicAmount, discount, freight, pAndF, cgstPercent, sgstPercent, igstPercent,
         cgstAmount, sgstAmount, igstAmount, insurance, totalAmount
       ]
     );
 
     res.status(201).json(rows[0]);
+
+    // Automatically sync PO header poAmount
+    try {
+      await pool.query(`
+        UPDATE "PurchaseOrder"
+        SET "poAmount" = COALESCE((SELECT SUM("totalAmount") FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1), 0),
+            "updatedAt" = NOW()
+        WHERE id = $1
+      `, [d.purchaseOrderId]);
+    } catch (_) {}
   } catch (err) {
     console.error('Error adding PO item:', err);
     if (err.code === '23505') {
@@ -1368,6 +1408,17 @@ app.put('/api/purchase-order-items/:id', authenticateToken, requireRoles(['OWNER
     );
 
     if (rows.length === 0) return res.status(404).json({ error: 'Item not found' });
+
+    // Automatically sync PO header poAmount
+    try {
+      await pool.query(`
+        UPDATE "PurchaseOrder"
+        SET "poAmount" = COALESCE((SELECT SUM("totalAmount") FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1), 0),
+            "updatedAt" = NOW()
+        WHERE id = $1
+      `, [rows[0].purchaseOrderId]);
+    } catch (_) {}
+
     res.json(rows[0]);
   } catch (err) {
     console.error('Error updating PO item:', err);
@@ -1383,14 +1434,30 @@ app.delete('/api/purchase-order-items/:id', authenticateToken, requireRoles(['OW
   try {
     const checkRes = await pool.query(`
       SELECT 
+        poi."purchaseOrderId",
         (SELECT COUNT(*)::int FROM "Purchase" WHERE "purchaseOrderItemId" = $1) as purchases,
         (SELECT COUNT(*)::int FROM "Sale" WHERE "purchaseOrderItemId" = $1 AND status IN ('APPROVED', 'PENDING')) as sales
+      FROM "PurchaseOrderItem" poi
+      WHERE poi.id = $1
     `, [req.params.id]);
 
-    if (checkRes.rows[0]?.purchases > 0 || checkRes.rows[0]?.sales > 0) {
+    if (!checkRes.rows[0]) return res.status(404).json({ error: 'Item not found' });
+    if (checkRes.rows[0].purchases > 0 || checkRes.rows[0].sales > 0) {
       return res.status(400).json({ error: 'Cannot delete item with existing purchases or active/pending sales' });
     }
+    const poId = checkRes.rows[0].purchaseOrderId;
     await pool.query(`DELETE FROM "PurchaseOrderItem" WHERE id = $1`, [req.params.id]);
+
+    // Automatically sync PO header poAmount
+    try {
+      await pool.query(`
+        UPDATE "PurchaseOrder"
+        SET "poAmount" = COALESCE((SELECT SUM("totalAmount") FROM "PurchaseOrderItem" WHERE "purchaseOrderId" = $1), 0),
+            "updatedAt" = NOW()
+        WHERE id = $1
+      `, [poId]);
+    } catch (_) {}
+
     res.json({ message: 'Item deleted' });
   } catch (err) {
     console.error('Error deleting PO item:', err);

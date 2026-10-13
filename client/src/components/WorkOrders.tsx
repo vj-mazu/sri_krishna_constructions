@@ -2679,6 +2679,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       {selectedForInvoice && (
         <SaleInvoiceModal
           sale={selectedForInvoice}
+          invoiceType="WORK_ORDER"
           onClose={() => setSelectedForInvoice(null)}
         />
       )}

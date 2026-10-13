@@ -3034,13 +3034,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Amount (₹) *</label>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Amount (₹) <span className="text-slate-400 font-normal text-[11px]">(Optional • Auto-calculated from items)</span>
+                    </label>
                     <input
                       type="number"
                       step="0.01"
-                      required
                       value={editPOAmount}
                       onChange={(e) => setEditPOAmount(e.target.value)}
+                      placeholder="Auto-calculated from line items"
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
                     />
                   </div>

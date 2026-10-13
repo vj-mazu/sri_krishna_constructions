@@ -275,129 +275,126 @@ export const SaleInvoiceModal: React.FC<{
 
       if (SKC_LOGO_BASE64) {
         try {
-          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2, targetY + 2, 20, 20);
+          doc.addImage(SKC_LOGO_BASE64, 'PNG', margin + 2.5, targetY + 2, 19, 19);
         } catch (e) {
           console.warn('Logo render fallback:', e);
         }
       }
 
-      // Title text: Company Name (Bold Red)
+      // Title text: Company Name (Bold Red Serif)
       doc.setTextColor(218, 18, 18);
       doc.setFont('times', 'bold');
-      doc.setFontSize(16);
+      doc.setFontSize(17);
       doc.text(customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS'), pageWidth / 2, targetY + 6.5, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
       doc.setFont('times', 'normal');
-      doc.setFontSize(8.2);
-      doc.text(customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170'), pageWidth / 2, targetY + 11.5, { align: 'center' });
+      doc.setFontSize(8.5);
+      doc.text(customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170'), pageWidth / 2, targetY + 11.2, { align: 'center' });
       
       doc.setFont('times', 'normal');
-      doc.setFontSize(8.2);
-      doc.text(customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 16.5, { align: 'center' });
+      doc.setFontSize(8.5);
+      doc.text(customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 15.8, { align: 'center' });
+
+      // Horizontal line dividing company header and GST/Mobile row (EXACT MATCH TO PHYSICAL INVOICE)
+      doc.setDrawColor(0, 0, 0);
+      doc.setLineWidth(0.35);
+      doc.line(margin, targetY + 18.5, margin + contentWidth, targetY + 18.5);
 
       // GST and Mobile Bar
       doc.setFont('times', 'bold');
-      doc.setFontSize(8);
-      doc.text(`GST NO: ${customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}`, margin + 2, targetY + 21.5);
-      doc.text(`Mobile No: ${customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}`, pageWidth - margin - 2, targetY + 21.5, { align: 'right' });
+      doc.setFontSize(8.2);
+      doc.text(`GST NO: ${customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}`, margin + 2.5, targetY + 22.3);
+      doc.text(`Mobile No: ${customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}`, pageWidth - margin - 2.5, targetY + 22.3, { align: 'right' });
     };
 
     // 1. TOP HEADER BOX ON PAGE 1
     drawHeaderBox(y);
     y += 24;
 
-    // 2. BOXED TAX INVOICE TITLE
-    doc.rect(margin, y, contentWidth, 7);
-    doc.setFontSize(12);
+    // 2. BOXED TAX INVOICE TITLE (PAGE 1 ONLY)
+    doc.rect(margin, y, contentWidth, 6.5);
+    doc.setFontSize(13);
     doc.setFont('times', 'bold');
-    doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 5.2, { align: 'center' });
-    y += 7;
+    doc.text(isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE', pageWidth / 2, y + 4.8, { align: 'center' });
+    y += 6.5;
 
-    // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT LAYOUT)
+    // 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT 4-ROW PHYSICAL LAYOUT)
     const boxHeight = 52;
-    const colHalf = contentWidth / 2;
+    const colHalf = contentWidth / 2; // 95mm
 
     doc.rect(margin, y, contentWidth, boxHeight);
     doc.line(margin + colHalf, y, margin + colHalf, y + boxHeight); // vertical center divider
 
-    // Left Column items
+    // Exact continuous horizontal row dividers across both columns
+    doc.line(margin, y + 6.5, margin + contentWidth, y + 6.5); // Row 1 divider (Inv No & PO No)
+    doc.line(margin, y + 13, margin + contentWidth, y + 13);   // Row 2 divider (Inv Date & PO Date)
+    doc.line(margin, y + 42, margin + contentWidth, y + 42);   // Row 3 divider (Supply To & Shipped To)
+
+    // Row 1: Left: Invoice/Receipt No, Right: PO No / WO No / Ref No
     doc.setFont('times', 'bold');
     doc.setFontSize(8);
-    let ly = y + 4.5;
-    doc.text(`INVOICE NO: ${invoiceNo}`, margin + 2, ly);
-    doc.line(margin, ly + 2, margin + colHalf, ly + 2);
+    doc.text(`${isInward ? 'RECEIPT NO' : 'INVOICE NO'}: ${invoiceNo}`, margin + 2, y + 4.6);
+    doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, y + 4.6);
 
-    ly += 6.5;
-    doc.text(`INVOICE DATE: ${invoiceDate}`, margin + 2, ly);
-    doc.line(margin, ly + 2, margin + colHalf, ly + 2);
+    // Row 2: Left: Invoice/Receipt Date, Right: Order/WO Date
+    doc.text(`${isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: ${invoiceDate}`, margin + 2, y + 11.1);
+    doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, y + 11.1);
 
-    ly += 5.5;
+    // Row 3 Left: Supply To, Paying Authority Address & GSTIN
     const supplyToText = primarySale.placeOfWork || partyName || '-';
-    doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, ly);
+    doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, y + 17);
     doc.setFont('times', 'normal');
     doc.setFontSize(7.5);
     
     if (partyAddress) {
       const addressLines = doc.splitTextToSize(partyAddress, colHalf - 4);
-      doc.text(addressLines.slice(0, 4), margin + 2, ly + 4.5);
+      doc.text(addressLines.slice(0, 5), margin + 2, y + 21);
     } else if (partyName && partyName !== '-' && partyName !== 'Customer' && partyName !== 'Supplier') {
-      doc.text(`Party: ${partyName}`, margin + 2, ly + 4.5);
+      doc.text(`Party: ${partyName}`, margin + 2, y + 21);
     }
     
     doc.setFont('times', 'bold');
     doc.setFontSize(8);
-    doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, ly + 20);
-    doc.line(margin, ly + 22, margin + colHalf, ly + 22);
+    doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, y + 39.5);
 
-    const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
-    doc.text(`Division: ${divLabel}`, margin + 2, ly + 27);
-
-    // Right Column items
-    let ry = y + 4.5;
-    doc.setFont('times', 'bold');
-    doc.setFontSize(8);
-    doc.text(`${refLabel}: ${refNumber}`, margin + colHalf + 2, ry);
-    doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
-
-    ry += 6.5;
-    doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, ry);
-    doc.line(margin + colHalf, ry + 2, margin + contentWidth, ry + 2);
-
-    ry += 5.5;
-    doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, ry);
+    // Row 3 Right: State of Supply, Shipped To Address & GSTIN
+    doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, y + 17);
     doc.setFont('times', 'normal');
     doc.setFontSize(7.5);
 
     const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
     const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
-    doc.text(shipLines.slice(0, 4), margin + colHalf + 2, ry + 4.5);
+    doc.text(shipLines.slice(0, 5), margin + colHalf + 2, y + 21);
     
-    // Horizontal separator line above Vehicle No (matching left column line)
-    doc.line(margin + colHalf, ly + 22, margin + contentWidth, ly + 22);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(8);
+    doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, y + 39.5);
 
+    // Row 4 Left: Division
+    const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
+    doc.text(`Division: ${divLabel}`, margin + 2, y + 47.5);
+
+    // Row 4 Right: Vehicle No & E-Way Bill
     const hasVehicle = vehicleNo && vehicleNo !== '-';
     const hasEway = eWayBillNo && eWayBillNo !== '-';
 
-    doc.setFont('times', 'bold');
-    doc.setTextColor(0, 0, 0);
-
     if (hasVehicle && hasEway) {
       doc.setFontSize(7.5);
-      doc.text(`Vehicle No : ${vehicleNo}`, margin + colHalf + 2, ly + 26);
-      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ly + 30);
+      doc.text(`Vehicle No : ${vehicleNo}`, margin + colHalf + 2, y + 46);
+      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, y + 50);
     } else if (hasEway) {
       doc.setFontSize(8);
-      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, ly + 27);
+      doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, y + 47.5);
     } else {
       doc.setFontSize(8);
-      doc.text(`Vehicle No : ${vehicleNo || '-'}`, margin + colHalf + 2, ly + 27);
+      doc.text(`Vehicle No : ${vehicleNo || '-'}`, margin + colHalf + 2, y + 47.5);
     }
 
     y += boxHeight;
 
-    // 4. INVOICE ITEMS TABLE WITH COMPACT KPCL AND SINGLE-LINE AMOUNT
+    // 4. INVOICE ITEMS TABLE WITH COMPACT KPCL AND EXACT COLUMN WIDTHS
     const tableBody = itemsRows.map((r) => [
       r.slNo.toString(),
       r.kpclCode || '-',
@@ -411,29 +408,29 @@ export const SaleInvoiceModal: React.FC<{
 
     autoTable(doc, {
       startY: y,
-      margin: { top: 35, left: margin, right: margin, bottom: 15 },
+      margin: { top: 34, left: margin, right: margin, bottom: 16 },
       head: [
         [
-          { content: 'SL\nNO', styles: { halign: 'center' } },
+          { content: 'SI\nNO', styles: { halign: 'center' } },
           { content: 'KPCL ITEM\nCODE', styles: { halign: 'center' } },
-          { content: 'Discription', styles: { halign: 'left' } },
-          { content: 'ITEM NAME &\nSPECIFICATION', styles: { halign: 'left' } },
+          { content: 'Discription', styles: { halign: 'center' } },
+          { content: 'ITEM NAME &\nSPECIFICATION', styles: { halign: 'center' } },
           { content: 'UNIT', styles: { halign: 'center' } },
           { content: 'QTY', styles: { halign: 'center' } },
-          { content: 'PRICE', styles: { halign: 'right' } },
-          { content: 'AMOUNT', styles: { halign: 'right' } }
+          { content: 'PRICE', styles: { halign: 'center' } },
+          { content: 'AMOUNT', styles: { halign: 'center' } }
         ]
       ],
       body: tableBody,
       theme: 'grid',
-      rowPageBreak: 'avoid', // PREVENTS ROWS FROM SPLITTING HALFWAY ACROSS PAGES
+      rowPageBreak: 'avoid', // PREVENTS ANY ROW FROM SPLITTING HALFWAY ACROSS PAGES
       styles: {
         font: 'times',
-        fontSize: 7.5,
+        fontSize: 7.2,
         lineColor: [0, 0, 0],
         lineWidth: 0.35,
         textColor: [0, 0, 0],
-        cellPadding: 1.8,
+        cellPadding: { top: 1.5, bottom: 1.5, left: 1.5, right: 1.5 },
         valign: 'middle'
       },
       headStyles: {
@@ -442,14 +439,17 @@ export const SaleInvoiceModal: React.FC<{
         textColor: [0, 0, 0],
         fontStyle: 'bold',
         valign: 'middle',
-        lineWidth: 0.4,
+        lineWidth: 0.35,
         lineColor: [0, 0, 0]
+      },
+      alternateRowStyles: {
+        fillColor: [255, 255, 255]
       },
       columnStyles: {
         0: { halign: 'center', cellWidth: 9, fontStyle: 'bold' },
         1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
-        2: { halign: 'left', cellWidth: 42, fontStyle: 'bold' },
-        3: { halign: 'left', cellWidth: 55 },
+        2: { halign: 'left', cellWidth: 38, fontStyle: 'bold' },
+        3: { halign: 'left', cellWidth: 59, fontStyle: 'normal' },
         4: { halign: 'center', cellWidth: 11 },
         5: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
         6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
@@ -465,16 +465,16 @@ export const SaleInvoiceModal: React.FC<{
 
     const finalTableY = (doc as any).lastAutoTable?.finalY || (y + 40);
 
-    // Check if space is sufficient on current page for totals box & signatures (needs ~70mm)
-    let fy = finalTableY + 2;
-    if (fy + 68 > 280) {
+    // Check if space is sufficient on current page for totals box & signatures (needs ~68mm)
+    let fy = finalTableY + 1.5;
+    if (fy + 68 > 278) {
       doc.addPage();
       drawHeaderBox(8);
-      fy = 36;
+      fy = 34;
     }
 
     // 5. BOTTOM TOTALS BOX & BANK DETAILS
-    const leftBoxWidth = 120;
+    const leftBoxWidth = 122;
     const bottomBoxHeight = 35;
 
     // Outer Box border
@@ -484,21 +484,21 @@ export const SaleInvoiceModal: React.FC<{
     // Left Box: Total Invoice amount in words + Bank Details
     doc.setFont('times', 'bold');
     doc.setFontSize(7.5);
-    doc.text('Total Invoice amount in words: ', margin + 2, fy + 4.5);
-    doc.setFont('times', 'normal');
+    doc.text('Total Invoice amount in words: ', margin + 2, fy + 4);
+    doc.setFont('times', 'bold');
     const inWordsClean = amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim();
     const wordsLines = doc.splitTextToSize(inWordsClean, leftBoxWidth - 4);
-    doc.text(wordsLines.slice(0, 2), margin + 2, fy + 8.5);
+    doc.text(wordsLines.slice(0, 2), margin + 2, fy + 7.8);
 
-    doc.line(margin, fy + 12.5, margin + leftBoxWidth, fy + 12.5);
+    doc.line(margin, fy + 12, margin + leftBoxWidth, fy + 12);
 
     doc.setFont('times', 'bold');
-    doc.text('Bank Details :', margin + 2, fy + 16.5);
+    doc.text('Bank Details :', margin + 2, fy + 15.5);
     doc.setFont('times', 'normal');
-    doc.text(`Account Holder Name : ${customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}`, margin + 2, fy + 20.5);
-    doc.text(`Bank Name : ${customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 24.5);
-    doc.text(`Bank Account No: ${customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}`, margin + 2, fy + 28.5);
-    doc.text(`IFSC Code:${customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}`, margin + 2, fy + 32.5);
+    doc.text(`Account Holder Name : ${customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}`, margin + 2, fy + 19.5);
+    doc.text(`Bank Name : ${customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}`, margin + 2, fy + 23.5);
+    doc.text(`Bank Account No: ${customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}`, margin + 2, fy + 27.5);
+    doc.text(`IFSC Code:${customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}`, margin + 2, fy + 31.5);
 
     // Right Box: Basic Cost, Taxes (SGST, CGST, IGST), Shipping, TOTAL TAX AMOUNT, TOTAL AMOUNT
     const rightX = margin + leftBoxWidth;
@@ -521,14 +521,14 @@ export const SaleInvoiceModal: React.FC<{
       summaryRows.push({ label: 'Shipping Charges', value: fmt(totalShipping) });
     }
     const totalTax = round2(totalCgst + totalSgst + totalIgst);
-    summaryRows.push({ label: 'TOTAL TAX AMOUNT', value: fmt(totalTax) });
+    summaryRows.push({ label: 'TOTAL TAX AMOUNT', value: fmt(totalTax), isBold: true });
     summaryRows.push({ label: 'TOTAL AMOUNT', value: fmt(totalInvoiceAmount), isBold: true });
 
     const rowHeight = bottomBoxHeight / summaryRows.length;
     summaryRows.forEach((row, rIdx) => {
       const rowY = fy + (rIdx * rowHeight);
       doc.setFont('times', row.isBold ? 'bold' : 'normal');
-      doc.setFontSize(row.isBold ? 8 : 7.2);
+      doc.setFontSize(row.isBold ? 7.8 : 7.2);
       doc.text(row.label, rightX + 2, rowY + (rowHeight * 0.72));
       doc.text(row.value, valX, rowY + (rowHeight * 0.72), { align: 'right' });
       if (rIdx < summaryRows.length - 1) {
@@ -537,11 +537,11 @@ export const SaleInvoiceModal: React.FC<{
     });
 
     // 6. Signatures (Royal Blue Company Title & Underlined Signatory)
-    let sigY = fy + bottomBoxHeight + 6;
-    if (sigY + 24 > 280) {
+    let sigY = fy + bottomBoxHeight + 5;
+    if (sigY + 22 > 280) {
       doc.addPage();
       drawHeaderBox(8);
-      sigY = 38;
+      sigY = 36;
     }
     doc.setFont('times', 'normal');
     doc.setFontSize(8);
@@ -573,7 +573,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.setFont('times', 'normal');
       doc.setFontSize(7.5);
       doc.setTextColor(0, 0, 0);
-      doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 290, { align: 'center' });
+      doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, 292, { align: 'center' });
     }
 
     return doc;
@@ -741,45 +741,47 @@ export const SaleInvoiceModal: React.FC<{
           >
             
             {/* 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO */}
-            <div className="border border-black p-3 flex items-center justify-between gap-4">
-              <img 
-                src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
-                alt="SKC Logo" 
-                className="w-16 sm:w-20 h-16 sm:h-20 object-contain shrink-0" 
-              />
-              <div className="flex-1 text-center">
-                <h1 className="text-xl sm:text-2xl font-black text-[#da1212] tracking-wide uppercase leading-tight">
-                  {customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS')}
-                </h1>
-                <p className="text-[11px] font-normal text-black mt-0.5">
-                  {customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170')}
-                </p>
-                <p className="text-[11px] font-normal text-black mt-0.5">
-                  {customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.'}
-                </p>
-                <div className="flex justify-between items-center text-[11px] font-bold text-black mt-1 px-1">
-                  <span>GST NO: {customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}</span>
-                  <span>Mobile No: {customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}</span>
+            <div className="border border-black p-2.5">
+              <div className="flex items-center justify-between gap-4">
+                <img 
+                  src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
+                  alt="SKC Logo" 
+                  className="w-16 sm:w-20 h-16 sm:h-20 object-contain shrink-0" 
+                />
+                <div className="flex-1 text-center pr-8 sm:pr-14">
+                  <h1 className="text-xl sm:text-2xl font-black text-[#da1212] tracking-wide uppercase leading-tight font-serif">
+                    {customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS')}
+                  </h1>
+                  <p className="text-[11.5px] font-normal text-black mt-0.5">
+                    {customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170')}
+                  </p>
+                  <p className="text-[11.5px] font-normal text-black mt-0.5">
+                    {customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.'}
+                  </p>
                 </div>
+              </div>
+              <div className="border-t border-black mt-2 pt-1 flex justify-between items-center text-[11px] font-bold text-black px-1">
+                <span>GST NO: {customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}</span>
+                <span>Mobile No: {customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}</span>
               </div>
             </div>
 
             {/* 2. TAX INVOICE TITLE BOX */}
-            <div className="border-x border-b border-black py-2 text-center font-sans font-black text-xl sm:text-2xl uppercase tracking-wider bg-white">
+            <div className="border-x border-b border-black py-1.5 text-center font-bold text-lg sm:text-xl uppercase tracking-wider bg-white">
               {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
             </div>
 
-            {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS */}
-            <div className="border-x border-b border-black grid grid-cols-2 text-[11px] font-sans">
+            {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT 4 ROWS) */}
+            <div className="border-x border-b border-black grid grid-cols-2 text-[11px]">
               {/* Left Column */}
               <div className="border-r border-black divide-y divide-black">
-                <div className="p-2 font-bold text-xs sm:text-sm">
-                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-black text-sm sm:text-base font-mono tracking-wide">{invoiceNo}</span>
+                <div className="p-1.5 font-bold">
+                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-bold">{invoiceNo}</span>
                 </div>
-                <div className="p-2 font-bold text-xs sm:text-sm">
-                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-bold text-xs sm:text-sm">{invoiceDate}</span>
+                <div className="p-1.5 font-bold">
+                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-bold">{invoiceDate}</span>
                 </div>
-                <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
+                <div className="p-1.5 min-h-[92px] flex flex-col justify-between">
                   <div>
                     <div className="font-bold">SUPPLY To : {primarySale.placeOfWork || partyName || '-'}</div>
                     {partyAddress ? (
@@ -797,13 +799,13 @@ export const SaleInvoiceModal: React.FC<{
 
               {/* Right Column */}
               <div className="divide-y divide-black">
-                <div className="p-2 font-bold text-xs sm:text-sm">
-                  {refLabel}: <span className="font-black text-xs sm:text-sm">{refNumber}</span>
+                <div className="p-1.5 font-bold">
+                  {refLabel}: <span className="font-bold">{refNumber}</span>
                 </div>
-                <div className="p-2 font-bold text-xs sm:text-sm">
-                  {dateLabel}: <span className="font-bold text-xs sm:text-sm">{refDate}</span>
+                <div className="p-1.5 font-bold">
+                  {dateLabel}: <span className="font-bold">{refDate}</span>
                 </div>
-                <div className="p-1.5 min-h-[90px] flex flex-col justify-between">
+                <div className="p-1.5 min-h-[92px] flex flex-col justify-between">
                   <div>
                     <div className="font-bold">State of Supply: {primarySale.stateOfSupply || 'KARNATAKA'}</div>
                     <div className="font-bold mt-0.5">Shipped To: <span className="font-normal">{primarySale.shippedTo || partyAddress || partyName || '-'}</span></div>
@@ -823,17 +825,17 @@ export const SaleInvoiceModal: React.FC<{
 
             {/* 4. TAX INVOICE ITEMS TABLE */}
             <div className="border-x border-b border-black overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse font-sans table-fixed">
+              <table className="w-full text-left text-[11px] border-collapse table-fixed">
                 <thead>
                   <tr className="border-b border-black font-bold bg-white text-[11px]">
-                    <th className="p-1.5 border-r border-black w-9 text-center">SL NO</th>
+                    <th className="p-1.5 border-r border-black w-10 text-center">SI NO</th>
                     <th className="p-1.5 border-r border-black w-24 text-center">KPCL ITEM CODE</th>
-                    <th className="p-1.5 border-r border-black w-40 text-left px-2">Discription</th>
-                    <th className="p-1.5 border-r border-black text-left px-2">ITEM NAME & SPECIFICATION</th>
-                    <th className="p-1.5 border-r border-black w-11 text-center">UNIT</th>
-                    <th className="p-1.5 border-r border-black w-11 text-center">QTY</th>
-                    <th className="p-1.5 border-r border-black w-20 text-right px-2">PRICE</th>
-                    <th className="p-1.5 w-24 text-right px-2 whitespace-nowrap">AMOUNT</th>
+                    <th className="p-1.5 border-r border-black w-40 text-center px-2">Discription</th>
+                    <th className="p-1.5 border-r border-black text-center px-2">ITEM NAME & SPECIFICATION</th>
+                    <th className="p-1.5 border-r border-black w-12 text-center">UNIT</th>
+                    <th className="p-1.5 border-r border-black w-12 text-center">QTY</th>
+                    <th className="p-1.5 border-r border-black w-20 text-center px-2">PRICE</th>
+                    <th className="p-1.5 w-24 text-center px-2 whitespace-nowrap">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
@@ -841,11 +843,11 @@ export const SaleInvoiceModal: React.FC<{
                     <tr key={r.slNo} className="border-b border-black">
                       <td className="p-1.5 text-center font-bold border-r border-black">{r.slNo}</td>
                       <td className="p-1.5 text-center font-bold border-r border-black">{r.kpclCode || '-'}</td>
-                      <td className="p-1.5 font-bold border-r border-black px-2">{r.itemName}</td>
+                      <td className="p-1.5 font-bold border-r border-black px-2 uppercase">{r.itemName}</td>
                       <td className="p-1.5 border-r border-black px-2 text-[10.5px] uppercase whitespace-pre-wrap">
                         {r.specifications}
                         {r.partNumber && !r.specifications.includes(r.partNumber) && (
-                          <div className="font-bold mt-0.5">P NO: {r.partNumber}</div>
+                          <div className="font-bold mt-0.5">P.No: {r.partNumber}</div>
                         )}
                       </td>
                       <td className="p-1.5 text-center border-r border-black">{r.unit}</td>
@@ -859,12 +861,12 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 5. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 mt-0 font-sans border-x border-b border-black">
+            <div className="grid grid-cols-1 sm:grid-cols-2 mt-0 border-x border-b border-black">
               {/* Left Box: Amount in words & Bank info */}
-              <div className="p-2.5 text-[11px] space-y-1.5 border-b sm:border-b-0 sm:border-r border-black">
+              <div className="p-2 text-[11px] space-y-1.5 border-b sm:border-b-0 sm:border-r border-black flex flex-col justify-between">
                 <div>
                   <span className="font-bold block text-black">Total Invoice amount in words: </span>
-                  <span className="italic font-bold text-black text-[11px] block mt-0.5">
+                  <span className="font-bold text-black text-[11px] block mt-0.5">
                     {amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim()}
                   </span>
                 </div>
@@ -881,55 +883,55 @@ export const SaleInvoiceModal: React.FC<{
 
               {/* Right Box: Tax Breakdown Summary */}
               <div className="divide-y divide-black text-[11px]">
-                <div className="p-1.5 px-2 flex justify-between font-bold">
-                  <span>Basic Cost:</span>
-                  <span className="font-bold">₹{fmt(totalBasic)}</span>
+                <div className="p-1.5 px-2 flex justify-between font-normal">
+                  <span>Basic Cost</span>
+                  <span className="font-bold">{fmt(totalBasic)}</span>
                 </div>
                 {(totalSgst > 0 || totalCgst > 0) && (
                   <>
-                    <div className="p-1.5 px-2 flex justify-between font-bold">
-                      <span>SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}:</span>
-                      <span className="font-bold">₹{fmt(totalSgst)}</span>
+                    <div className="p-1.5 px-2 flex justify-between font-normal">
+                      <span>SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}</span>
+                      <span className="font-bold">{fmt(totalSgst)}</span>
                     </div>
-                    <div className="p-1.5 px-2 flex justify-between font-bold">
-                      <span>CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}:</span>
-                      <span className="font-bold">₹{fmt(totalCgst)}</span>
+                    <div className="p-1.5 px-2 flex justify-between font-normal">
+                      <span>CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}</span>
+                      <span className="font-bold">{fmt(totalCgst)}</span>
                     </div>
                   </>
                 )}
                 {totalIgst > 0 && (
-                  <div className="p-1.5 px-2 flex justify-between font-bold text-indigo-900">
-                    <span>IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}:</span>
-                    <span className="font-bold">₹{fmt(totalIgst)}</span>
+                  <div className="p-1.5 px-2 flex justify-between font-normal">
+                    <span>IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}</span>
+                    <span className="font-bold">{fmt(totalIgst)}</span>
                   </div>
                 )}
                 {totalCgst === 0 && totalSgst === 0 && totalIgst === 0 && (
-                  <div className="p-1.5 px-2 flex justify-between font-bold text-slate-600">
-                    <span>GST (0%):</span>
-                    <span className="font-bold">₹0.00</span>
+                  <div className="p-1.5 px-2 flex justify-between font-normal">
+                    <span>GST (0%)</span>
+                    <span className="font-bold">0</span>
                   </div>
                 )}
                 {totalShipping > 0 && (
-                  <div className="p-1.5 px-2 flex justify-between font-bold text-blue-900">
-                    <span>Shipping Charges:</span>
-                    <span className="font-bold">₹{fmt(totalShipping)}</span>
+                  <div className="p-1.5 px-2 flex justify-between font-normal">
+                    <span>Shipping Charges</span>
+                    <span className="font-bold">{fmt(totalShipping)}</span>
                   </div>
                 )}
                 <div className="p-1.5 px-2 flex justify-between font-bold">
-                  <span>TOTAL TAX AMOUNT:</span>
-                  <span className="font-bold">₹{fmt(totalCgst + totalSgst + totalIgst)}</span>
+                  <span>TOTAL TAX AMOUNT</span>
+                  <span className="font-bold">{fmt(totalCgst + totalSgst + totalIgst)}</span>
                 </div>
-                <div className="p-2 px-2 flex justify-between font-black text-xs">
-                  <span>TOTAL AMOUNT:</span>
-                  <span className="text-sm font-black">₹{fmt(totalInvoiceAmount)}</span>
+                <div className="p-2 px-2 flex justify-between font-bold text-xs bg-slate-50/50">
+                  <span>TOTAL AMOUNT</span>
+                  <span className="text-sm font-black">{fmt(totalInvoiceAmount)}</span>
                 </div>
               </div>
             </div>
 
             {/* 6. SIGNATURES (Right side only with Royal Blue Header & Proprietor in Royal Blue) */}
-            <div className="flex justify-end items-end mt-10 pt-4 text-xs font-sans">
+            <div className="flex justify-end items-end mt-10 pt-4 text-xs">
               <div className="text-center min-w-[200px]">
-                <div className="text-black font-medium">Your Faithfully</div>
+                <div className="text-black font-normal">Your Faithfully</div>
                 <div className="font-bold text-[#1e40af] mt-1 text-xs">
                   {customSettings.signatoryTitle || 'For Sri Krishna Constructions'}
                 </div>

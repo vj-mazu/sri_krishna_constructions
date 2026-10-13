@@ -2907,6 +2907,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       {previewSaleInvoice && (
         <SaleInvoiceModal
           sale={previewSaleInvoice}
+          invoiceType="OUTWARD"
           onClose={() => setPreviewSaleInvoice(null)}
         />
       )}
