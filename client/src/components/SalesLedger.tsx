@@ -57,6 +57,7 @@ interface SaleLedgerItem {
   poNumber: string;
   workOrderNumber?: string;
   workOrderDate?: string;
+  shippingCharges?: number;
   companyName?: string;
   companyGstNumber?: string;
   partyAddress?: string;
@@ -139,6 +140,10 @@ export const SalesLedger: React.FC = () => {
       totalAmount: number;
       totalBasic: number;
       totalTax: number;
+      totalCgst: number;
+      totalSgst: number;
+      totalIgst: number;
+      totalShipping: number;
       totalQty: number;
       firstSale: SaleLedgerItem;
     }>();
@@ -182,6 +187,10 @@ export const SalesLedger: React.FC = () => {
           totalAmount: 0,
           totalBasic: 0,
           totalTax: 0,
+          totalCgst: 0,
+          totalSgst: 0,
+          totalIgst: 0,
+          totalShipping: 0,
           totalQty: 0,
           firstSale: sale
         };
@@ -189,16 +198,25 @@ export const SalesLedger: React.FC = () => {
       }
       grp.items.push(sale);
       const b = Number(sale.basicAmount || (sale.qty * sale.rate) || 0);
-      const t = Number((sale.cgstAmount || 0) + (sale.sgstAmount || 0) + (sale.igstAmount || 0));
+      const cgst = Number(sale.cgstAmount || (b * ((Number(sale.cgstPercent) || 0) / 100)) || 0);
+      const sgst = Number(sale.sgstAmount || (b * ((Number(sale.sgstPercent) || 0) / 100)) || 0);
+      const igst = Number(sale.igstAmount || (b * ((Number(sale.igstPercent) || 0) / 100)) || 0);
       grp.totalBasic += b;
-      grp.totalTax += t;
+      grp.totalCgst += cgst;
+      grp.totalSgst += sgst;
+      grp.totalIgst += igst;
+      grp.totalTax += (cgst + sgst + igst);
+      grp.totalShipping = Math.max(grp.totalShipping, Number(sale.shippingCharges || 0));
       grp.totalAmount += Number(sale.totalAmount || 0);
       grp.totalQty += Number(sale.qty || 0);
     });
 
     map.forEach(grp => {
       grp.totalBasic = Math.round((grp.totalBasic + Number.EPSILON) * 100) / 100;
-      grp.totalTax = Math.round((grp.totalTax + Number.EPSILON) * 100) / 100;
+      grp.totalCgst = Math.round((grp.totalCgst + Number.EPSILON) * 100) / 100;
+      grp.totalSgst = Math.round((grp.totalSgst + Number.EPSILON) * 100) / 100;
+      grp.totalIgst = Math.round((grp.totalIgst + Number.EPSILON) * 100) / 100;
+      grp.totalTax = Math.round((grp.totalCgst + grp.totalSgst + grp.totalIgst + Number.EPSILON) * 100) / 100;
       grp.totalAmount = Math.round((grp.totalAmount + Number.EPSILON) * 100) / 100;
     });
 
@@ -858,13 +876,32 @@ export const SalesLedger: React.FC = () => {
 
                 {/* CONTAINER SUMMARY FOOTER */}
                 <div className="bg-slate-50 px-3.5 py-2.5 border-t border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-600 font-medium">
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span>Total Items: <strong className="text-slate-800 font-mono font-semibold">{grp.items.length}</strong></span>
                     <span>Total Qty: <strong className="text-blue-900 font-mono font-semibold">{grp.totalQty} units</strong></span>
                   </div>
-                  <div className="flex items-center gap-4 font-mono">
+                  <div className="flex flex-wrap items-center gap-2 font-mono">
                     <span>Basic: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalBasic)}</strong></span>
-                    <span>Tax: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalTax)}</strong></span>
+                    {grp.totalCgst > 0 && (
+                      <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        CGST: +{formatCurrency(grp.totalCgst)}
+                      </span>
+                    )}
+                    {grp.totalSgst > 0 && (
+                      <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        SGST: +{formatCurrency(grp.totalSgst)}
+                      </span>
+                    )}
+                    {grp.totalIgst > 0 && (
+                      <span className="text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                        IGST: +{formatCurrency(grp.totalIgst)}
+                      </span>
+                    )}
+                    {grp.totalShipping > 0 && (
+                      <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-semibold">
+                        Shipping: +{formatCurrency(grp.totalShipping)}
+                      </span>
+                    )}
                     <span className="text-xs sm:text-sm font-bold text-[#1e3a8a] bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
                       Net: {formatCurrency(grp.totalAmount)}
                     </span>

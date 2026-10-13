@@ -687,7 +687,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         poNumber: poNumber.trim(),
         divisionId: poDivisionId,
         date: poDate,
-        poAmount: parseFloat(poAmount),
+        poAmount: parseFloat(poAmount) || 0,
       });
 
       const msg = `Purchase Order '${poNumber}' created successfully!`;
@@ -3112,18 +3112,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 />
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Amount (Rs) *</label>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  PO Amount (Rs) <span className="text-slate-400 font-normal text-[11px]">(Optional • Auto-calculated from items)</span>
+                </label>
                 <input
                   type="number"
-                  required
                   value={poAmount}
                   onChange={(e) => setPoAmount(e.target.value)}
-                  placeholder="e.g. 2500000"
+                  placeholder="Auto-calculated from line items"
                   className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-mono font-bold"
                 />
-                {poAmount && (
+                {poAmount ? (
                   <div className="text-[11px] font-bold text-[#667eea] mt-1 font-mono bg-indigo-50 px-2 py-0.5 rounded w-fit border border-indigo-100">
                     Preview: {formatIndianCurrency(poAmount)}
+                  </div>
+                ) : (
+                  <div className="text-[10px] text-slate-500 mt-1 italic">
+                    Automatically summed from registered PO line items.
                   </div>
                 )}
               </div>

@@ -1398,88 +1398,7 @@ app.delete('/api/purchase-order-items/:id', authenticateToken, requireRoles(['OW
   }
 });
 
-// POST /api/purchases - Inward purchase record with ACID transactional safety
-app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
-  const client = await pool.connect();
-  try {
-    const d = req.body;
-    const qty = parseFloat(d.qty) || 0;
-    const rate = parseFloat(d.rate) || 0;
-    const cgstPercent = parseFloat(d.cgstPercent) || 0;
-    const sgstPercent = parseFloat(d.sgstPercent) || 0;
-    const igstPercent = parseFloat(d.igstPercent) || 0;
-    const shippingCharges = parseFloat(d.shippingCharges) || 0;
 
-    const basicAmount = qty * rate;
-    const cgstAmount = basicAmount * (cgstPercent / 100);
-    const sgstAmount = basicAmount * (sgstPercent / 100);
-    const igstAmount = basicAmount * (igstPercent / 100);
-    const totalAmount = basicAmount + cgstAmount + sgstAmount + igstAmount + shippingCharges;
-
-    await client.query('BEGIN');
-
-    // Row-level lock on item to verify and enforce ordered PO quantity limit
-    const itemRes = await client.query(`
-      SELECT poi.qty, COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as purchased
-      FROM "PurchaseOrderItem" poi
-      WHERE poi.id = $1
-      FOR UPDATE
-    `, [d.purchaseOrderItemId]);
-
-    if (itemRes.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'PO item not found' });
-    }
-
-    const item = itemRes.rows[0];
-    const remainingAllowed = (item.qty || 0) - (item.purchased || 0);
-    if (qty > remainingAllowed) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: `Cannot inward ${qty} units. Ordered PO item quantity is ${item.qty}, already received ${item.purchased} units. Remaining balance is ${Math.max(0, remainingAllowed)} units!`
-      });
-    }
-
-    const { rows } = await client.query(
-      `INSERT INTO "Purchase" (
-        "id", "purchaseOrderItemId", "date", "qty", "rate", "basicAmount",
-        "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
-        "totalAmount", "partyName", "supplierAddress", "gstNumber", "partyInvoiceNumber",
-        "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "shippingCharges", "addedById", "createdAt"
-      ) VALUES (
-        gen_random_uuid()::text, $1, $2, $3, $4, $5,
-        $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, NOW()
-      ) RETURNING *`,
-      [
-        d.purchaseOrderItemId, new Date(d.date), qty, rate, basicAmount,
-        cgstPercent, sgstPercent, igstPercent, cgstAmount, sgstAmount, igstAmount,
-        totalAmount,
-        d.partyName ? d.partyName.trim() : null,
-        d.supplierAddress ? d.supplierAddress.trim() : null,
-        d.gstNumber ? d.gstNumber.trim().toUpperCase() : null,
-        d.partyInvoiceNumber ? d.partyInvoiceNumber.trim().toUpperCase() : null,
-        d.supplierInvoiceDate ? new Date(d.supplierInvoiceDate) : null,
-        d.vehicleNumber ? d.vehicleNumber.trim().toUpperCase() : null,
-        d.remarks ? d.remarks.trim() : null,
-        d.receivedItemName ? d.receivedItemName.trim() : null,
-        d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null,
-        shippingCharges,
-        req.user.id
-      ]
-    );
-
-    await client.query('COMMIT');
-    res.status(201).json(rows[0]);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error('Error creating purchase:', err);
-    res.status(500).json({ error: 'Failed to record purchase' });
-  } finally {
-    client.release();
-  }
-});
 
 // PUT /api/purchases/:id - Update purchase
 app.put('/api/purchases/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res, next) => {
@@ -1740,6 +1659,16 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
             });
           }
 
+          // Enforce ordered PO item maximum limit: cannot inward more than PO ordered quantity
+          const poiRes = await client.query('SELECT qty, "itemName" FROM "PurchaseOrderItem" WHERE id = $1', [itemId]);
+          const orderedQty = poiRes.rows[0]?.qty || 0;
+          if (otherPurchased + qty > orderedQty) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              error: `Cannot inward ${qty} units for "${poiRes.rows[0]?.itemName || 'Item'}". Ordered PO item quantity is ${orderedQty}, other received inward is ${otherPurchased} units. Maximum inward allowed is ${Math.max(0, orderedQty - otherPurchased)} units!`
+            });
+          }
+
           if (item.unit && item.unit.trim()) {
             await client.query('UPDATE "PurchaseOrderItem" SET "unit" = $1 WHERE "id" = $2', [item.unit.trim().toUpperCase(), itemId]);
           }
@@ -1789,6 +1718,24 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
         }
 
         if (poItemId) {
+          // Enforce ordered PO item maximum limit
+          const poiCheck = await client.query(`
+            SELECT poi.qty, poi."itemName", COALESCE((SELECT SUM(p.qty) FROM "Purchase" p WHERE p."purchaseOrderItemId" = poi.id), 0)::float as received
+            FROM "PurchaseOrderItem" poi
+            WHERE poi.id = $1
+          `, [poItemId]);
+
+          if (poiCheck.rows[0]) {
+            const ordQ = poiCheck.rows[0].qty || 0;
+            const recQ = poiCheck.rows[0].received || 0;
+            if (recQ + qty > ordQ) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({
+                error: `Cannot inward ${qty} units for "${poiCheck.rows[0].itemName || 'Item'}". Ordered PO item quantity is ${ordQ}, already received inward is ${recQ} units. Maximum inward allowed is ${Math.max(0, ordQ - recQ)} units!`
+              });
+            }
+          }
+
           const insRes = await client.query(`
             INSERT INTO "Purchase" (
               "id", "purchaseOrderItemId", "partyInvoiceNumber", "date", "qty", "rate",
@@ -4412,6 +4359,8 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
         LOWER(COALESCE(wo."partyGstNumber", '')) LIKE $${params.length} OR
         LOWER(wo."itemName") LIKE $${params.length} OR
         LOWER(COALESCE(wo."partNumber", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(wo."description", '')) LIKE $${params.length} OR
+        LOWER(COALESCE(wo."remarks", '')) LIKE $${params.length} OR
         LOWER(COALESCE(wo."vehicleNumber", '')) LIKE $${params.length} OR
         LOWER(COALESCE(wo."eWayBillNumber", '')) LIKE $${params.length}
       )`);
@@ -5258,6 +5207,9 @@ app.get('/api/sales-ledger', authenticateToken, async (req, res) => {
         LOWER(COALESCE(all_sales."eWayBillNumber", '')) LIKE $${pIdx} OR
         LOWER(COALESCE(all_sales."itemName", '')) LIKE $${pIdx} OR
         LOWER(COALESCE(all_sales."partNumber", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."kpclCode", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."poNumber", '')) LIKE $${pIdx} OR
+        LOWER(COALESCE(all_sales."remarks", '')) LIKE $${pIdx} OR
         LOWER(COALESCE(all_sales."workOrderNumber", '')) LIKE $${pIdx}
       )`);
     }
@@ -8265,14 +8217,15 @@ app.get('/api/salary-hike-ledger', authenticateToken, requireRoles(['OWNER', 'MA
       if (workerHistory.length === 0) {
         const initialDate = w.wageRevisedDate ? new Date(w.wageRevisedDate).toISOString().split('T')[0] : '2024-08-01';
         const dailyWage = parseFloat(w.dailyWage) || 0;
-        const base = Math.round(dailyWage * 31);
+        const dailyAllowance = parseFloat(w.dailyAllowance) || 0;
+        const base = Math.round((dailyWage + dailyAllowance) * 31);
         const hike = parseFloat(w.extraAmount) || 0;
         workerHistory = [{
           effectiveDate: initialDate,
           basePaid: base,
           hikeAmount: hike,
           totalAmount: base + hike,
-          notes: 'Master Registration (31 Days Wages)'
+          notes: 'Master Registration (31 Days Wages + Allowance)'
         }];
       }
 

@@ -112,8 +112,10 @@ export const SalaryLedger: React.FC = () => {
     setSelectedWorkerForHike(worker);
     const lastHike = worker.hikeHistory[worker.hikeHistory.length - 1];
 
-    // Standard 31 days base wages paid: Daily Wage * 31
-    const defaultMonthlyBase = Math.round((Number(worker.dailyWage) || 0) * 31);
+    // Standard 31 days base wages paid: (Daily Wage + Daily Allowance) * 31
+    const dailyWage = Number(worker.dailyWage) || 0;
+    const dailyAllowance = Number(worker.dailyAllowance) || 0;
+    const defaultMonthlyBase = Math.round((dailyWage + dailyAllowance) * 31);
 
     setNewHikeBase(lastHike ? String(lastHike.basePaid) : String(defaultMonthlyBase));
     setNewHikeExtra(lastHike && lastHike.hikeAmount ? String(lastHike.hikeAmount) : String(worker.extraAmount || '0'));

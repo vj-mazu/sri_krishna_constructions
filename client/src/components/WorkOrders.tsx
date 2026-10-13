@@ -252,6 +252,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       totalAmount: number;
       totalBasic: number;
       totalTax: number;
+      totalCgst: number;
+      totalSgst: number;
+      totalIgst: number;
       totalShipping: number;
       totalQty: number;
       firstItem: WorkOrderItem;
@@ -291,6 +294,9 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           totalAmount: 0,
           totalBasic: 0,
           totalTax: 0,
+          totalCgst: 0,
+          totalSgst: 0,
+          totalIgst: 0,
           totalShipping: 0,
           totalQty: 0,
           firstItem: wo
@@ -299,17 +305,24 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       }
       grp.items.push(wo);
       const basic = (Number(wo.qty) || 0) * (Number(wo.rate) || 0);
-      const taxP = (Number(wo.cgstPercent) || 0) + (Number(wo.sgstPercent) || 0) + (Number(wo.igstPercent) || 0);
-      const tax = basic * (taxP / 100);
+      const cgst = Number(wo.cgstAmount || (basic * ((Number(wo.cgstPercent) || 0) / 100)) || 0);
+      const sgst = Number(wo.sgstAmount || (basic * ((Number(wo.sgstPercent) || 0) / 100)) || 0);
+      const igst = Number(wo.igstAmount || (basic * ((Number(wo.igstPercent) || 0) / 100)) || 0);
       grp.totalBasic += basic;
-      grp.totalTax += tax;
+      grp.totalCgst += cgst;
+      grp.totalSgst += sgst;
+      grp.totalIgst += igst;
+      grp.totalTax += (cgst + sgst + igst);
       grp.totalShipping = Math.max(grp.totalShipping, Number(wo.shippingCharges || 0));
       grp.totalQty += Number(wo.qty || 0);
     });
 
     map.forEach(grp => {
       grp.totalBasic = Math.round((grp.totalBasic + Number.EPSILON) * 100) / 100;
-      grp.totalTax = Math.round((grp.totalTax + Number.EPSILON) * 100) / 100;
+      grp.totalCgst = Math.round((grp.totalCgst + Number.EPSILON) * 100) / 100;
+      grp.totalSgst = Math.round((grp.totalSgst + Number.EPSILON) * 100) / 100;
+      grp.totalIgst = Math.round((grp.totalIgst + Number.EPSILON) * 100) / 100;
+      grp.totalTax = Math.round((grp.totalCgst + grp.totalSgst + grp.totalIgst + Number.EPSILON) * 100) / 100;
       grp.totalAmount = Math.round((grp.totalBasic + grp.totalTax + grp.totalShipping + Number.EPSILON) * 100) / 100;
     });
 
@@ -1678,15 +1691,33 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
                 {/* CONTAINER SUMMARY FOOTER */}
                 <div className="bg-slate-100/90 px-3.5 py-2.5 border-t-2 border-slate-300 flex flex-wrap items-center justify-between gap-2.5 text-xs text-slate-700 font-medium">
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-3">
                     <span>Total Items: <strong className="text-slate-800 font-mono font-semibold">{grp.items.length}</strong></span>
                     <span>Total Qty: <strong className="text-blue-900 font-mono font-semibold">{grp.totalQty} units</strong></span>
-                    {grp.totalShipping > 0 && <span>Shipping: <strong className="text-blue-900 font-mono font-semibold">₹{grp.totalShipping}</strong></span>}
                   </div>
-                  <div className="flex items-center gap-4 font-mono">
+                  <div className="flex flex-wrap items-center gap-2.5 font-mono">
                     <span>Basic: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalBasic)}</strong></span>
-                    <span>Tax: <strong className="text-slate-800 font-medium">{formatCurrency(grp.totalTax)}</strong></span>
-                    <span className="text-xs sm:text-sm font-bold text-[#1e3a8a] bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                    {grp.totalCgst > 0 && (
+                      <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        CGST: +{formatCurrency(grp.totalCgst)}
+                      </span>
+                    )}
+                    {grp.totalSgst > 0 && (
+                      <span className="text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                        SGST: +{formatCurrency(grp.totalSgst)}
+                      </span>
+                    )}
+                    {grp.totalIgst > 0 && (
+                      <span className="text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                        IGST: +{formatCurrency(grp.totalIgst)}
+                      </span>
+                    )}
+                    {grp.totalShipping > 0 && (
+                      <span className="text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-semibold">
+                        Shipping: +{formatCurrency(grp.totalShipping)}
+                      </span>
+                    )}
+                    <span className="text-xs sm:text-sm font-black text-[#1e3a8a] bg-blue-50 px-3 py-1 rounded-md border border-blue-300 shadow-2xs">
                       Net: {formatCurrency(grp.totalAmount)}
                     </span>
                   </div>
