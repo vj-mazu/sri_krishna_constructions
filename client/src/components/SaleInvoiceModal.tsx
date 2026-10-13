@@ -4,6 +4,7 @@ import { Download, Printer, X, Edit3, RotateCcw, Building2, Check } from 'lucide
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
+import { SKC_SIGNATURE_BASE64 } from '../signatureBase64';
 import { showToast } from '../toast';
 
 interface CustomInvoiceSettings {
@@ -569,18 +570,22 @@ export const SaleInvoiceModal: React.FC<{
     doc.text('Your Faithfully', pageWidth - margin - 22, sigY, { align: 'center' });
     
     // Royal Blue for company signature & Proprietor designation
-    doc.setFont('times', 'bold');
-    doc.setTextColor(30, 64, 175); // #1e40af
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(43, 87, 151); // #2b5797
     doc.text(customSettings.signatoryTitle || 'For Sri Krishna Constructions', pageWidth - margin - 22, sigY + 5.5, { align: 'center' });
     
-    // Signature underline
-    doc.setDrawColor(0, 0, 0);
-    doc.setLineWidth(0.35);
-    doc.line(pageWidth - margin - 44, sigY + 15, pageWidth - margin, sigY + 15);
+    // Draw cropped signature image if available
+    if (SKC_SIGNATURE_BASE64) {
+      try {
+        doc.addImage(SKC_SIGNATURE_BASE64, 'PNG', pageWidth - margin - 32, sigY + 6.5, 20, 11);
+      } catch (_) {}
+    }
 
-    // Proprietor designation in Royal Blue
-    doc.setTextColor(30, 64, 175); // #1e40af
-    doc.setFont('times', 'bold');
+    // Proprietor designation in matching serif
+    doc.setTextColor(43, 87, 151); // #2b5797
+    doc.setFont('times', 'normal');
+    doc.setFontSize(10.5);
     doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 19, { align: 'center' });
 
     // 7. Render exact, synchronized page count on every page (e.g., Page 1 of 3, Page 2 of 3, Page 3 of 3)
@@ -642,8 +647,12 @@ export const SaleInvoiceModal: React.FC<{
         }
       };
 
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/sales/generate-pdf', {
+      const token = localStorage.getItem('iac_token') || localStorage.getItem('token');
+      const apiBase = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.includes('onrender.com'))
+        ? 'https://sri-krishna-constructions.onrender.com/api'
+        : (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com') ? '/api' : 'http://localhost:5000/api');
+
+      const response = await fetch(`${apiBase}/sales/generate-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -664,6 +673,9 @@ export const SaleInvoiceModal: React.FC<{
         window.URL.revokeObjectURL(url);
         showToast('Tax Invoice PDF downloaded successfully (Original Fidelity)', 'success');
         return;
+      } else {
+        const errJson = await response.json().catch(() => ({}));
+        console.warn('Backend PDF generator returned non-ok:', response.status, errJson);
       }
     } catch (e) {
       console.warn('Backend PDF generator fallback:', e);
@@ -679,7 +691,89 @@ export const SaleInvoiceModal: React.FC<{
     }
   };
 
-  const printPdf = () => {
+  const printPdf = async () => {
+    try {
+      showToast('Preparing Tax Invoice for printing...', 'info');
+      const backendItems = itemsRows.map(r => ({
+        sl_no: r.slNo,
+        kpcl_code: r.kpclCode,
+        description: r.itemName,
+        specification: r.specifications,
+        unit: r.unit,
+        qty: r.qty,
+        price: r.rate,
+        amount: r.amount
+      }));
+
+      const payload = {
+        invoiceData: {
+          invoice_no: invoiceNo,
+          invoice_date: invoiceDate,
+          po_no: refNumber,
+          order_date: refDate,
+          supply_to: primarySale.placeOfWork || partyName || 'SHAKTINAGAR',
+          state_of_supply: primarySale.stateOfSupply || 'KARNATAKA',
+          bill_to_block: partyAddress ? `TO Paying Authority:${partyName}\n${partyAddress}\nGST NO:${partyGst || '-'}` : (partyName ? `TO Paying Authority:${partyName}\nGST NO:${partyGst || '-'}` : ''),
+          ship_to_block: shippedToText ? `Shipped To: ${shippedToText}\nGST NO:${partyGst || '-'}` : '',
+          division: divLabel,
+          vehicle_no: vehicleNo,
+          eway_bill: eWayBillNo,
+          company_gstin: customSettings.companyGst,
+          company_mobile: customSettings.companyPhone,
+          bank_holder: customSettings.bankHolder,
+          bank_name: customSettings.bankName,
+          bank_account_no: customSettings.bankAccount,
+          bank_ifsc: customSettings.bankIfsc,
+          items: backendItems
+        },
+        settings: {
+          gst_rounding: customSettings.gstRounding || 'up',
+          show_eway_bill: customSettings.showEwayBill || false,
+          repeat_column_headers: customSettings.repeatColumnHeaders || false,
+          number_style: customSettings.numberStyle || 'plain'
+        }
+      };
+
+      const token = localStorage.getItem('iac_token') || localStorage.getItem('token');
+      const apiBase = (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.includes('onrender.com'))
+        ? 'https://sri-krishna-constructions.onrender.com/api'
+        : (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com') ? '/api' : 'http://localhost:5000/api');
+
+      const response = await fetch(`${apiBase}/sales/generate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const pdfBlob = await response.blob();
+        const blobUrl = URL.createObjectURL(pdfBlob);
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
+        iframe.onload = () => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+          setTimeout(() => {
+            try { document.body.removeChild(iframe); } catch (_) {}
+            URL.revokeObjectURL(blobUrl);
+          }, 60000);
+        };
+        return;
+      }
+    } catch (e) {
+      console.warn('Backend PDF print fallback:', e);
+    }
+
     try {
       const doc = generatePdf();
       const pdfBlob = doc.output('blob');
@@ -860,10 +954,10 @@ export const SaleInvoiceModal: React.FC<{
               {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
             </div>
 
-            {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT 4 ROWS) */}
-            <div className="border-x border-b border-black grid grid-cols-2 text-[11px]">
-              {/* Left Column */}
-              <div className="border-r border-black divide-y divide-black">
+            {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT 63% / 37% PHYSICAL SPLIT) */}
+            <div className="border-x border-b border-black flex text-[11px]">
+              {/* Left Column (63%) */}
+              <div className="w-[63%] border-r border-black divide-y divide-black flex flex-col">
                 <div className="p-1.5 font-bold">
                   {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-bold">{invoiceNo}</span>
                 </div>
@@ -874,20 +968,20 @@ export const SaleInvoiceModal: React.FC<{
                   <div>
                     <div className="font-bold">SUPPLY To : {primarySale.placeOfWork || partyName || '-'}</div>
                     {partyAddress ? (
-                      <div className="text-[10.5px] text-black whitespace-pre-wrap mt-0.5">{partyAddress}</div>
+                      <div className="text-[10.5px] font-bold text-black whitespace-pre-wrap mt-0.5">{partyAddress}</div>
                     ) : (
-                      <div className="text-[10.5px] text-black mt-0.5">{partyName || '-'}</div>
+                      <div className="text-[10.5px] font-bold text-black mt-0.5">{partyName || '-'}</div>
                     )}
                   </div>
-                  <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
+                  <div className="font-bold mt-1">GST NO:{partyGst || '-'}</div>
                 </div>
                 <div className="p-1.5 font-bold">
                   Division: <span className="font-bold">{primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-'}</span>
                 </div>
               </div>
 
-              {/* Right Column */}
-              <div className="divide-y divide-black">
+              {/* Right Column (37%) */}
+              <div className="w-[37%] divide-y divide-black flex flex-col">
                 <div className="p-1.5 font-bold">
                   {refLabel}: <span className="font-bold">{refNumber}</span>
                 </div>
@@ -897,13 +991,13 @@ export const SaleInvoiceModal: React.FC<{
                 <div className="p-1.5 min-h-[92px] flex flex-col justify-between">
                   <div>
                     <div className="font-bold">State of Supply: {primarySale.stateOfSupply || 'KARNATAKA'}</div>
-                    <div className="font-bold mt-0.5">Shipped To: <span className="font-normal">{primarySale.shippedTo || partyAddress || partyName || '-'}</span></div>
+                    <div className="font-bold mt-0.5">Shipped To: <span className="font-bold">{primarySale.shippedTo || partyAddress || partyName || '-'}</span></div>
                   </div>
-                  <div className="font-bold mt-1">GST NO: {partyGst || '-'}</div>
+                  <div className="font-bold mt-1">GST NO:{partyGst || '-'}</div>
                 </div>
                 <div className="p-1.5 font-bold space-y-0.5">
                   <div>Vehicle No : <span className="uppercase font-bold">{vehicleNo || '-'}</span></div>
-                  {eWayBillNo && eWayBillNo !== '-' && (
+                  {eWayBillNo && eWayBillNo !== '-' && customSettings.showEwayBill && (
                     <div className="text-black font-bold text-[10.5px]">
                       E-Way Bill : <span>{eWayBillNo}</span>
                     </div>
@@ -916,33 +1010,33 @@ export const SaleInvoiceModal: React.FC<{
             <div className="border-x border-b border-black overflow-x-auto">
               <table className="w-full text-left text-[11px] border-collapse table-fixed">
                 <thead>
-                  <tr className="border-b border-black font-bold bg-white text-[11px]">
-                    <th className="p-1.5 border-r border-black w-10 text-center">SI NO</th>
-                    <th className="p-1.5 border-r border-black w-24 text-center">KPCL ITEM CODE</th>
-                    <th className="p-1.5 border-r border-black w-40 text-center px-2">Discription</th>
-                    <th className="p-1.5 border-r border-black text-center px-2">ITEM NAME & SPECIFICATION</th>
-                    <th className="p-1.5 border-r border-black w-12 text-center">UNIT</th>
-                    <th className="p-1.5 border-r border-black w-12 text-center">QTY</th>
-                    <th className="p-1.5 border-r border-black w-20 text-center px-2">PRICE</th>
-                    <th className="p-1.5 w-24 text-center px-2 whitespace-nowrap">AMOUNT</th>
+                  <tr className="border-b border-black font-bold bg-white text-[11px] font-serif">
+                    <th className="p-1.5 border-r border-black w-[4%] text-center">SI<br/>NO</th>
+                    <th className="p-1.5 border-r border-black w-[11%] text-center">KPCL<br/>ITEM<br/>CODE</th>
+                    <th className="p-1.5 border-r border-black w-[19.5%] text-center px-1">Discription</th>
+                    <th className="p-1.5 border-r border-black w-[31%] text-center px-1">ITEM NAME &amp;<br/>SPECIFICATION</th>
+                    <th className="p-1.5 border-r border-black w-[5.5%] text-center">UNIT</th>
+                    <th className="p-1.5 border-r border-black w-[5.5%] text-center">QTY</th>
+                    <th className="p-1.5 border-r border-black w-[9.5%] text-center px-1">PRICE</th>
+                    <th className="p-1.5 w-[14%] text-center px-1 whitespace-nowrap">AMOUNT</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-black">
                   {itemsRows.map((r) => (
                     <tr key={r.slNo} className="border-b border-black">
-                      <td className="p-1.5 text-center font-bold border-r border-black">{r.slNo}</td>
-                      <td className="p-1.5 text-center font-bold border-r border-black">{r.kpclCode || '-'}</td>
-                      <td className="p-1.5 font-bold border-r border-black px-2 uppercase">{r.itemName}</td>
-                      <td className="p-1.5 border-r border-black px-2 text-[10.5px] uppercase whitespace-pre-wrap">
+                      <td className="p-1.5 text-center font-bold border-r border-black font-serif align-middle">{r.slNo}</td>
+                      <td className="p-1.5 text-left font-normal border-r border-black font-serif align-middle whitespace-nowrap pl-1">{r.kpclCode || '-'}</td>
+                      <td className="p-1.5 font-bold border-r border-black px-1.5 uppercase font-sans text-[10.5px] align-middle">{r.itemName}</td>
+                      <td className="p-1.5 border-r border-black px-1.5 text-[10px] uppercase whitespace-pre-wrap font-sans align-top leading-tight">
                         {r.specifications}
                         {r.partNumber && !r.specifications.includes(r.partNumber) && (
-                          <div className="font-bold mt-0.5">P.No: {r.partNumber}</div>
+                          <div className="font-bold mt-0.5">P NO: {r.partNumber}</div>
                         )}
                       </td>
-                      <td className="p-1.5 text-center font-bold border-r border-black">{r.unit}</td>
-                      <td className="p-1.5 text-center font-bold border-r border-black">{r.qty}</td>
-                      <td className="p-1.5 text-right font-bold border-r border-black px-2">{fmt(r.rate)}</td>
-                      <td className="p-1.5 text-right font-bold px-2 whitespace-nowrap">{fmt(r.amount)}</td>
+                      <td className="p-1.5 text-center font-bold border-r border-black font-serif align-middle">{r.unit === 'NOS' ? "No's" : (r.unit || "No's")}</td>
+                      <td className="p-1.5 text-center font-bold border-r border-black font-serif align-middle">{customSettings.numberStyle === 'formatted' ? r.qty : String(r.qty)}</td>
+                      <td className="p-1.5 text-center font-bold border-r border-black px-1 font-serif align-middle">{customSettings.numberStyle === 'formatted' ? fmt(r.rate) : String(r.rate)}</td>
+                      <td className="p-1.5 text-center font-bold px-1 whitespace-nowrap font-serif align-middle">{customSettings.numberStyle === 'formatted' ? fmt(r.amount) : String(r.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -950,82 +1044,86 @@ export const SaleInvoiceModal: React.FC<{
             </div>
 
             {/* 5. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 mt-0 border-x border-b border-black">
-              {/* Left Box: Amount in words & Bank info (Takes ~8 of 12 cols, matching 128mm) */}
-              <div className="sm:col-span-8 p-2 text-[11px] border-b sm:border-b-0 sm:border-r border-black flex flex-col justify-between">
-                <div>
-                  <span className="font-bold block text-black text-[11.5px]">Total Invoice amount in words: </span>
-                  <span className="font-bold text-black text-[11.5px] block mt-0.5">
-                    {amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim()}
+            <div className="flex mt-0 border-x border-b border-black text-[11px]">
+              {/* Left Box (65.2% = 4% + 11% + 19.5% + 31%) */}
+              <div className="w-[65.2%] p-2 text-[11px] border-r border-black flex flex-col justify-between font-serif">
+                <div className="min-h-[46px] flex flex-col justify-center">
+                  <span className="font-bold block text-black text-[11.5px] leading-tight">
+                    Total Invoice amount in words: {amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim()}
                   </span>
                 </div>
                 <div className="pt-2 border-t border-black mt-2">
                   <span className="font-bold block text-black text-[11.5px]">Bank Details :</span>
-                  <div className="text-[11px] text-black space-y-0.5 mt-0.5">
-                    <div>Account Holder Name : <strong>{customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}</strong></div>
-                    <div>Bank Name : <strong>{customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}</strong></div>
-                    <div>Bank Account No: <strong className="font-bold">{customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}</strong></div>
-                    <div>IFSC Code: <strong className="font-bold">{customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}</strong></div>
+                  <div className="text-[11px] text-black space-y-0.5 mt-0.5 font-bold">
+                    <div>Account Holder Name : {customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}</div>
+                    <div>Bank Name : {customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}</div>
+                    <div>Bank Account No: {customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}</div>
+                    <div>IFSC Code:{customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}</div>
                   </div>
                 </div>
               </div>
 
-              {/* Right Box: 2-Column Grid (Labels | Values) with Vertical Line Divider (4 of 12 cols, matching 40mm + 22mm) */}
-              <div className="sm:col-span-4 divide-y divide-black text-[11px]">
-                <div className="grid grid-cols-12">
-                  <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">Basic Cost</div>
-                  <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalBasic)}</div>
+              {/* Right Box (34.8% = 5.5% + 5.5% + 9.5% + 14.3%) */}
+              <div className="w-[34.8%] divide-y divide-black text-[11px] font-serif flex flex-col">
+                <div className="flex h-[28px] items-center">
+                  <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">Basic Cost</div>
+                  <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalBasic) : String(totalBasic)}</div>
                 </div>
                 {(totalSgst > 0 || totalCgst > 0) && (
                   <>
-                    <div className="grid grid-cols-12">
-                      <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}</div>
-                      <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalSgst)}</div>
+                    <div className="flex h-[28px] items-center">
+                      <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}</div>
+                      <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalSgst) : String(totalSgst)}</div>
                     </div>
-                    <div className="grid grid-cols-12">
-                      <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}</div>
-                      <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalCgst)}</div>
+                    <div className="flex h-[28px] items-center">
+                      <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}</div>
+                      <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalCgst) : String(totalCgst)}</div>
                     </div>
                   </>
                 )}
                 {totalIgst > 0 && (
-                  <div className="grid grid-cols-12">
-                    <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}</div>
-                    <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalIgst)}</div>
+                  <div className="flex h-[28px] items-center">
+                    <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}</div>
+                    <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalIgst) : String(totalIgst)}</div>
                   </div>
                 )}
                 {totalCgst === 0 && totalSgst === 0 && totalIgst === 0 && (
-                  <div className="grid grid-cols-12">
-                    <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">GST (0%)</div>
-                    <div className="col-span-5 p-1.5 px-2 text-right font-bold">0</div>
+                  <div className="flex h-[28px] items-center">
+                    <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">GST (0%)</div>
+                    <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">0</div>
                   </div>
                 )}
                 {totalShipping > 0 && (
-                  <div className="grid grid-cols-12">
-                    <div className="col-span-7 p-1.5 px-2 border-r border-black font-normal">Shipping Charges</div>
-                    <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalShipping)}</div>
+                  <div className="flex h-[28px] items-center">
+                    <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">Shipping Charges</div>
+                    <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalShipping) : String(totalShipping)}</div>
                   </div>
                 )}
-                <div className="grid grid-cols-12 font-bold">
-                  <div className="col-span-7 p-1.5 px-2 border-r border-black">TOTAL TAX AMOUNT</div>
-                  <div className="col-span-5 p-1.5 px-2 text-right font-bold">{fmt(totalCgst + totalSgst + totalIgst)}</div>
+                <div className="flex h-[28px] items-center">
+                  <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold text-[10px] whitespace-nowrap">TOTAL TAX AMOUNT</div>
+                  <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalCgst + totalSgst + totalIgst) : String(totalCgst + totalSgst + totalIgst)}</div>
                 </div>
-                <div className="grid grid-cols-12 font-bold bg-slate-50">
-                  <div className="col-span-7 p-2 px-2 border-r border-black text-xs font-black">TOTAL AMOUNT</div>
-                  <div className="col-span-5 p-2 px-2 text-right text-sm font-black">{fmt(totalInvoiceAmount)}</div>
+                <div className="flex h-[28px] items-center">
+                  <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold text-[10px] whitespace-nowrap">TOTAL AMOUNT</div>
+                  <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalInvoiceAmount) : String(totalInvoiceAmount)}</div>
                 </div>
               </div>
             </div>
 
-            {/* 6. SIGNATURES (Right side only with Royal Blue Header & Proprietor in Royal Blue) */}
-            <div className="flex justify-end items-end mt-10 pt-4 text-xs">
-              <div className="text-center min-w-[200px]">
-                <div className="text-black font-normal">Your Faithfully</div>
-                <div className="font-bold text-[#1e40af] mt-1 text-xs">
+            <div className="flex justify-end items-end mt-8 pt-4 text-xs">
+              <div className="text-center min-w-[220px]">
+                <div className="text-black font-normal text-[11.5px]">Your Faithfully</div>
+                <div className="font-normal text-[#2b5797] mt-0.5 text-sm font-serif">
                   {customSettings.signatoryTitle || 'For Sri Krishna Constructions'}
                 </div>
-                <div className="w-48 border-b border-black mt-8 mb-1 mx-auto"></div>
-                <div className="text-[#1e40af] text-[11.5px] font-bold">
+                <div className="h-10 my-1 flex items-center justify-center">
+                  {SKC_SIGNATURE_BASE64 ? (
+                    <img src={SKC_SIGNATURE_BASE64} alt="Proprietor Signature" className="h-9 object-contain" />
+                  ) : (
+                    <div className="w-48 border-b border-black mt-6 mb-1 mx-auto"></div>
+                  )}
+                </div>
+                <div className="text-[#2b5797] text-[13px] font-normal font-serif">
                   {customSettings.signatoryDesignation || 'Proprietor'}
                 </div>
               </div>
