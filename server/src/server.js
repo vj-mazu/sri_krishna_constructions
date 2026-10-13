@@ -1983,6 +1983,63 @@ app.delete(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '
   }
 });
 
+// POST /api/sales/generate-pdf - High-fidelity Chromium/Edge invoice PDF generator
+app.post('/api/sales/generate-pdf', authenticateToken, async (req, res) => {
+  try {
+    const { invoiceData, settings } = req.body;
+    if (!invoiceData) {
+      return res.status(400).json({ error: 'Missing invoiceData' });
+    }
+
+    // Attach default logos if not provided
+    if (!invoiceData.logo_base64) {
+      const logoPath = path.resolve(__dirname, '../../client/public/skc_logo.png');
+      if (fs.existsSync(logoPath)) {
+        invoiceData.logo_base64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
+      }
+    }
+    if (!invoiceData.signature_base64) {
+      const sigPath = path.resolve(__dirname, '../../client/public/skc_signature.png');
+      if (fs.existsSync(sigPath)) {
+        invoiceData.signature_base64 = `data:image/png;base64,${fs.readFileSync(sigPath).toString('base64')}`;
+      }
+    }
+
+    const payload = {
+      ...invoiceData,
+      settings: settings || {}
+    };
+
+    const tempId = crypto.randomBytes(8).toString('hex');
+    const tempJson = path.resolve(__dirname, `../temp_inv_${tempId}.json`);
+    const tempPdf = path.resolve(__dirname, `../temp_inv_${tempId}.pdf`);
+
+    fs.writeFileSync(tempJson, JSON.stringify(payload), 'utf8');
+
+    const pyScript = path.resolve(__dirname, '../../tools/invoice_engine.py');
+    const pyProc = spawn('python', [pyScript, tempJson, tempPdf]);
+
+    pyProc.on('close', (code) => {
+      try { if (fs.existsSync(tempJson)) fs.unlinkSync(tempJson); } catch (_) {}
+
+      if (code === 0 && fs.existsSync(tempPdf)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="Tax_Invoice_${(invoiceData.invoice_no || 'SKC').replace(/[\/\\]/g, '_')}.pdf"`);
+        const readStream = fs.createReadStream(tempPdf);
+        readStream.pipe(res);
+        readStream.on('close', () => {
+          try { if (fs.existsSync(tempPdf)) fs.unlinkSync(tempPdf); } catch (_) {}
+        });
+      } else {
+        res.status(500).json({ error: 'Failed to generate PDF via engine' });
+      }
+    });
+  } catch (err) {
+    console.error('Invoice PDF generation error:', err);
+    res.status(500).json({ error: 'Invoice PDF generation error' });
+  }
+});
+
 // GET /api/sales/next-invoice-number - Auto continuation of invoice numbering (e.g. 2026-27/01, 2026-27/02, 2026-27/10)
 app.get('/api/sales/next-invoice-number', authenticateToken, async (req, res) => {
   try {

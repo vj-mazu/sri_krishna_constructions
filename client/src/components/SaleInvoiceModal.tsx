@@ -18,6 +18,10 @@ interface CustomInvoiceSettings {
   bankIfsc: string;
   signatoryTitle: string;
   signatoryDesignation: string;
+  gstRounding?: 'up' | 'nearest';
+  showEwayBill?: boolean;
+  repeatColumnHeaders?: boolean;
+  numberStyle?: 'plain' | 'formatted';
 }
 
 export const SaleInvoiceModal: React.FC<{ 
@@ -86,6 +90,8 @@ export const SaleInvoiceModal: React.FC<{
   const partyGst = primarySale.gstNumber || primarySale.partyGstNumber || primarySale.clientGst || '';
   const eWayBillNo = primarySale.eWayBillNumber || primarySale.eWayBillNo || primarySale.ewayBillNumber || primarySale.ewayBillNo || salesList.find(s => s.eWayBillNumber || s.eWayBillNo)?.eWayBillNumber || '';
   const vehicleNo = primarySale.vehicleNumber || primarySale.vehicleNo || salesList.find(s => s.vehicleNumber || s.vehicleNo)?.vehicleNumber || '';
+  const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
+  const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
 
   // Customizable Company & Bank Details state with localStorage caching
   const defaultSettings: CustomInvoiceSettings = {
@@ -99,7 +105,11 @@ export const SaleInvoiceModal: React.FC<{
     bankAccount: '18133070005349',
     bankIfsc: 'CNRB0011813',
     signatoryTitle: 'For Sri Krishna Constructions',
-    signatoryDesignation: 'Proprietor'
+    signatoryDesignation: 'Proprietor',
+    gstRounding: 'up',
+    showEwayBill: false,
+    repeatColumnHeaders: false,
+    numberStyle: 'plain'
   };
 
   const [customSettings, setCustomSettings] = useState<CustomInvoiceSettings>(() => {
@@ -118,7 +128,11 @@ export const SaleInvoiceModal: React.FC<{
           bankAccount: parsed.bankAccount !== undefined ? parsed.bankAccount : defaultSettings.bankAccount,
           bankIfsc: parsed.bankIfsc !== undefined ? parsed.bankIfsc : defaultSettings.bankIfsc,
           signatoryTitle: parsed.signatoryTitle !== undefined ? parsed.signatoryTitle : defaultSettings.signatoryTitle,
-          signatoryDesignation: parsed.signatoryDesignation !== undefined ? parsed.signatoryDesignation : defaultSettings.signatoryDesignation
+          signatoryDesignation: parsed.signatoryDesignation !== undefined ? parsed.signatoryDesignation : defaultSettings.signatoryDesignation,
+          gstRounding: parsed.gstRounding || 'up',
+          showEwayBill: parsed.showEwayBill || false,
+          repeatColumnHeaders: parsed.repeatColumnHeaders || false,
+          numberStyle: parsed.numberStyle || 'plain'
         };
       } catch (_) {}
     }
@@ -585,11 +599,80 @@ export const SaleInvoiceModal: React.FC<{
     return doc;
   };
 
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
+    try {
+      showToast('Generating pixel-perfect Tax Invoice PDF...', 'info');
+      const backendItems = itemsRows.map(r => ({
+        sl_no: r.slNo,
+        kpcl_code: r.kpclCode,
+        description: r.itemName,
+        specification: r.specifications,
+        unit: r.unit,
+        qty: r.qty,
+        price: r.rate,
+        amount: r.amount
+      }));
+
+      const payload = {
+        invoiceData: {
+          invoice_no: invoiceNo,
+          invoice_date: invoiceDate,
+          po_no: refNumber,
+          order_date: refDate,
+          supply_to: primarySale.placeOfWork || partyName || 'SHAKTINAGAR',
+          state_of_supply: primarySale.stateOfSupply || 'KARNATAKA',
+          bill_to_block: partyAddress ? `TO Paying Authority:${partyName}\n${partyAddress}\nGST NO:${partyGst || '-'}` : (partyName ? `TO Paying Authority:${partyName}\nGST NO:${partyGst || '-'}` : ''),
+          ship_to_block: shippedToText ? `Shipped To: ${shippedToText}\nGST NO:${partyGst || '-'}` : '',
+          division: divLabel,
+          vehicle_no: vehicleNo,
+          eway_bill: eWayBillNo,
+          company_gstin: customSettings.companyGst,
+          company_mobile: customSettings.companyPhone,
+          bank_holder: customSettings.bankHolder,
+          bank_name: customSettings.bankName,
+          bank_account_no: customSettings.bankAccount,
+          bank_ifsc: customSettings.bankIfsc,
+          items: backendItems
+        },
+        settings: {
+          gst_rounding: customSettings.gstRounding || 'up',
+          show_eway_bill: customSettings.showEwayBill || false,
+          repeat_column_headers: customSettings.repeatColumnHeaders || false,
+          number_style: customSettings.numberStyle || 'plain'
+        }
+      };
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/sales/generate-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        showToast('Tax Invoice PDF downloaded successfully (Original Fidelity)', 'success');
+        return;
+      }
+    } catch (e) {
+      console.warn('Backend PDF generator fallback:', e);
+    }
+
     try {
       const doc = generatePdf();
       doc.save(`${isInward ? 'INWARD_RECEIPT' : 'TAX_INVOICE'}_${invoiceNo.replaceAll('/', '_')}.pdf`);
-      showToast('Tax Invoice PDF downloaded successfully', 'success');
+      showToast('Tax Invoice PDF downloaded successfully (client fallback)', 'success');
     } catch (error) {
       console.error('Failed to generate Tax Invoice PDF:', error);
       showToast('Error generating PDF. Please check console for details.', 'error');
@@ -1129,6 +1212,64 @@ export const SaleInvoiceModal: React.FC<{
                       onChange={e => setTempSettings({ ...tempSettings, signatoryDesignation: e.target.value })}
                       className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500"
                     />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <span>⚙️ Invoice Formatting & Layout Settings (Original Match)</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">GST Rounding Method</label>
+                    <select
+                      value={tempSettings.gstRounding || 'up'}
+                      onChange={e => setTempSettings({ ...tempSettings, gstRounding: e.target.value as 'up' | 'nearest' })}
+                      className="w-full p-2 border border-slate-300 rounded font-bold text-slate-800 bg-white"
+                    >
+                      <option value="up">Round UP to Next Rupee (Original Match: 9% = 272,221)</option>
+                      <option value="nearest">Round to Nearest Rupee (Standard Math)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">Number Formatting Style</label>
+                    <select
+                      value={tempSettings.numberStyle || 'plain'}
+                      onChange={e => setTempSettings({ ...tempSettings, numberStyle: e.target.value as 'plain' | 'formatted' })}
+                      className="w-full p-2 border border-slate-300 rounded font-bold text-slate-800 bg-white"
+                    >
+                      <option value="plain">Plain Digits (Original Match: 3024670, no commas)</option>
+                      <option value="formatted">Indian Formatted (30,24,670)</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="showEwayBill"
+                      checked={tempSettings.showEwayBill || false}
+                      onChange={e => setTempSettings({ ...tempSettings, showEwayBill: e.target.checked })}
+                      className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                    />
+                    <label htmlFor="showEwayBill" className="font-bold text-slate-700 cursor-pointer">
+                      Show E-Way Bill row under Vehicle No (Default: OFF)
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2">
+                    <input
+                      type="checkbox"
+                      id="repeatHeaders"
+                      checked={tempSettings.repeatColumnHeaders || false}
+                      onChange={e => setTempSettings({ ...tempSettings, repeatColumnHeaders: e.target.checked })}
+                      className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                    />
+                    <label htmlFor="repeatHeaders" className="font-bold text-slate-700 cursor-pointer">
+                      Repeat Table Headers on Continuation Pages (Default: OFF)
+                    </label>
                   </div>
                 </div>
               </div>
