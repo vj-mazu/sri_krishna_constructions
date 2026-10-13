@@ -472,8 +472,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   const [editingPoModal, setEditingPoModal] = useState<any | null>(null);
   const [editPoForm, setEditPoForm] = useState({ poNumber: '', date: '', divisionId: '', poAmount: 0, remarks: '' });
-  const [editPoCalcQty, setEditPoCalcQty] = useState('');
-  const [editPoCalcRate, setEditPoCalcRate] = useState('');
   const [poRemarksModal, setPoRemarksModal] = useState<any | null>(null);
   const [poRemarksText, setPoRemarksText] = useState('');
   const [divisions, setDivisions] = useState<Array<{ id: string; name: string; type?: string; isActive?: boolean }>>([]);
@@ -2460,68 +2458,16 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         onChange={(val) => setEditPoForm(prev => ({ ...prev, date: val }))}
                       />
                     </div>
-                    <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 space-y-2">
-                      <div className="flex justify-between items-center">
-                        <label className="block font-bold text-slate-700 text-xs">
-                          Total PO Amount (₹) *
-                        </label>
-                        <span className="text-[10px] text-blue-700 font-semibold bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
-                          Live Auto-Calculator: Qty × Rate
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <span className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Quantity</span>
-                          <input
-                            type="number"
-                            step="any"
-                            placeholder="e.g. 18"
-                            value={editPoCalcQty}
-                            onChange={(e) => {
-                              const q = e.target.value;
-                              setEditPoCalcQty(q);
-                              const r = parseFloat(editPoCalcRate) || 0;
-                              const qtyNum = parseFloat(q) || 0;
-                              if (qtyNum > 0 && r > 0) {
-                                setEditPoForm(prev => ({ ...prev, poAmount: parseFloat((qtyNum * r).toFixed(2)) }));
-                              }
-                            }}
-                            className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold outline-none focus:border-[#1e3a8a]"
-                          />
-                        </div>
-                        <div>
-                          <span className="block text-[10px] font-bold text-slate-600 uppercase mb-0.5">Unit Rate (₹)</span>
-                          <input
-                            type="number"
-                            step="any"
-                            placeholder="e.g. 21500"
-                            value={editPoCalcRate}
-                            onChange={(e) => {
-                              const r = e.target.value;
-                              setEditPoCalcRate(r);
-                              const q = parseFloat(editPoCalcQty) || 0;
-                              const rateNum = parseFloat(r) || 0;
-                              if (q > 0 && rateNum > 0) {
-                                setEditPoForm(prev => ({ ...prev, poAmount: parseFloat((q * rateNum).toFixed(2)) }));
-                              }
-                            }}
-                            className="w-full p-1.5 bg-white border border-slate-300 rounded text-xs font-mono font-bold outline-none focus:border-[#1e3a8a]"
-                          />
-                        </div>
-                      </div>
+                    <div>
+                      <label className="block font-semibold text-slate-700 mb-1">Total PO Amount (₹) *</label>
                       <input
                         type="number"
                         step="0.01"
                         value={editPoForm.poAmount !== undefined && editPoForm.poAmount !== null ? editPoForm.poAmount : ''}
                         onChange={(e) => setEditPoForm(prev => ({ ...prev, poAmount: Number(e.target.value) }))}
-                        placeholder="Auto-calculated (Qty × Rate)"
+                        placeholder="Enter PO amount"
                         className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold text-slate-900 bg-white"
                       />
-                      {editPoForm.poAmount > 0 && (
-                        <div className="text-[11px] font-bold text-emerald-700 font-mono bg-emerald-50 px-2 py-0.5 rounded w-fit border border-emerald-200">
-                          Live Total: {formatCurrency(editPoForm.poAmount)}
-                        </div>
-                      )}
                     </div>
                     <div>
                       <label className="block font-semibold text-slate-700 mb-1">Remarks / Special Notes</label>
@@ -6624,8 +6570,6 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                               onClick={() => {
                                 fetchDivisions();
                                 setEditingPoModal(po);
-                                setEditPoCalcQty('');
-                                setEditPoCalcRate('');
                                 setEditPoForm({
                                   poNumber: po.poNumber,
                                   date: po.date ? new Date(po.date).toISOString().split('T')[0] : '',
