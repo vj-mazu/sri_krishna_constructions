@@ -2165,7 +2165,7 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
           const stockRes = await client.query(`
             SELECT 
               COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = $1), 0)::float as "totalInward",
-              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.id != $2 AND s.status = 'APPROVED'), 0)::float as "otherSold"
+              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.id != $2 AND s.status IN ('APPROVED', 'PENDING')), 0)::float as "otherSold"
           `, [exSale.purchaseOrderItemId, saleId]);
           const totalInward = stockRes.rows[0]?.totalInward || 0;
           const otherSold = stockRes.rows[0]?.otherSold || 0;
@@ -2236,7 +2236,7 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
           const stockRes = await client.query(`
             SELECT 
               COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = $1), 0)::float as "totalInward",
-              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status = 'APPROVED'), 0)::float as "otherSold"
+              COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = $1 AND s.status IN ('APPROVED', 'PENDING')), 0)::float as "otherSold"
           `, [poItemId]);
           const totalInward = stockRes.rows[0]?.totalInward || 0;
           const otherSold = stockRes.rows[0]?.otherSold || 0;
