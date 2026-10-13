@@ -2260,34 +2260,84 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
           {/* RIGHT: CLEAN WHITE PILL CARDS (DYNAMIC PER SUB-TAB) */}
           <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
-            {activeTab === 'items' && (
-              <>
-                <div className="bg-white text-slate-800 rounded-full px-4 py-2 shadow-md text-xs font-bold flex items-center gap-2">
-                  <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">PO Amount:</span>
-                  <span className="text-orange-600 font-black font-mono text-sm">
-                    {formatCurrency(poKpi?.totalPoAmount ?? selectedPo.poAmount)}
-                  </span>
-                </div>
-                {isManagerOrOwner && (
-                  <button
-                    onClick={() => {
-                      fetchDivisions();
-                      setEditingPoModal(selectedPo);
-                      setEditPoForm({
-                        poNumber: selectedPo.poNumber,
-                        date: selectedPo.date ? new Date(selectedPo.date).toISOString().split('T')[0] : '',
-                        divisionId: selectedPo.divisionId || selectedPo.division?.id || '',
-                        poAmount: selectedPo.poAmount || 0,
-                        remarks: selectedPo.remarks || ''
-                      });
-                    }}
-                    className="bg-white/20 hover:bg-white/30 text-white rounded-full px-4 py-2 text-xs font-bold flex items-center gap-1.5 transition-all border border-white/30 shadow-sm"
-                  >
-                    <Edit className="w-3.5 h-3.5" /> Edit PO
-                  </button>
-                )}
-              </>
-            )}
+            {activeTab === 'items' && (() => {
+              const liveAddingAmount = showAddItem
+                ? calculateBreakdown(
+                    itemForm.qty,
+                    itemForm.rate,
+                    itemForm.cgstPercent,
+                    itemForm.sgstPercent,
+                    itemForm.igstPercent,
+                    itemForm.discount,
+                    itemForm.freight,
+                    itemForm.pAndF,
+                    itemForm.insurance
+                  ).totalAmount
+                : 0;
+
+              const liveEditingDelta = editingItem
+                ? (calculateBreakdown(
+                    editItemForm.qty,
+                    editItemForm.rate,
+                    editItemForm.cgstPercent,
+                    editItemForm.sgstPercent,
+                    editItemForm.igstPercent,
+                    editItemForm.discount,
+                    editItemForm.freight,
+                    editItemForm.pAndF,
+                    editItemForm.insurance
+                  ).totalAmount -
+                  calculateBreakdown(
+                    editingItem.qty,
+                    editingItem.rate,
+                    editingItem.cgstPercent,
+                    editingItem.sgstPercent,
+                    editingItem.igstPercent,
+                    editingItem.discount,
+                    editingItem.freight,
+                    editingItem.pAndF,
+                    editingItem.insurance
+                  ).totalAmount)
+                : 0;
+
+              const basePoAmount = Number(poKpi?.totalPoAmount ?? selectedPo.poAmount ?? 0);
+              const liveDelta = liveAddingAmount + liveEditingDelta;
+              const displayAmount = Math.max(0, basePoAmount + liveDelta);
+
+              return (
+                <>
+                  <div className="bg-white text-slate-800 rounded-full px-4 py-2 shadow-md text-xs font-bold flex items-center gap-2 transition-all">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">PO Amount:</span>
+                    <span className="text-orange-600 font-black font-mono text-sm">
+                      {formatCurrency(displayAmount)}
+                    </span>
+                    {liveDelta !== 0 && (
+                      <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold animate-pulse">
+                        {liveDelta > 0 ? `+${formatCurrency(liveDelta)}` : formatCurrency(liveDelta)} (Live)
+                      </span>
+                    )}
+                  </div>
+                  {isManagerOrOwner && (
+                    <button
+                      onClick={() => {
+                        fetchDivisions();
+                        setEditingPoModal(selectedPo);
+                        setEditPoForm({
+                          poNumber: selectedPo.poNumber,
+                          date: selectedPo.date ? new Date(selectedPo.date).toISOString().split('T')[0] : '',
+                          divisionId: selectedPo.divisionId || selectedPo.division?.id || '',
+                          poAmount: selectedPo.poAmount || 0,
+                          remarks: selectedPo.remarks || ''
+                        });
+                      }}
+                      className="bg-white/20 hover:bg-white/30 text-white rounded-full px-4 py-2 text-xs font-bold flex items-center gap-1.5 transition-all border border-white/30 shadow-sm"
+                    >
+                      <Edit className="w-3.5 h-3.5" /> Edit PO
+                    </button>
+                  )}
+                </>
+              );
+            })()}
 
             {activeTab === 'purchases' && (
               <>
