@@ -6,28 +6,23 @@ export const seedBaselineData = async () => {
     console.log('🌱 Starting automatic seed & database verification...');
 
     const hashedOwner = await bcrypt.hash('owner123', 10);
-    const hashedManjunath = await bcrypt.hash('admin123', 10);
 
-    // 1. Ensure 'owner' user exists
+    // 1. Ensure only single 'owner' user exists
     await pool.query(`
       INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "createdAt", "updatedAt")
       VALUES (gen_random_uuid()::text, 'owner', 'System Owner', '9876543210', $1, 'OWNER', NOW(), NOW())
       ON CONFLICT ("username") DO UPDATE SET "role" = 'OWNER';
     `, [hashedOwner]);
 
-    // 2. Ensure 'manjunath' user exists
-    await pool.query(`
-      INSERT INTO "User" ("id", "username", "fullName", "mobileNumber", "password", "role", "createdAt", "updatedAt")
-      VALUES (gen_random_uuid()::text, 'manjunath', 'Manjunath', '9876543210', $1, 'OWNER', NOW(), NOW())
-      ON CONFLICT ("username") DO UPDATE SET "role" = 'OWNER';
-    `, [hashedManjunath]);
+    // 2. Remove legacy second account if present so only 'owner' remains
+    await pool.query(`DELETE FROM "User" WHERE "username" = 'manjunath'`);
 
-    console.log('✅ Baseline seeded successfully with owner and manjunath accounts!');
+    console.log('✅ Baseline seeded successfully with single owner account (owner / owner123)!');
   } catch (err) {
     console.warn('⚠️ Note on seed verification:', err.message);
   }
 };
 
 if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
-  seedBaselineData();
+  seedBaselineData().then(() => pool.end());
 }

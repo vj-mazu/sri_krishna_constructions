@@ -6,48 +6,16 @@ import pkg from 'pg';
 const { Pool } = pkg;
 import dotenv from 'dotenv';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Load .env from server directory or project root
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config();
+
 export const initializeDatabaseTables = async () => {
-  // Extract Logo from Downloads (Prioritize high-definition original logo image)
-  try {
-    const directLogoPath = 'C:\\Users\\maju\\Downloads\\ChatGPT Image Aug 22, 2026, 07_49_17 PM.png';
-    const excelLogoPath = 'C:\\Users\\maju\\Downloads\\SKC LOGO.xlsx';
-    let logoBuf = null;
-    let logoExt = 'png';
-
-    if (fs.existsSync(directLogoPath)) {
-      logoBuf = fs.readFileSync(directLogoPath);
-      logoExt = 'png';
-    } else if (fs.existsSync(excelLogoPath)) {
-      const wb = new ExcelJS.Workbook();
-      await wb.xlsx.readFile(excelLogoPath);
-      if (wb.media && wb.media.length > 0) {
-        logoBuf = wb.media[0].buffer;
-        logoExt = wb.media[0].extension || 'png';
-      }
-    }
-
-    if (logoBuf) {
-      const base64Str = `data:image/${logoExt};base64,${Buffer.from(logoBuf).toString('base64')}`;
-      const targetTsFile = path.join(__dirname, '../../client/src/logoBase64.ts');
-      const targetPngFile = path.join(__dirname, '../../client/public/skc_logo.png');
-      
-      if (fs.existsSync(path.dirname(targetTsFile))) {
-        fs.writeFileSync(targetTsFile, `export const SKC_LOGO_BASE64 = "${base64Str}";\n`);
-      }
-      if (fs.existsSync(path.dirname(targetPngFile))) {
-        fs.writeFileSync(targetPngFile, logoBuf);
-      }
-    }
-  } catch (err) {
-    // Silent fallback on cloud environments where local download paths do not exist
-  }
-
-  const connectionString = process.env.DATABASE_URL;
+  const connectionString = process.env.DATABASE_URL || 'postgresql://postgres:12345@localhost:5432/sri_krishna_construction?schema=public';
   if (!connectionString) {
     console.warn('⚠️ No DATABASE_URL found in environment.');
     return;
@@ -124,6 +92,16 @@ export const initializeDatabaseTables = async () => {
       CREATE TABLE IF NOT EXISTS "Division" (
         "id" TEXT PRIMARY KEY,
         "name" TEXT UNIQUE NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+
+      -- 3b. Create Location Table (Physical Warehouses, Yards, Stores)
+      CREATE TABLE IF NOT EXISTS "Location" (
+        "id" TEXT PRIMARY KEY,
+        "name" TEXT UNIQUE NOT NULL,
+        "description" TEXT,
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -372,6 +350,21 @@ export const initializeDatabaseTables = async () => {
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
 
+      -- 13b. Create WorkOrderMaster Table (Master records for Work Orders with division, date, amount)
+      CREATE TABLE IF NOT EXISTS "WorkOrderMaster" (
+        "id" TEXT PRIMARY KEY,
+        "workOrderNumber" TEXT NOT NULL UNIQUE,
+        "divisionId" TEXT REFERENCES "Division"("id"),
+        "date" TIMESTAMP(3) NOT NULL,
+        "amount" DOUBLE PRECISION NOT NULL DEFAULT 0,
+        "remarks" TEXT,
+        "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
+        "addedById" TEXT REFERENCES "User"("id"),
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_womaster_wonumber ON "WorkOrderMaster"("workOrderNumber");
+
       -- Schema Column Synchronizations
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "approvedById" TEXT REFERENCES "User"("id");
       ALTER TABLE "ApprovalRequest" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
@@ -401,6 +394,7 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "receivedItemName" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "receivedPartNumber" TEXT;
       ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "Purchase" ADD COLUMN IF NOT EXISTS "location" TEXT;
 
       -- Sale outward buyer/party details, eWayBillNumber & mandatory Owner approval system
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "partyName" TEXT;
@@ -417,10 +411,12 @@ export const initializeDatabaseTables = async () => {
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "approvedAt" TIMESTAMP(3);
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;
       ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "Sale" ADD COLUMN IF NOT EXISTS "location" TEXT;
 
-      -- Individual Stock Transaction eWayBillNumber & shippingCharges
+      -- Individual Stock Transaction eWayBillNumber & shippingCharges & location
       ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "eWayBillNumber" TEXT;
       ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;
+      ALTER TABLE "IndividualStockTransaction" ADD COLUMN IF NOT EXISTS "location" TEXT;
 
       -- WorkOrder shippingCharges, kpclCode & Owner Approval tracking
       ALTER TABLE "WorkOrder" ADD COLUMN IF NOT EXISTS "shippingCharges" DOUBLE PRECISION NOT NULL DEFAULT 0;

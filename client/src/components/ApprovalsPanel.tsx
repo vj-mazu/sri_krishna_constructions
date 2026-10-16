@@ -134,6 +134,9 @@ export const ApprovalsPanel: React.FC = () => {
         }];
       }
 
+      const poNum = p.poNumber || p.purchaseOrderNumber || p.ponumber || '';
+      const woNum = p.workOrderNumber || '';
+
       if (!groupMap.has(groupKey)) {
         groupMap.set(groupKey, {
           id: a.id,
@@ -141,14 +144,17 @@ export const ApprovalsPanel: React.FC = () => {
           type: a.type,
           invoiceNumber: invNum || '-',
           invoiceDate: p.invoiceDate || a.createdAt,
-          partyName: p.partyName || '-',
-          supplierAddress: p.supplierAddress || p.partyAddress || '-',
-          companyGstNumber: p.companyGstNumber || '29DWKPP3582H1ZV',
-          gstNumber: p.gstNumber || p.partyGstNumber || '-',
-          partyInvoiceNumber: p.partyInvoiceNumber || '-',
-          vehicleNumber: p.vehicleNumber || '-',
-          eWayBillNumber: p.eWayBillNumber || '-',
-          remarks: p.remarks || a.reason || '-',
+          partyName: p.partyName || p.clientDepartment || '-',
+          supplierAddress: p.supplierAddress || p.partyAddress || '',
+          companyGstNumber: p.companyGstNumber || '',
+          gstNumber: p.gstNumber || p.partyGstNumber || p.clientGst || '',
+          partyInvoiceNumber: p.partyInvoiceNumber && p.partyInvoiceNumber !== '-' ? p.partyInvoiceNumber : '',
+          poNumber: poNum,
+          workOrderNumber: woNum,
+          division: p.division || '',
+          vehicleNumber: p.vehicleNumber && p.vehicleNumber !== '-' ? p.vehicleNumber : '',
+          eWayBillNumber: p.eWayBillNumber && p.eWayBillNumber !== '-' ? p.eWayBillNumber : '',
+          remarks: p.remarks || a.reason || '',
           requestedBy: a.requestedBy,
           createdAt: a.createdAt,
           approvalIds: [a.id],
@@ -162,6 +168,9 @@ export const ApprovalsPanel: React.FC = () => {
         existing.items.push(...itemsList);
         existing.totalAmount += p.totalAmount ? Number(p.totalAmount) : itemsList.reduce((sum, it) => sum + (Number(it.totalAmount) || 0), 0);
         existing.totalQty += p.qty ? Number(p.qty) : itemsList.reduce((sum, it) => sum + (Number(it.qty) || 0), 0);
+        if (!existing.poNumber && poNum) existing.poNumber = poNum;
+        if (!existing.workOrderNumber && woNum) existing.workOrderNumber = woNum;
+        if (!existing.gstNumber && (p.gstNumber || p.partyGstNumber)) existing.gstNumber = p.gstNumber || p.partyGstNumber;
       }
     }
 
@@ -362,26 +371,42 @@ export const ApprovalsPanel: React.FC = () => {
                     <span className="text-slate-500">Party Name:</span>
                     <strong className="text-slate-900">{grp.partyName || '-'}</strong>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Party Address:</span>
-                    <span className="text-slate-700 truncate max-w-[180px]">{grp.supplierAddress || '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Our GST:</span>
-                    <span className="text-blue-900 font-bold">{grp.companyGstNumber || '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Party GST:</span>
-                    <span className="text-slate-800">{grp.gstNumber || '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Party Inv / DC:</span>
-                    <span className="text-blue-900 font-bold">{grp.partyInvoiceNumber || '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Vehicle No:</span>
-                    <span className="text-slate-800 font-bold">{grp.vehicleNumber || '-'}</span>
-                  </div>
+                  {grp.supplierAddress && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Address:</span>
+                      <span className="text-slate-700 truncate max-w-[180px]">{grp.supplierAddress}</span>
+                    </div>
+                  )}
+                  {grp.gstNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Party GST:</span>
+                      <span className="text-slate-800 font-mono font-bold">{grp.gstNumber}</span>
+                    </div>
+                  )}
+                  {grp.workOrderNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Work Order No:</span>
+                      <span className="text-blue-900 font-mono font-bold">{grp.workOrderNumber}</span>
+                    </div>
+                  )}
+                  {grp.poNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">PO Number:</span>
+                      <span className="text-blue-900 font-mono font-bold">{grp.poNumber}</span>
+                    </div>
+                  )}
+                  {grp.partyInvoiceNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Ref / Inv No:</span>
+                      <span className="text-blue-900 font-mono font-bold">{grp.partyInvoiceNumber}</span>
+                    </div>
+                  )}
+                  {grp.vehicleNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Vehicle No:</span>
+                      <span className="text-slate-800 font-bold uppercase">{grp.vehicleNumber}</span>
+                    </div>
+                  )}
                   <div className={`flex justify-between font-bold p-1.5 rounded pt-1 border-t ${isDelete ? 'text-rose-950 bg-rose-100/70 border-rose-300' : 'text-blue-950 bg-blue-100/60 border-slate-200'}`}>
                     <span>{isDelete ? 'Deletion Value:' : 'Total Invoice:'}</span>
                     <span className="text-xs">{formatCurrency(grp.totalAmount)}</span>
@@ -442,29 +467,26 @@ export const ApprovalsPanel: React.FC = () => {
         <table className="w-full text-left text-[11px] excel-table">
           <thead>
             <tr>
-              <th className="w-10 text-center bg-sky-950 text-sky-200 font-bold px-2 py-2">SL NO</th>
-              <th className="px-2 py-2 whitespace-nowrap">Type</th>
-              <th className="px-2 py-2 whitespace-nowrap">Invoice Details</th>
-              <th className="px-2 py-2 min-w-[120px]">Party Name & Address</th>
-              <th className="px-2 py-2 whitespace-nowrap">GST Numbers</th>
-              <th className="px-2 py-2 whitespace-nowrap">Party DC / Vehicle</th>
-              <th className="px-2 py-2 whitespace-nowrap text-center">Items & Units</th>
-              <th className="px-2 py-2 whitespace-nowrap">Total Value</th>
-              <th className="px-2 py-2 whitespace-nowrap">Requested By</th>
-              <th className="px-2 py-2 whitespace-nowrap">Date</th>
-              <th className="text-center px-2 py-2 sticky right-0 bg-sky-950 text-sky-200 font-bold z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] min-w-[150px]">Actions</th>
+              <th className="w-12 text-center bg-sky-950 text-sky-200 font-bold px-2.5 py-2.5">SL NO</th>
+              <th className="px-2.5 py-2.5 whitespace-nowrap">Type</th>
+              <th className="px-2.5 py-2.5 whitespace-nowrap">Invoice & Ref No</th>
+              <th className="px-2.5 py-2.5 min-w-[140px]">Party / Department</th>
+              <th className="px-2.5 py-2.5 whitespace-nowrap text-center">Items & Units</th>
+              <th className="px-2.5 py-2.5 whitespace-nowrap">Total Value</th>
+              <th className="px-2.5 py-2.5 whitespace-nowrap">Requested By & Date</th>
+              <th className="text-center px-2.5 py-2.5 sticky right-0 bg-sky-950 text-sky-200 font-bold z-10 shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] min-w-[140px]">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={11} className="text-center py-8 text-slate-500 font-semibold">
+                <td colSpan={8} className="text-center py-8 text-slate-500 font-semibold">
                   Loading approval queue...
                 </td>
               </tr>
             ) : groupedInvoiceApprovals.length === 0 ? (
               <tr>
-                <td colSpan={11} className="text-center py-8 text-slate-400">
+                <td colSpan={8} className="text-center py-8 text-slate-400">
                   No pending approval requests.
                 </td>
               </tr>
@@ -480,8 +502,8 @@ export const ApprovalsPanel: React.FC = () => {
 
                 return (
                   <tr key={grp.key} className={`hover:bg-slate-50 border-b-2 ${isDelete ? 'bg-rose-50/30 border-rose-200' : 'border-slate-200'}`}>
-                    <td className={`font-mono text-center font-bold px-2 py-2 ${isDelete ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-[#1e3a8a]'}`}>{i + 1}</td>
-                    <td className="px-2 py-2 whitespace-nowrap">
+                    <td className={`font-mono text-center font-bold px-2.5 py-2.5 ${isDelete ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-[#1e3a8a]'}`}>{i + 1}</td>
+                    <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
                         isDelete
                           ? 'bg-rose-100 text-rose-900 border border-rose-300'
@@ -496,48 +518,52 @@ export const ApprovalsPanel: React.FC = () => {
                         {isInwardDelete ? '🗑️ INWARD DELETION' : isSaleDelete ? '🗑️ SALE DELETION' : isWorkOrderDelete ? '🗑️ WORK ORDER DELETION' : isIndSale ? 'INDIVIDUAL SALE' : isWorkOrder ? (grp.type === 'WORK_ORDER_EDIT' ? 'WORK ORDER EDIT' : 'WORK ORDER SALE') : isSaleEdit ? 'PO SALE EDIT' : 'PO SALE'}
                       </span>
                     </td>
-                    <td className="px-2 py-2">
-                      <div className="font-mono font-bold text-[#1e3a8a]">{grp.invoiceNumber || '-'}</div>
+                    <td className="px-2.5 py-2.5 font-mono">
+                      <div className="font-bold text-[#1e3a8a] text-xs">{grp.invoiceNumber || '-'}</div>
                       <div className="text-[10px] text-slate-500">{formatDate(grp.invoiceDate)}</div>
+                      {grp.workOrderNumber && (
+                        <div className="text-[10px] text-blue-900 font-bold">WO: {grp.workOrderNumber}</div>
+                      )}
+                      {grp.poNumber && (
+                        <div className="text-[10px] text-blue-900 font-bold">PO: {grp.poNumber}</div>
+                      )}
+                      {grp.partyInvoiceNumber && (
+                        <div className="text-[10px] text-slate-600">Ref: {grp.partyInvoiceNumber}</div>
+                      )}
+                      {grp.vehicleNumber && (
+                        <div className="text-[10px] text-slate-500 uppercase">Veh: {grp.vehicleNumber}</div>
+                      )}
                     </td>
-                    <td className="px-2 py-2 break-words max-w-[140px]">
-                      <div className="font-semibold text-slate-900">{grp.partyName || '-'}</div>
-                      <div className="text-[10px] text-slate-500 break-words">{grp.supplierAddress || '-'}</div>
+                    <td className="px-2.5 py-2.5 max-w-[200px]">
+                      <div className="font-bold text-slate-900">{grp.partyName || '-'}</div>
+                      {grp.supplierAddress && <div className="text-[10px] text-slate-500 truncate">{grp.supplierAddress}</div>}
+                      {grp.gstNumber && <div className="text-[10px] font-mono text-slate-600 font-semibold">GSTIN: {grp.gstNumber}</div>}
                     </td>
-                    <td className="px-2 py-2 font-mono text-[10px]">
-                      <div className="space-y-0.5">
-                        <div><span className="text-slate-400">Our:</span> <strong className="text-blue-950 font-bold">{grp.companyGstNumber || '-'}</strong></div>
-                        <div><span className="text-slate-400">Party:</span> <span className="text-slate-700">{grp.gstNumber || '-'}</span></div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 font-mono text-[10px]">
-                      <div className="space-y-0.5">
-                        <div><span className="text-slate-400">DC:</span> <strong className="text-blue-900">{grp.partyInvoiceNumber || '-'}</strong></div>
-                        <div><span className="text-slate-400">Veh:</span> <span className="text-slate-800 font-bold">{grp.vehicleNumber || '-'}</span></div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 text-center font-mono whitespace-nowrap">
-                      <span className={`px-2 py-1 rounded font-bold text-[10px] border ${isDelete ? 'bg-rose-100 text-rose-950 border-rose-200' : 'bg-blue-50 text-blue-900 border-blue-200'}`}>
+                    <td className="px-2.5 py-2.5 text-center font-mono whitespace-nowrap">
+                      <span className={`px-2 py-0.5 rounded font-bold text-[10px] border ${isDelete ? 'bg-rose-100 text-rose-950 border-rose-200' : 'bg-blue-50 text-blue-900 border-blue-200'}`}>
                         📦 {grp.items.length} item{grp.items.length > 1 ? 's' : ''} ({grp.totalQty} units)
                       </span>
+                      {grp.items[0]?.itemName && (
+                        <div className="text-[10px] text-slate-500 truncate max-w-[140px] mt-0.5 mx-auto">
+                          {grp.items[0].itemName}
+                        </div>
+                      )}
                     </td>
-                    <td className="px-2 py-2 font-mono whitespace-nowrap">
-                      <div className={`font-bold text-xs ${isDelete ? 'text-rose-900' : 'text-slate-900'}`}>{formatCurrency(grp.totalAmount)}</div>
+                    <td className="px-2.5 py-2.5 font-mono whitespace-nowrap">
+                      <div className={`font-black text-xs ${isDelete ? 'text-rose-900' : 'text-slate-900'}`}>{formatCurrency(grp.totalAmount)}</div>
                     </td>
-                    <td className="px-2 py-2 whitespace-nowrap">
+                    <td className="px-2.5 py-2.5 whitespace-nowrap">
                       <div className="font-semibold text-slate-800">{grp.requestedBy?.fullName}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">{new Date(grp.createdAt).toLocaleString('en-GB')}</div>
                     </td>
-                    <td className="px-2 py-2 text-slate-500 font-mono whitespace-nowrap">
-                      {new Date(grp.createdAt).toLocaleString('en-GB')}
-                    </td>
-                    <td className="px-2 py-2 text-center sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
+                    <td className="px-2.5 py-2.5 text-center sticky right-0 bg-white/95 backdrop-blur-sm shadow-[-4px_0_6px_-2px_rgba(0,0,0,0.15)] border-l border-slate-200 z-10">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => setInspectModal(grp)}
                           className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold flex items-center gap-1 transition-colors"
                           title="Inspect all items in this request"
                         >
-                          <Eye className="w-3 h-3" />
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
                         {isDelete ? (
                           <>
@@ -563,7 +589,7 @@ export const ApprovalsPanel: React.FC = () => {
                               className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] flex items-center gap-1 shadow-sm transition-colors"
                               title={`Approve all ${grp.items.length} items`}
                             >
-                              <CheckCircle2 className="w-3 h-3" /> Approve All
+                              <CheckCircle2 className="w-3 h-3" /> Approve
                             </button>
                             <button
                               onClick={() => handleBatchAction(grp.approvalIds, 'REJECTED')}
@@ -630,11 +656,12 @@ export const ApprovalsPanel: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                   <div><span className="text-slate-500">Party Name:</span> <strong className="text-slate-900">{inspectModal.partyName || '-'}</strong></div>
-                  <div><span className="text-slate-500">Party Address:</span> <span className="text-slate-800">{inspectModal.supplierAddress || '-'}</span></div>
-                  <div><span className="text-slate-500">Our Company GST:</span> <strong className="text-blue-950 font-mono">{inspectModal.companyGstNumber || '-'}</strong></div>
-                  <div><span className="text-slate-500">Party GST No:</span> <strong className="text-slate-900 font-mono">{inspectModal.gstNumber || '-'}</strong></div>
-                  <div><span className="text-slate-500">Party DC / Inv No:</span> <strong className="text-blue-900 font-mono">{inspectModal.partyInvoiceNumber || '-'}</strong></div>
-                  <div><span className="text-slate-500">Vehicle No:</span> <strong className="text-slate-900 font-mono uppercase font-bold">{inspectModal.vehicleNumber || '-'}</strong></div>
+                  {inspectModal.supplierAddress && <div><span className="text-slate-500">Party Address:</span> <span className="text-slate-800">{inspectModal.supplierAddress}</span></div>}
+                  {inspectModal.gstNumber && <div><span className="text-slate-500">Party GST No:</span> <strong className="text-slate-900 font-mono">{inspectModal.gstNumber}</strong></div>}
+                  {inspectModal.workOrderNumber && <div><span className="text-slate-500">Work Order No:</span> <strong className="text-blue-900 font-mono">{inspectModal.workOrderNumber}</strong></div>}
+                  {inspectModal.poNumber && <div><span className="text-slate-500">PO Number:</span> <strong className="text-blue-900 font-mono">{inspectModal.poNumber}</strong></div>}
+                  {inspectModal.partyInvoiceNumber && <div><span className="text-slate-500">Ref / Invoice No:</span> <strong className="text-blue-900 font-mono">{inspectModal.partyInvoiceNumber}</strong></div>}
+                  {inspectModal.vehicleNumber && <div><span className="text-slate-500">Vehicle No:</span> <strong className="text-slate-900 font-mono uppercase font-bold">{inspectModal.vehicleNumber}</strong></div>}
                   {inspectModal.remarks && <div className="col-span-full bg-white p-2 rounded border border-slate-200"><span className="text-slate-400 uppercase font-bold text-[9px] block">Remarks:</span>{inspectModal.remarks}</div>}
                 </div>
               </div>

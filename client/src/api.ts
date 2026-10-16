@@ -4,13 +4,27 @@ const getApiBase = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   if (import.meta.env.VITE_APP_API_URL) return import.meta.env.VITE_APP_API_URL;
   
-  // If running directly on Render's domain, use relative /api
-  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
-    return '/api';
-  }
-  
-  // If running in production (e.g. Vercel / Custom domain), point to the live Render backend
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // Direct on render domain
+    if (host.includes('onrender.com')) {
+      return '/api';
+    }
+    // Localhost, IPv6, loopback, or private LAN IPs
+    if (
+      host === 'localhost' || 
+      host === '127.0.0.1' || 
+      host === '[::1]' ||
+      host === '::1' ||
+      host.endsWith('.local') ||
+      host.startsWith('192.168.') || 
+      host.startsWith('10.') || 
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)
+    ) {
+      return `http://${host}:5000/api`;
+    }
+    
+    // Live Cloud / Vercel production deployment
     return 'https://sri-krishna-constructions.onrender.com/api';
   }
   

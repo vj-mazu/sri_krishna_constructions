@@ -16,10 +16,13 @@ import { initializeDatabaseTables } from './init-db.js';
 import { pool } from './db.js';
 import crypto from 'crypto';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Load .env from server directory or project root
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config();
 
 // Application initialization
 
@@ -467,22 +470,59 @@ app.get('/api/dashboard/daily-stats', authenticateToken, async (req, res) => {
 // POST /api/purchase-orders - Create PO (Owner/Manager only)
 app.post('/api/purchase-orders', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
   try {
-    const { poNumber, date, divisionId, poAmount, remarks } = req.body;
+    const { poNumber, date, divisionId, divisionName, poAmount, remarks } = req.body;
     if (!poNumber || !poNumber.trim()) {
       return res.status(400).json({ error: 'Purchase Order number is required' });
     }
     if (!date) {
       return res.status(400).json({ error: 'Purchase Order date is required' });
     }
-    if (!divisionId) {
-      return res.status(400).json({ error: 'Division selection is required' });
+    
+    // Resolve division: if UUID provided use directly, or if name provided lookup/auto-create
+    let effectiveDivisionId = divisionId;
+    const inputDivName = (divisionName || '').trim();
+    if (!effectiveDivisionId && inputDivName) {
+      const existingDiv = await pool.query(`SELECT id FROM "Division" WHERE LOWER(name) = LOWER($1) LIMIT 1`, [inputDivName]);
+      if (existingDiv.rows.length > 0) {
+        effectiveDivisionId = existingDiv.rows[0].id;
+      } else {
+        const newDiv = await pool.query(
+          `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', true, NOW(), NOW())
+           RETURNING id`,
+          [inputDivName]
+        );
+        effectiveDivisionId = newDiv.rows[0].id;
+      }
+    } else if (effectiveDivisionId) {
+      // Check if effectiveDivisionId is not a valid UUID (e.g. user entered text into divisionId field)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(effectiveDivisionId)) {
+        const textName = effectiveDivisionId.trim();
+        const existingDiv = await pool.query(`SELECT id FROM "Division" WHERE LOWER(name) = LOWER($1) LIMIT 1`, [textName]);
+        if (existingDiv.rows.length > 0) {
+          effectiveDivisionId = existingDiv.rows[0].id;
+        } else {
+          const newDiv = await pool.query(
+            `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', true, NOW(), NOW())
+             RETURNING id`,
+            [textName]
+          );
+          effectiveDivisionId = newDiv.rows[0].id;
+        }
+      }
+    }
+
+    if (!effectiveDivisionId) {
+      return res.status(400).json({ error: 'Division selection or manual division name is required' });
     }
 
     const result = await pool.query(
       `INSERT INTO "PurchaseOrder" ("id", "poNumber", "date", "divisionId", "poAmount", "remarks", "addedById", "createdAt", "updatedAt")
        VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, NOW(), NOW())
        RETURNING *`,
-      [poNumber.trim(), new Date(date), divisionId, parseFloat(poAmount) || 0, remarks ? remarks.trim() : null, req.user.id]
+      [poNumber.trim(), new Date(date), effectiveDivisionId, parseFloat(poAmount) || 0, remarks ? remarks.trim() : null, req.user.id]
     );
 
     res.status(201).json(result.rows[0]);
@@ -507,7 +547,8 @@ app.get('/api/purchase-orders', authenticateToken, async (req, res) => {
     let whereClauses = [];
     let params = [];
 
-    if (activeOnly === 'true') {
+    // Hide inactive POs by default in PO operations unless activeOnly='false' or activeOnly='all'
+    if (activeOnly !== 'false' && activeOnly !== 'all') {
       whereClauses.push(`COALESCE(po."isActive", true) = true`);
     }
     if (search) {
@@ -1016,12 +1057,12 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
           "id", "purchaseOrderItemId", "date", "qty", "rate", "basicAmount",
           "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
           "totalAmount", "partyName", "supplierAddress", "gstNumber", "partyInvoiceNumber",
-          "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "shippingCharges", "addedById", "createdAt"
+          "supplierInvoiceDate", "vehicleNumber", "remarks", "receivedItemName", "receivedPartNumber", "shippingCharges", "location", "addedById", "createdAt"
         ) VALUES (
           gen_random_uuid()::text, $1, $2, $3, $4, $5,
           $6, $7, $8, $9, $10, $11,
           $12, $13, $14, $15, $16,
-          $17, $18, $19, $20, $21, $22, $23, NOW()
+          $17, $18, $19, $20, $21, $22, $23, $24, NOW()
         ) RETURNING *`,
         [
           itemId, invDate, qty, rate, basicAmount,
@@ -1037,6 +1078,7 @@ app.post('/api/purchases', authenticateToken, requireRoles(['OWNER', 'MANAGER'])
           (d.receivedItemName || null),
           (d.receivedPartNumber ? d.receivedPartNumber.trim().toUpperCase() : null),
           shippingCharges,
+          (d.location || body.location ? (d.location || body.location).trim() : null),
           req.user.id
         ]
       );
@@ -1224,8 +1266,8 @@ app.get('/api/invoices/:invoiceNumber', authenticateToken, async (req, res) => {
         igstPercent: wo.igstPercent,
         shippingCharges: wo.shippingCharges || 0,
         item: {
-          itemName: wo.itemName,
-          specifications: wo.description || 'Work Order Direct Sale',
+          itemName: wo.itemName || '',
+          specifications: wo.description || '',
           partNumber: wo.partNumber || '',
           kpclCode: wo.kpclCode || '-',
           unit: wo.unit || 'NOS'
@@ -1756,6 +1798,8 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
       const receivedItemName = item.receivedItemName || item.itemName || null;
       const receivedPartNumber = item.receivedPartNumber || item.partNumber || null;
 
+      const itemLocation = item.location !== undefined ? (item.location ? item.location.trim() : null) : (req.body.location ? req.body.location.trim() : null);
+
       if (purId) {
         const exP = existing.rows.find(p => p.id === purId);
         if (exP) {
@@ -1799,8 +1843,9 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
               "supplierInvoiceDate" = $16, "vehicleNumber" = $17, "remarks" = $18,
               "shippingCharges" = $19,
               "receivedItemName" = COALESCE($20, "receivedItemName"),
-              "receivedPartNumber" = COALESCE($21, "receivedPartNumber")
-          WHERE "id" = $22
+              "receivedPartNumber" = COALESCE($21, "receivedPartNumber"),
+              "location" = COALESCE($22, "location")
+          WHERE "id" = $23
           RETURNING *
         `, [
           targetPartyInv, purDate, qty, rate,
@@ -1808,7 +1853,7 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
           cgstAmount, sgstAmount, igstAmount, totalAmount,
           partyName, supplierAddress, gstNumber,
           supplierInvoiceDate, vehicleNumber, remarks, shippingCharges,
-          receivedItemName, receivedPartNumber,
+          receivedItemName, receivedPartNumber, itemLocation,
           purId
         ]);
         if (uRes.rows[0]) {
@@ -1859,14 +1904,14 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
               "cgstAmount", "sgstAmount", "igstAmount", "totalAmount",
               "partyName", "supplierAddress", "gstNumber",
               "supplierInvoiceDate", "vehicleNumber", "remarks", "shippingCharges",
-              "receivedItemName", "receivedPartNumber", "addedById", "createdAt", "updatedAt"
+              "receivedItemName", "receivedPartNumber", "location", "addedById", "createdAt", "updatedAt"
             ) VALUES (
               gen_random_uuid()::text, $1, $2, $3, $4, $5,
               $6, $7, $8, $9,
               $10, $11, $12, $13,
               $14, $15, $16,
               $17, $18, $19, $20,
-              $21, $22, $23, NOW(), NOW()
+              $21, $22, $23, $24, NOW(), NOW()
             ) RETURNING *
           `, [
             poItemId, targetPartyInv, purDate, qty, rate,
@@ -1874,7 +1919,7 @@ app.put(['/api/purchases/invoice', '/api/purchases/invoice/:invoiceNumber', '/ap
             cgstAmount, sgstAmount, igstAmount, totalAmount,
             partyName, supplierAddress, gstNumber,
             supplierInvoiceDate, vehicleNumber, remarks, shippingCharges,
-            receivedItemName, receivedPartNumber, req.user.id
+            receivedItemName, receivedPartNumber, itemLocation, req.user.id
           ]);
           if (insRes.rows[0]) {
             updatedPurchases.push(insRes.rows[0]);
@@ -1998,12 +2043,8 @@ app.post('/api/sales/generate-pdf', authenticateToken, async (req, res) => {
         invoiceData.logo_base64 = `data:image/png;base64,${fs.readFileSync(logoPath).toString('base64')}`;
       }
     }
-    if (!invoiceData.signature_base64) {
-      const sigPath = path.resolve(__dirname, '../../client/public/skc_signature.png');
-      if (fs.existsSync(sigPath)) {
-        invoiceData.signature_base64 = `data:image/png;base64,${fs.readFileSync(sigPath).toString('base64')}`;
-      }
-    }
+    // Signature image removed per requirement: blank space left for manual physical signature
+    delete invoiceData.signature_base64;
 
     const payload = {
       ...invoiceData,
@@ -2178,12 +2219,12 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
           "id", "purchaseOrderItemId", "invoiceNumber", "invoiceDate", "qty", "rate", "basicAmount",
           "cgstPercent", "sgstPercent", "igstPercent", "cgstAmount", "sgstAmount", "igstAmount",
           "totalAmount", "partyName", "supplierAddress", "gstNumber", "companyGstNumber", "partyInvoiceNumber",
-          "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "shippingCharges", "status", "addedById", "createdAt"
+          "supplierInvoiceDate", "vehicleNumber", "eWayBillNumber", "remarks", "shippingCharges", "location", "status", "addedById", "createdAt"
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
           $8, $9, $10, $11, $12, $13,
           $14, $15, $16, $17, $18, $19,
-          $20, $21, $22, $23, $24, 'PENDING', $25, NOW()
+          $20, $21, $22, $23, $24, $25, 'PENDING', $26, NOW()
         ) RETURNING *`,
         [
           saleId, itemId, invNum,
@@ -2201,6 +2242,7 @@ app.post('/api/sales', authenticateToken, requireRoles(['OWNER', 'MANAGER']), as
           (d.eWayBillNumber || body.eWayBillNumber ? (d.eWayBillNumber || body.eWayBillNumber).trim().toUpperCase() : null),
           (d.remarks || body.remarks ? (d.remarks || body.remarks).trim() : null),
           shippingCharges,
+          (d.location || body.location ? (d.location || body.location).trim() : null),
           req.user.id
         ]
       );
@@ -2387,8 +2429,9 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
               "partyName" = $13, "supplierAddress" = $14, "gstNumber" = $15, "companyGstNumber" = $16,
               "partyInvoiceNumber" = $17, "supplierInvoiceDate" = $18, "vehicleNumber" = $19,
               "eWayBillNumber" = $20, "remarks" = $21, "shippingCharges" = $22,
+              "location" = COALESCE($23, "location"),
               "status" = 'PENDING', "approvedById" = null, "approvedAt" = null
-          WHERE "id" = $23
+          WHERE "id" = $24
           RETURNING *
         `, [
           targetInvNum, invDate, qty, rate,
@@ -2397,6 +2440,7 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
           partyName, supplierAddress, gstNumber, companyGstNumber,
           partyInvoiceNumber, supplierInvoiceDate, vehicleNumber,
           eWayBillNumber, remarks, shippingCharges,
+          (item.location || req.body.location ? (item.location || req.body.location).trim() : null),
           saleId
         ]);
         if (uRes.rows[0]) {
@@ -2456,14 +2500,14 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
               "cgstAmount", "sgstAmount", "igstAmount", "totalAmount",
               "partyName", "supplierAddress", "gstNumber", "companyGstNumber",
               "partyInvoiceNumber", "supplierInvoiceDate", "vehicleNumber",
-              "eWayBillNumber", "remarks", "shippingCharges", "status", "addedById", "createdAt", "updatedAt"
+              "eWayBillNumber", "remarks", "shippingCharges", "location", "status", "addedById", "createdAt", "updatedAt"
             ) VALUES (
               gen_random_uuid()::text, $1, $2, $3, $4, $5,
               $6, $7, $8, $9,
               $10, $11, $12, $13,
               $14, $15, $16, $17,
               $18, $19, $20,
-              $21, $22, $23, 'PENDING', $24, NOW(), NOW()
+              $21, $22, $23, $24, 'PENDING', $25, NOW(), NOW()
             ) RETURNING *
           `, [
             poItemId, targetInvNum, invDate, qty, rate,
@@ -2471,7 +2515,9 @@ app.put(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sales/
             cgstAmount, sgstAmount, igstAmount, totalAmount,
             partyName, supplierAddress, gstNumber, companyGstNumber,
             partyInvoiceNumber, supplierInvoiceDate, vehicleNumber,
-            eWayBillNumber, remarks, shippingCharges, req.user.id
+            eWayBillNumber, remarks, shippingCharges,
+            (item.location || req.body.location ? (item.location || req.body.location).trim() : null),
+            req.user.id
           ]);
           if (insRes.rows[0]) {
             updatedSales.push(insRes.rows[0]);
@@ -2866,7 +2912,7 @@ app.delete(['/api/sales/invoice', '/api/sales/invoice/:invoiceNumber', '/api/sal
 // GET /api/stock-summary - Aggregated stock view with dual-join and dictionary lookup
 app.get('/api/stock-summary', authenticateToken, async (req, res) => {
   try {
-    const { search, poNumber, partNumber, kpclCode, itemName, make, stockStatus, dateFrom, dateTo, cursor, limit = 50 } = req.query;
+    const { search, poNumber, partNumber, kpclCode, itemName, make, location, stockStatus, dateFrom, dateTo, cursor, limit = 50 } = req.query;
     const limitNum = parseInt(limit, 10) || 50;
 
     let whereClauses = [];
@@ -2895,6 +2941,10 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
     if (make) {
       params.push(`%${make}%`);
       whereClauses.push(`poi.make ILIKE $${params.length}`);
+    }
+    if (location && location.trim() && location.toUpperCase() !== 'ALL') {
+      params.push(`%${location.trim()}%`);
+      whereClauses.push(`EXISTS (SELECT 1 FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id AND pur.location ILIKE $${params.length})`);
     }
     if (dateFrom) {
       params.push(new Date(dateFrom));
@@ -2934,6 +2984,10 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
         indParams.push(`%${partNumber.trim()}%`);
         indWhere.push(`s."partNumber" ILIKE $${indParams.length}`);
       }
+      if (location && location.trim() && location.toUpperCase() !== 'ALL') {
+        indParams.push(`%${location.trim()}%`);
+        indWhere.push(`EXISTS (SELECT 1 FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx."location" ILIKE $${indParams.length})`);
+      }
 
       const indWhereSql = indWhere.length > 0 ? 'WHERE ' + indWhere.join(' AND ') : '';
       const countRes = await pool.query(`SELECT COUNT(*)::int as count FROM "IndividualStock" s ${indWhereSql}`, indParams);
@@ -2953,6 +3007,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
           COALESCE(s."make", 'DIRECT') as "make",
           COALESCE(s."hsnCode", '-') as "hsnCode",
           s."unit",
+          COALESCE((SELECT STRING_AGG(DISTINCT tx.location, ', ') FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.location IS NOT NULL AND tx.location != ''), '-') as "location",
           s."openingStock" as "orderedQty",
           (s."openingStock" + COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('INWARD', 'PURCHASE') AND tx.status = 'APPROVED'), 0))::float as "totalPurchased",
           COALESCE((SELECT SUM(tx.qty) FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx.type IN ('OUTWARD', 'SALE') AND tx.status = 'APPROVED'), 0)::float as "totalSold"
@@ -2970,6 +3025,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
         return {
           ...item,
           stockType: 'INDIVIDUAL',
+          location: item.location || '-',
           orderedQty: ordered,
           totalPurchased: purchased,
           totalSold: sold,
@@ -3006,6 +3062,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
         poi.qty as "orderedQty",
         COALESCE(po."poNumber", (SELECT po2."poNumber" FROM "PurchaseOrder" po2 WHERE po2.id = poi."purchaseOrderId"), '-') as "poNumber",
         COALESCE(po."date", (SELECT po2."date" FROM "PurchaseOrder" po2 WHERE po2.id = poi."purchaseOrderId"), NULL) as "poDate",
+        COALESCE((SELECT STRING_AGG(DISTINCT pur.location, ', ') FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id AND pur.location IS NOT NULL AND pur.location != ''), '-') as "location",
         COALESCE((SELECT SUM(pur.qty) FROM "Purchase" pur WHERE pur."purchaseOrderItemId" = poi.id), 0)::float as "totalPurchased",
         COALESCE((SELECT SUM(s.qty) FROM "Sale" s WHERE s."purchaseOrderItemId" = poi.id AND s.status = 'APPROVED'), 0)::float as "totalSold"
       FROM "PurchaseOrderItem" poi
@@ -3056,6 +3113,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
         make: item.make || '',
         hsnCode: item.hsnCode || item.hsncode || '',
         unit: item.unit || 'NOS',
+        location: item.location || '-',
         orderedQty: ordered,
         totalPurchased: purchased,
         totalSold: sold,
@@ -3076,7 +3134,7 @@ app.get('/api/stock-summary', authenticateToken, async (req, res) => {
 // GET /api/individual-stocks - List all individual stock items with aggregated balances
 app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
   try {
-    const { search, partNumber, kpclCode, cursor, page, limit = 50 } = req.query;
+    const { search, partNumber, kpclCode, location, cursor, page, limit = 50 } = req.query;
     const limitNum = parseInt(limit, 10) || 50;
 
     let whereClauses = [];
@@ -3095,6 +3153,11 @@ app.get('/api/individual-stocks', authenticateToken, async (req, res) => {
     if (kpclCode && kpclCode.trim()) {
       params.push(`%${kpclCode.trim()}%`);
       whereClauses.push(`s."kpclCode" ILIKE $${params.length}`);
+    }
+
+    if (location && location.trim() && location.toUpperCase() !== 'ALL') {
+      params.push(`%${location.trim()}%`);
+      whereClauses.push(`EXISTS (SELECT 1 FROM "IndividualStockTransaction" tx WHERE tx."stockId" = s.id AND tx."location" ILIKE $${params.length})`);
     }
 
     const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
@@ -3339,7 +3402,7 @@ app.delete('/api/individual-stocks/:id', authenticateToken, requireRoles(['OWNER
 // GET /api/individual-stocks/transactions - Get all transactions across items (with type, search, pagination)
 app.get('/api/individual-stocks/transactions', authenticateToken, async (req, res) => {
   try {
-    const { type, search, invoiceNumber, dateFrom, dateTo, page, limit = 50 } = req.query;
+    const { type, search, invoiceNumber, dateFrom, dateTo, location, page, limit = 50 } = req.query;
     const limitNum = parseInt(limit, 10) || 50;
 
     let whereClauses = [];
@@ -3364,6 +3427,11 @@ app.get('/api/individual-stocks/transactions', authenticateToken, async (req, re
     if (invoiceNumber && invoiceNumber.trim()) {
       params.push(`%${invoiceNumber.trim()}%`);
       whereClauses.push(`tx."partyInvoiceNumber" ILIKE $${params.length}`);
+    }
+
+    if (location && location.trim() && location.toUpperCase() !== 'ALL') {
+      params.push(`%${location.trim()}%`);
+      whereClauses.push(`tx."location" ILIKE $${params.length}`);
     }
 
     if (dateFrom) {
@@ -4544,9 +4612,13 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
     const { search, dateFrom, dateTo } = req.query;
     let query = `
       SELECT wo.*,
-             u."fullName" as "addedByName"
+             u."fullName" as "addedByName",
+             wom."divisionId",
+             d."name" as "divisionName"
       FROM "WorkOrder" wo
       LEFT JOIN "User" u ON wo."addedById" = u.id
+      LEFT JOIN "WorkOrderMaster" wom ON UPPER(TRIM(wo."workOrderNumber")) = UPPER(TRIM(wom."workOrderNumber"))
+      LEFT JOIN "Division" d ON wom."divisionId" = d.id
     `;
     const whereClauses = [];
     const params = [];
@@ -4625,8 +4697,14 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
           shippingCharges: d.shippingCharges
         }];
 
-    if (rawItems.length === 0 || !rawItems[0].itemName || !rawItems[0].itemName.trim()) {
-      return res.status(400).json({ error: 'At least one item with a valid Item Name is required' });
+    const hasAnyItem = rawItems.some(it => 
+      (it.itemName && it.itemName.trim()) || 
+      (it.description && it.description.trim()) || 
+      (it.specifications && it.specifications.trim()) || 
+      (it.partNumber && it.partNumber.trim())
+    );
+    if (!hasAnyItem) {
+      return res.status(400).json({ error: 'At least one item with description or specifications is required' });
     }
 
     await client.query('BEGIN');
@@ -4635,14 +4713,19 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
     let grandTotal = 0;
 
     for (const item of rawItems) {
-      if (!item.itemName || !item.itemName.trim()) continue;
+      const itName = item.itemName ? item.itemName.trim() : '';
+      const itDesc = item.description ? item.description.trim() : (item.specifications ? item.specifications.trim() : null);
+      const itPart = item.partNumber ? item.partNumber.trim().toUpperCase() : null;
+      const itKpcl = item.kpclCode ? item.kpclCode.trim() : '-';
 
       const qty = parseFloat(item.qty) || 0;
       const rate = parseFloat(item.rate) || 0;
+      if (!itName && !itDesc && !itPart && qty <= 0) continue;
+
       const shippingCharges = parseFloat(item.shippingCharges) || 0;
       if (qty <= 0) {
         await client.query('ROLLBACK');
-        return res.status(400).json({ error: `Quantity for item "${item.itemName}" must be greater than 0` });
+        return res.status(400).json({ error: 'Quantity must be greater than 0' });
       }
 
       const basicAmount = Math.round((qty * rate + Number.EPSILON) * 100) / 100;
@@ -4693,10 +4776,10 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
           d.partyGstNumber ? d.partyGstNumber.trim().toUpperCase() : null,
           d.companyName ? d.companyName.trim() : 'Sri Krishna Constructions',
           d.companyGstNumber ? d.companyGstNumber.trim().toUpperCase() : '29DWKPP3582H1ZV',
-          item.kpclCode ? item.kpclCode.trim() : '-',
-          item.itemName.trim(),
-          item.description ? item.description.trim() : (item.specifications || null),
-          item.partNumber ? item.partNumber.trim().toUpperCase() : null,
+          itKpcl,
+          itName,
+          itDesc,
+          itPart,
           item.unit ? item.unit.trim().toUpperCase() : 'NOS',
           qty,
           rate,
@@ -4720,6 +4803,47 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
       );
 
       createdOrders.push(rows[0]);
+    }
+
+    // Auto-create or link WorkOrderMaster if needed
+    try {
+      const woNumClean = d.workOrderNumber.trim().toUpperCase();
+      const existingWom = await client.query('SELECT * FROM "WorkOrderMaster" WHERE UPPER(TRIM("workOrderNumber")) = $1', [woNumClean]);
+      let resolvedDivisionId = null;
+      if (d.division && d.division.trim()) {
+        const divClean = d.division.trim();
+        const divRes = await client.query('SELECT id FROM "Division" WHERE LOWER(TRIM("name")) = LOWER(TRIM($1))', [divClean]);
+        if (divRes.rows.length > 0) {
+          resolvedDivisionId = divRes.rows[0].id;
+        } else {
+          const newDiv = await client.query(
+            `INSERT INTO "Division" ("id", "name", "type", "description", "isActive", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', 'Auto-created from Work Order', true, NOW(), NOW())
+             RETURNING "id"`,
+            [divClean]
+          );
+          resolvedDivisionId = newDiv.rows[0]?.id;
+        }
+      }
+
+      if (existingWom.rows.length === 0) {
+        await client.query(
+          `INSERT INTO "WorkOrderMaster" ("id", "workOrderNumber", "divisionId", "date", "amount", "remarks", "isActive", "addedById", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, true, $6, NOW(), NOW())`,
+          [
+            woNumClean,
+            resolvedDivisionId,
+            d.workOrderDate ? new Date(d.workOrderDate) : new Date(),
+            grandTotal,
+            d.remarks ? d.remarks.trim() : null,
+            req.user.id
+          ]
+        );
+      } else if (resolvedDivisionId && !existingWom.rows[0].divisionId) {
+        await client.query('UPDATE "WorkOrderMaster" SET "divisionId" = $1 WHERE "id" = $2', [resolvedDivisionId, existingWom.rows[0].id]);
+      }
+    } catch (womErr) {
+      console.warn('Auto-link WorkOrderMaster non-fatal notice:', womErr.message);
     }
 
     await client.query('COMMIT');
@@ -4820,9 +4944,14 @@ app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', 
     let grandTotal = 0;
 
     for (const item of items) {
-      if (!item.itemName || !item.itemName.trim()) continue;
+      const itName = item.itemName ? item.itemName.trim() : '';
+      const itDesc = item.description ? item.description.trim() : (item.specifications ? item.specifications.trim() : null);
+      const itPart = item.partNumber ? item.partNumber.trim().toUpperCase() : null;
+      const itKpcl = item.kpclCode ? item.kpclCode.trim() : '-';
+
       const qty = parseFloat(item.qty) || 0;
       const rate = parseFloat(item.rate) || 0;
+      if (!itName && !itDesc && !itPart && qty <= 0) continue;
       const shippingCharges = (item.shippingCharges !== undefined && item.shippingCharges !== '')
         ? (parseFloat(item.shippingCharges) || 0)
         : (items.length === 1 ? (parseFloat(d.shippingCharges) || 0) : 0);
@@ -4867,7 +4996,7 @@ app.put(['/api/work-orders/invoice', '/api/work-orders/invoice/:invoiceNumber', 
       `, [
         targetWoNum, woDate, targetInvNum, invDate,
         partyName, partyAddress, partyGstNumber, companyName, companyGstNumber,
-        item.kpclCode || '-', item.itemName.trim(), item.description || null, item.partNumber || null,
+        itKpcl, itName, itDesc, itPart,
         item.unit ? item.unit.trim().toUpperCase() : 'NOS',
         qty, rate, basicAmount, cgstP, sgstP, igstP, cgstAmount, sgstAmount, igstAmount, shippingCharges, totalAmount,
         vehicleNumber, eWayBillNumber, remarks, req.user.id
@@ -5312,11 +5441,11 @@ app.get(['/api/invoices', '/api/invoices/:invoiceNumber', '/api/invoices/*'], au
         ...wo,
         sourceType: 'WORK_ORDER',
         item: {
-          itemName: wo.itemName,
+          itemName: wo.itemName || '',
           partNumber: wo.partNumber || '',
           kpclCode: wo.kpclCode || '-',
           unit: wo.unit || 'NOS',
-          specifications: wo.description || 'Work Order Direct Sale'
+          specifications: wo.description || ''
         }
       }));
       return res.json({ items });
@@ -6026,6 +6155,374 @@ app.delete('/api/divisions/:id', authenticateToken, requireRoles(['OWNER', 'MANA
     res.json({ message: 'Division deleted successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete division' });
+  }
+});
+
+// --- LOCATIONS MASTER CRUD API (FOR INWARD & SALE LOCATION TRACKING) ---
+app.get('/api/locations', authenticateToken, async (req, res) => {
+  try {
+    const { activeOnly } = req.query;
+    let whereSql = '';
+    if (activeOnly === 'true') {
+      whereSql = 'WHERE COALESCE("isActive", true) = true';
+    }
+    const { rows: locations } = await pool.query(`
+      SELECT "id", "name", "description", COALESCE("isActive", true) as "isActive", "createdAt", "updatedAt"
+      FROM "Location"
+      ${whereSql}
+      ORDER BY "name" ASC
+    `);
+    res.json({ locations });
+  } catch (err) {
+    console.error('Fetch locations error:', err);
+    res.status(500).json({ error: 'Failed to fetch locations' });
+  }
+});
+
+app.post('/api/locations', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { name, description, isActive } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Location name is required' });
+    }
+    const cleanName = name.trim();
+    const activeVal = isActive !== undefined ? !!isActive : true;
+
+    const existing = await pool.query('SELECT id FROM "Location" WHERE LOWER("name") = LOWER($1)', [cleanName]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: `Location '${cleanName}' already exists` });
+    }
+
+    const { rows } = await pool.query(
+      `INSERT INTO "Location" ("id", "name", "description", "isActive", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, NOW(), NOW())
+       RETURNING *`,
+      [cleanName, description ? description.trim() : null, activeVal]
+    );
+    res.status(201).json({ location: rows[0] });
+  } catch (err) {
+    console.error('Create location error:', err);
+    res.status(500).json({ error: 'Failed to create location' });
+  }
+});
+
+app.put('/api/locations/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, isActive } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Location name is required' });
+    }
+    const cleanName = name.trim();
+
+    const existing = await pool.query('SELECT id FROM "Location" WHERE LOWER("name") = LOWER($1) AND "id" != $2', [cleanName, id]);
+    if (existing.rows.length > 0) {
+      return res.status(400).json({ error: `Location '${cleanName}' already exists` });
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE "Location"
+       SET "name" = $1,
+           "description" = $2,
+           "isActive" = CASE WHEN $3::boolean IS NOT NULL THEN $3 ELSE "isActive" END,
+           "updatedAt" = NOW()
+       WHERE "id" = $4
+       RETURNING *`,
+      [cleanName, description !== undefined ? (description ? description.trim() : null) : null, isActive !== undefined ? !!isActive : null, id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Location not found' });
+    res.json({ location: rows[0], message: 'Location updated successfully' });
+  } catch (err) {
+    console.error('Update location error:', err);
+    res.status(500).json({ error: 'Failed to update location' });
+  }
+});
+
+app.patch('/api/locations/:id/toggle-active', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `UPDATE "Location"
+       SET "isActive" = NOT COALESCE("isActive", true),
+           "updatedAt" = NOW()
+       WHERE "id" = $1
+       RETURNING *`,
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Location not found' });
+    res.json({ location: rows[0], message: `Location marked as ${rows[0].isActive ? 'ACTIVE' : 'INACTIVE'}` });
+  } catch (err) {
+    console.error('Toggle location active error:', err);
+    res.status(500).json({ error: 'Failed to update location status' });
+  }
+});
+
+app.delete('/api/locations/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query('DELETE FROM "Location" WHERE "id" = $1', [id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Location not found' });
+    res.json({ message: 'Location deleted successfully' });
+  } catch (err) {
+    console.error('Delete location error:', err);
+    res.status(500).json({ error: 'Failed to delete location' });
+  }
+});
+
+// --- WORK ORDER MASTERS CRUD API (MASTER CREATION MODULE) ---
+// GET /api/work-order-masters - List Work Order Master records
+app.get('/api/work-order-masters', authenticateToken, async (req, res) => {
+  try {
+    const { search, status, activeOnly } = req.query;
+    let whereClauses = [];
+    let params = [];
+
+    if (activeOnly !== 'false' && activeOnly !== 'all') {
+      if (status === 'ACTIVE') {
+        whereClauses.push('COALESCE(wom."isActive", true) = true');
+      } else if (status === 'INACTIVE') {
+        whereClauses.push('COALESCE(wom."isActive", true) = false');
+      } else if (!status || status === 'ALL') {
+        // Default show all in master management if explicitly requesting ALL or unfiltered
+        // If activeOnly parameter is passed as 'true'
+        if (activeOnly === 'true') {
+          whereClauses.push('COALESCE(wom."isActive", true) = true');
+        }
+      }
+    } else if (status === 'ACTIVE') {
+      whereClauses.push('COALESCE(wom."isActive", true) = true');
+    } else if (status === 'INACTIVE') {
+      whereClauses.push('COALESCE(wom."isActive", true) = false');
+    }
+
+    if (search && search.trim()) {
+      params.push(`%${search.trim().toLowerCase()}%`);
+      whereClauses.push(`(LOWER(wom."workOrderNumber") LIKE $${params.length} OR LOWER(COALESCE(d."name", '')) LIKE $${params.length} OR LOWER(COALESCE(wom."remarks", '')) LIKE $${params.length})`);
+    }
+
+    const whereSql = whereClauses.length > 0 ? 'WHERE ' + whereClauses.join(' AND ') : '';
+
+    const query = `
+      SELECT 
+        wom.id,
+        wom."workOrderNumber",
+        wom."divisionId",
+        wom."date",
+        wom."amount",
+        wom."remarks",
+        COALESCE(wom."isActive", true) as "isActive",
+        wom."createdAt",
+        wom."updatedAt",
+        d.name as "divisionName",
+        u."fullName" as "addedByName",
+        COALESCE((
+          SELECT SUM(wo."totalAmount") 
+          FROM "WorkOrder" wo 
+          WHERE LOWER(TRIM(wo."workOrderNumber")) = LOWER(TRIM(wom."workOrderNumber"))
+        ), 0)::float as "billedAmount",
+        COALESCE((
+          SELECT COUNT(*)::int 
+          FROM "WorkOrder" wo 
+          WHERE LOWER(TRIM(wo."workOrderNumber")) = LOWER(TRIM(wom."workOrderNumber"))
+        ), 0)::int as "itemCount"
+      FROM "WorkOrderMaster" wom
+      LEFT JOIN "Division" d ON wom."divisionId" = d.id
+      LEFT JOIN "User" u ON wom."addedById" = u.id
+      ${whereSql}
+      ORDER BY wom."date" DESC, wom."createdAt" DESC
+    `;
+
+    const { rows } = await pool.query(query, params);
+    res.json({ workOrderMasters: rows, totalCount: rows.length });
+  } catch (err) {
+    console.error('Fetch work order masters error:', err);
+    res.status(500).json({ error: 'Failed to fetch work orders master' });
+  }
+});
+
+// POST /api/work-order-masters - Create Work Order Master record
+app.post('/api/work-order-masters', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { workOrderNumber, divisionId, divisionName, date, amount, remarks } = req.body;
+    if (!workOrderNumber || !workOrderNumber.trim()) {
+      return res.status(400).json({ error: 'Work Order number is required' });
+    }
+    if (!date) {
+      return res.status(400).json({ error: 'Work Order date is required' });
+    }
+
+    // Resolve division: manual division auto-resolution/creation
+    let effectiveDivisionId = divisionId;
+    const inputDivName = (divisionName || '').trim();
+    if (!effectiveDivisionId && inputDivName) {
+      const existingDiv = await pool.query(`SELECT id FROM "Division" WHERE LOWER(name) = LOWER($1) LIMIT 1`, [inputDivName]);
+      if (existingDiv.rows.length > 0) {
+        effectiveDivisionId = existingDiv.rows[0].id;
+      } else {
+        const newDiv = await pool.query(
+          `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', true, NOW(), NOW())
+           RETURNING id`,
+          [inputDivName]
+        );
+        effectiveDivisionId = newDiv.rows[0].id;
+      }
+    } else if (effectiveDivisionId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(effectiveDivisionId)) {
+        const textName = effectiveDivisionId.trim();
+        const existingDiv = await pool.query(`SELECT id FROM "Division" WHERE LOWER(name) = LOWER($1) LIMIT 1`, [textName]);
+        if (existingDiv.rows.length > 0) {
+          effectiveDivisionId = existingDiv.rows[0].id;
+        } else {
+          const newDiv = await pool.query(
+            `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', true, NOW(), NOW())
+             RETURNING id`,
+            [textName]
+          );
+          effectiveDivisionId = newDiv.rows[0].id;
+        }
+      }
+    }
+
+    if (!effectiveDivisionId) {
+      return res.status(400).json({ error: 'Division selection or manual division name is required' });
+    }
+
+    // Auto calculate amount from WorkOrder direct sales if amount not passed or 0
+    let parsedAmount = parseFloat(amount) || 0;
+    if (parsedAmount <= 0) {
+      const sumRes = await pool.query(
+        `SELECT SUM("totalAmount")::float as total FROM "WorkOrder" WHERE LOWER(TRIM("workOrderNumber")) = LOWER(TRIM($1))`,
+        [workOrderNumber.trim()]
+      );
+      if (sumRes.rows[0]?.total) {
+        parsedAmount = sumRes.rows[0].total;
+      }
+    }
+
+    const cleanWoNum = workOrderNumber.trim().toUpperCase();
+
+    const result = await pool.query(
+      `INSERT INTO "WorkOrderMaster" ("id", "workOrderNumber", "divisionId", "date", "amount", "remarks", "isActive", "addedById", "createdAt", "updatedAt")
+       VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, true, $6, NOW(), NOW())
+       RETURNING *`,
+      [cleanWoNum, effectiveDivisionId, new Date(date), parsedAmount, remarks ? remarks.trim() : null, req.user.id]
+    );
+
+    res.status(201).json({ workOrderMaster: result.rows[0], message: 'Work Order created successfully' });
+  } catch (err) {
+    console.error('Create work order master error:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: `Work Order '${req.body.workOrderNumber}' already exists.` });
+    }
+    res.status(500).json({ error: 'Failed to create Work Order master' });
+  }
+});
+
+// PUT /api/work-order-masters/:id - Update Work Order Master record
+app.put('/api/work-order-masters/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { workOrderNumber, divisionId, divisionName, date, amount, remarks, isActive } = req.body;
+
+    let effectiveDivisionId = divisionId;
+    const inputDivName = (divisionName || '').trim();
+    if (!effectiveDivisionId && inputDivName) {
+      const existingDiv = await pool.query(`SELECT id FROM "Division" WHERE LOWER(name) = LOWER($1) LIMIT 1`, [inputDivName]);
+      if (existingDiv.rows.length > 0) {
+        effectiveDivisionId = existingDiv.rows[0].id;
+      } else {
+        const newDiv = await pool.query(
+          `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+           VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', true, NOW(), NOW())
+           RETURNING id`,
+          [inputDivName]
+        );
+        effectiveDivisionId = newDiv.rows[0].id;
+      }
+    } else if (effectiveDivisionId) {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(effectiveDivisionId)) {
+        const textName = effectiveDivisionId.trim();
+        const existingDiv = await pool.query(`SELECT id FROM "Division" WHERE LOWER(name) = LOWER($1) LIMIT 1`, [textName]);
+        if (existingDiv.rows.length > 0) {
+          effectiveDivisionId = existingDiv.rows[0].id;
+        } else {
+          const newDiv = await pool.query(
+            `INSERT INTO "Division" ("id", "name", "type", "isActive", "createdAt", "updatedAt")
+             VALUES (gen_random_uuid()::text, $1, 'PO_CLIENT', true, NOW(), NOW())
+             RETURNING id`,
+            [textName]
+          );
+          effectiveDivisionId = newDiv.rows[0].id;
+        }
+      }
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE "WorkOrderMaster"
+       SET "workOrderNumber" = COALESCE($1, "workOrderNumber"),
+           "divisionId" = COALESCE($2, "divisionId"),
+           "date" = COALESCE($3, "date"),
+           "amount" = COALESCE($4, "amount"),
+           "remarks" = $5,
+           "isActive" = COALESCE($6, "isActive"),
+           "updatedAt" = NOW()
+       WHERE id = $7
+       RETURNING *`,
+      [
+        workOrderNumber ? workOrderNumber.trim().toUpperCase() : null,
+        effectiveDivisionId || null,
+        date ? new Date(date) : null,
+        amount !== undefined ? parseFloat(amount) || 0 : null,
+        remarks !== undefined ? (remarks ? remarks.trim() : null) : null,
+        isActive !== undefined ? isActive : null,
+        id
+      ]
+    );
+
+    if (rows.length === 0) return res.status(404).json({ error: 'Work Order not found' });
+    res.json({ workOrderMaster: rows[0], message: 'Work Order updated successfully' });
+  } catch (err) {
+    console.error('Update work order master error:', err);
+    if (err.code === '23505') {
+      return res.status(400).json({ error: `Work Order '${req.body.workOrderNumber}' already exists.` });
+    }
+    res.status(500).json({ error: 'Failed to update Work Order master' });
+  }
+});
+
+// PATCH /api/work-order-masters/:id/toggle-active - Toggle active status
+app.patch('/api/work-order-masters/:id/toggle-active', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rows } = await pool.query(
+      `UPDATE "WorkOrderMaster"
+       SET "isActive" = NOT COALESCE("isActive", true), "updatedAt" = NOW()
+       WHERE "id" = $1
+       RETURNING *`,
+      [id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Work Order not found' });
+    res.json({ workOrderMaster: rows[0], message: `Work Order marked as ${rows[0].isActive ? 'ACTIVE' : 'INACTIVE'}` });
+  } catch (err) {
+    console.error('Toggle work order active error:', err);
+    res.status(500).json({ error: 'Failed to update Work Order status' });
+  }
+});
+
+// DELETE /api/work-order-masters/:id - Delete Work Order master record
+app.delete('/api/work-order-masters/:id', authenticateToken, requireRoles(['OWNER', 'MANAGER']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { rowCount } = await pool.query('DELETE FROM "WorkOrderMaster" WHERE "id" = $1', [id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Work Order not found' });
+    res.json({ message: 'Work Order master deleted successfully' });
+  } catch (err) {
+    console.error('Delete work order master error:', err);
+    res.status(500).json({ error: 'Failed to delete Work Order master' });
   }
 });
 
@@ -8550,25 +9047,11 @@ app.delete('/api/salary-hike-ledger/:id', authenticateToken, requireRoles(['OWNE
 // --- BANK ADVICE PROFESSIONAL EXCEL EXPORT (EXCELJS WITH CLEAN BORDERS) ---
 app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, res) => {
   try {
-    const { type, month, year, chequeNo, companyAccountNo, bankBranchDate, workers } = req.body;
-    const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
+    const { type, month, year, chequeNo, canaraChequeNo, nonCanaraChequeNo, companyAccountNo, bankBranchDate, workers, canaraWorkers, nonCanaraWorkers } = req.body;
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const monthName = months[parseInt(month, 10) - 1] || 'Month';
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet(bankTitle, {
-      views: [{ showGridLines: true }]
-    });
-
-    // Column widths
-    worksheet.columns = [
-      { key: 'col1', width: 10 },
-      { key: 'col2', width: 35 },
-      { key: 'col3', width: 28 },
-      { key: 'col4', width: 20 },
-      { key: 'col5', width: 18 }
-    ];
-
     const thinBorder = {
       top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
       left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
@@ -8576,146 +9059,165 @@ app.post('/api/wages/export-bank-advice-excel', authenticateToken, async (req, r
       right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
     };
 
-    // Header Letterhead
-    worksheet.addRow(['SRI KRISHNA CONSTRUCTIONS']);
-    worksheet.getRow(1).font = { bold: true, size: 14, color: { argb: 'FF1E3A8A' } };
-    worksheet.mergeCells('A1:E1');
-    worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+    const buildSheet = (worksheet, title, sheetWorkers, sheetChequeNo) => {
+      worksheet.views = [{ showGridLines: true }];
+      worksheet.columns = [
+        { key: 'col1', width: 10 },
+        { key: 'col2', width: 35 },
+        { key: 'col3', width: 28 },
+        { key: 'col4', width: 20 },
+        { key: 'col5', width: 18 }
+      ];
 
-    worksheet.addRow(['SHAKTHINAGAR - 584170']);
-    worksheet.getRow(2).font = { bold: true, size: 10, color: { argb: 'FF64748B' } };
-    worksheet.mergeCells('A2:E2');
-    worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' };
+      // Header Letterhead
+      worksheet.addRow(['SRI KRISHNA CONSTRUCTIONS']);
+      worksheet.getRow(1).font = { bold: true, size: 14, color: { argb: 'FF1E3A8A' } };
+      worksheet.mergeCells('A1:E1');
+      worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
 
-    worksheet.addRow([]); // Blank Row 3
+      worksheet.addRow(['SHAKTHINAGAR - 584170']);
+      worksheet.getRow(2).font = { bold: true, size: 10, color: { argb: 'FF64748B' } };
+      worksheet.mergeCells('A2:E2');
+      worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' };
 
-    worksheet.addRow(['To,']);
-    worksheet.addRow(['The Branch Manager,']);
-    worksheet.addRow(['Canara Bank,']);
-    worksheet.addRow(['Deosugur - 584 170']);
-    
-    worksheet.addRow([]); // Blank Row 8
+      worksheet.addRow([]); // Blank Row 3
+      worksheet.addRow(['To,']);
+      worksheet.addRow(['The Branch Manager,']);
+      worksheet.addRow(['Canara Bank,']);
+      worksheet.addRow(['Deosugur - 584 170']);
+      worksheet.addRow([]); // Blank Row 8
 
-    worksheet.addRow(['SUB: SALARY DISTRIBUTION']);
-    worksheet.getRow(9).font = { bold: true, size: 11, color: { argb: 'FF1E3A8A' } };
+      worksheet.addRow([`SUB: SALARY DISTRIBUTION - ${title.toUpperCase()}`]);
+      worksheet.getRow(9).font = { bold: true, size: 11, color: { argb: 'FF1E3A8A' } };
 
-    worksheet.addRow([`ACCOUNT No. ${companyAccountNo || '18133070005349'}`]);
-    worksheet.getRow(10).font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
+      worksheet.addRow([`ACCOUNT No. ${companyAccountNo || '18133070005349'}`]);
+      worksheet.getRow(10).font = { bold: true, size: 11, color: { argb: 'FF0F172A' } };
 
-    const totalAmount = (workers || []).reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
-    const descRow = worksheet.addRow([`We are enclosed herewith a cheque for Rs. ${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${year}. Please credit the amount to the following accounts:`]);
-    worksheet.mergeCells(`A11:E11`);
-    worksheet.getRow(11).font = { bold: true, size: 9.5, color: { argb: 'FF334155' } };
-    worksheet.getRow(11).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-    worksheet.getRow(11).height = 28;
+      const totalAmount = (sheetWorkers || []).reduce((sum, w) => sum + (parseFloat(w.amount) || 0), 0);
+      const descRow = worksheet.addRow([`We are enclosed herewith a cheque for Rs. ${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${year}. Please credit the amount to the following accounts:`]);
+      worksheet.mergeCells(`A11:E11`);
+      worksheet.getRow(11).font = { bold: true, size: 9.5, color: { argb: 'FF334155' } };
+      worksheet.getRow(11).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      worksheet.getRow(11).height = 28;
 
-    worksheet.addRow([]); // Blank Row 12
+      worksheet.addRow([]); // Blank Row 12
 
-    const chequeDateRow = worksheet.addRow([`Cheque No: ${chequeNo || '-'}`, '', '', `Date: ${bankBranchDate || '-'}`]);
-    worksheet.mergeCells('A13:C13');
-    worksheet.mergeCells('D13:E13');
-    worksheet.getCell('A13').alignment = { vertical: 'middle', horizontal: 'left' };
-    worksheet.getCell('D13').alignment = { vertical: 'middle', horizontal: 'right' };
-    worksheet.getRow(13).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
-    worksheet.getRow(13).height = 20;
+      const chequeDateRow = worksheet.addRow([`Cheque No: ${sheetChequeNo || chequeNo || '-'}`, '', '', `Date: ${bankBranchDate || '-'}`]);
+      worksheet.mergeCells('A13:C13');
+      worksheet.mergeCells('D13:E13');
+      worksheet.getCell('A13').alignment = { vertical: 'middle', horizontal: 'left' };
+      worksheet.getCell('D13').alignment = { vertical: 'middle', horizontal: 'right' };
+      worksheet.getRow(13).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+      worksheet.getRow(13).height = 20;
 
-    // Table Header Row (Row 14)
-    const headerRow = worksheet.addRow(['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)']);
-
-    headerRow.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-    headerRow.height = 24;
-    headerRow.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF1E3A8A' }
-      };
-      cell.border = thinBorder;
-    });
-
-    // Add Worker Rows
-    (workers || []).forEach((w, idx) => {
-      const amt = parseFloat(w.amount) || 0;
-      const r = worksheet.addRow([
-        idx + 1,
-        (w.fullName || '').toUpperCase(),
-        String(w.bankAccountNo || '-'),
-        (w.ifscCode || '').toUpperCase(),
-        amt
-      ]);
-      r.height = 20;
-      r.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
-      r.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
-      r.getCell(2).font = { bold: true };
-      r.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
-      r.getCell(3).numFmt = '@'; // Store text string format for account number!
-      r.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
-      r.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
-      r.getCell(5).font = { bold: true };
-      r.getCell(5).numFmt = '₹#,##0.00';
-
-      r.eachCell((cell) => {
+      // Table Header Row
+      const headerRow = worksheet.addRow(['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)']);
+      headerRow.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.height = 24;
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FF1E3A8A' }
+        };
         cell.border = thinBorder;
       });
-    });
 
-    // Summary Total Row
-    const totalRow = worksheet.addRow(['', 'TOTAL AMOUNT', '', '', totalAmount]);
-    totalRow.height = 22;
-    totalRow.font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
-    totalRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
-    totalRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
-    totalRow.getCell(5).numFmt = '₹#,##0.00';
-    totalRow.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFF1F5F9' }
-      };
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FF0F172A' } },
-        bottom: { style: 'double', color: { argb: 'FF0F172A' } },
-        left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
-      };
-    });
+      // Add Worker Rows
+      (sheetWorkers || []).forEach((w, idx) => {
+        const amt = parseFloat(w.amount) || 0;
+        const r = worksheet.addRow([
+          idx + 1,
+          (w.fullName || '').toUpperCase(),
+          String(w.bankAccountNo || '-'),
+          (w.ifscCode || '').toUpperCase(),
+          amt
+        ]);
+        r.height = 20;
+        r.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+        r.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+        r.getCell(2).font = { bold: true };
+        r.getCell(3).alignment = { vertical: 'middle', horizontal: 'center' };
+        r.getCell(3).numFmt = '@';
+        r.getCell(4).alignment = { vertical: 'middle', horizontal: 'center' };
+        r.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+        r.getCell(5).font = { bold: true };
+        r.getCell(5).numFmt = '₹#,##0.00';
 
-    worksheet.addRow([]); // Blank spacer row
+        r.eachCell((cell) => {
+          cell.border = thinBorder;
+        });
+      });
 
-    // Email on Left (Merge Columns A-B), Signature on Right (Merge Columns D-E)
-    const emailSigRow = worksheet.addRow(['sunilgouda1280@gmail.com', '', '', 'For SRI KRISHNA CONSTRUCTIONS', '']);
-    const signTitleRow = worksheet.addRow(['', '', '', 'Authorized Signatory', '']);
+      // Summary Total Row
+      const totalRow = worksheet.addRow(['', 'TOTAL AMOUNT', '', '', totalAmount]);
+      totalRow.height = 22;
+      totalRow.font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+      totalRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'left' };
+      totalRow.getCell(5).alignment = { vertical: 'middle', horizontal: 'right' };
+      totalRow.getCell(5).numFmt = '₹#,##0.00';
+      totalRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFF1F5F9' }
+        };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF0F172A' } },
+          bottom: { style: 'double', color: { argb: 'FF0F172A' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+      });
 
-    const emailRowIdx = emailSigRow.number;
-    const signRowIdx = signTitleRow.number;
+      worksheet.addRow([]); // Blank spacer row
 
-    worksheet.mergeCells(`A${emailRowIdx}:B${emailRowIdx}`);
-    worksheet.mergeCells(`D${emailRowIdx}:E${emailRowIdx}`);
-    worksheet.mergeCells(`D${signRowIdx}:E${signRowIdx}`);
+      const emailSigRow = worksheet.addRow(['sunilgouda1280@gmail.com', '', '', 'For SRI KRISHNA CONSTRUCTIONS', '']);
+      const signTitleRow = worksheet.addRow(['', '', '', 'Authorized Signatory', '']);
 
-    emailSigRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
-    emailSigRow.getCell(1).font = { size: 9.5, color: { argb: 'FF475569' } };
+      const emailRowIdx = emailSigRow.number;
+      const signRowIdx = signTitleRow.number;
 
-    emailSigRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
-    emailSigRow.getCell(4).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+      worksheet.mergeCells(`A${emailRowIdx}:B${emailRowIdx}`);
+      worksheet.mergeCells(`D${emailRowIdx}:E${emailRowIdx}`);
+      worksheet.mergeCells(`D${signRowIdx}:E${signRowIdx}`);
 
-    signTitleRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
-    signTitleRow.getCell(4).font = { size: 9, color: { argb: 'FF64748B' } };
+      emailSigRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+      emailSigRow.getCell(1).font = { size: 9.5, color: { argb: 'FF475569' } };
+      emailSigRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+      emailSigRow.getCell(4).font = { bold: true, size: 10, color: { argb: 'FF0F172A' } };
+      signTitleRow.getCell(4).alignment = { vertical: 'middle', horizontal: 'right' };
+      signTitleRow.getCell(4).font = { size: 9, color: { argb: 'FF64748B' } };
+      emailSigRow.height = 20;
+      signTitleRow.height = 18;
+    };
 
-    emailSigRow.height = 20;
-    signTitleRow.height = 18;
+    if (type === 'all' || type === 'both' || (canaraWorkers && nonCanaraWorkers)) {
+      // Both sheets in one workbook
+      const canSheet = workbook.addWorksheet('CANARA BANK');
+      buildSheet(canSheet, 'CANARA BANK', canaraWorkers || [], canaraChequeNo || chequeNo);
+
+      const nonCanSheet = workbook.addWorksheet('NON-CANARA (OTHER BANKS)');
+      buildSheet(nonCanSheet, 'NON-CANARA (OTHER BANKS)', nonCanaraWorkers || [], nonCanaraChequeNo || chequeNo);
+    } else {
+      const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
+      const sheet = workbook.addWorksheet(bankTitle);
+      buildSheet(sheet, bankTitle, workers || [], chequeNo);
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_ADVICE_${monthName.toUpperCase()}_${year}.xlsx"`);
+    res.setHeader('Content-Disposition', `attachment; filename="SRI_KRISHNA_CONSTRUCTIONS_BANK_ADVICE_${monthName.toUpperCase()}_${year}.xlsx"`);
 
     await workbook.xlsx.write(res);
-    res.end();
+    return res.end();
   } catch (err) {
     console.error('Export bank advice excel error:', err);
     res.status(500).json({ error: 'Failed to generate bank advice Excel' });
   }
 });
+
+
 
 app.post('/api/wages/whatsapp-link', authenticateToken, async (req, res) => {
   try {

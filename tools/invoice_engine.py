@@ -96,14 +96,18 @@ def paginate_items(items, target_pages=None):
     if len(items) == 25 and (target_pages is None or target_pages == 3):
         return [items[0:6], items[6:17], items[17:25]]
     
+    if len(items) <= 5:
+        return [items]
+    
     pages = []
     current_page = []
     current_height = 0
     is_first_page = True
     
     for item in items:
-        spec_lines = len(item.get("specification", "").split("\n"))
-        item_height = max(55, 30 + spec_lines * 13)
+        spec = str(item.get("specification") or "")
+        spec_lines = len(spec.split("\n")) if spec else 1
+        item_height = max(45, 25 + spec_lines * 13)
         limit = 520 if is_first_page else 800
         
         if current_height + item_height > limit and current_page:
@@ -132,7 +136,16 @@ def generate_invoice_html(invoice_data, settings=None):
     totals = calculate_invoice_totals(items, gst_rounding)
     
     logo_b64 = invoice_data.get("logo_base64", "")
-    sig_b64 = invoice_data.get("signature_base64", "")
+    is_wo = invoice_data.get("is_work_order", False)
+    has_kpcl = any(item.get("kpcl_code") and str(item.get("kpcl_code")).strip() not in ["", "-", "N/A", "n/a", "None"] for item in items)
+    
+    show_kpcl = invoice_data.get("show_kpcl_column")
+    if is_wo and not has_kpcl:
+        show_kpcl = False
+    elif show_kpcl is None:
+        show_kpcl = not (is_wo and not has_kpcl)
+    elif isinstance(show_kpcl, str):
+        show_kpcl = show_kpcl.lower() in ["true", "1", "yes"]
 
     pages = paginate_items(items)
     total_page_count = len(pages)
@@ -249,17 +262,12 @@ def generate_invoice_html(invoice_data, settings=None):
     margin-top: 2px;
     line-height: 1.15;
   }}
-  .header-separator {{
-    border-top: 1.2px solid #000000;
-    margin: 1px 0 0 0;
-  }}
   .gst-mobile-row {{
     display: flex;
     justify-content: space-between;
-    padding: 2px 8px;
+    padding: 2.5px 8px;
     font-size: 10.5pt;
     font-weight: normal;
-    border-top: 1.2px solid #000000;
   }}
   
   /* Page 1 Tax Invoice Banner */
@@ -291,7 +299,7 @@ def generate_invoice_html(invoice_data, settings=None):
     border-bottom: none;
   }}
   .meta-left {{
-    width: 63%;
+    width: 50%;
     border-right: 2.0px solid #000000;
     padding: 2.5px 6px;
     display: flex;
@@ -299,7 +307,7 @@ def generate_invoice_html(invoice_data, settings=None):
     justify-content: center;
   }}
   .meta-right {{
-    width: 37%;
+    width: 50%;
     padding: 2.5px 6px;
     display: flex;
     flex-direction: column;
@@ -341,20 +349,24 @@ def generate_invoice_html(invoice_data, settings=None):
     word-break: break-word;
     page-break-inside: avoid;
     break-inside: avoid;
+    vertical-align: top;
   }}
   .item-table td:last-child {{
     border-right: none;
   }}
   
   /* Column Widths */
-  .col-sino {{ width: 3.5%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: middle; }}
-  .col-code {{ width: 11.2%; text-align: left; font-family: 'Times New Roman', serif; font-size: 11pt; font-weight: normal; vertical-align: middle; white-space: nowrap; padding-left: 2px; }}
-  .col-disc {{ width: 19.5%; text-align: left; font-family: 'Calibri', 'Carlito', sans-serif; font-size: 10.5pt; font-weight: bold; vertical-align: middle; }}
-  .col-spec {{ width: 31.0%; text-align: left; font-family: 'Calibri', 'Carlito', sans-serif; font-size: 9.5pt; font-weight: normal; vertical-align: top; white-space: pre-wrap; line-height: 1.2; }}
-  .col-unit {{ width: 5.6%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11pt; font-weight: bold; vertical-align: middle; }}
-  .col-qty {{ width: 5.6%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: middle; }}
-  .col-price {{ width: 9.6%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: middle; }}
-  .col-amount {{ width: 14.0%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: middle; }}
+  .col-sino {{ width: 4.8%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: top; }}
+  .col-code {{ width: 11.5%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11pt; font-weight: normal; vertical-align: top; white-space: nowrap; }}
+  .col-disc {{ width: 20.0%; text-align: left; font-family: 'Times New Roman', serif; font-size: 10.5pt; font-weight: bold; vertical-align: top; }}
+  .col-spec {{ width: 31.1%; text-align: left; font-family: 'Times New Roman', serif; font-size: 10pt; font-weight: normal; vertical-align: top; white-space: pre-wrap; line-height: 1.2; }}
+  .col-sino-nokpcl {{ width: 5.3%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: top; }}
+  .col-disc-nokpcl {{ width: 25.3%; text-align: left; font-family: 'Times New Roman', serif; font-size: 10.5pt; font-weight: bold; vertical-align: top; }}
+  .col-spec-nokpcl {{ width: 36.8%; text-align: left; font-family: 'Times New Roman', serif; font-size: 10pt; font-weight: normal; vertical-align: top; white-space: pre-wrap; line-height: 1.2; }}
+  .col-unit {{ width: 5.8%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11pt; font-weight: bold; vertical-align: top; }}
+  .col-qty {{ width: 5.8%; text-align: center; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: top; }}
+  .col-price {{ width: 9.5%; text-align: right; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: top; padding-right: 6px; }}
+  .col-amount {{ width: 11.5%; text-align: right; font-family: 'Times New Roman', serif; font-size: 11.5pt; font-weight: bold; vertical-align: top; padding-right: 6px; }}
   
   /* Totals Block - Continuous grid lines with table columns above */
   .totals-container {{
@@ -364,7 +376,7 @@ def generate_invoice_html(invoice_data, settings=None):
     font-size: 11pt;
   }}
   .totals-left {{
-    width: 65.2%; /* Col 0 (3.5) + Col 1 (11.2) + Col 2 (19.5) + Col 3 (31.0) */
+    width: 67.4%; /* 128mm / 190mm */
     border-right: 1.4px solid #000000;
     display: flex;
     flex-direction: column;
@@ -394,7 +406,7 @@ def generate_invoice_html(invoice_data, settings=None):
     line-height: 1.35;
   }}
   .totals-right {{
-    width: 34.8%; /* Col 4 (5.6) + Col 5 (5.6) + Col 6 (9.6) + Col 7 (14.0) */
+    width: 32.6%; /* 62mm / 190mm */
     display: flex;
     flex-direction: column;
   }}
@@ -409,7 +421,7 @@ def generate_invoice_html(invoice_data, settings=None):
     border-bottom: none;
   }}
   .total-label {{
-    width: 59.8%; /* (5.6 + 5.6 + 9.6) / 34.8 = 59.8% */
+    width: 64.5%; /* 40mm / 62mm */
     padding: 0 6px;
     font-weight: bold;
     font-size: 10.5pt;
@@ -423,7 +435,7 @@ def generate_invoice_html(invoice_data, settings=None):
     font-size: 10pt;
   }}
   .total-value {{
-    width: 40.2%; /* 14.0 / 34.8 = 40.2% */
+    width: 35.5%; /* 22mm / 62mm */
     padding: 0 8px;
     text-align: right;
     font-family: 'Times New Roman', serif;
@@ -513,7 +525,6 @@ def generate_invoice_html(invoice_data, settings=None):
           <div class="company-tagline">All type of air compressor Service and Spares Avaliable.</div>
         </div>
       </div>
-      <div class="header-separator"></div>
       <div class="gst-mobile-row">
         <div>GST NO: {invoice_data.get('company_gstin', '29DWKPP3582H1ZV')}</div>
         <div>Mobile No:  {invoice_data.get('company_mobile', '8496841904')}</div>
@@ -548,10 +559,10 @@ def generate_invoice_html(invoice_data, settings=None):
         </div>
       </div>
       <div class="meta-row">
-        <div class="meta-left">Division: {invoice_data.get('division', '')}</div>
+        <div class="meta-left">{'Division: ' + str(invoice_data.get('division')).strip() if invoice_data.get('division') and str(invoice_data.get('division')).strip() not in ['', '-', 'None'] else '&nbsp;'}</div>
         <div class="meta-right">
-          Vehicle No : {invoice_data.get('vehicle_no', '')}
-          {f'<div style="margin-top:2px;">E-Way Bill: {invoice_data.get("eway_bill", "")}</div>' if show_eway_bill and invoice_data.get("eway_bill") else ''}
+          {f'Vehicle No : {str(invoice_data.get("vehicle_no")).strip()}' if invoice_data.get('vehicle_no') and str(invoice_data.get('vehicle_no')).strip() not in ['', '-', 'None'] else '&nbsp;'}
+          {f'<div style="margin-top:2px;">E-Way Bill: {invoice_data.get("eway_bill", "")}</div>' if show_eway_bill and invoice_data.get("eway_bill") and str(invoice_data.get("eway_bill")).strip() not in ['', '-', 'None'] else ''}
         </div>
       </div>
     </div>
@@ -564,13 +575,28 @@ def generate_invoice_html(invoice_data, settings=None):
     <table class="item-table">
 """
         if show_headers:
-            html += f"""
+            if show_kpcl:
+                html += f"""
       <thead>
         <tr>
           <th class="col-sino">SI<br>NO</th>
           <th class="col-code">KPCL<br>ITEM<br>CODE</th>
-          <th class="col-disc">Discription</th>
+          <th class="col-disc">Description</th>
           <th class="col-spec">ITEM NAME &amp;<br>SPECIFICATION</th>
+          <th class="col-unit">UNIT</th>
+          <th class="col-qty">QTY</th>
+          <th class="col-price">PRICE</th>
+          <th class="col-amount">AMOUNT</th>
+        </tr>
+      </thead>
+"""
+            else:
+                html += f"""
+      <thead>
+        <tr>
+          <th class="col-sino-nokpcl">SI<br>NO</th>
+          <th class="col-disc-nokpcl">Description</th>
+          <th class="col-spec-nokpcl">ITEM NAME &amp;<br>SPECIFICATION</th>
           <th class="col-unit">UNIT</th>
           <th class="col-qty">QTY</th>
           <th class="col-price">PRICE</th>
@@ -581,11 +607,23 @@ def generate_invoice_html(invoice_data, settings=None):
         html += """      <tbody>
 """
         for item in page_items:
-            html += f"""        <tr>
+            if show_kpcl:
+                html += f"""        <tr>
           <td class="col-sino">{item.get('sl_no', '')}</td>
           <td class="col-code">{item.get('kpcl_code', '')}</td>
           <td class="col-disc">{item.get('description', '')}</td>
-          <td class="col-spec">{item.get('specification', '')}</td>
+          <td class="col-spec">{item.get('specification') or ''}</td>
+          <td class="col-unit">{item.get('unit', '')}</td>
+          <td class="col-qty">{fmt_num(item.get('qty', 0))}</td>
+          <td class="col-price">{fmt_num(item.get('price', 0))}</td>
+          <td class="col-amount">{fmt_num(item.get('amount', 0))}</td>
+        </tr>
+"""
+            else:
+                html += f"""        <tr>
+          <td class="col-sino-nokpcl">{item.get('sl_no', '')}</td>
+          <td class="col-disc-nokpcl">{item.get('description', '')}</td>
+          <td class="col-spec-nokpcl">{item.get('specification') or ''}</td>
           <td class="col-unit">{item.get('unit', '')}</td>
           <td class="col-qty">{fmt_num(item.get('qty', 0))}</td>
           <td class="col-price">{fmt_num(item.get('price', 0))}</td>
@@ -648,9 +686,7 @@ def generate_invoice_html(invoice_data, settings=None):
     <div class="sig-box">
       <div class="faithfully-text">Your Faithfully</div>
       <div class="company-sig-name">For Sri Krishna Constructions</div>
-      <div class="sig-img-container">
-        {f'<img src="{sig_b64}" alt="Signature">' if sig_b64 else '<div style="height:40px;width:80px;border:1px dashed #2b5797;display:flex;align-items:center;justify-content:center;font-size:8pt;color:#2b5797;">[SIGNATURE]</div>'}
-      </div>
+      <div class="sig-img-container" style="height: 48px;"></div>
       <div class="proprietor-text">Proprietor</div>
     </div>
   </div>

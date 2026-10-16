@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api';
 import { showToast } from '../toast';
 import { showConfirm } from '../confirmDialog';
-import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2, Search, Plus, CheckCircle2, Power, Briefcase } from 'lucide-react';
+import { UserPlus, UserCheck, Shield, Trash2, AlertCircle, Users, FolderPlus, Edit, Package, ArrowDownToLine, ArrowUpFromLine, Receipt, History, Eye, FileText, X, Building2, Search, Plus, CheckCircle2, Power, Briefcase, MapPin } from 'lucide-react';
 import { DatePickerDMY } from './DatePickerDMY';
 
 interface UserManagementProps {
@@ -10,7 +10,7 @@ interface UserManagementProps {
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'divisions' | 'workers' | 'pos' | 'holidays'>(
+  const [activeSubTab, setActiveSubTab] = useState<'accounts' | 'divisions' | 'workers' | 'pos' | 'work_orders' | 'locations'>(
     currentUserRole === 'SUPERVISOR' ? 'workers' : 'accounts'
   );
   const [error, setError] = useState('');
@@ -127,52 +127,75 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   const [editPODate, setEditPODate] = useState('');
   const [editPOAmount, setEditPOAmount] = useState('');
   const [editPOActive, setEditPOActive] = useState<boolean>(true);
-  // --- HOLIDAYS (CALENDAR) STATE ---
-  const [holidays, setHolidays] = useState<any[]>([]);
-  const [holidayDate, setHolidayDate] = useState(new Date().toISOString().split('T')[0]);
-  const [holidayName, setHolidayName] = useState('');
-  const [holidayType, setHolidayType] = useState('GOVT_HOLIDAY');
-  const [holidayDescription, setHolidayDescription] = useState('');
+  // --- WORK ORDERS (MASTER) STATE ---
+  const [workOrderMasters, setWorkOrderMasters] = useState<any[]>([]);
+  const [woStatusFilter, setWoStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ACTIVE');
+  const [woSearch, setWoSearch] = useState('');
+  const [woNumber, setWoNumber] = useState('');
+  const [woDivisionId, setWoDivisionId] = useState('');
+  const [woDate, setWoDate] = useState(new Date().toISOString().split('T')[0]);
+  const [woAmount, setWoAmount] = useState('');
+  const [woRemarks, setWoRemarks] = useState('');
+
+  // Edit Work Order Master State
+  const [editingWOMaster, setEditingWOMaster] = useState<any>(null);
+  const [editWONumber, setEditWONumber] = useState('');
+  const [editWODivisionId, setEditWODivisionId] = useState('');
+  const [editWODate, setEditWODate] = useState('');
+  const [editWOAmount, setEditWOAmount] = useState('');
+  const [editWORemarks, setEditWORemarks] = useState('');
+  const [editWOActive, setEditWOActive] = useState<boolean>(true);
+
+  // --- LOCATIONS (MASTER) STATE ---
+  const [locations, setLocations] = useState<any[]>([]);
+  const [locationSearch, setLocationSearch] = useState('');
+  const [locationName, setLocationName] = useState('');
+  const [locationCode, setLocationCode] = useState('');
+  const [locationDescription, setLocationDescription] = useState('');
+  const [editingLocation, setEditingLocation] = useState<any>(null);
+  const [editLocationName, setEditLocationName] = useState('');
+  const [editLocationCode, setEditLocationCode] = useState('');
+  const [editLocationDescription, setEditLocationDescription] = useState('');
+  const [editLocationActive, setEditLocationActive] = useState<boolean>(true);
 
   const clearMessages = () => {
     setError('');
     setSuccess('');
   };
 
-  const fetchHolidays = async () => {
+  const fetchLocations = async () => {
     try {
-      const res = await api.get('/holidays');
-      setHolidays(res.data.holidays || []);
+      const res = await api.get('/locations');
+      setLocations(res.data.locations || []);
     } catch (err: any) {
-      console.error('Failed to load holidays:', err);
-      showToast(err.response?.data?.error || 'Failed to load holiday calendar', 'error');
+      console.error('Failed to load locations:', err);
+      showToast(err.response?.data?.error || 'Failed to load locations', 'error');
     }
   };
 
-  const handleAddHoliday = async (e: React.FormEvent) => {
+  const handleCreateLocation = async (e: React.FormEvent) => {
     e.preventDefault();
     clearMessages();
-    if (!holidayName.trim() || !holidayDate) {
-      showToast('Holiday name and date are required', 'error');
+    if (!locationName.trim()) {
+      showToast('Location name is required', 'error');
       return;
     }
-
     try {
       setLoading(true);
-      await api.post('/holidays', {
-        date: holidayDate,
-        name: holidayName.trim(),
-        type: holidayType,
-        description: holidayDescription.trim() || undefined,
+      await api.post('/locations', {
+        name: locationName.trim(),
+        code: locationCode.trim() || undefined,
+        description: locationDescription.trim() || undefined
       });
-      const msg = `Holiday '${holidayName}' declared successfully!`;
+      const msg = `Location '${locationName}' added successfully!`;
       setSuccess(msg);
       showToast(msg, 'success');
-      setHolidayName('');
-      setHolidayDescription('');
-      fetchHolidays();
+      setLocationName('');
+      setLocationCode('');
+      setLocationDescription('');
+      fetchLocations();
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to save holiday';
+      const errMsg = err.response?.data?.error || 'Failed to create location';
       setError(errMsg);
       showToast(errMsg, 'error');
     } finally {
@@ -180,24 +203,172 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
     }
   };
 
-  const handleDeleteHoliday = async (id: string, name: string) => {
+  const handleUpdateLocation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLocation) return;
+    clearMessages();
+    try {
+      setLoading(true);
+      await api.put(`/locations/${editingLocation.id}`, {
+        name: editLocationName.trim(),
+        code: editLocationCode.trim() || undefined,
+        description: editLocationDescription.trim() || undefined,
+        isActive: editLocationActive
+      });
+      const msg = `Location '${editLocationName}' updated successfully!`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+      setEditingLocation(null);
+      fetchLocations();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update location';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleLocationActive = async (id: string, name: string, currentActive: boolean) => {
+    try {
+      clearMessages();
+      await api.patch(`/locations/${id}/toggle-active`);
+      setLocations(prev => prev.map(loc => loc.id === id ? { ...loc, isActive: !currentActive } : loc));
+      const msg = `Location '${name}' marked as ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to toggle location status';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
+  const handleDeleteLocation = async (id: string, name: string) => {
     const confirmed = await showConfirm({
-      title: 'Remove Holiday',
-      message: `Are you sure you want to remove the holiday '${name}'?`,
-      confirmText: 'Remove',
+      title: 'Delete Location',
+      message: `Are you sure you want to delete location '${name}'?`,
+      confirmText: 'Delete',
       type: 'danger'
     });
     if (!confirmed) return;
     clearMessages();
-
     try {
-      await api.delete(`/holidays/${id}`);
-      const msg = `Holiday '${name}' removed successfully.`;
+      await api.delete(`/locations/${id}`);
+      const msg = `Location '${name}' deleted successfully.`;
       setSuccess(msg);
       showToast(msg, 'success');
-      fetchHolidays();
+      fetchLocations();
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'Failed to delete holiday';
+      const errMsg = err.response?.data?.error || 'Failed to delete location';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
+  const fetchWorkOrderMasters = async () => {
+    try {
+      const res = await api.get('/work-order-masters', { params: { activeOnly: false } });
+      setWorkOrderMasters(res.data.workOrderMasters || []);
+    } catch (err: any) {
+      console.error('Failed to load work order masters:', err);
+      showToast(err.response?.data?.error || 'Failed to load work order masters', 'error');
+    }
+  };
+
+  const handleCreateWorkOrderMaster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearMessages();
+    if (!woNumber.trim() || !woDivisionId.trim()) {
+      showToast('Work Order number and division are required', 'error');
+      return;
+    }
+    try {
+      setLoading(true);
+      await api.post('/work-order-masters', {
+        workOrderNumber: woNumber.trim(),
+        divisionId: woDivisionId,
+        date: woDate,
+        amount: parseFloat(woAmount) || 0,
+        remarks: woRemarks.trim() || undefined
+      });
+      const msg = `Work Order '${woNumber}' created successfully!`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+      setWoNumber('');
+      setWoDivisionId('');
+      setWoAmount('');
+      setWoRemarks('');
+      fetchWorkOrderMasters();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to create work order';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateWorkOrderMaster = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingWOMaster) return;
+    clearMessages();
+    try {
+      setLoading(true);
+      await api.put(`/work-order-masters/${editingWOMaster.id}`, {
+        workOrderNumber: editWONumber.trim(),
+        divisionId: editWODivisionId,
+        date: editWODate,
+        amount: parseFloat(editWOAmount) || 0,
+        remarks: editWORemarks.trim() || undefined,
+        isActive: editWOActive
+      });
+      const msg = `Work Order '${editWONumber}' updated successfully!`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+      setEditingWOMaster(null);
+      fetchWorkOrderMasters();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update work order';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleWOMasterActive = async (id: string, woNum: string, currentActive: boolean) => {
+    try {
+      clearMessages();
+      await api.patch(`/work-order-masters/${id}/toggle-active`);
+      setWorkOrderMasters(prev => prev.map(w => w.id === id ? { ...w, isActive: !currentActive } : w));
+      const msg = `Work Order '${woNum}' marked as ${!currentActive ? 'ACTIVE' : 'INACTIVE'}`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to update work order status';
+      setError(errMsg);
+      showToast(errMsg, 'error');
+    }
+  };
+
+  const handleDeleteWorkOrderMaster = async (id: string, woNum: string) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Work Order',
+      message: `Are you sure you want to delete work order '${woNum}'?`,
+      confirmText: 'Delete',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+    clearMessages();
+    try {
+      await api.delete(`/work-order-masters/${id}`);
+      const msg = `Work Order '${woNum}' deleted successfully.`;
+      setSuccess(msg);
+      showToast(msg, 'success');
+      fetchWorkOrderMasters();
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Failed to delete work order';
       setError(errMsg);
       showToast(errMsg, 'error');
     }
@@ -246,7 +417,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
   useEffect(() => {
     const promises: Promise<void>[] = [fetchDivisions(), fetchWorkers()];
     if (currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') {
-      promises.push(fetchUsers(), fetchPurchaseOrders(), fetchHolidays());
+      promises.push(fetchUsers(), fetchPurchaseOrders(), fetchWorkOrderMasters(), fetchLocations());
     }
     Promise.all(promises);
   }, [currentUserRole]);
@@ -843,12 +1014,24 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
             )}
             {currentUserRole !== 'SUPERVISOR' && (
               <button
-                onClick={() => { setActiveSubTab('holidays'); clearMessages(); fetchHolidays(); }}
-                className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center flex items-center gap-1 ${
-                  activeSubTab === 'holidays' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                onClick={() => { setActiveSubTab('work_orders'); clearMessages(); fetchWorkOrderMasters(); }}
+                className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center flex items-center justify-center gap-1.5 ${
+                  activeSubTab === 'work_orders' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                <span>🏛️</span> Holidays
+                <Briefcase className="w-3.5 h-3.5" />
+                <span>Work Orders</span>
+              </button>
+            )}
+            {currentUserRole !== 'SUPERVISOR' && (
+              <button
+                onClick={() => { setActiveSubTab('locations'); clearMessages(); fetchLocations(); }}
+                className={`px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold rounded-md transition-all whitespace-nowrap flex-1 md:flex-initial text-center flex items-center justify-center gap-1.5 ${
+                  activeSubTab === 'locations' ? 'bg-[#1e3a8a] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>Locations</span>
               </button>
             )}
           </div>
@@ -3012,18 +3195,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Division *</label>
-                    <select
+                    <label className="block font-semibold text-slate-700 mb-1">Division * (Type or Select)</label>
+                    <input
+                      type="text"
                       required
+                      list="edit-po-divisions-datalist"
                       value={editPODivisionId}
                       onChange={(e) => setEditPODivisionId(e.target.value)}
+                      placeholder="Type division (e.g. KPCL, RTPS)..."
                       className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
-                    >
-                      <option value="">-- Choose Division --</option>
-                      {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT' && (d.isActive !== false || d.id === editPODivisionId)).map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
+                    />
+                    <datalist id="edit-po-divisions-datalist">
+                      {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT').map((d) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
                       ))}
-                    </select>
+                    </datalist>
                   </div>
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Date *</label>
@@ -3092,18 +3278,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
                 />
               </div>
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Division *</label>
-                <select
+                <label className="block font-semibold text-slate-700 mb-1">Division * (Type or Select)</label>
+                <input
+                  type="text"
                   required
+                  list="po-divisions-datalist"
                   value={poDivisionId}
                   onChange={(e) => setPoDivisionId(e.target.value)}
+                  placeholder="Type division (e.g. KPCL, RTPS)..."
                   className="w-full p-2 border border-slate-300 rounded focus:border-[#667eea] focus:ring-1 focus:ring-[#667eea] outline-none font-semibold bg-white"
-                >
-                  <option value="">-- Choose Division --</option>
+                />
+                <datalist id="po-divisions-datalist">
                   {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT' && d.isActive !== false).map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.name}>{d.name}</option>
                   ))}
-                </select>
+                </datalist>
               </div>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Date *</label>
@@ -3240,125 +3429,615 @@ export const UserManagement: React.FC<UserManagementProps> = ({ currentUserRole 
         </div>
       )}
 
-      {/* --- TAB 5: HOLIDAY CALENDAR (GOVT & COMPANY PAID HOLIDAYS) --- */}
-      {activeSubTab === 'holidays' && (
+      {/* --- TAB 5: WORK ORDERS MASTER --- */}
+      {activeSubTab === 'work_orders' && (
         <div className="space-y-4 animate-fadeIn">
-          <div className="flex justify-between items-center bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-3 rounded-xl border border-amber-200">
-            <div>
-              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
-                <span>🏛️</span> Official Company & Government Holiday Calendar
-              </h3>
-              <p className="text-xs text-slate-500">
-                Holidays declared here apply to <strong>all divisions</strong> and are automatically credited as a paid working day for workers in daily attendance and payroll.
-              </p>
+          {/* EDIT WORK ORDER MASTER MODAL */}
+          {editingWOMaster && (
+            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-[#1e3a8a]" />
+                    <span>Edit Work Order Master</span>
+                  </h3>
+                  <button onClick={() => setEditingWOMaster(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">×</button>
+                </div>
+
+                <form onSubmit={handleUpdateWorkOrderMaster} className="space-y-3.5 text-xs overflow-y-auto pr-1">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Work Order Number *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editWONumber}
+                      onChange={(e) => setEditWONumber(e.target.value.toUpperCase())}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Division * (Type or Select)</label>
+                    <input
+                      type="text"
+                      required
+                      list="edit-wo-divisions-datalist"
+                      value={editWODivisionId}
+                      onChange={(e) => setEditWODivisionId(e.target.value)}
+                      placeholder="Type division (e.g. KPCL, RTPS)..."
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-semibold bg-white"
+                    />
+                    <datalist id="edit-wo-divisions-datalist">
+                      {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT').map((d) => (
+                        <option key={d.id} value={d.name}>{d.name}</option>
+                      ))}
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Work Order Date *</label>
+                    <DatePickerDMY
+                      required
+                      value={editWODate}
+                      onChange={(val) => setEditWODate(val)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Allocated Amount (₹)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={editWOAmount}
+                      onChange={(e) => setEditWOAmount(e.target.value)}
+                      placeholder="Enter amount or auto-calculated"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
+                    <input
+                      type="text"
+                      value={editWORemarks}
+                      onChange={(e) => setEditWORemarks(e.target.value)}
+                      placeholder="Scope, client notes, contract terms..."
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Status *</label>
+                    <select
+                      value={editWOActive ? 'ACTIVE' : 'INACTIVE'}
+                      onChange={(e) => setEditWOActive(e.target.value === 'ACTIVE')}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white"
+                    >
+                      <option value="ACTIVE">🟢 ACTIVE (Shown in dropdowns)</option>
+                      <option value="INACTIVE">🔴 INACTIVE (Hidden from new entries)</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setEditingWOMaster(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg shadow disabled:opacity-50"
+                    >
+                      {loading ? 'Saving...' : 'Update Work Order'}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-            <span className="px-3 py-1 bg-amber-500 text-white font-bold text-xs rounded-lg shadow-sm">
-              {holidays.length} Declared Holidays
-            </span>
+          )}
+
+          {/* HEADER BANNER */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-gradient-to-r from-blue-900 to-indigo-900 text-white p-4 rounded-xl shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+                <Briefcase className="w-5 h-5 text-sky-300" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base">Work Orders Master Registry</h3>
+                <p className="text-xs text-blue-200">
+                  Manage official work orders, allocate contract amounts, and track billed totals.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-white/15 text-white font-bold text-xs rounded-lg">
+                {workOrderMasters.length} Work Orders
+              </span>
+            </div>
           </div>
 
+          {/* CREATE WORK ORDER MASTER FORM */}
           {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
-            <form onSubmit={handleAddHoliday} className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider">Declare New Holiday</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <form onSubmit={handleCreateWorkOrderMaster} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col gap-3">
+              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5 text-[#1e3a8a]" /> Create New Work Order Master
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Holiday Date *</label>
-                  <DatePickerDMY
-                    required
-                    value={holidayDate}
-                    onChange={(val) => setHolidayDate(val)}
-                  />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block font-bold text-slate-700 mb-1">Holiday Name *</label>
+                  <label className="block font-semibold text-slate-700 mb-1">Work Order No *</label>
                   <input
                     type="text"
                     required
-                    value={holidayName}
-                    onChange={(e) => setHolidayName(e.target.value)}
-                    placeholder="e.g. Independence Day, Rajyotsava, Gandhi Jayanti"
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
+                    value={woNumber}
+                    onChange={(e) => setWoNumber(e.target.value.toUpperCase())}
+                    placeholder="e.g. WO/2026/01"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono font-bold uppercase"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Holiday Type</label>
-                  <select
-                    value={holidayType}
-                    onChange={(e) => setHolidayType(e.target.value)}
-                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-semibold"
-                  >
-                    <option value="GOVT_HOLIDAY">Govt Holiday</option>
-                    <option value="FESTIVAL_HOLIDAY">Festival Holiday</option>
-                    <option value="COMPANY_HOLIDAY">Company Holiday</option>
-                  </select>
+                  <label className="block font-semibold text-slate-700 mb-1">Division * (Type or Select)</label>
+                  <input
+                    type="text"
+                    required
+                    list="wo-create-divisions-datalist"
+                    value={woDivisionId}
+                    onChange={(e) => setWoDivisionId(e.target.value)}
+                    placeholder="Type division (e.g. KPCL)..."
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-semibold bg-white"
+                  />
+                  <datalist id="wo-create-divisions-datalist">
+                    {divisions.filter(d => (d.type || 'PO_CLIENT') === 'PO_CLIENT' && d.isActive !== false).map((d) => (
+                      <option key={d.id} value={d.name}>{d.name}</option>
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Work Order Date *</label>
+                  <DatePickerDMY
+                    required
+                    value={woDate}
+                    onChange={(val) => setWoDate(val)}
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Contract Amount (₹)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={woAmount}
+                    onChange={(e) => setWoAmount(e.target.value)}
+                    placeholder="Auto or enter amount"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none font-mono font-bold bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Remarks</label>
+                  <input
+                    type="text"
+                    value={woRemarks}
+                    onChange={(e) => setWoRemarks(e.target.value)}
+                    placeholder="Contract notes..."
+                    className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a] outline-none"
+                  />
                 </div>
               </div>
-
               <div className="flex justify-end">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold rounded-lg text-xs shadow disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  <span>🏛️</span> Declare Holiday
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{loading ? 'Creating...' : 'Create Work Order'}</span>
                 </button>
               </div>
             </form>
           )}
 
-          <div className="overflow-x-auto border border-slate-200 rounded-lg">
+          {/* FILTER & SEARCH BAR */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-600">Status:</span>
+              {(['ACTIVE', 'INACTIVE', 'ALL'] as const).map(st => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setWoStatusFilter(st)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                    woStatusFilter === st 
+                      ? 'bg-[#1e3a8a] text-white shadow-xs' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {st === 'ACTIVE' ? '🟢 Active' : st === 'INACTIVE' ? '🔴 Inactive' : 'All'}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search work orders, division..."
+                value={woSearch}
+                onChange={(e) => setWoSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-400 outline-none uppercase font-mono"
+              />
+            </div>
+          </div>
+
+          {/* WORK ORDERS MASTER TABLE */}
+          <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
             <table className="w-full text-left text-xs excel-table">
               <thead>
                 <tr>
-                  <th>Holiday Date</th>
-                  <th>Holiday Name</th>
-                  <th>Category</th>
-                  <th>Declared By</th>
+                  <th>Work Order No</th>
+                  <th>Division</th>
+                  <th>Order Date</th>
+                  <th className="text-right">WO Amount</th>
+                  <th>Remarks</th>
                   <th>Status</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {holidays.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-400">
-                      No holidays declared yet for this calendar year.
-                    </td>
-                  </tr>
-                ) : (
-                  holidays.map((h) => (
-                    <tr key={h.id} className="hover:bg-amber-50/30">
-                      <td className="font-mono font-bold text-[#1e3a8a]">
-                        {new Date(h.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td className="font-bold text-slate-800 flex items-center gap-1.5 py-2">
-                        <span>🏛️</span> {h.name}
-                      </td>
-                      <td>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                          {h.type?.replace('_', ' ') || 'GOVT HOLIDAY'}
-                        </span>
-                      </td>
-                      <td className="text-slate-600">{h.addedByName || 'Owner/Manager'}</td>
-                      <td>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Paid Holiday
-                        </span>
-                      </td>
-                      <td>
-                        {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                {(() => {
+                  let filtered = [...workOrderMasters];
+                  if (woStatusFilter === 'ACTIVE') filtered = filtered.filter(w => w.isActive !== false);
+                  if (woStatusFilter === 'INACTIVE') filtered = filtered.filter(w => w.isActive === false);
+                  if (woSearch.trim()) {
+                    const q = woSearch.trim().toLowerCase();
+                    filtered = filtered.filter(w => 
+                      (w.workOrderNumber || '').toLowerCase().includes(q) ||
+                      (w.divisionName || '').toLowerCase().includes(q) ||
+                      (w.remarks || '').toLowerCase().includes(q)
+                    );
+                  }
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-400">
+                          No work orders match the selected filters.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.map((wo) => {
+                    const isActive = wo.isActive !== false;
+                    return (
+                      <tr key={wo.id} className={!isActive ? 'bg-slate-50/80 opacity-75' : 'hover:bg-blue-50/30'}>
+                        <td className="font-mono font-bold text-[#1e3a8a]">
+                          {wo.workOrderNumber}
+                        </td>
+                        <td className="font-semibold text-slate-800">
+                          {wo.divisionName || 'General'}
+                        </td>
+                        <td className="font-mono text-slate-600">
+                          {new Date(wo.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                        </td>
+                        <td className="font-mono font-bold text-right text-slate-900">
+                          ₹{Math.round(wo.amount || 0).toLocaleString('en-IN')}
+                        </td>
+                        <td className="text-slate-600 max-w-xs truncate" title={wo.remarks || ''}>
+                          {wo.remarks ? (
+                            <span className="text-slate-800 text-[11px]">{wo.remarks}</span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">-</span>
+                          )}
+                        </td>
+                        <td>
                           <button
-                            onClick={() => handleDeleteHoliday(h.id, h.name)}
-                            className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded transition-colors"
-                            title="Remove Holiday"
+                            type="button"
+                            onClick={() => handleToggleWOMasterActive(wo.id, wo.workOrderNumber, isActive)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                              isActive 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200' 
+                                : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                            }`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            {isActive ? '🟢 Active' : '🔴 Inactive'}
                           </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-                )}
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingWOMaster(wo);
+                                setEditWONumber(wo.workOrderNumber);
+                                setEditWODivisionId(wo.divisionName || wo.divisionId || '');
+                                setEditWODate(wo.date ? new Date(wo.date).toISOString().split('T')[0] : '');
+                                setEditWOAmount(String(wo.amount || ''));
+                                setEditWORemarks(wo.remarks || '');
+                                setEditWOActive(wo.isActive !== false);
+                              }}
+                              className="p-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                              title="Edit Work Order Master"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteWorkOrderMaster(wo.id, wo.workOrderNumber)}
+                                className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded transition-colors"
+                                title="Delete Work Order Master"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* --- TAB 6: LOCATIONS MASTER --- */}
+      {activeSubTab === 'locations' && (
+        <div className="space-y-4 animate-fadeIn">
+          {/* EDIT LOCATION MODAL */}
+          {editingLocation && (
+            <div className="fixed inset-0 bg-black/60 z-[99999] flex items-start sm:items-center justify-center py-4 sm:py-8 p-2 sm:p-4 overflow-y-auto backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 w-full max-w-lg animate-fadeIn my-auto max-h-[92vh] flex flex-col">
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+                  <h3 className="text-sm sm:text-base font-bold text-slate-800 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#1e3a8a]" />
+                    <span>Edit Location Master</span>
+                  </h3>
+                  <button onClick={() => setEditingLocation(null)} className="text-slate-400 hover:text-slate-700 text-xl font-bold p-1">×</button>
+                </div>
+
+                <form onSubmit={handleUpdateLocation} className="space-y-3.5 text-xs overflow-y-auto pr-1">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Location Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editLocationName}
+                      onChange={(e) => setEditLocationName(e.target.value)}
+                      placeholder="e.g. Main Yard, Store RTPS, Godown 1"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Code / Short Code</label>
+                    <input
+                      type="text"
+                      value={editLocationCode}
+                      onChange={(e) => setEditLocationCode(e.target.value.toUpperCase())}
+                      placeholder="e.g. MY-01, RTPS-STR"
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-mono uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Description / Address</label>
+                    <input
+                      type="text"
+                      value={editLocationDescription}
+                      onChange={(e) => setEditLocationDescription(e.target.value)}
+                      placeholder="Warehouse details, site location, racks..."
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">Status *</label>
+                    <select
+                      value={editLocationActive ? 'ACTIVE' : 'INACTIVE'}
+                      onChange={(e) => setEditLocationActive(e.target.value === 'ACTIVE')}
+                      className="w-full p-2 border border-slate-300 rounded focus:border-[#1e3a8a] focus:ring-1 focus:ring-[#1e3a8a]/20 outline-none font-bold bg-white"
+                    >
+                      <option value="ACTIVE">🟢 ACTIVE (Selectable in stock entry)</option>
+                      <option value="INACTIVE">🔴 INACTIVE (Hidden from selection)</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 shrink-0 sticky bottom-0 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setEditingLocation(null)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg shadow disabled:opacity-50"
+                    >
+                      {loading ? 'Saving...' : 'Update Location'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* HEADER BANNER */}
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-gradient-to-r from-emerald-800 to-teal-900 text-white p-4 rounded-xl shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/10 rounded-lg flex items-center justify-center">
+                <MapPin className="w-5 h-5 text-emerald-200" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base">Physical Locations & Storage Master</h3>
+                <p className="text-xs text-emerald-200">
+                  Manage physical stock yards, site warehouses, and storage locations used across Inward Purchases, Sales, and Stock Summary.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 bg-white/15 text-white font-bold text-xs rounded-lg">
+                {locations.length} Locations
+              </span>
+            </div>
+          </div>
+
+          {/* CREATE LOCATION FORM */}
+          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+            <form onSubmit={handleCreateLocation} className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col gap-3">
+              <h4 className="font-bold text-xs text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5 text-emerald-600" /> Add New Physical Location / Yard
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Location Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={locationName}
+                    onChange={(e) => setLocationName(e.target.value)}
+                    placeholder="e.g. Main Yard, Site Store RTPS, Godown 1"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Code / Short Code</label>
+                  <input
+                    type="text"
+                    value={locationCode}
+                    onChange={(e) => setLocationCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. MY-01, STR-RTPS"
+                    className="w-full p-2 border border-slate-300 rounded focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-mono uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Description / Notes</label>
+                  <input
+                    type="text"
+                    value={locationDescription}
+                    onChange={(e) => setLocationDescription(e.target.value)}
+                    placeholder="Yard capacity, address, racks..."
+                    className="w-full p-2 border border-slate-300 rounded focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-lg text-xs shadow disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{loading ? 'Adding...' : 'Add Location'}</span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* SEARCH BAR */}
+          <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200">
+            <div className="relative flex-1 sm:max-w-xs">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search locations..."
+                value={locationSearch}
+                onChange={(e) => setLocationSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+              />
+            </div>
+            <div className="text-xs text-slate-500 font-semibold">
+              Total: <strong className="text-slate-800">{locations.length}</strong> location(s)
+            </div>
+          </div>
+
+          {/* LOCATIONS TABLE */}
+          <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white shadow-xs">
+            <table className="w-full text-left text-xs excel-table">
+              <thead>
+                <tr>
+                  <th>Location Name</th>
+                  <th>Code</th>
+                  <th>Description / Address</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  let filtered = [...locations];
+                  if (locationSearch.trim()) {
+                    const q = locationSearch.trim().toLowerCase();
+                    filtered = filtered.filter(loc => 
+                      (loc.name || '').toLowerCase().includes(q) ||
+                      (loc.code || '').toLowerCase().includes(q) ||
+                      (loc.description || '').toLowerCase().includes(q)
+                    );
+                  }
+
+                  if (filtered.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={5} className="p-8 text-center text-slate-400">
+                          No physical locations registered yet. Add your first storage location above.
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filtered.map((loc) => {
+                    const isActive = loc.isActive !== false;
+                    return (
+                      <tr key={loc.id} className={!isActive ? 'bg-slate-50/80 opacity-75' : 'hover:bg-emerald-50/30'}>
+                        <td className="font-bold text-slate-900 flex items-center gap-1.5 py-2">
+                          <MapPin className="w-3.5 h-3.5 text-emerald-700" />
+                          <span>{loc.name}</span>
+                        </td>
+                        <td className="font-mono font-semibold text-slate-700">
+                          {loc.code || '-'}
+                        </td>
+                        <td className="text-slate-600">
+                          {loc.description || '-'}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleLocationActive(loc.id, loc.name, isActive)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-all ${
+                              isActive 
+                                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200' 
+                                : 'bg-rose-100 text-rose-800 border border-rose-300 hover:bg-rose-200'
+                            }`}
+                          >
+                            {isActive ? '🟢 Active' : '🔴 Inactive'}
+                          </button>
+                        </td>
+                        <td>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingLocation(loc);
+                                setEditLocationName(loc.name);
+                                setEditLocationCode(loc.code || '');
+                                setEditLocationDescription(loc.description || '');
+                                setEditLocationActive(loc.isActive !== false);
+                              }}
+                              className="p-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded transition-colors"
+                              title="Edit Location"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLocation(loc.id, loc.name)}
+                                className="p-1 text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded transition-colors"
+                                title="Delete Location"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

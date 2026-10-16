@@ -1,0 +1,18 @@
+{
+  "name": "sri-krishna-constructions",
+  "version": "1.0.0",
+  "description": "Enterprise ERP & Payroll Management Platform for Sri Krishna Constructions",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "build:client": "npm run build --prefix client",
+    "build": "npm run build --prefix client",
+    "start": "node server/src/server.js"
+  }
+}

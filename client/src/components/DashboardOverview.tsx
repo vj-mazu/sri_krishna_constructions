@@ -59,10 +59,45 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
     inactiveWorkersWithAdvance: [] as InactiveWorkerWithAdvance[]
   });
   const [loading, setLoading] = useState(true);
+  const [selectedPendingPo, setSelectedPendingPo] = useState<string | 'ALL'>('ALL');
+  const [showPendingDetails, setShowPendingDetails] = useState(true);
 
   const formatCurrency = (val: number) => {
     return '₹' + Math.round(val || 0).toLocaleString('en-IN');
   };
+
+  const groupedPendingPos = React.useMemo(() => {
+    const map = new Map<string, {
+      poNumber: string;
+      divisionName: string;
+      items: PendingOrder[];
+      totalPendingQty: number;
+      totalOrderedQty: number;
+      totalInwardQty: number;
+    }>();
+
+    (stats.pendingOrders || []).forEach(item => {
+      const poNum = item.poNumber || 'UNKNOWN';
+      let grp = map.get(poNum);
+      if (!grp) {
+        grp = {
+          poNumber: poNum,
+          divisionName: item.divisionName || 'General',
+          items: [],
+          totalPendingQty: 0,
+          totalOrderedQty: 0,
+          totalInwardQty: 0
+        };
+        map.set(poNum, grp);
+      }
+      grp.items.push(item);
+      grp.totalPendingQty += Number(item.pendingQty || 0);
+      grp.totalOrderedQty += Number(item.orderedQty || 0);
+      grp.totalInwardQty += Number(item.inwardQty || 0);
+    });
+
+    return Array.from(map.values());
+  }, [stats.pendingOrders]);
 
   const fetchDailyStats = async () => {
     setLoading(true);
@@ -391,52 +426,158 @@ export const DashboardOverview: React.FC<DashboardProps> = ({ onSelectTab }) => 
         </div>
 
         {stats.pendingOrders && stats.pendingOrders.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
-                  <th className="p-2.5">PO Number</th>
-                  <th className="p-2.5">Item & Specs</th>
-                  <th className="p-2.5 text-center">Unit</th>
-                  <th className="p-2.5 text-right">Ordered Qty</th>
-                  <th className="p-2.5 text-right">Inward Qty</th>
-                  <th className="p-2.5 text-right text-rose-700">Pending Deficit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {stats.pendingOrders.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="p-2.5 font-bold text-[#1e3a8a] whitespace-nowrap">
-                      {item.poNumber || 'N/A'}
-                      {item.divisionName && (
-                        <div className="text-[10px] text-slate-400 font-normal">{item.divisionName}</div>
-                      )}
-                    </td>
-                    <td className="p-2.5 text-slate-800 font-semibold">
-                      <div>{item.itemName}</div>
-                      {(item.partNumber || item.kpclCode) && (
-                        <div className="text-[10px] text-slate-400 font-mono">
-                          {item.partNumber ? `Part: ${item.partNumber}` : ''}{' '}
-                          {item.kpclCode ? `KPCL: ${item.kpclCode}` : ''}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-2.5 text-center font-bold text-slate-500">{item.unit || 'NOS'}</td>
-                    <td className="p-2.5 text-right font-mono font-bold text-slate-700">
-                      {Number(item.orderedQty || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td className="p-2.5 text-right font-mono font-bold text-emerald-600">
-                      {Number(item.inwardQty || 0).toLocaleString('en-IN')}
-                    </td>
-                    <td className="p-2.5 text-right font-mono font-black text-rose-600">
-                      <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full">
-                        {Number(item.pendingQty || 0).toLocaleString('en-IN')} Pending
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-4">
+            {/* TOP SUMMARY CARDS / PILLS PER PO NUMBER */}
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2 flex items-center justify-between">
+                <span>Summary by Purchase Order (Click PO to view details)</span>
+                <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-mono font-bold">
+                  {groupedPendingPos.length} POs with Pending Items
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5">
+                {/* ALL POS CARD */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedPendingPo('ALL');
+                    setShowPendingDetails(true);
+                  }}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    selectedPendingPo === 'ALL'
+                      ? 'bg-blue-50/80 border-[#1e3a8a] ring-2 ring-[#1e3a8a]/20 shadow-xs'
+                      : 'bg-slate-50 hover:bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-slate-900">All Pending POs</span>
+                    <span className="font-mono text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.5 rounded font-bold">
+                      {stats.pendingOrders.length} Items
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-rose-700 font-bold font-mono mt-1">
+                    {stats.pendingOrders.reduce((sum, it) => sum + (Number(it.pendingQty) || 0), 0).toLocaleString('en-IN')} Units Total Deficit
+                  </div>
+                </button>
+
+                {/* INDIVIDUAL PO PILLS */}
+                {groupedPendingPos.map((grp) => {
+                  const isSelected = selectedPendingPo === grp.poNumber;
+                  return (
+                    <button
+                      key={grp.poNumber}
+                      type="button"
+                      onClick={() => {
+                        setSelectedPendingPo(grp.poNumber);
+                        setShowPendingDetails(true);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-[#1e3a8a] text-white border-[#1e3a8a] shadow-md ring-2 ring-[#1e3a8a]/30'
+                          : 'bg-white hover:bg-slate-50 border-slate-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <span className={`font-black font-mono text-xs uppercase ${isSelected ? 'text-white' : 'text-[#1e3a8a]'}`}>
+                          {grp.poNumber}
+                        </span>
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${isSelected ? 'bg-white/20 text-sky-100' : 'bg-slate-100 text-slate-600'}`}>
+                          {grp.divisionName}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className={`text-[11px] font-bold ${isSelected ? 'text-white' : 'text-slate-800'}`}>
+                          {grp.items.length} {grp.items.length === 1 ? 'Item' : 'Items'} Pending
+                        </span>
+                        <span className={`font-mono font-bold text-xs ${isSelected ? 'text-rose-200' : 'text-rose-600'}`}>
+                          {Math.round(grp.totalPendingQty).toLocaleString('en-IN')} Units
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* DETAILS SECTION HEADER & TOGGLE */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-slate-700">
+                  {selectedPendingPo === 'ALL' 
+                    ? `Showing All Deficit Items (${stats.pendingOrders.length})` 
+                    : `Showing Deficit Items for PO: ${selectedPendingPo}`}
+                </span>
+                {selectedPendingPo !== 'ALL' && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPendingPo('ALL')}
+                    className="text-[10px] text-blue-600 hover:underline font-semibold"
+                  >
+                    (Show All)
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPendingDetails(!showPendingDetails)}
+                className="text-xs font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1 rounded-lg transition-colors"
+              >
+                {showPendingDetails ? '▲ Hide Details' : '▼ Show Details'}
+              </button>
+            </div>
+
+            {/* DETAILS TABLE */}
+            {showPendingDetails && (
+              <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-xs animate-fadeIn">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                      <th className="p-2.5">PO Number</th>
+                      <th className="p-2.5">Item &amp; Specs</th>
+                      <th className="p-2.5 text-center">Unit</th>
+                      <th className="p-2.5 text-right">Ordered Qty</th>
+                      <th className="p-2.5 text-right">Inward Qty</th>
+                      <th className="p-2.5 text-right text-rose-700">Pending Deficit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stats.pendingOrders
+                      .filter(item => selectedPendingPo === 'ALL' || item.poNumber === selectedPendingPo)
+                      .map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="p-2.5 font-bold text-[#1e3a8a] whitespace-nowrap">
+                            {item.poNumber || 'N/A'}
+                            {item.divisionName && (
+                              <div className="text-[10px] text-slate-400 font-normal">{item.divisionName}</div>
+                            )}
+                          </td>
+                          <td className="p-2.5 text-slate-800 font-semibold">
+                            <div>{item.itemName}</div>
+                            {(item.partNumber || item.kpclCode) && (
+                              <div className="text-[10px] text-slate-400 font-mono">
+                                {item.partNumber ? `Part: ${item.partNumber}` : ''}{' '}
+                                {item.kpclCode ? `KPCL: ${item.kpclCode}` : ''}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-2.5 text-center font-bold text-slate-500">{item.unit || 'NOS'}</td>
+                          <td className="p-2.5 text-right font-mono font-bold text-slate-700">
+                            {Number(item.orderedQty || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold text-emerald-600">
+                            {Number(item.inwardQty || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-black text-rose-600">
+                            <span className="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-full">
+                              {Number(item.pendingQty || 0).toLocaleString('en-IN')} Pending
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         ) : (
           <div className="text-center py-6 text-slate-400 text-xs">

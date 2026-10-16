@@ -23,7 +23,11 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Calendar,
-  Truck
+  Truck,
+  ArrowLeft,
+  ExternalLink,
+  Briefcase,
+  IndianRupee
 } from 'lucide-react';
 import { SaleInvoiceModal } from './SaleInvoiceModal';
 import { DatePickerDMY } from './DatePickerDMY';
@@ -32,6 +36,8 @@ interface WorkOrderItem {
   id: string;
   workOrderNumber: string;
   workOrderDate: string;
+  division?: string;
+  divisionName?: string;
   invoiceNumber: string;
   invoiceDate: string;
   partyName: string;
@@ -72,6 +78,7 @@ interface InvoiceItemRow {
   unit: string;
   qty: string;
   rate: string;
+  amount?: string;
 }
 
 interface WorkOrdersProps {
@@ -85,10 +92,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  // Work Order Detail Selection (PO-Style drilldown)
+  const [selectedWorkOrder, setSelectedWorkOrder] = useState<any | null>(null);
+  const [statusFilter, setStatusFilter] = useState<'ACTIVE' | 'INACTIVE' | 'ALL'>('ACTIVE');
+  const [divisionFilter, setDivisionFilter] = useState<string>('ALL');
+
   // Pagination & Sorting state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('ASC');
+  const [sortOrder, setSortOrder] = useState<'DESC' | 'ASC'>('DESC');
 
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -100,16 +112,47 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   const [selectedWorkOrderIds, setSelectedWorkOrderIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [nextInvoiceLoading, setNextInvoiceLoading] = useState(false);
+  const [divisions, setDivisions] = useState<any[]>([]);
+  const [woMasters, setWoMasters] = useState<any[]>([]);
+
+  // Remarks Modal State (Matching PO Remarks Modal)
+  const [woRemarksModal, setWoRemarksModal] = useState<any | null>(null);
+  const [woRemarksText, setWoRemarksText] = useState('');
+  const [savingRemarks, setSavingRemarks] = useState(false);
+
+  // PO-Style Item Entry Form State (Matching PO Add Item Form)
+  const [showAddItemForm, setShowAddItemForm] = useState(false);
+  const [itemForm, setItemForm] = useState({
+    kpclCode: '',
+    itemName: '',
+    partNumber: '',
+    make: '',
+    hsnCode: '',
+    unit: 'NOS',
+    specifications: '',
+    qty: 1,
+    rate: 0,
+    cgstPercent: 9,
+    sgstPercent: 9,
+    igstPercent: 0,
+    discount: 0,
+    freight: 0,
+    pAndF: 0,
+    insurance: 0
+  });
 
   // Direct Interactive Invoice Form State
   const initialInvoiceHeader = {
     workOrderNumber: '',
     workOrderDate: new Date().toISOString().slice(0, 10),
+    division: '',
     invoiceNumber: '',
     invoiceDate: new Date().toISOString().slice(0, 10),
     partyName: '',
     partyAddress: '',
     partyGstNumber: '',
+    stateOfSupply: 'KARNATAKA',
+    placeOfWork: '',
     companyName: 'Sri Krishna Constructions',
     companyGstNumber: '29DWKPP3582H1ZV',
     vehicleNumber: '',
@@ -131,7 +174,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       partNumber: '',
       unit: '',
       qty: '1',
-      rate: ''
+      rate: '',
+      amount: ''
     }
   ]);
 
@@ -162,7 +206,26 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     remarks: ''
   });
 
-  const fetchWorkOrders = useCallback(async () => {
+    const fetchAuxData = async () => {
+    try {
+      const [divRes, womRes] = await Promise.allSettled([
+        api.get('/divisions'),
+        api.get('/work-order-masters', { params: { activeOnly: false } })
+      ]);
+      if (divRes.status === 'fulfilled') {
+        const divs = divRes.value.data?.divisions || (Array.isArray(divRes.value.data) ? divRes.value.data : []);
+        setDivisions(divs);
+      }
+      if (womRes.status === 'fulfilled') {
+        const masters = womRes.value.data?.workOrderMasters || (Array.isArray(womRes.value.data) ? womRes.value.data : []);
+        setWoMasters(masters);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch aux data for work orders:', e);
+    }
+  };
+
+const fetchWorkOrders = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get('/work-orders');
@@ -176,6 +239,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
   useEffect(() => {
     fetchWorkOrders();
+    fetchAuxData();
   }, [fetchWorkOrders]);
 
   useEffect(() => {
@@ -184,6 +248,12 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
   const filteredWorkOrders = React.useMemo(() => {
     let result = [...workOrders];
+
+    // If a specific Work Order is clicked/opened, filter strictly to its line items
+    if (selectedWorkOrder) {
+      const targetWoNum = (selectedWorkOrder.workOrderNumber || '').trim().toUpperCase();
+      result = result.filter(w => (w.workOrderNumber || '').trim().toUpperCase() === targetWoNum);
+    }
 
     if (searchTerm.trim()) {
       const q = searchTerm.trim().toLowerCase();
@@ -233,7 +303,158 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     });
 
     return result;
-  }, [workOrders, searchTerm, dateFrom, dateTo, sortOrder]);
+  }, [workOrders, selectedWorkOrder, searchTerm, dateFrom, dateTo, sortOrder]);
+
+  // Master Work Orders List (Aggregated from WorkOrderMaster + direct WorkOrders)
+  const masterWorkOrdersList = React.useMemo(() => {
+    const map = new Map<string, any>();
+
+    // 1. Seed from woMasters
+    woMasters.forEach((m: any) => {
+      const cleanNum = (m.workOrderNumber || '').trim().toUpperCase();
+      if (!cleanNum) return;
+      map.set(cleanNum, {
+        id: m.id,
+        workOrderNumber: cleanNum,
+        divisionId: m.divisionId,
+        divisionName: m.divisionName || m.division?.name || '',
+        date: m.date,
+        amount: Number(m.amount) || 0,
+        remarks: m.remarks || '',
+        isActive: m.isActive !== false,
+        items: [] as WorkOrderItem[],
+        invoices: new Set<string>(),
+        billedAmount: Number(m.billedAmount) || 0
+      });
+    });
+
+    // 2. Link line items from workOrders
+    workOrders.forEach((wo: WorkOrderItem) => {
+      const rawWo = (wo.workOrderNumber || '').trim().toUpperCase();
+      const cleanWo = rawWo && rawWo !== '-' && rawWo !== 'N/A' ? rawWo : 'DIRECT_SALES';
+      let entry = map.get(cleanWo);
+      if (!entry) {
+        entry = {
+          id: `auto_${cleanWo}`,
+          workOrderNumber: cleanWo,
+          divisionId: (wo as any).divisionId,
+          divisionName: (wo as any).divisionName || (wo as any).division?.name || (wo as any).division || '',
+          date: wo.workOrderDate || wo.invoiceDate,
+          amount: 0,
+          remarks: wo.remarks || '',
+          isActive: true,
+          items: [] as WorkOrderItem[],
+          invoices: new Set<string>(),
+          billedAmount: 0
+        };
+        map.set(cleanWo, entry);
+      }
+      entry.items.push(wo);
+      const invNum = (wo.invoiceNumber || '').trim().toUpperCase();
+      if (invNum && invNum !== '-') {
+        entry.invoices.add(invNum);
+      }
+    });
+
+    // 3. Finalize totals and balances
+    return Array.from(map.values()).map(w => {
+      const calculatedBilled = w.items.reduce((sum: number, it: any) => sum + (Number(it.totalAmount) || 0), 0);
+      const finalBilled = calculatedBilled > 0 ? calculatedBilled : w.billedAmount;
+      const finalAmount = w.amount > 0 ? w.amount : finalBilled;
+      const balance = Math.max(0, finalAmount - finalBilled);
+      return {
+        ...w,
+        billedAmount: finalBilled,
+        amount: finalAmount,
+        balance,
+        invoiceCount: w.invoices.size,
+        itemCount: w.items.length
+      };
+    });
+  }, [woMasters, workOrders]);
+
+  const filteredMasterWorkOrders = React.useMemo(() => {
+    let list = [...masterWorkOrdersList];
+
+    if (statusFilter !== 'ALL') {
+      list = list.filter(w => statusFilter === 'ACTIVE' ? w.isActive !== false : w.isActive === false);
+    }
+
+    if (divisionFilter !== 'ALL') {
+      list = list.filter(w => (w.divisionName || '').toLowerCase() === divisionFilter.toLowerCase());
+    }
+
+    if (searchTerm.trim()) {
+      const q = searchTerm.trim().toLowerCase();
+      list = list.filter(w => {
+        const woNum = (w.workOrderNumber || '').toLowerCase();
+        const divName = (w.divisionName || '').toLowerCase();
+        const rem = (w.remarks || '').toLowerCase();
+        const hasItemMatch = w.items.some((it: any) => 
+          (it.itemName || '').toLowerCase().includes(q) ||
+          (it.partNumber || '').toLowerCase().includes(q) ||
+          (it.partyName || '').toLowerCase().includes(q) ||
+          (it.invoiceNumber || '').toLowerCase().includes(q)
+        );
+        return woNum.includes(q) || divName.includes(q) || rem.includes(q) || hasItemMatch;
+      });
+    }
+
+    if (dateFrom) {
+      const fromD = new Date(dateFrom);
+      fromD.setHours(0, 0, 0, 0);
+      list = list.filter(w => {
+        if (!w.date) return false;
+        const d = new Date(w.date);
+        d.setHours(0, 0, 0, 0);
+        return d >= fromD;
+      });
+    }
+
+    if (dateTo) {
+      const toD = new Date(dateTo);
+      toD.setHours(23, 59, 59, 999);
+      list = list.filter(w => {
+        if (!w.date) return false;
+        const d = new Date(w.date);
+        return d <= toD;
+      });
+    }
+
+    list.sort((a, b) => {
+      const timeA = new Date(a.date || 0).getTime();
+      const timeB = new Date(b.date || 0).getTime();
+      return sortOrder === 'ASC' ? timeA - timeB : timeB - timeA;
+    });
+
+    return list;
+  }, [masterWorkOrdersList, statusFilter, divisionFilter, searchTerm, dateFrom, dateTo, sortOrder]);
+
+  const currentSelectedWo = React.useMemo(() => {
+    if (!selectedWorkOrder) return null;
+    const cleanNum = (selectedWorkOrder.workOrderNumber || '').trim().toUpperCase();
+    return masterWorkOrdersList.find(m => m.workOrderNumber.toUpperCase() === cleanNum) || selectedWorkOrder;
+  }, [selectedWorkOrder, masterWorkOrdersList]);
+
+  const distinctDivisions = React.useMemo(() => {
+    const set = new Set<string>();
+    masterWorkOrdersList.forEach(w => {
+      if (w.divisionName && w.divisionName.trim()) set.add(w.divisionName.trim());
+    });
+    divisions.forEach((d: any) => {
+      if (d.name && d.name.trim()) set.add(d.name.trim());
+    });
+    return Array.from(set).sort();
+  }, [masterWorkOrdersList, divisions]);
+
+  const masterKpis = React.useMemo(() => {
+    const totalOrders = masterWorkOrdersList.length;
+    const totalContract = masterWorkOrdersList.reduce((acc, w) => acc + (Number(w.amount) || 0), 0);
+    const totalBilled = masterWorkOrdersList.reduce((acc, w) => acc + (Number(w.billedAmount) || 0), 0);
+    const totalAmount = totalBilled > 0 ? totalBilled : totalContract;
+    const totalBalance = Math.max(0, totalContract - totalBilled);
+    return { totalOrders, totalContract, totalBilled, totalAmount, totalBalance };
+  }, [masterWorkOrdersList]);
 
   // Group work orders by invoice number (or work order number) into distinct containers
   const groupedWorkOrdersList = React.useMemo(() => {
@@ -243,6 +464,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       invoiceDate: string;
       workOrderNumber: string;
       workOrderDate: string;
+      division?: string;
       partyName: string;
       partyAddress: string;
       partyGstNumber: string;
@@ -285,6 +507,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           invoiceDate: wo.invoiceDate,
           workOrderNumber: cleanWo || wo.workOrderNumber || '-',
           workOrderDate: wo.workOrderDate,
+          division: (wo as any).divisionName || (wo as any).division?.name || (wo as any).division || '',
           partyName: wo.partyName || '-',
           partyAddress: wo.partyAddress || '',
           partyGstNumber: wo.partyGstNumber || '',
@@ -401,8 +624,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     let basicTotal = 0;
     const computedRows = invoiceItems.map(item => {
       const q = parseFloat(item.qty) || 0;
-      const r = parseFloat(item.rate) || 0;
-      const amt = Math.round((q * r + Number.EPSILON) * 100) / 100;
+      let r = parseFloat(item.rate) || 0;
+      let amt = parseFloat(item.amount || '0') || 0;
+      if (amt === 0 && q > 0 && r > 0) {
+        amt = Math.round((q * r + Number.EPSILON) * 100) / 100;
+      } else if (r === 0 && q > 0 && amt > 0) {
+        r = Math.round(((amt / q) + Number.EPSILON) * 100) / 100;
+      } else if (q > 0 && r > 0 && (!item.amount || item.amount.trim() === '')) {
+        amt = Math.round((q * r + Number.EPSILON) * 100) / 100;
+      }
       basicTotal += amt;
       return { ...item, computedAmount: amt };
     });
@@ -435,7 +665,161 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     };
   }, [invoiceItems, invoiceHeader]);
 
-  const handleOpenAdd = async () => {
+  // Real-time breakdown calculation (Matching PO calculation)
+  const calculateBreakdown = (
+    qty: number,
+    rate: number,
+    cgstPercent: number,
+    sgstPercent: number,
+    igstPercent: number,
+    discount: number,
+    freight: number,
+    pAndF: number,
+    insurance: number
+  ) => {
+    const basicAmount = Math.max(0, qty * rate);
+    const taxable = Math.max(0, basicAmount - (discount || 0) + (freight || 0) + (pAndF || 0) + (insurance || 0));
+    const cgstAmount = Math.round((taxable * ((cgstPercent || 0) / 100) + Number.EPSILON) * 100) / 100;
+    const sgstAmount = Math.round((taxable * ((sgstPercent || 0) / 100) + Number.EPSILON) * 100) / 100;
+    const igstAmount = Math.round((taxable * ((igstPercent || 0) / 100) + Number.EPSILON) * 100) / 100;
+    const totalTax = cgstAmount + sgstAmount + igstAmount;
+    const totalAmount = Math.round((taxable + totalTax + Number.EPSILON) * 100) / 100;
+    return { 
+      basicAmount, 
+      taxable, 
+      cgstAmount, 
+      sgstAmount, 
+      igstAmount, 
+      totalTax, 
+      totalAmount,
+      discount: discount || 0,
+      freight: freight || 0,
+      pAndF: pAndF || 0,
+      insurance: insurance || 0
+    };
+  };
+
+  // Save Item to Work Order using PO-style Form
+  const handleSaveItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const finalItemName = itemForm.itemName ? itemForm.itemName.trim() : '';
+    const finalSpecs = itemForm.specifications ? itemForm.specifications.trim() : '';
+    const finalPart = itemForm.partNumber ? itemForm.partNumber.trim().toUpperCase() : '';
+
+    if (!finalItemName && !finalSpecs && !finalPart) {
+      showToast('Please enter an Item Name or Specification', 'error');
+      return;
+    }
+    if ((itemForm.qty || 0) <= 0) {
+      showToast('Quantity must be greater than 0', 'error');
+      return;
+    }
+    if ((itemForm.rate || 0) < 0) {
+      showToast('Unit Rate cannot be negative', 'error');
+      return;
+    }
+
+    const woObj = currentSelectedWo || selectedWorkOrder;
+    if (!woObj) {
+      showToast('Work Order is not selected', 'error');
+      return;
+    }
+
+    let invNo = '';
+    try {
+      const res = await api.get('/sales/next-invoice-number');
+      invNo = res.data?.nextInvoiceNumber || `WO-${Date.now().toString().slice(-6)}`;
+    } catch {
+      invNo = `WO-${Date.now().toString().slice(-6)}`;
+    }
+
+    const payload = {
+      workOrderNumber: woObj.workOrderNumber,
+      workOrderDate: woObj.date ? new Date(woObj.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      division: woObj.divisionName || woObj.division || 'General',
+      invoiceNumber: invNo,
+      invoiceDate: new Date().toISOString().slice(0, 10),
+      partyName: woObj.divisionName || 'KPCL / Client',
+      partyAddress: woObj.partyAddress || '',
+      partyGstNumber: woObj.partyGstNumber || '',
+      companyName: 'Sri Krishna Constructions',
+      companyGstNumber: '29DWKPP3582H1ZV',
+      cgstPercent: itemForm.cgstPercent,
+      sgstPercent: itemForm.sgstPercent,
+      igstPercent: itemForm.igstPercent,
+      shippingCharges: itemForm.freight || 0,
+      remarks: woObj.remarks || '',
+      items: [
+        {
+          kpclCode: itemForm.kpclCode || '-',
+          itemName: finalItemName,
+          description: finalSpecs,
+          partNumber: finalPart,
+          unit: itemForm.unit || 'NOS',
+          qty: itemForm.qty,
+          rate: itemForm.rate
+        }
+      ]
+    };
+
+    try {
+      setSubmitting(true);
+      const res = await api.post('/work-orders', payload);
+      showToast(res.data?.message || `Item registered under ${woObj.workOrderNumber}!`, 'success');
+      setShowAddItemForm(false);
+      fetchWorkOrders();
+      fetchAuxData();
+      window.dispatchEvent(new Event('skc-approvals-updated'));
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to save item to work order', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Save Remarks on Work Order
+  const handleSaveWoRemarks = async () => {
+    if (!woRemarksModal) return;
+    try {
+      setSavingRemarks(true);
+      if (woRemarksModal.id) {
+        await api.put(`/work-orders/master/${woRemarksModal.id}`, {
+          remarks: woRemarksText
+        });
+      }
+      showToast('Work Order remarks updated successfully!', 'success');
+      setWoRemarksModal(null);
+      fetchWorkOrders();
+      fetchAuxData();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to update remarks', 'error');
+    } finally {
+      setSavingRemarks(false);
+    }
+  };
+
+  // Delete Work Order
+  const handleDeleteWorkOrder = async (id: string, woNum: string) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Work Order',
+      message: `Are you sure you want to delete work order '${woNum}'?`,
+      confirmText: 'Delete',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+    try {
+      if (id) {
+        await api.delete(`/work-order-masters/${id}`);
+      }
+      showToast(`Work Order '${woNum}' deleted successfully.`, 'success');
+      fetchWorkOrders();
+      fetchAuxData();
+    } catch (err: any) {
+      showToast(err.response?.data?.error || 'Failed to delete work order', 'error');
+    }
+  };
+
+  const handleOpenAdd = async (targetWo?: any) => {
     setIsEditingInvoice(false);
     setOriginalEditingInvoiceNo(null);
     setEditItem(null);
@@ -452,9 +836,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       setNextInvoiceLoading(false);
     }
 
+    const woObj = targetWo || currentSelectedWo || selectedWorkOrder;
+
     setInvoiceHeader({
       ...initialInvoiceHeader,
-      invoiceNumber: nextInv || ''
+      invoiceNumber: nextInv || '',
+      workOrderNumber: woObj ? woObj.workOrderNumber : '',
+      division: woObj ? (woObj.divisionName || woObj.division || '') : '',
+      workOrderDate: woObj && woObj.date ? new Date(woObj.date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10)
     });
 
     setInvoiceItems([
@@ -483,7 +872,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         partNumber: '',
         unit: '',
         qty: '1',
-        rate: ''
+        rate: '',
+        amount: ''
       }
     ]);
   };
@@ -497,7 +887,32 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
   };
 
   const handleItemRowChange = (id: string, field: keyof InvoiceItemRow, value: string) => {
-    setInvoiceItems(prev => prev.map(it => it.id === id ? { ...it, [field]: value } : it));
+    setInvoiceItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const updated = { ...it, [field]: value };
+      
+      const q = parseFloat(field === 'qty' ? value : it.qty) || 0;
+      
+      if (field === 'qty') {
+        const r = parseFloat(it.rate) || 0;
+        if (r > 0 && q > 0) {
+          updated.amount = (Math.round((q * r + Number.EPSILON) * 100) / 100).toString();
+        } else if (parseFloat(it.amount || '0') > 0 && q > 0) {
+          updated.rate = (Math.round(((parseFloat(it.amount || '0') / q) + Number.EPSILON) * 100) / 100).toString();
+        }
+      } else if (field === 'rate') {
+        const r = parseFloat(value) || 0;
+        if (q > 0) {
+          updated.amount = (Math.round((q * r + Number.EPSILON) * 100) / 100).toString();
+        }
+      } else if (field === 'amount') {
+        const amt = parseFloat(value) || 0;
+        if (q > 0) {
+          updated.rate = (Math.round(((amt / q) + Number.EPSILON) * 100) / 100).toString();
+        }
+      }
+      return updated;
+    }));
   };
 
   const handleOpenEdit = async (item: WorkOrderItem) => {
@@ -522,11 +937,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     setInvoiceHeader({
       workOrderNumber: first.workOrderNumber || item.workOrderNumber || '',
       workOrderDate: first.workOrderDate ? new Date(first.workOrderDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+      division: (first as any).divisionName || (first as any).division?.name || (first as any).division || (item as any).divisionName || '',
       invoiceNumber: first.invoiceNumber || targetInvNum || '',
       invoiceDate: first.invoiceDate ? new Date(first.invoiceDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
       partyName: first.partyName || item.partyName || '',
       partyAddress: first.partyAddress || item.partyAddress || '',
       partyGstNumber: first.partyGstNumber || (first as any).gstNumber || item.partyGstNumber || '',
+      stateOfSupply: (first as any).stateOfSupply || (item as any).stateOfSupply || 'KARNATAKA',
+      placeOfWork: (first as any).placeOfWork || (first as any).supplyTo || (item as any).placeOfWork || (item as any).supplyTo || '',
       companyName: first.companyName || item.companyName || 'Sri Krishna Constructions',
       companyGstNumber: first.companyGstNumber || item.companyGstNumber || '29DWKPP3582H1ZV',
       vehicleNumber: first.vehicleNumber || item.vehicleNumber || '',
@@ -546,7 +964,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       partNumber: m.partNumber || m.item?.partNumber || '',
       unit: m.unit || m.item?.unit || 'NOS',
       qty: (m.qty !== undefined ? m.qty : (m.quantity !== undefined ? m.quantity : 1)).toString(),
-      rate: (m.rate !== undefined ? m.rate : (m.unitPrice !== undefined ? m.unitPrice : 0)).toString()
+      rate: (m.rate !== undefined ? m.rate : (m.unitPrice !== undefined ? m.unitPrice : 0)).toString(),
+      amount: (m.basicAmount !== undefined ? m.basicAmount : (m.amount !== undefined ? m.amount : (Number(m.qty || 1) * Number(m.rate || 0)))).toString()
     }));
 
     setInvoiceItems(mapWoItems(matchingItems));
@@ -663,6 +1082,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       divisionName: (wo as any).divisionName || (wo as any).division?.name,
       companyName: wo.companyName,
       companyGstNumber: wo.companyGstNumber,
+      stateOfSupply: (wo as any).stateOfSupply || 'KARNATAKA',
+      placeOfWork: (wo as any).placeOfWork || (wo as any).supplyTo || '',
       quantity: wo.qty,
       unitPrice: wo.rate,
       cgstPercent: wo.cgstPercent,
@@ -670,8 +1091,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       igstPercent: wo.igstPercent,
       shippingCharges: wo.shippingCharges || 0,
       item: {
-        itemName: wo.itemName,
-        specifications: wo.description || 'Work Order Direct Sale',
+        itemName: wo.itemName || wo.description || (wo.partNumber ? `PART ${wo.partNumber}` : 'Work Order Item'),
+        specifications: wo.description || '',
         partNumber: wo.partNumber || '',
         kpclCode: wo.kpclCode || '-',
         unit: wo.unit || 'NOS'
@@ -698,19 +1119,24 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       return;
     }
 
-    const validItems = invoiceItems.filter(it => it.itemName.trim() !== '');
+    const validItems = invoiceItems.filter(it => 
+      (it.itemName && it.itemName.trim() !== '') || 
+      (it.description && it.description.trim() !== '') || 
+      (it.partNumber && it.partNumber.trim() !== '')
+    );
     if (validItems.length === 0) {
-      showToast('Please add at least one item description / name', 'error');
+      showToast('Please add at least one item or specification', 'error');
       return;
     }
 
     for (const it of validItems) {
+      const itLabel = it.itemName.trim() || it.description.trim() || it.partNumber.trim() || 'Item';
       if ((parseFloat(it.qty) || 0) <= 0) {
-        showToast(`Quantity for "${it.itemName}" must be greater than 0`, 'error');
+        showToast(`Quantity for "${itLabel}" must be greater than 0`, 'error');
         return;
       }
       if ((parseFloat(it.rate) || 0) < 0) {
-        showToast(`Rate for "${it.itemName}" cannot be negative`, 'error');
+        showToast(`Rate for "${itLabel}" cannot be negative`, 'error');
         return;
       }
     }
@@ -718,12 +1144,15 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
     const payload = {
       workOrderNumber: invoiceHeader.workOrderNumber.trim().toUpperCase(),
       workOrderDate: invoiceHeader.workOrderDate,
+      division: invoiceHeader.division ? invoiceHeader.division.trim() : '',
       invoiceNumber: invoiceHeader.invoiceNumber.trim().toUpperCase(),
       originalInvoiceNumber: originalEditingInvoiceNo || invoiceHeader.invoiceNumber.trim().toUpperCase(),
       invoiceDate: invoiceHeader.invoiceDate,
       partyName: invoiceHeader.partyName.trim(),
       partyAddress: invoiceHeader.partyAddress.trim(),
       partyGstNumber: invoiceHeader.partyGstNumber.trim().toUpperCase(),
+      stateOfSupply: (invoiceHeader.stateOfSupply || 'KARNATAKA').trim().toUpperCase(),
+      placeOfWork: (invoiceHeader.placeOfWork || '').trim(),
       companyName: invoiceHeader.companyName,
       companyGstNumber: invoiceHeader.companyGstNumber,
       vehicleNumber: invoiceHeader.vehicleNumber.trim().toUpperCase(),
@@ -733,16 +1162,24 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       sgstPercent: parseFloat(invoiceHeader.sgstPercent) || 0,
       igstPercent: parseFloat(invoiceHeader.igstPercent) || 0,
       shippingCharges: parseFloat(invoiceHeader.shippingCharges) || 0,
-      items: validItems.map(it => ({
-        id: it.id,
-        kpclCode: it.kpclCode || '-',
-        itemName: it.itemName.trim(),
-        description: it.description.trim(),
-        partNumber: it.partNumber.trim().toUpperCase(),
-        unit: it.unit || 'NOS',
-        qty: parseFloat(it.qty) || 0,
-        rate: parseFloat(it.rate) || 0
-      }))
+      items: validItems.map(it => {
+        const q = parseFloat(it.qty) || 0;
+        let r = parseFloat(it.rate) || 0;
+        const a = parseFloat(it.amount || '0') || 0;
+        if (r === 0 && q > 0 && a > 0) {
+          r = Math.round(((a / q) + Number.EPSILON) * 100) / 100;
+        }
+        return {
+          id: it.id,
+          kpclCode: it.kpclCode || '-',
+          itemName: it.itemName ? it.itemName.trim() : '',
+          description: it.description ? it.description.trim() : '',
+          partNumber: it.partNumber ? it.partNumber.trim().toUpperCase() : '',
+          unit: it.unit || 'NOS',
+          qty: q,
+          rate: r
+        };
+      })
     };
 
     if (isEditingInvoice && originalEditingInvoiceNo) {
@@ -754,6 +1191,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         setIsEditingInvoice(false);
         setOriginalEditingInvoiceNo(null);
         fetchWorkOrders();
+        fetchAuxData();
         window.dispatchEvent(new Event('skc-approvals-updated'));
         return;
       } catch (err: any) {
@@ -770,6 +1208,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
       showToast(res.data?.message || `Tax Invoice ${invoiceHeader.invoiceNumber} with ${validItems.length} items submitted for approval!`, 'success');
       setShowAddModal(false);
       fetchWorkOrders();
+      fetchAuxData();
       window.dispatchEvent(new Event('skc-approvals-updated'));
 
       if (openPdfDirectly) {
@@ -784,6 +1223,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           partyName: wo.partyName,
           partyAddress: wo.partyAddress,
           gstNumber: wo.partyGstNumber,
+          stateOfSupply: wo.stateOfSupply || invoiceHeader.stateOfSupply || 'KARNATAKA',
+          placeOfWork: wo.placeOfWork || invoiceHeader.placeOfWork || '',
           companyName: wo.companyName,
           companyGstNumber: wo.companyGstNumber,
           quantity: wo.qty,
@@ -793,8 +1234,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           igstPercent: wo.igstPercent,
           shippingCharges: wo.shippingCharges || 0,
           item: {
-            itemName: wo.itemName,
-            specifications: wo.description || 'Work Order Direct Sale',
+            itemName: wo.itemName || wo.description || (wo.partNumber ? `PART ${wo.partNumber}` : 'Work Order Item'),
+            specifications: wo.description || '',
             partNumber: wo.partNumber || '',
             kpclCode: wo.kpclCode || '-',
             unit: wo.unit || 'NOS'
@@ -858,167 +1299,791 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
 
   return (
     <div className="flex flex-col h-full space-y-4">
-      {/* 1. HEADER BANNER */}
-      <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0369a1] border border-blue-400/30 rounded-2xl shadow-lg p-4 text-white flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-[#1e3a8a] shadow-md shrink-0">
-            <FileSpreadsheet className="w-5 h-5 stroke-[2.5]" />
+      {/* ========================================================= */}
+      {/* VIEW 2: PO-STYLE DETAIL WORKSPACE (When selectedWorkOrder) */}
+      {/* ========================================================= */}
+      {selectedWorkOrder ? (
+        <div className="flex flex-col space-y-4 animate-fadeIn">
+          {/* 2.1 DETAIL HEADER BANNER */}
+          <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0284c7] rounded-xl sm:rounded-2xl shadow-lg p-3 sm:p-4 text-white flex flex-col md:flex-row md:items-center justify-between gap-3 sm:gap-4 border border-blue-400/30">
+            {/* Left: Circular Back Button + Title & Subtitle */}
+            <div className="flex items-center gap-2.5 sm:gap-3.5">
+              <button
+                type="button"
+                onClick={() => setSelectedWorkOrder(null)}
+                className="w-8 h-8 sm:w-11 sm:h-11 bg-white rounded-full flex items-center justify-center text-[#1e3a8a] shadow-md hover:scale-105 transition-all flex-shrink-0 cursor-pointer"
+                title="Back to Work Orders List"
+              >
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2.5]" />
+              </button>
+              <div>
+                <h1 className="text-sm sm:text-xl font-black text-white tracking-tight flex items-center gap-1.5 sm:gap-2">
+                  WO: <span className="font-mono text-sky-200">{currentSelectedWo?.workOrderNumber}</span>
+                </h1>
+                <p className="text-[10px] sm:text-xs text-blue-100 font-medium mt-0.5 flex items-center gap-1.5 sm:gap-2">
+                  <span>Division: <strong className="text-white font-bold">{currentSelectedWo?.divisionName || 'General'}</strong></span>
+                  <span>•</span>
+                  <span>Date: <strong className="text-white font-bold">{formatDate(currentSelectedWo?.date)}</strong></span>
+                  {currentSelectedWo?.remarks && (
+                    <>
+                      <span>•</span>
+                      <span className="italic opacity-90 truncate max-w-xs">{currentSelectedWo.remarks}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Clean White Pill Cards & Action */}
+            {(() => {
+              const liveAddingAmount = showAddItemForm
+                ? calculateBreakdown(
+                    itemForm.qty,
+                    itemForm.rate,
+                    itemForm.cgstPercent,
+                    itemForm.sgstPercent,
+                    itemForm.igstPercent,
+                    itemForm.discount,
+                    itemForm.freight,
+                    itemForm.pAndF,
+                    itemForm.insurance
+                  ).totalAmount
+                : 0;
+
+              const baseWoAmount = Number(currentSelectedWo?.billedAmount || currentSelectedWo?.amount || 0);
+              const liveDelta = liveAddingAmount;
+              const displayAmount = Math.max(0, baseWoAmount + liveDelta);
+
+              return (
+                <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
+                  <div className="bg-white text-slate-800 rounded-full px-4 py-2 shadow-md text-xs font-bold flex items-center gap-2">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Contract:</span>
+                    <span className="text-orange-600 font-black font-mono text-sm">
+                      {formatCurrency(currentSelectedWo?.amount)}
+                    </span>
+                  </div>
+
+                  <div className="bg-white text-slate-800 rounded-full px-4 py-2 shadow-md text-xs font-bold flex items-center gap-2">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Invoiced:</span>
+                    <span className="text-blue-700 font-black font-mono text-sm">
+                      {formatCurrency(currentSelectedWo?.billedAmount)}
+                    </span>
+                  </div>
+
+                  <div className="bg-white text-slate-800 rounded-full px-4 py-2 shadow-md text-xs font-bold flex items-center gap-2 transition-all">
+                    <span className="text-slate-400 font-semibold uppercase text-[10px] tracking-wider">Total Amount:</span>
+                    <span className="text-emerald-700 font-black font-mono text-sm">
+                      {formatCurrency(displayAmount)}
+                    </span>
+                    {liveDelta !== 0 && (
+                      <span className="bg-amber-100 text-amber-800 border border-amber-300 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold animate-pulse">
+                        {liveDelta > 0 ? `+${formatCurrency(liveDelta)}` : formatCurrency(liveDelta)} (Live)
+                      </span>
+                    )}
+                  </div>
+
+                  {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER' || currentUserRole === 'STAFF') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAddItemForm(!showAddItemForm);
+                        if (!showAddItemForm) {
+                          setItemForm({
+                            kpclCode: '',
+                            itemName: '',
+                            partNumber: '',
+                            make: '',
+                            hsnCode: '',
+                            unit: 'NOS',
+                            specifications: '',
+                            qty: 1,
+                            rate: 0,
+                            cgstPercent: 9,
+                            sgstPercent: 9,
+                            igstPercent: 0,
+                            discount: 0,
+                            freight: 0,
+                            pAndF: 0,
+                            insurance: 0
+                          });
+                        }
+                      }}
+                      className="bg-white text-[#1e3a8a] hover:bg-blue-50 rounded-full px-4 py-2 shadow-md text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer"
+                    >
+                      {showAddItemForm ? <Minus className="w-4 h-4 text-[#1e3a8a]" /> : <Plus className="w-4 h-4 text-[#1e3a8a] stroke-[3]" />}
+                      <span>{showAddItemForm ? 'Close Form' : '+ Add Item'}</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
-          <div>
-            <h1 className="text-base sm:text-xl font-black text-white tracking-tight uppercase">
-              Work Orders & Direct Sales
-            </h1>
-            <p className="text-xs text-blue-100 mt-0.5">
-              Direct billing jobs & sales contracts
-            </p>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-2 self-start md:self-auto">
-          <button
-            onClick={fetchWorkOrders}
-            disabled={loading}
-            className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors border border-white/20"
-            title="Refresh"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </button>
+          {/* PO-STYLE ITEM ENTRY FORM */}
+          {showAddItemForm && (
+            <form onSubmit={handleSaveItem} className="bg-white rounded-2xl border-2 border-slate-300 shadow-xl animate-fadeIn overflow-hidden">
+              <div className="flex items-center justify-between border-b border-slate-200 p-4 bg-slate-50">
+                <div>
+                  <h3 className="font-bold text-base text-slate-800">New Item Registration</h3>
+                  <p className="text-xs text-slate-500">Official Work Order specification, quantity and pricing entry</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-white border border-slate-200 text-[#1e3a8a] px-3 py-1 rounded-full text-xs font-bold font-mono">
+                    WO: {currentSelectedWo?.workOrderNumber}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddItemForm(false)}
+                    className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
 
-          <button
-            onClick={handleExportCSV}
-            disabled={workOrders.length === 0}
-            className="bg-white/10 hover:bg-white/20 text-white rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 transition-all border border-white/20 disabled:opacity-50"
-          >
-            <ArrowDownToLine className="w-4 h-4" /> Export CSV
-          </button>
+              <div className="p-5 space-y-4 text-xs">
+                {/* SECTION 1: ITEM IDENTIFICATION */}
+                <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-[#1e3a8a]" /> 1. Item Identification &amp; Specifications
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">KPCL Item Code</label>
+                      <input
+                        type="text"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none"
+                        value={itemForm.kpclCode}
+                        onChange={e => setItemForm({ ...itemForm, kpclCode: e.target.value.toUpperCase() })}
+                        placeholder="e.g. 635020311R"
+                      />
+                    </div>
 
-          {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER' || currentUserRole === 'STAFF') && (
-            <button
-              onClick={() => {
-                if (showAddModal) {
-                  setShowAddModal(false);
-                  setEditItem(null);
-                } else {
-                  handleOpenAdd();
-                }
-              }}
-              className="bg-white text-[#1e3a8a] hover:bg-blue-50 rounded-xl px-4 py-2 shadow-md text-xs font-black flex items-center gap-1.5 transition-all"
-            >
-              {showAddModal && !editItem ? <Minus className="w-4 h-4 stroke-[3]" /> : <Plus className="w-4 h-4 text-[#1e3a8a] stroke-[3]" />}
-              {showAddModal && !editItem ? 'Cancel Form' : '+ New Work Order Sale'}
-            </button>
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Item Name</label>
+                      <input
+                        type="text"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none"
+                        value={itemForm.itemName}
+                        onChange={e => setItemForm({ ...itemForm, itemName: e.target.value })}
+                        placeholder="e.g. VALVE HOLDER / FABRICATION WORK"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Part Number</label>
+                      <input
+                        type="text"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold uppercase focus:ring-2 focus:ring-[#1e3a8a]/20 focus:border-[#1e3a8a] outline-none"
+                        value={itemForm.partNumber}
+                        onChange={e => setItemForm({ ...itemForm, partNumber: e.target.value.toUpperCase() })}
+                        placeholder="e.g. AR-163 / WO-01"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Make / Model</label>
+                      <input
+                        type="text"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase focus:ring-2 focus:ring-orange-500 outline-none"
+                        value={itemForm.make}
+                        onChange={e => setItemForm({ ...itemForm, make: e.target.value })}
+                        placeholder="e.g. KIRLOSKAR / EQUIVALENT"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">HSN Code</label>
+                      <input
+                        type="text"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono uppercase focus:ring-2 focus:ring-orange-500 outline-none"
+                        value={itemForm.hsnCode}
+                        onChange={e => setItemForm({ ...itemForm, hsnCode: e.target.value })}
+                        placeholder="84149090"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Unit * (Pick or Type Custom)</label>
+                      <input
+                        required
+                        type="text"
+                        list="wo-item-units-list"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs uppercase font-bold focus:ring-2 focus:ring-orange-500 outline-none"
+                        value={itemForm.unit}
+                        onChange={e => setItemForm({ ...itemForm, unit: e.target.value.toUpperCase() })}
+                        placeholder="e.g. NOS, LUMPS, SET"
+                      />
+                      <datalist id="wo-item-units-list">
+                        <option value="NOS">NOS (Numbers)</option>
+                        <option value="LUMPS">LUMPS (Lumpsum / LS)</option>
+                        <option value="PCS">PCS (Pieces)</option>
+                        <option value="SET">SET (Set)</option>
+                        <option value="BOX">BOX (Box)</option>
+                        <option value="MTR">MTR (Meters)</option>
+                        <option value="KGS">KGS (Kilograms)</option>
+                        <option value="LTR">LTR (Liters)</option>
+                        <option value="SQM">SQM (Square Meters)</option>
+                        <option value="JOB">JOB (Job / Service)</option>
+                        <option value="HRS">HRS (Hours)</option>
+                      </datalist>
+                    </div>
+
+                    <div className="col-span-full">
+                      <label className="block font-bold text-slate-700 mb-1">Detailed Specifications (Multi-line text)</label>
+                      <textarea
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs h-16 font-mono focus:ring-2 focus:ring-orange-500 outline-none"
+                        value={itemForm.specifications}
+                        onChange={e => setItemForm({ ...itemForm, specifications: e.target.value })}
+                        placeholder="Description, material grade, scope of work, technical details..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 2: QUANTITY & PRICING */}
+                <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
+                    <IndianRupee className="w-3.5 h-3.5 text-emerald-600" /> 2. Quantity &amp; Base Pricing
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Quantity *</label>
+                      <input
+                        required
+                        type="number"
+                        step="any"
+                        min="0.001"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={itemForm.qty || ''}
+                        onChange={e => setItemForm({ ...itemForm, qty: parseFloat(e.target.value) || 0 })}
+                        placeholder="e.g. 10"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Unit Rate (₹) *</label>
+                      <input
+                        required
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={itemForm.rate || ''}
+                        onChange={e => setItemForm({ ...itemForm, rate: parseFloat(e.target.value) || 0 })}
+                        placeholder="e.g. 2500.00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Basic Total Amount (₹)</label>
+                      <input
+                        type="number"
+                        step="any"
+                        min="0"
+                        className="w-full p-2 bg-emerald-50/40 border border-emerald-300 rounded-lg text-xs font-mono font-bold text-emerald-950 focus:ring-2 focus:ring-emerald-500 outline-none"
+                        value={itemForm.qty && itemForm.rate ? Math.round((itemForm.qty * itemForm.rate + Number.EPSILON) * 100) / 100 : ''}
+                        onChange={e => {
+                          const amt = parseFloat(e.target.value) || 0;
+                          const q = itemForm.qty || 1;
+                          setItemForm({ ...itemForm, rate: q > 0 ? Math.round(((amt / q) + Number.EPSILON) * 100) / 100 : 0 });
+                        }}
+                        placeholder="0.00"
+                        title="Auto-calculated (Qty × Rate). You can also type Amount directly to auto-calculate Rate"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 3: TAXES & LOGISTICS */}
+                <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 mb-3 flex items-center gap-1.5">
+                    <Receipt className="w-3.5 h-3.5 text-[#1e3a8a]" /> 3. Taxes &amp; Logistics (Matches PO Structure)
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Discount (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.discount || ''}
+                        onChange={e => setItemForm({ ...itemForm, discount: parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Freight (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.freight || ''}
+                        onChange={e => setItemForm({ ...itemForm, freight: parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">P&amp;F (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.pAndF || ''}
+                        onChange={e => setItemForm({ ...itemForm, pAndF: parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Insurance (₹)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.insurance || ''}
+                        onChange={e => setItemForm({ ...itemForm, insurance: parseFloat(e.target.value) || 0 })}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">CGST %</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.cgstPercent}
+                        onChange={e => setItemForm({ ...itemForm, cgstPercent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">SGST %</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.sgstPercent}
+                        onChange={e => setItemForm({ ...itemForm, sgstPercent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">IGST %</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="w-full p-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold outline-none"
+                        value={itemForm.igstPercent}
+                        onChange={e => setItemForm({ ...itemForm, igstPercent: parseFloat(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* SECTION 4: REAL-TIME COMPUTED BREAKDOWN & ACTION */}
+                {(() => {
+                  const b = calculateBreakdown(
+                    itemForm.qty,
+                    itemForm.rate,
+                    itemForm.cgstPercent,
+                    itemForm.sgstPercent,
+                    itemForm.igstPercent,
+                    itemForm.discount,
+                    itemForm.freight,
+                    itemForm.pAndF,
+                    itemForm.insurance
+                  );
+                  return (
+                    <div className="bg-gradient-to-r from-slate-900 to-[#1e3a8a] p-4 rounded-xl text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg">
+                      <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono">
+                        <span className="text-white/80">Basic: <strong className="text-white font-bold">{formatCurrency(b.basicAmount)}</strong></span>
+                        {b.discount > 0 && <span className="text-rose-300 bg-white/10 px-2 py-0.5 rounded">Disc: -{formatCurrency(b.discount)}</span>}
+                        {b.freight > 0 && <span className="text-slate-300 bg-white/10 px-2 py-0.5 rounded">Freight: +{formatCurrency(b.freight)}</span>}
+                        {b.pAndF > 0 && <span className="text-slate-300 bg-white/10 px-2 py-0.5 rounded">P&amp;F: +{formatCurrency(b.pAndF)}</span>}
+                        {b.insurance > 0 && <span className="text-slate-300 bg-white/10 px-2 py-0.5 rounded">Ins: +{formatCurrency(b.insurance)}</span>}
+                        <span className="text-emerald-300 bg-white/10 px-2 py-0.5 rounded">Tax: +{formatCurrency(b.totalTax)}</span>
+                        <span className="text-amber-300 font-bold ml-2">Total: {formatCurrency(b.totalAmount)}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setShowAddItemForm(false)}
+                          className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          className="px-5 py-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black rounded-lg text-xs shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>{submitting ? 'Saving...' : 'Save Item to Work Order'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </form>
           )}
-        </div>
-      </div>
 
-      {/* 2. STATS KPI CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Work Orders</div>
-          <div className="text-lg font-black text-slate-900 font-mono mt-1">{workOrders.length} Orders</div>
-          <div className="text-[10px] text-slate-400 mt-0.5">Direct sales executed</div>
-        </div>
+          {/* 2.2 INSIDE SEARCH & TOOLBAR */}
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-2.5 items-center justify-between">
+            <div className="relative flex-1 min-w-[260px]">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs uppercase font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                placeholder="Search invoices, items, part number, party within this WO..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
+              />
+            </div>
 
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Total Units Dispatched</div>
-          <div className="text-lg font-black text-emerald-700 font-mono mt-1">{totalQty} Units</div>
-          <div className="text-[10px] text-slate-400 mt-0.5">Quantity delivered</div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-blue-700 font-bold uppercase tracking-wider">Work Order Turnover</div>
-          <div className="text-lg font-black text-blue-900 font-mono mt-1">{formatCurrency(totalValue)}</div>
-          <div className="text-[10px] text-slate-400 mt-0.5">Basic + GST Included</div>
-        </div>
-
-        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
-          <div className="text-[10px] text-purple-700 font-bold uppercase tracking-wider">Ledger Status</div>
-          <div className="flex items-center gap-1.5 mt-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="text-xs font-black text-slate-800">Master Ledger Linked</span>
-          </div>
-          <div className="text-[10px] text-slate-400 mt-0.5">Continuous Serial Sequencing</div>
-        </div>
-      </div>
-
-      {/* 3. SEARCH & FILTERS */}
-      <div className="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-2.5 items-center justify-between">
-        <div className="relative flex-1 min-w-[280px]">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs uppercase font-mono focus:ring-2 focus:ring-blue-400 outline-none"
-            placeholder="Search by Work Order No, Invoice No, Client Name, GSTIN, Part No..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          {selectedWorkOrderIds.length > 0 && (
-            <button
-              onClick={() => {
-                const chosen = workOrders
-                  .filter(w => selectedWorkOrderIds.includes(w.id))
-                  .map(wo => ({
-                    ...wo,
-                    sourceType: 'WORK_ORDER',
-                    workOrderNumber: wo.workOrderNumber,
-                    workOrderDate: wo.workOrderDate,
-                    poNumber: wo.workOrderNumber,
-                    poDate: wo.workOrderDate,
-                    partyName: wo.partyName,
-                    partyAddress: wo.partyAddress,
-                    gstNumber: wo.partyGstNumber,
-                    companyName: wo.companyName,
-                    companyGstNumber: wo.companyGstNumber,
-                    quantity: wo.qty,
-                    unitPrice: wo.rate,
-                    cgstPercent: wo.cgstPercent,
-                    sgstPercent: wo.sgstPercent,
-                    igstPercent: wo.igstPercent,
-                    shippingCharges: wo.shippingCharges || 0,
-                    item: {
-                      itemName: wo.itemName,
-                      specifications: wo.description || 'Work Order Direct Sale',
-                      partNumber: wo.partNumber || '',
-                      kpclCode: wo.kpclCode || '-',
-                      unit: wo.unit || 'NOS'
+            <div className="flex items-center gap-2">
+              {selectedWorkOrderIds.length > 0 && (
+                <button
+                  onClick={() => {
+                    const chosen = workOrders
+                      .filter(w => selectedWorkOrderIds.includes(w.id))
+                      .map(wo => ({
+                        ...wo,
+                        sourceType: 'WORK_ORDER',
+                        workOrderNumber: wo.workOrderNumber,
+                        workOrderDate: wo.workOrderDate,
+                        poNumber: wo.workOrderNumber,
+                        poDate: wo.workOrderDate,
+                        partyName: wo.partyName,
+                        partyAddress: wo.partyAddress,
+                        gstNumber: wo.partyGstNumber,
+                        stateOfSupply: (wo as any).stateOfSupply || 'KARNATAKA',
+                        placeOfWork: (wo as any).placeOfWork || (wo as any).supplyTo || '',
+                        companyName: wo.companyName,
+                        companyGstNumber: wo.companyGstNumber,
+                        quantity: wo.qty,
+                        unitPrice: wo.rate,
+                        cgstPercent: wo.cgstPercent,
+                        sgstPercent: wo.sgstPercent,
+                        igstPercent: wo.igstPercent,
+                        shippingCharges: wo.shippingCharges || 0,
+                        item: {
+                          itemName: wo.itemName || wo.description || (wo.partNumber ? `PART ${wo.partNumber}` : 'Work Order Item'),
+                          specifications: wo.description || '',
+                          partNumber: wo.partNumber || '',
+                          kpclCode: wo.kpclCode || '-',
+                          unit: wo.unit || 'NOS'
+                        }
+                      }));
+                    if (chosen.length > 0) {
+                      setSelectedForInvoice(chosen);
                     }
-                  }));
-                if (chosen.length > 0) {
-                  setSelectedForInvoice(chosen);
-                }
-              }}
-              className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md animate-pulse cursor-pointer transition-all"
-            >
-              <Receipt className="w-3.5 h-3.5" /> View &amp; Download Invoice ({selectedWorkOrderIds.length} Selected)
-            </button>
-          )}
+                  }}
+                  className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-md animate-pulse cursor-pointer transition-all"
+                >
+                  <Receipt className="w-3.5 h-3.5" /> View &amp; Download Invoice ({selectedWorkOrderIds.length} Selected)
+                </button>
+              )}
 
-          <input
-            type="date"
-            className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
-          <span className="text-xs text-slate-400">to</span>
-          <input
-            type="date"
-            className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-          />
-          {(searchTerm || dateFrom || dateTo) && (
-            <button
-              onClick={() => { setSearchTerm(''); setDateFrom(''); setDateTo(''); }}
-              className="px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-xl font-bold border border-rose-200"
-            >
-              Reset
-            </button>
-          )}
+              <input
+                type="date"
+                className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="date"
+                className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+              {(searchTerm || dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setSearchTerm(''); setDateFrom(''); setDateTo(''); }}
+                  className="px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-xl font-bold border border-rose-200 cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* ========================================================= */
+        /* VIEW 1: MASTER WORK ORDERS REGISTRY (When !selectedWorkOrder) */
+        /* ========================================================= */
+        <div className="flex flex-col space-y-4 animate-fadeIn">
+          {/* 1.1 HEADER BANNER */}
+          <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0369a1] border border-blue-400/30 rounded-2xl shadow-lg p-4 text-white flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-[#1e3a8a] shadow-md shrink-0">
+                <FileSpreadsheet className="w-5 h-5 stroke-[2.5]" />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/20 border border-white/30 text-white text-[10px] font-bold uppercase tracking-wider mb-1">
+                  Sales &amp; Execution
+                </div>
+                <h1 className="text-base sm:text-xl font-black text-white tracking-tight uppercase">
+                  Work Orders Master &amp; Direct Sales
+                </h1>
+                <p className="text-xs text-blue-100 mt-0.5">
+                  Track and manage work orders, contract amounts, billed values, and line items
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 self-start md:self-auto">
+              <button
+                onClick={() => { fetchWorkOrders(); fetchAuxData(); }}
+                disabled={loading}
+                className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors border border-white/20"
+                title="Refresh"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+              </button>
+
+              <button
+                onClick={handleExportCSV}
+                disabled={workOrders.length === 0}
+                className="bg-white/10 hover:bg-white/20 text-white rounded-xl px-3.5 py-2 text-xs font-bold flex items-center gap-1.5 transition-all border border-white/20 disabled:opacity-50"
+              >
+                <ArrowDownToLine className="w-4 h-4" /> Export CSV
+              </button>
+            </div>
+          </div>
+
+          {/* 1.2 STATS KPI CARDS */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Total Work Orders</div>
+              <div className="text-lg font-black text-slate-900 font-mono mt-1">{masterKpis.totalOrders} Contracts</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Active &amp; completed jobs</div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-[10px] text-orange-700 font-bold uppercase tracking-wider">Total Contract Value</div>
+              <div className="text-lg font-black text-orange-600 font-mono mt-1">{formatCurrency(masterKpis.totalContract)}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Allocated contract cap</div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-[10px] text-blue-700 font-bold uppercase tracking-wider">Total Invoiced (Billed)</div>
+              <div className="text-lg font-black text-blue-900 font-mono mt-1">{formatCurrency(masterKpis.totalBilled)}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Direct tax invoices executed</div>
+            </div>
+
+            <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+              <div className="text-[10px] text-emerald-700 font-bold uppercase tracking-wider">Total Amount</div>
+              <div className="text-lg font-black text-emerald-700 font-mono mt-1">{formatCurrency(masterKpis.totalAmount)}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">Total executed order value</div>
+            </div>
+          </div>
+
+          {/* 1.3 SEARCH & FILTERS TOOLBAR */}
+          <div className="bg-white p-3.5 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-2.5 items-center justify-between">
+            <div className="relative flex-1 min-w-[260px]">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                className="w-full pl-9 pr-3 py-1.5 border border-slate-300 rounded-xl text-xs uppercase font-mono focus:ring-2 focus:ring-blue-400 outline-none"
+                placeholder="Search by Work Order No, Division, Remarks, Invoice No, Item..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
+              />
+            </div>
+
+            {/* Division Filter Dropdown */}
+            <div className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={divisionFilter}
+                onChange={(e) => setDivisionFilter(e.target.value)}
+                className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs bg-white text-slate-800 font-semibold outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+              >
+                <option value="ALL">All Divisions ({masterWorkOrdersList.length})</option>
+                {distinctDivisions.map(d => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter Toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+              {(['ALL', 'ACTIVE', 'INACTIVE'] as const).map(st => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    statusFilter === st
+                      ? 'bg-[#1e3a8a] text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                  }`}
+                >
+                  {st === 'ALL' ? '📋 All' : st === 'ACTIVE' ? '🟢 Active' : '🔴 Inactive'}
+                </button>
+              ))}
+            </div>
+
+            {/* Date Filters */}
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+              <span className="text-xs text-slate-400">to</span>
+              <input
+                type="date"
+                className="px-2.5 py-1.5 border border-slate-300 rounded-xl text-xs outline-none bg-white font-mono"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+              {(searchTerm || divisionFilter !== 'ALL' || statusFilter !== 'ALL' || dateFrom || dateTo) && (
+                <button
+                  onClick={() => { setSearchTerm(''); setDivisionFilter('ALL'); setStatusFilter('ALL'); setDateFrom(''); setDateTo(''); }}
+                  className="px-2.5 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-xl font-bold border border-rose-200 cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 1.4 MASTER WORK ORDERS TABLE */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+            <div className="overflow-x-auto">
+              <table className="excel-table w-full text-xs text-left">
+                <thead>
+                  <tr>
+                    <th className="text-center w-12 bg-sky-950 text-sky-200 font-bold border-r border-sky-800">SL NO</th>
+                    <th>Work Order Number</th>
+                    <th>Division</th>
+                    <th>Date</th>
+                    <th className="text-right">Contract Amount</th>
+                    <th className="text-right">Billed Amount</th>
+                    <th className="text-right">Total Amount</th>
+                    <th className="text-center">Invoices &amp; Items</th>
+                    <th className="text-center">Status</th>
+                    <th>Remarks</th>
+                    <th className="text-center min-w-[140px]">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={11} className="p-12 text-center text-slate-500 font-semibold text-xs">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
+                        Loading work orders registry...
+                      </td>
+                    </tr>
+                  ) : filteredMasterWorkOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="p-12 text-center text-slate-400 text-xs">
+                        No work orders found matching the selected filters.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredMasterWorkOrders.map((wo, index) => {
+                      const isActive = wo.isActive !== false;
+                      return (
+                        <tr key={wo.id || wo.workOrderNumber} className="border-b border-slate-200 hover:bg-blue-50/40 transition-colors">
+                          <td className="text-center font-mono font-bold bg-slate-100 text-[#1e3a8a] border-r border-slate-300">{index + 1}</td>
+                          <td>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedWorkOrder(wo)}
+                              className="text-[#1e3a8a] hover:text-[#1e40af] font-mono font-bold text-xs underline flex items-center gap-1.5 cursor-pointer group"
+                              title="Click to view inside this Work Order"
+                            >
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600 group-hover:scale-110 transition-transform" />
+                              <span>{wo.workOrderNumber}</span>
+                            </button>
+                          </td>
+                          <td>
+                            <span className="px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold text-[11px]">
+                              {wo.divisionName || 'General'}
+                            </span>
+                          </td>
+                          <td className="font-mono text-slate-700">{formatDate(wo.date)}</td>
+                          <td className="text-right font-mono font-bold text-slate-900">{formatCurrency(wo.amount)}</td>
+                          <td className="text-right font-mono font-bold text-blue-700">{formatCurrency(wo.billedAmount)}</td>
+                          <td className="text-right font-mono font-bold">
+                            <span className="text-emerald-700 font-bold">
+                              {formatCurrency(wo.billedAmount || wo.amount)}
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <span className="bg-slate-100 text-slate-800 py-0.5 px-2 rounded-full text-[10px] font-bold">
+                              {wo.invoiceCount} Invoices • {wo.itemCount} Items
+                            </span>
+                          </td>
+                          <td className="text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              isActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-rose-100 text-rose-800 border border-rose-300'
+                            }`}>
+                              {isActive ? '🟢 Active' : '🔴 Inactive'}
+                            </span>
+                          </td>
+                          <td className="text-slate-600 max-w-xs truncate" title={wo.remarks || ''}>
+                            {wo.remarks ? (
+                              <span className="text-slate-800 text-[11px]">{wo.remarks}</span>
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">-</span>
+                            )}
+                          </td>
+                          <td className="text-center">
+                            <div className="flex justify-center items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWoRemarksModal(wo);
+                                  setWoRemarksText(wo.remarks || '');
+                                }}
+                                className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded font-semibold text-[10px] flex items-center gap-1 transition-colors cursor-pointer"
+                                title="View / Edit Work Order Remarks"
+                              >
+                                <FileText className="w-3 h-3" /> Remarks
+                              </button>
+                              {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER') && wo.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteWorkOrder(wo.id, wo.workOrderNumber)}
+                                  className="p-1.5 text-rose-500 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+                                  title="Delete Work Order"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 1.5 FOOTER COUNT */}
+            <div className="p-3.5 border-t border-slate-200 flex justify-between items-center bg-slate-50 text-xs text-slate-600">
+              <div>
+                Total Work Orders: <strong className="text-slate-900">{filteredMasterWorkOrders.length}</strong> of <strong className="text-[#1e3a8a]">{masterWorkOrdersList.length}</strong>
+              </div>
+              <div className="text-[11px] text-slate-500">
+                Click any Work Order number to manage its line items &amp; invoices
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 4. DIRECT INTERACTIVE TAX INVOICE CREATOR (NEW WORK ORDER SALE MODAL) */}
       {showAddModal && !isEditingInvoice && (
@@ -1070,7 +2135,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">
                       Tax Invoice No * {nextInvoiceLoading && <span className="text-blue-600 animate-pulse">(Auto...)</span>}
@@ -1101,10 +2166,36 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     <input
                       type="text"
                       required
+                      list="wo-masters-datalist"
                       placeholder="e.g. WO/2026/001"
                       value={invoiceHeader.workOrderNumber}
-                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, workOrderNumber: e.target.value.toUpperCase() })}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        const matchedMaster = woMasters.find((m: any) => (m.workOrderNumber || '').trim().toUpperCase() === val.trim());
+                        if (matchedMaster) {
+                          setInvoiceHeader(prev => ({
+                            ...prev,
+                            workOrderNumber: val,
+                            division: matchedMaster.division?.name || matchedMaster.divisionName || prev.division,
+                            workOrderDate: matchedMaster.date ? new Date(matchedMaster.date).toISOString().slice(0, 10) : prev.workOrderDate
+                          }));
+                        } else {
+                          setInvoiceHeader(prev => ({ ...prev, workOrderNumber: val }));
+                        }
+                      }}
                       className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Division (Manual / Select)</label>
+                    <input
+                      type="text"
+                      list="wo-divisions-datalist"
+                      placeholder="e.g. O&M, Coal Handling..."
+                      value={invoiceHeader.division || ''}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, division: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                     />
                   </div>
 
@@ -1191,6 +2282,29 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                     />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">State of Supply</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. KARNATAKA"
+                      value={invoiceHeader.stateOfSupply || 'KARNATAKA'}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, stateOfSupply: e.target.value.toUpperCase() })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">SUPPLY To (Site / Location / Delivery Ref)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. BTPS, KPCL, KUDATINI (Optional)"
+                      value={invoiceHeader.placeOfWork || ''}
+                      onChange={(e) => setInvoiceHeader({ ...invoiceHeader, placeOfWork: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* SECTION 3: MULTI-ITEM TAX INVOICE TABLE */}
@@ -1245,7 +2359,6 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           <td className="p-1.5">
                             <input
                               type="text"
-                              required
                               placeholder="e.g. Fabrication and Erection Structure Work"
                               value={row.itemName}
                               onChange={(e) => handleItemRowChange(row.id, 'itemName', e.target.value)}
@@ -1322,8 +2435,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                               className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
                             />
                           </td>
-                          <td className="p-2 text-right font-mono font-bold text-slate-900 bg-slate-50">
-                            {formatCurrency(row.computedAmount)}
+                          <td className="p-1.5">
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              placeholder="0.00"
+                              value={row.amount !== undefined && row.amount !== '' ? row.amount : (row.computedAmount > 0 ? row.computedAmount : '')}
+                              onChange={(e) => handleItemRowChange(row.id, 'amount', e.target.value)}
+                              className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500 bg-emerald-50/40 text-emerald-950"
+                              title="Auto-calculated (Qty × Rate). You can also type Amount directly to auto-calculate Rate!"
+                            />
                           </td>
                           <td className="p-1.5 text-center">
                             <button
@@ -1492,19 +2614,37 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
         </div>
       )}
 
-      {/* 5. WORK ORDERS GROUPED CONTAINERS (ONE CONTAINER PER WORK ORDER / INVOICE) */}
-      <div className="space-y-6">
-        {loading ? (
-          <div className="bg-white rounded-2xl border-2 border-slate-200 p-12 text-center text-slate-400 font-semibold text-xs shadow-sm">
-            <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
-            Loading work orders...
-          </div>
-        ) : paginatedGroupedWorkOrders.length === 0 ? (
-          <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center text-slate-400 text-xs shadow-sm">
-            No work orders match the selected filters.
-          </div>
-        ) : (
-          paginatedGroupedWorkOrders.map((grp, grpIdx) => {
+      {/* ========================================================= */}
+      {/* 5. WORK ORDERS GROUPED CONTAINERS & PAGINATION (INSIDE WO) */}
+      {/* ========================================================= */}
+      {selectedWorkOrder && (
+        <>
+          <div className="space-y-6">
+            {loading ? (
+              <div className="bg-white rounded-2xl border-2 border-slate-200 p-12 text-center text-slate-400 font-semibold text-xs shadow-sm">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
+                Loading tax invoices for this work order...
+              </div>
+            ) : paginatedGroupedWorkOrders.length === 0 ? (
+              <div className="bg-white rounded-2xl border-2 border-dashed border-slate-300 p-12 text-center text-slate-500 text-xs shadow-sm space-y-3">
+                <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto" />
+                <div className="font-bold text-slate-700 text-sm">No Tax Invoices Recorded Under This Work Order</div>
+                <p className="text-slate-400 max-w-md mx-auto">
+                  Click the button below to generate your first tax invoice and add line items for Work Order <span className="font-mono font-bold text-slate-700">{currentSelectedWo?.workOrderNumber}</span>.
+                </p>
+                {(currentUserRole === 'OWNER' || currentUserRole === 'MANAGER' || currentUserRole === 'STAFF') && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenAdd(currentSelectedWo)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white rounded-xl text-xs font-bold shadow transition-all cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>+ Create First Tax Invoice / Add Items</span>
+                  </button>
+                )}
+              </div>
+            ) : (
+              paginatedGroupedWorkOrders.map((grp, grpIdx) => {
             const grpItemIds = grp.items.map(wo => wo.id);
             const isAllGrpSelected = grpItemIds.length > 0 && grpItemIds.every(id => selectedWorkOrderIds.includes(id));
             const isSomeGrpSelected = grpItemIds.some(id => selectedWorkOrderIds.includes(id));
@@ -1548,6 +2688,14 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                       <FileSpreadsheet className="w-3.5 h-3.5 text-blue-200" />
                       <span>WO: {grp.workOrderNumber}</span>
                     </div>
+
+                    {/* Division Pill */}
+                    {(grp.division || grp.items[0]?.divisionName || grp.items[0]?.division) && (
+                      <div className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-900 font-bold text-xs flex items-center gap-1 shadow-2xs">
+                        <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Div: {grp.division || grp.items[0]?.divisionName || grp.items[0]?.division}</span>
+                      </div>
+                    )}
 
                     {/* Invoice Number Pill */}
                     {grp.invoiceNumber && grp.invoiceNumber !== '-' && (
@@ -1771,7 +2919,7 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                           <div>
                             <label className="block text-[11px] font-bold text-slate-700 mb-1">Tax Invoice No *</label>
                             <input
@@ -1798,10 +2946,36 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                             <input
                               type="text"
                               required
+                              list="wo-masters-datalist"
                               placeholder="e.g. WO/2026/001"
                               value={invoiceHeader.workOrderNumber}
-                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, workOrderNumber: e.target.value.toUpperCase() })}
+                              onChange={(e) => {
+                                const val = e.target.value.toUpperCase();
+                                const matchedMaster = woMasters.find((m: any) => (m.workOrderNumber || '').trim().toUpperCase() === val.trim());
+                                if (matchedMaster) {
+                                  setInvoiceHeader(prev => ({
+                                    ...prev,
+                                    workOrderNumber: val,
+                                    division: matchedMaster.division?.name || matchedMaster.divisionName || prev.division,
+                                    workOrderDate: matchedMaster.date ? new Date(matchedMaster.date).toISOString().slice(0, 10) : prev.workOrderDate
+                                  }));
+                                } else {
+                                  setInvoiceHeader(prev => ({ ...prev, workOrderNumber: val }));
+                                }
+                              }}
                               className="w-full p-2 bg-white border border-slate-300 rounded-lg font-mono font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">Division (Manual / Select)</label>
+                            <input
+                              type="text"
+                              list="wo-divisions-datalist"
+                              placeholder="e.g. O&M, Coal Handling..."
+                              value={invoiceHeader.division || ''}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, division: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold focus:ring-2 focus:ring-blue-400 outline-none text-xs"
                             />
                           </div>
 
@@ -1888,6 +3062,29 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                             />
                           </div>
                         </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-slate-200/60">
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">State of Supply</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. KARNATAKA"
+                              value={invoiceHeader.stateOfSupply || 'KARNATAKA'}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, stateOfSupply: e.target.value.toUpperCase() })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg font-bold uppercase focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">SUPPLY To (Site / Location / Delivery Ref)</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. BTPS, KPCL, KUDATINI (Optional)"
+                              value={invoiceHeader.placeOfWork || ''}
+                              onChange={(e) => setInvoiceHeader({ ...invoiceHeader, placeOfWork: e.target.value })}
+                              className="w-full p-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none text-xs"
+                            />
+                          </div>
+                        </div>
                       </div>
 
                       {/* SECTION 3: MULTI-ITEM TAX INVOICE TABLE */}
@@ -1942,7 +3139,6 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                                   <td className="p-1.5">
                                     <input
                                       type="text"
-                                      required
                                       placeholder="e.g. Fabrication and Erection Structure Work"
                                       value={row.itemName}
                                       onChange={(e) => handleItemRowChange(row.id, 'itemName', e.target.value)}
@@ -2019,8 +3215,17 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
                                       className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500"
                                     />
                                   </td>
-                                  <td className="p-2 text-right font-mono font-bold text-slate-900 bg-slate-50">
-                                    {formatCurrency(row.computedAmount)}
+                                  <td className="p-1.5">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      placeholder="0.00"
+                                      value={row.amount !== undefined && row.amount !== '' ? row.amount : (row.computedAmount > 0 ? row.computedAmount : '')}
+                                      onChange={(e) => handleItemRowChange(row.id, 'amount', e.target.value)}
+                                      className="w-full p-1.5 border border-slate-300 rounded font-mono font-bold text-right text-xs outline-none focus:border-blue-500 bg-emerald-50/40 text-emerald-950"
+                                      title="Auto-calculated (Qty × Rate). You can also type Amount directly to auto-calculate Rate!"
+                                    />
                                   </td>
                                   <td className="p-1.5 text-center">
                                     <button
@@ -2241,6 +3446,8 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
             </button>
           </div>
         </div>
+        </>
+      )}
 
       {/* 5. EDIT WORK ORDER MODAL (Replaced by multi-item invoice modal above) */}
       {false && (
@@ -2726,6 +3933,81 @@ export const WorkOrders: React.FC<WorkOrdersProps> = ({ currentUserRole = 'OWNER
           onClose={() => setSelectedForInvoice(null)}
         />
       )}
-    </div>
+
+      {/* 8. WORK ORDER REMARKS MODAL (Matching PO Remarks Modal) */}
+      {woRemarksModal && (
+        <div 
+          className="fixed inset-0 z-[99999] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn"
+          onClick={(e) => { if (e.target === e.currentTarget) setWoRemarksModal(null); }}
+        >
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col animate-fadeIn">
+            <div className="bg-gradient-to-r from-[#1e3a8a] via-[#1e40af] to-[#0284c7] text-white px-5 py-3.5 flex justify-between items-center">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-amber-300" />
+                <div>
+                  <h3 className="font-bold text-sm text-white">Work Order Remarks</h3>
+                  <p className="text-[11px] text-blue-100 font-mono">WO: {woRemarksModal.workOrderNumber}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWoRemarksModal(null)}
+                className="text-white/80 hover:text-white p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <label className="block text-xs font-bold text-slate-700">Remarks / Contract Notes</label>
+              <textarea
+                rows={4}
+                value={woRemarksText}
+                onChange={(e) => setWoRemarksText(e.target.value)}
+                placeholder="Enter remarks, notes, or execution terms for this work order..."
+                className="w-full p-3 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-[#1e3a8a] outline-none"
+              />
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setWoRemarksModal(null)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-lg text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingRemarks}
+                onClick={handleSaveWoRemarks}
+                className="px-5 py-2 bg-[#1e3a8a] hover:bg-[#1e40af] text-white font-bold rounded-lg text-xs shadow disabled:opacity-50 cursor-pointer"
+              >
+                {savingRemarks ? 'Saving...' : 'Save Remarks'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    
+
+      {/* ACTIVE DIVISIONS AUTO-SUGGESTION DATALIST */}
+      <datalist id="wo-divisions-datalist">
+        {divisions.map((div: any) => (
+          <option key={div.id} value={div.name}>
+            {div.name}
+          </option>
+        ))}
+      </datalist>
+
+      {/* WORK ORDER MASTERS AUTO-SUGGESTION DATALIST */}
+      <datalist id="wo-masters-datalist">
+        {woMasters.map((m: any) => (
+          <option key={m.id} value={m.workOrderNumber}>
+            {m.division?.name ? `[${m.division.name}] ` : ''}{m.workOrderNumber} (₹{m.amount || 0})
+          </option>
+        ))}
+      </datalist>
+</div>
   );
 };

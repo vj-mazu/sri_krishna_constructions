@@ -29,6 +29,7 @@ interface StockItem {
   make: string;
   hsnCode: string;
   unit: string;
+  location?: string;
   orderedQty: number;
   totalPurchased: number;
   totalSold: number;
@@ -41,6 +42,7 @@ export const StockGrid: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [poMap, setPoMap] = useState<Record<string, string>>({});
+  const [locationsList, setLocationsList] = useState<string[]>([]);
   
   const [stockTypeFilter] = useState<'PO'>('PO');
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,11 +50,12 @@ export const StockGrid: React.FC = () => {
   const [partNumberFilter, setPartNumberFilter] = useState('');
   const [kpclCodeFilter, setKpclCodeFilter] = useState('');
   const [makeFilter, setMakeFilter] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
   const [stockStatusFilter, setStockStatusFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  // Fetch PO map for client-side fallback linking
+  // Fetch PO map and locations for filtering and autocomplete
   useEffect(() => {
     api.get('/purchase-orders', { params: { limit: 200 } }).then((res) => {
       const map: Record<string, string> = {};
@@ -63,6 +66,11 @@ export const StockGrid: React.FC = () => {
       });
       setPoMap(map);
     }).catch(() => {});
+
+    api.get('/locations').then((res) => {
+      const locs = (res.data.locations || []).map((l: any) => l.name).filter(Boolean);
+      setLocationsList(locs);
+    }).catch(() => {});
   }, []);
 
   const debouncedSearch = useDebounce(searchTerm, 300);
@@ -70,6 +78,7 @@ export const StockGrid: React.FC = () => {
   const debouncedPartNumber = useDebounce(partNumberFilter, 300);
   const debouncedKpclCode = useDebounce(kpclCodeFilter, 300);
   const debouncedMake = useDebounce(makeFilter, 300);
+  const debouncedLocation = useDebounce(locationFilter, 300);
   
   const [cursorHistory, setCursorHistory] = useState<string[]>([]);
   const [currentCursor, setCurrentCursor] = useState<string | undefined>(undefined);
@@ -91,6 +100,7 @@ export const StockGrid: React.FC = () => {
       if (debouncedPartNumber) params.partNumber = debouncedPartNumber;
       if (debouncedKpclCode) params.kpclCode = debouncedKpclCode;
       if (debouncedMake) params.make = debouncedMake;
+      if (debouncedLocation) params.location = debouncedLocation;
       if (stockStatusFilter) params.stockStatus = stockStatusFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
@@ -107,13 +117,13 @@ export const StockGrid: React.FC = () => {
       setLoading(false);
       setResponseTime(Math.round(performance.now() - startTime));
     }
-  }, [stockTypeFilter, debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, stockStatusFilter, dateFrom, dateTo]);
+  }, [stockTypeFilter, debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, debouncedLocation, stockStatusFilter, dateFrom, dateTo]);
 
   useEffect(() => {
     setCursorHistory([]);
     setCurrentCursor(undefined);
     fetchStock(undefined);
-  }, [stockTypeFilter, debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, stockStatusFilter, dateFrom, dateTo, fetchStock]);
+  }, [stockTypeFilter, debouncedSearch, debouncedPoNumber, debouncedPartNumber, debouncedKpclCode, debouncedMake, debouncedLocation, stockStatusFilter, dateFrom, dateTo, fetchStock]);
 
   const handleNext = () => {
     if (nextCursor) {
@@ -159,6 +169,7 @@ export const StockGrid: React.FC = () => {
       if (debouncedPartNumber) params.partNumber = debouncedPartNumber;
       if (debouncedKpclCode) params.kpclCode = debouncedKpclCode;
       if (debouncedMake) params.make = debouncedMake;
+      if (debouncedLocation) params.location = debouncedLocation;
       if (stockStatusFilter) params.stockStatus = stockStatusFilter;
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
@@ -174,6 +185,7 @@ export const StockGrid: React.FC = () => {
         'Specifications': item.specifications,
         'Part Number': item.partNumber,
         'Make': item.make,
+        'Location': item.location || '-',
         'HSN Code': item.hsnCode,
         'Unit': item.unit,
         'Ordered Qty': item.orderedQty,
@@ -333,7 +345,24 @@ export const StockGrid: React.FC = () => {
           />
         </div>
 
-        {/* 6. STOCK STATUS DROPDOWN FILTER */}
+        {/* 6. LOCATION FILTER */}
+        <div className="w-36">
+          <input
+            type="text"
+            list="stock-locations-list"
+            className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs uppercase font-mono focus:ring-2 focus:ring-blue-400 focus:border-blue-500 outline-none"
+            placeholder="Location..."
+            value={locationFilter}
+            onChange={(e) => setLocationFilter(e.target.value.toUpperCase())}
+          />
+          <datalist id="stock-locations-list">
+            {locationsList.map((loc, i) => (
+              <option key={i} value={loc} />
+            ))}
+          </datalist>
+        </div>
+
+        {/* 7. STOCK STATUS DROPDOWN FILTER */}
         <div className="w-40">
           <select
             className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 bg-white focus:ring-2 focus:ring-blue-400 focus:border-blue-500 outline-none cursor-pointer"
@@ -348,7 +377,7 @@ export const StockGrid: React.FC = () => {
           </select>
         </div>
 
-        {/* 7. DATE FROM */}
+        {/* 8. DATE FROM */}
         <div className="w-36">
           <input
             type="date"
@@ -359,7 +388,7 @@ export const StockGrid: React.FC = () => {
           />
         </div>
 
-        {/* 8. DATE TO */}
+        {/* 9. DATE TO */}
         <div className="w-36">
           <input
             type="date"
@@ -371,7 +400,7 @@ export const StockGrid: React.FC = () => {
         </div>
 
         {/* CLEAR FILTERS BUTTON */}
-        {(searchTerm || poNumberFilter || partNumberFilter || kpclCodeFilter || makeFilter || stockStatusFilter || dateFrom || dateTo) && (
+        {(searchTerm || poNumberFilter || partNumberFilter || kpclCodeFilter || makeFilter || locationFilter || stockStatusFilter || dateFrom || dateTo) && (
           <button
             onClick={() => {
               setSearchTerm('');
@@ -379,6 +408,7 @@ export const StockGrid: React.FC = () => {
               setPartNumberFilter('');
               setKpclCodeFilter('');
               setMakeFilter('');
+              setLocationFilter('');
               setStockStatusFilter('');
               setDateFrom('');
               setDateTo('');
@@ -422,6 +452,10 @@ export const StockGrid: React.FC = () => {
                   <span>Make: <strong className="text-slate-800">{item.make || '-'}</strong></span>
                 </div>
 
+                <div className="text-[10px] text-slate-600">
+                  Location: <strong className="text-slate-800 font-semibold">{item.location || '-'}</strong>
+                </div>
+
                 {/* Stock metrics pill grid */}
                 <div className="grid grid-cols-4 gap-1.5 text-center bg-slate-50 p-2 rounded-lg border border-slate-100 font-mono text-[10px]">
                   <div>
@@ -458,6 +492,7 @@ export const StockGrid: React.FC = () => {
                 <th className="min-w-[200px]">Specifications</th>
                 <th>Part Number</th>
                 <th>Make</th>
+                <th>Location</th>
                 <th className="text-center">HSN</th>
                 <th className="text-center">Unit</th>
                 <th className="text-center">Qty</th>
@@ -470,14 +505,14 @@ export const StockGrid: React.FC = () => {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="p-12 text-center text-slate-500 font-semibold">
+                  <td colSpan={15} className="p-12 text-center text-slate-500 font-semibold">
                     <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-[#1e3a8a]" />
                     Calculating real-time database stock...
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={14} className="p-12 text-center text-slate-400">
+                  <td colSpan={15} className="p-12 text-center text-slate-400">
                     No items found matching the selected filters.
                   </td>
                 </tr>
@@ -493,6 +528,7 @@ export const StockGrid: React.FC = () => {
                     <td className="text-[11px] text-slate-600 font-mono whitespace-pre-wrap max-w-xs">{item.specifications || '-'}</td>
                     <td className="font-mono font-bold text-slate-800">{item.partNumber}</td>
                     <td className="text-slate-700">{item.make || '-'}</td>
+                    <td className="text-slate-700 font-semibold">{item.location || '-'}</td>
                     <td className="text-center font-mono text-slate-600">{item.hsnCode || '-'}</td>
                     <td className="text-center font-mono">{item.unit}</td>
                     <td className="text-center font-mono font-bold text-slate-800">{item.orderedQty}</td>

@@ -326,6 +326,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
 
   // All Items Dropdown for Forms
   const [allItemsForSelection, setAllItemsForSelection] = useState<any[]>([]);
+  const [locationsList, setLocationsList] = useState<any[]>([]);
 
   // Sub-tab Forms State
   const [showAddItem, setShowAddItem] = useState(false);
@@ -341,21 +342,22 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
   const [purchaseForm, setPurchaseForm] = useState({
     itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
     partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
-    receivedItemName: '', receivedPartNumber: ''
+    receivedItemName: '', receivedPartNumber: '', location: ''
   });
 
   const [saleForm, setSaleForm] = useState({
     itemId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().split('T')[0], qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
-    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '29DWKPP3582H1ZV', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
+    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '29DWKPP3582H1ZV', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: '',
+    location: ''
   });
 
   // Multi-Item Sales Selection & Inward Table State
   const [selectedMultiSaleItemIds, setSelectedMultiSaleItemIds] = useState<string[]>([]);
-  const [multiSaleItemEdits, setMultiSaleItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number }>>({});
+  const [multiSaleItemEdits, setMultiSaleItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number; location?: string }>>({});
 
   // Multi-Item Purchases Selection & Inward Table State
   const [selectedMultiPurchaseItemIds, setSelectedMultiPurchaseItemIds] = useState<string[]>([]);
-  const [multiPurchaseItemEdits, setMultiPurchaseItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number; receivedItemName?: string; receivedPartNumber?: string }>>({});
+  const [multiPurchaseItemEdits, setMultiPurchaseItemEdits] = useState<Record<string, { qty: number; rate: number; cgstPercent: number; sgstPercent: number; igstPercent: number; receivedItemName?: string; receivedPartNumber?: string; location?: string }>>({});
   const [selectedPurchaseIds, setSelectedPurchaseIds] = useState<string[]>([]);
 
   // Helper to fetch next continuous invoice number
@@ -393,6 +395,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     supplierInvoiceDate?: string;
     vehicleNumber?: string;
     remarks?: string;
+    location?: string;
   }>({});
 
   const [editingSale, setEditingSale] = useState<any | null>(null);
@@ -414,6 +417,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     vehicleNumber?: string;
     eWayBillNumber?: string;
     remarks?: string;
+    location?: string;
   }>({});
 
   // Grouped Inward Invoice Edit Modal State
@@ -429,6 +433,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     supplierInvoiceDate: string;
     vehicleNumber: string;
     remarks: string;
+    location: string;
   }>({
     partyInvoiceNumber: '',
     date: '',
@@ -437,7 +442,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     gstNumber: '',
     supplierInvoiceDate: '',
     vehicleNumber: '',
-    remarks: ''
+    remarks: '',
+    location: ''
   });
 
   // Grouped Sale Invoice Edit Modal State
@@ -456,6 +462,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     vehicleNumber: string;
     eWayBillNumber: string;
     remarks: string;
+    location: string;
   }>({
     invoiceNumber: '',
     invoiceDate: '',
@@ -467,7 +474,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     supplierInvoiceDate: '',
     vehicleNumber: '',
     eWayBillNumber: '',
-    remarks: ''
+    remarks: '',
+    location: ''
   });
 
   const [editingPoModal, setEditingPoModal] = useState<any | null>(null);
@@ -661,8 +669,20 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     }
   };
 
+  // Fetch active physical storage locations
+  const fetchLocations = async () => {
+    try {
+      const res = await api.get('/locations', { params: { activeOnly: 'true' } });
+      const list = res.data?.locations || (Array.isArray(res.data) ? res.data : []);
+      setLocationsList(list);
+    } catch (err) {
+      console.warn('Failed to load locations in PurchaseRecords:', err);
+    }
+  };
+
   useEffect(() => {
     fetchDivisions();
+    fetchLocations();
   }, []);
 
   // --- API CALL: FETCH MAIN PO LIST ---
@@ -796,6 +816,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     fetchAllItemsForDropdown(poId);
     fetchPoPurchases(poId, null);
     fetchPoSales(poId, null);
+    fetchLocations();
   };
 
   // Sub-Tab Switch Refresh
@@ -804,8 +825,10 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
     if (activeTab === 'items') {
       fetchPoItems(selectedPo.id, itemsCursor);
     } else if (activeTab === 'purchases') {
+      fetchLocations();
       fetchPoPurchases(selectedPo.id, purchasesCursor);
     } else if (activeTab === 'sales') {
+      fetchLocations();
       fetchPoSales(selectedPo.id, salesCursor);
     }
   }, [selectedPo, activeTab, itemsCursor, purchasesCursor, salesCursor, fetchPoItems, fetchPoPurchases, fetchPoSales]);
@@ -924,7 +947,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           sgstPercent: itm?.sgstPercent !== undefined && itm?.sgstPercent !== null ? itm.sgstPercent : (purchaseForm.sgstPercent || 0),
           igstPercent: itm?.igstPercent !== undefined && itm?.igstPercent !== null ? itm.igstPercent : (purchaseForm.igstPercent || 0),
           receivedItemName: purchaseForm.receivedItemName || itm?.itemName || '',
-          receivedPartNumber: purchaseForm.receivedPartNumber || itm?.partNumber || ''
+          receivedPartNumber: purchaseForm.receivedPartNumber || itm?.partNumber || '',
+          location: purchaseForm.location || ''
         };
         const maxAllowed = itm ? Math.max(0, (itm.qty || 0) - (itm.purchasedQty || 0)) : (purchaseForm.qty || 0);
         return {
@@ -936,6 +960,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           igstPercent: Number(edit.igstPercent ?? 0),
           receivedItemName: edit.receivedItemName || itm?.itemName || '',
           receivedPartNumber: edit.receivedPartNumber || itm?.partNumber || '',
+          location: edit.location || purchaseForm.location || '',
           itemName: itm?.itemName || '',
           partNumber: itm?.partNumber || '',
           maxAllowed
@@ -968,7 +993,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         supplierInvoiceDate: purchaseForm.supplierInvoiceDate || purchaseForm.date || '',
         vehicleNumber: purchaseForm.vehicleNumber || '',
         remarks: purchaseForm.remarks || '',
-        shippingCharges: Number(purchaseForm.shippingCharges || 0)
+        shippingCharges: Number(purchaseForm.shippingCharges || 0),
+        location: purchaseForm.location || ''
       };
 
       await api.post('/purchases', payload);
@@ -979,7 +1005,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       setPurchaseForm({
         itemId: '', date: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
         partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
-        receivedItemName: '', receivedPartNumber: ''
+        receivedItemName: '', receivedPartNumber: '', location: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoPurchases(selectedPo.id, purchasesCursor);
@@ -1011,7 +1037,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           rate: itm?.rate ?? saleForm.rate ?? 0,
           cgstPercent: itm?.cgstPercent !== undefined && itm?.cgstPercent !== null ? itm.cgstPercent : (saleForm.cgstPercent || 0),
           sgstPercent: itm?.sgstPercent !== undefined && itm?.sgstPercent !== null ? itm.sgstPercent : (saleForm.sgstPercent || 0),
-          igstPercent: itm?.igstPercent !== undefined && itm?.igstPercent !== null ? itm.igstPercent : (saleForm.igstPercent || 0)
+          igstPercent: itm?.igstPercent !== undefined && itm?.igstPercent !== null ? itm.igstPercent : (saleForm.igstPercent || 0),
+          location: saleForm.location || ''
         };
         const maxAvail = itm?.availableForSale !== undefined 
           ? itm.availableForSale 
@@ -1023,6 +1050,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           cgstPercent: Number(edit.cgstPercent ?? 0),
           sgstPercent: Number(edit.sgstPercent ?? 0),
           igstPercent: Number(edit.igstPercent ?? 0),
+          location: edit.location || saleForm.location || '',
           itemName: itm?.itemName || '',
           partNumber: itm?.partNumber || '',
           maxAvail
@@ -1058,7 +1086,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
         vehicleNumber: saleForm.vehicleNumber || '',
         eWayBillNumber: saleForm.eWayBillNumber || '',
         remarks: saleForm.remarks || '',
-        shippingCharges: Number(saleForm.shippingCharges || 0)
+        shippingCharges: Number(saleForm.shippingCharges || 0),
+        location: saleForm.location || ''
       };
 
       await api.post('/sales', payload);
@@ -1068,7 +1097,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       setMultiSaleItemEdits({});
       setSaleForm({
         itemId: '', invoiceNumber: '', invoiceDate: '', qty: 0, rate: 0, cgstPercent: 0, sgstPercent: 0, igstPercent: 0, shippingCharges: 0,
-        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
+        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', eWayBillNumber: '', remarks: '',
+        location: ''
       });
       fetchPoHeaderAndKpi(selectedPo.id);
       fetchPoSales(selectedPo.id, salesCursor);
@@ -1226,7 +1256,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       cgstPercent: p.cgstPercent || 0,
       sgstPercent: p.sgstPercent || 0,
       igstPercent: p.igstPercent || 0,
-      shippingCharges: p.shippingCharges || 0
+      shippingCharges: p.shippingCharges || 0,
+      location: p.location || ''
     }));
 
     setEditInwardInvoiceItems(mapInwardItems(items));
@@ -1239,7 +1270,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       gstNumber: pur.gstNumber || '',
       supplierInvoiceDate: pur.supplierInvoiceDate ? new Date(pur.supplierInvoiceDate).toISOString().split('T')[0] : '',
       vehicleNumber: pur.vehicleNumber || '',
-      remarks: pur.remarks || ''
+      remarks: pur.remarks || '',
+      location: pur.location || ''
     });
 
     setEditInwardInvoiceModal(pur);
@@ -1287,7 +1319,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           cgstPercent: parseFloat(it.cgstPercent) || 0,
           sgstPercent: parseFloat(it.sgstPercent) || 0,
           igstPercent: parseFloat(it.igstPercent) || 0,
-          shippingCharges: parseFloat(it.shippingCharges) || 0
+          shippingCharges: parseFloat(it.shippingCharges) || 0,
+          location: it.location || editInwardInvoiceHeader.location || ''
         }))
       };
       const res = await api.put('/purchases/invoice', payload, { params: { invoiceNumber: originalInv } });
@@ -1505,7 +1538,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       cgstPercent: s.cgstPercent || 0,
       sgstPercent: s.sgstPercent || 0,
       igstPercent: s.igstPercent || 0,
-      shippingCharges: s.shippingCharges || 0
+      shippingCharges: s.shippingCharges || 0,
+      location: s.location || ''
     }));
 
     setEditSaleInvoiceItems(mapSaleItems(items));
@@ -1521,7 +1555,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
       supplierInvoiceDate: sale.supplierInvoiceDate ? new Date(sale.supplierInvoiceDate).toISOString().split('T')[0] : '',
       vehicleNumber: sale.vehicleNumber || '',
       eWayBillNumber: sale.eWayBillNumber || '',
-      remarks: sale.remarks || ''
+      remarks: sale.remarks || '',
+      location: sale.location || ''
     });
 
     setEditSaleInvoiceModal(sale);
@@ -1567,7 +1602,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           cgstPercent: parseFloat(it.cgstPercent) || 0,
           sgstPercent: parseFloat(it.sgstPercent) || 0,
           igstPercent: parseFloat(it.igstPercent) || 0,
-          shippingCharges: parseFloat(it.shippingCharges) || 0
+          shippingCharges: parseFloat(it.shippingCharges) || 0,
+          location: it.location || editSaleInvoiceHeader.location || ''
         }))
       };
       const res = await api.put('/sales/invoice', payload, { params: { invoiceNumber: originalInv } });
@@ -4183,6 +4219,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[70px] text-center whitespace-nowrap">IGST %</th>
                                 <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[130px]">Received Part No (Display)</th>
                                 <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[140px]">Received Item Name (Display)</th>
+                                <th className="px-2 py-2 bg-emerald-950 text-emerald-200 min-w-[130px] text-center">Location</th>
                                 <th className="px-2 py-2 text-right">Basic (₹)</th>
                                 <th className="px-2 py-2 text-right">Tax (₹)</th>
                                 <th className="px-2 py-2 text-right">Line Total (₹)</th>
@@ -4191,7 +4228,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                             <tbody>
                               {allItemsForSelection.length === 0 ? (
                                 <tr>
-                                  <td colSpan={19} className="p-8 text-center text-slate-400 font-semibold bg-white">
+                                  <td colSpan={20} className="p-8 text-center text-slate-400 font-semibold bg-white">
                                     No items found in this Purchase Order. Please add items to PO first.
                                   </td>
                                 </tr>
@@ -4207,7 +4244,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
                                     igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
                                     receivedItemName: item.itemName || '',
-                                    receivedPartNumber: item.partNumber || ''
+                                    receivedPartNumber: item.partNumber || '',
+                                    location: ''
                                   };
 
                                   const curQty = Number(edit.qty || 0);
@@ -4255,7 +4293,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                                       sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
                                                       igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
                                                       receivedItemName: item.itemName || '',
-                                                      receivedPartNumber: item.partNumber || ''
+                                                      receivedPartNumber: item.partNumber || '',
+                                                      location: ''
                                                     }
                                                   }));
                                                 }
@@ -4420,6 +4459,25 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                         />
                                       </td>
 
+                                      {/* Location per item */}
+                                      <td className="px-1 py-1">
+                                        <input 
+                                          type="text"
+                                          list="active-locations-datalist"
+                                          placeholder="Select Location"
+                                          className="w-full p-1.5 border border-slate-300 rounded text-xs uppercase font-medium bg-white focus:border-emerald-500"
+                                          value={edit.location ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value.toUpperCase();
+                                            setMultiPurchaseItemEdits(prev => ({
+                                              ...prev,
+                                              [item.id]: { ...edit, location: val }
+                                            }));
+                                          }}
+                                        />
+                                      </td>
+
                                       <td className="px-2 py-2 text-right font-mono font-medium">{formatCurrency(basic)}</td>
                                       <td className="px-2 py-2 text-right font-mono text-emerald-700">{formatCurrency(tax)}</td>
                                       <td className="px-2 py-2 text-right font-mono font-bold text-slate-900">{formatCurrency(lineTotal)}</td>
@@ -4546,6 +4604,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <span>DC / INV: {grp.invoiceNumber}</span>
                               </div>
 
+                              {/* Location Badge */}
+                              {grp.items[0]?.location && (
+                                <div className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                  <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+                                  <span>Loc: {grp.items[0].location}</span>
+                                </div>
+                              )}
+
                               {/* Date */}
                               <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-2xs">
                                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -4638,6 +4704,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   <th className="py-2 px-2.5 min-w-[130px] border border-slate-400 text-white font-semibold">Part Number</th>
                                   <th className="py-2 px-2.5 min-w-[200px] border border-slate-400 text-white font-semibold">Item Name &amp; Description</th>
                                   <th className="py-2 px-2.5 text-center min-w-[85px] border border-slate-400 bg-emerald-900 text-emerald-100 font-semibold">Inward Qty</th>
+                                  <th className="py-2 px-2.5 min-w-[100px] border border-slate-400 text-white font-semibold">Location</th>
                                   <th className="py-2 px-2.5 text-right min-w-[90px] border border-slate-400 text-white font-semibold">Rate (₹)</th>
                                   <th className="py-2 px-2.5 text-right min-w-[95px] border border-slate-400 text-white font-semibold">Basic (₹)</th>
                                   <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">CGST</th>
@@ -4688,6 +4755,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                       </td>
                                       <td className="py-1.5 px-2.5 text-center font-mono text-xs font-semibold text-emerald-800 bg-emerald-50/40 border border-slate-300">
                                         {pur.qty}
+                                      </td>
+                                      <td className="py-1.5 px-2.5 border border-slate-300">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                          {pur.location || '-'}
+                                        </span>
                                       </td>
                                       <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-700 border border-slate-300">
                                         {formatCurrency(pur.rate)}
@@ -4889,6 +4961,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           <th className="p-2 w-20 text-center">CGST %</th>
                                           <th className="p-2 w-20 text-center">SGST %</th>
                                           <th className="p-2 w-20 text-center">IGST %</th>
+                                          <th className="p-2 w-28 text-center">Location</th>
                                           <th className="p-2 w-28 text-right">Total (₹)</th>
                                           <th className="p-2 w-12 text-center">Action</th>
                                         </tr>
@@ -5063,6 +5136,19 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                                     setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, igstPercent: val } : it));
                                                   }}
                                                   className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
+                                                />
+                                              </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="text"
+                                                  list="active-locations-datalist"
+                                                  value={item.location || ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value.toUpperCase();
+                                                    setEditInwardInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, location: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-semibold uppercase text-center text-xs"
+                                                  placeholder="Select Location"
                                                 />
                                               </td>
                                               <td className="p-2 font-mono font-bold text-right text-emerald-900 bg-emerald-50/50">
@@ -5391,7 +5477,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                         />
                       </div>
 
-                      <div className="md:col-span-2">
+                      <div className="md:col-span-3">
                         <label className="block text-[11px] font-bold text-slate-700 mb-1">Remarks / Note</label>
                         <input 
                           type="text" 
@@ -5451,6 +5537,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">CGST %</th>
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">SGST %</th>
                                 <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[75px] text-center whitespace-nowrap">IGST %</th>
+                                <th className="px-2 py-2 bg-amber-950 text-amber-200 min-w-[130px] text-center">Location</th>
                                 <th className="px-2 py-2 text-right">Basic (₹)</th>
                                 <th className="px-2 py-2 text-right">Tax (₹)</th>
                                 <th className="px-2 py-2 text-right">Line Total (₹)</th>
@@ -5462,7 +5549,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 if (available.length === 0) {
                                   return (
                                     <tr>
-                                      <td colSpan={18} className="p-8 text-center text-slate-400 font-semibold bg-white">
+                                      <td colSpan={19} className="p-8 text-center text-slate-400 font-semibold bg-white">
                                         No inwarded items available for sale in this Purchase Order. Please record Inward Purchases first.
                                       </td>
                                     </tr>
@@ -5476,7 +5563,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                     rate: item.rate || 0,
                                     cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
                                     sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
-                                    igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0
+                                    igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
+                                    location: saleForm.location || ''
                                   };
 
                                   const curQty = Number(edits.qty ?? availStock);
@@ -5490,7 +5578,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   const lineTotal = lineBasic + lineTax;
                                   const isOverStock = curQty > availStock;
 
-                                  const updateEdit = (field: string, val: number) => {
+                                  const updateEdit = (field: string, val: any) => {
                                     setMultiSaleItemEdits(prev => ({
                                       ...prev,
                                       [item.id]: {
@@ -5499,7 +5587,8 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           rate: item.rate || 0,
                                           cgstPercent: item.cgstPercent !== undefined && item.cgstPercent !== null ? Number(item.cgstPercent) : 0,
                                           sgstPercent: item.sgstPercent !== undefined && item.sgstPercent !== null ? Number(item.sgstPercent) : 0,
-                                          igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0
+                                          igstPercent: item.igstPercent !== undefined && item.igstPercent !== null ? Number(item.igstPercent) : 0,
+                                          location: saleForm.location || ''
                                         },
                                         [field]: val
                                       }
@@ -5609,6 +5698,22 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           onChange={(e) => updateEdit('igstPercent', e.target.value === '' ? 0 : Number(e.target.value))}
                                           disabled={!isSelected}
                                           className="w-14 p-1 text-center font-mono font-bold text-xs rounded border border-slate-300 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none shadow-2xs"
+                                        />
+                                      </td>
+
+                                      {/* Location per item */}
+                                      <td className="px-1.5 py-1.5 bg-amber-50/50">
+                                        <input 
+                                          type="text"
+                                          list="active-locations-datalist"
+                                          placeholder="Select Location"
+                                          className="w-full p-1 border border-amber-400 rounded text-xs uppercase font-medium bg-white focus:ring-1 focus:ring-amber-500 disabled:bg-slate-100 disabled:text-slate-400"
+                                          value={edits.location ?? ''}
+                                          disabled={!isSelected}
+                                          onChange={(e) => {
+                                            const val = e.target.value.toUpperCase();
+                                            updateEdit('location', val);
+                                          }}
                                         />
                                       </td>
 
@@ -5769,6 +5874,14 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                 <span>TAX INV: {grp.invoiceNumber}</span>
                               </div>
 
+                              {/* Location Badge */}
+                              {grp.items[0]?.location && (
+                                <div className="px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                  <Building2 className="w-3.5 h-3.5 text-amber-700" />
+                                  <span>Loc: {grp.items[0].location}</span>
+                                </div>
+                              )}
+
                               {/* Date */}
                               <div className="px-2.5 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-xs font-semibold flex items-center gap-1 shadow-2xs">
                                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
@@ -5870,6 +5983,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                   <th className="py-2 px-2.5 min-w-[130px] border border-slate-400 text-white font-semibold">Part Number</th>
                                   <th className="py-2 px-2.5 min-w-[200px] border border-slate-400 text-white font-semibold">Item Name</th>
                                   <th className="py-2 px-2.5 text-center min-w-[85px] border border-slate-400 bg-amber-900 text-amber-100 font-semibold">Sold Qty</th>
+                                  <th className="py-2 px-2.5 min-w-[100px] border border-slate-400 text-white font-semibold">Location</th>
                                   <th className="py-2 px-2.5 text-right min-w-[90px] border border-slate-400 text-white font-semibold">Rate (₹)</th>
                                   <th className="py-2 px-2.5 text-right min-w-[95px] border border-slate-400 text-white font-semibold">Basic (₹)</th>
                                   <th className="py-2 px-2 text-right min-w-[70px] border border-slate-400 text-white font-semibold">CGST</th>
@@ -5908,6 +6022,11 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                       </td>
                                       <td className="py-1.5 px-2.5 text-center font-mono text-xs font-semibold text-amber-900 bg-amber-50/40 border border-slate-300">
                                         {sale.qty}
+                                      </td>
+                                      <td className="py-1.5 px-2.5 border border-slate-300">
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-900 border border-amber-200">
+                                          {sale.location || '-'}
+                                        </span>
                                       </td>
                                       <td className="py-1.5 px-2.5 text-right font-mono text-xs text-slate-700 border border-slate-300">
                                         {formatCurrency(sale.rate)}
@@ -6111,6 +6230,7 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                           <th className="p-2 w-20 text-center">CGST %</th>
                                           <th className="p-2 w-20 text-center">SGST %</th>
                                           <th className="p-2 w-20 text-center">IGST %</th>
+                                          <th className="p-2 w-28 text-center">Location</th>
                                           <th className="p-2 w-28 text-right">Total (₹)</th>
                                           <th className="p-2 w-12 text-center">Action</th>
                                         </tr>
@@ -6287,6 +6407,19 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
                                                   className="w-full p-1.5 border border-slate-300 rounded font-mono text-center text-xs"
                                                 />
                                               </td>
+                                              <td className="p-1">
+                                                <input
+                                                  type="text"
+                                                  list="active-locations-datalist"
+                                                  value={item.location || ''}
+                                                  onChange={e => {
+                                                    const val = e.target.value.toUpperCase();
+                                                    setEditSaleInvoiceItems(prev => prev.map((it, i) => i === idx ? { ...it, location: val } : it));
+                                                  }}
+                                                  className="w-full p-1.5 border border-slate-300 rounded font-semibold uppercase text-center text-xs"
+                                                  placeholder="Select Location"
+                                                />
+                                              </td>
                                               <td className="p-2 font-mono font-bold text-right text-blue-900 bg-blue-50/50">
                                                 {formatCurrency(total)}
                                               </td>
@@ -6423,6 +6556,15 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
             onClose={() => setPreviewInwardReceipt(null)}
           />
         )}
+
+        {/* ACTIVE LOCATIONS AUTO-SUGGESTION DATALIST */}
+        <datalist id="active-locations-datalist">
+          {locationsList.map((loc: any) => (
+            <option key={loc.id} value={loc.name}>
+              {loc.code ? `[${loc.code}] ` : ''}{loc.name}
+            </option>
+          ))}
+        </datalist>
       </div>
     );
   }
@@ -6782,7 +6924,17 @@ export const PurchaseRecords: React.FC<PurchaseRecordsProps> = ({ currentUserRol
           onClose={() => setPreviewInwardReceipt(null)}
         />
       )}
-    </div>
+    
+
+      {/* ACTIVE LOCATIONS AUTO-SUGGESTION DATALIST */}
+      <datalist id="active-locations-datalist">
+        {locationsList.map((loc: any) => (
+          <option key={loc.id} value={loc.name}>
+            {loc.code ? `[${loc.code}] ` : ''}{loc.name}
+          </option>
+        ))}
+      </datalist>
+</div>
   );
 };
 

@@ -58,6 +58,10 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
   const [salesTotalCount, setSalesTotalCount] = useState(0);
   const [selectedSaleIds, setSelectedSaleIds] = useState<string[]>([]);
 
+  // Locations filter state
+  const [locationsList, setLocationsList] = useState<any[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
+
   // --- TAB 4: INVOICES PREVIEW & MODAL ---
   const [previewSaleInvoice, setPreviewSaleInvoice] = useState<any | null>(null);
   const [previewInwardReceipt, setPreviewInwardReceipt] = useState<any | null>(null);
@@ -83,12 +87,12 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
 
   const [purchaseForm, setPurchaseForm] = useState({
     stockId: '', date: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
-    partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
+    partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '', location: ''
   });
 
   const [saleForm, setSaleForm] = useState({
     stockId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
-    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
+    partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', vehicleNumber: '', eWayBillNumber: '', remarks: '', location: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -119,9 +123,19 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
     }
   }, []);
 
+  const fetchLocationsList = useCallback(async () => {
+    try {
+      const res = await api.get('/locations', { params: { activeOnly: true } });
+      setLocationsList(res.data.locations || []);
+    } catch (err) {
+      console.error('Failed to load locations in stock summary:', err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchAllItemsCache();
-  }, [fetchAllItemsCache]);
+    fetchLocationsList();
+  }, [fetchAllItemsCache, fetchLocationsList]);
 
   // --- FETCH ITEMS MASTER WITH PAGINATION ---
   const fetchItemsMaster = useCallback(async () => {
@@ -134,6 +148,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       if (itemsSearch) params.search = itemsSearch;
       if (itemsPartNumber) params.partNumber = itemsPartNumber;
       if (itemsKpclCode) params.kpclCode = itemsKpclCode;
+      if (selectedLocation && selectedLocation !== 'ALL') params.location = selectedLocation;
 
       const res = await api.get('/individual-stocks', { params });
       const raw = res.data?.items || res.data?.individualStocks || [];
@@ -144,7 +159,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
     } finally {
       setItemsLoading(false);
     }
-  }, [itemsPage, itemsPageSize, itemsSearch, itemsPartNumber, itemsKpclCode]);
+  }, [itemsPage, itemsPageSize, itemsSearch, itemsPartNumber, itemsKpclCode, selectedLocation]);
 
   // --- FETCH INWARD TRANSACTIONS WITH PAGINATION ---
   const fetchPurchases = useCallback(async () => {
@@ -158,6 +173,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       if (purchasesSearch) params.search = purchasesSearch;
       if (purchasesDateFrom) params.dateFrom = purchasesDateFrom;
       if (purchasesDateTo) params.dateTo = purchasesDateTo;
+      if (selectedLocation && selectedLocation !== 'ALL') params.location = selectedLocation;
 
       const res = await api.get('/individual-stocks/transactions', { params });
       const raw = res.data?.transactions || [];
@@ -168,7 +184,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
     } finally {
       setPurchasesLoading(false);
     }
-  }, [purchasesPage, purchasesPageSize, purchasesSearch, purchasesDateFrom, purchasesDateTo]);
+  }, [purchasesPage, purchasesPageSize, purchasesSearch, purchasesDateFrom, purchasesDateTo, selectedLocation]);
 
   // --- FETCH SALES TRANSACTIONS WITH PAGINATION ---
   const fetchSales = useCallback(async () => {
@@ -183,6 +199,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       if (salesInvoiceNumber) params.invoiceNumber = salesInvoiceNumber;
       if (salesDateFrom) params.dateFrom = salesDateFrom;
       if (salesDateTo) params.dateTo = salesDateTo;
+      if (selectedLocation && selectedLocation !== 'ALL') params.location = selectedLocation;
 
       const res = await api.get('/individual-stocks/transactions', { params });
       const raw = res.data?.transactions || [];
@@ -193,7 +210,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
     } finally {
       setSalesLoading(false);
     }
-  }, [salesPage, salesPageSize, salesSearch, salesInvoiceNumber, salesDateFrom, salesDateTo]);
+  }, [salesPage, salesPageSize, salesSearch, salesInvoiceNumber, salesDateFrom, salesDateTo, selectedLocation]);
 
   useEffect(() => {
     if (activeTab === 'items') fetchItemsMaster();
@@ -328,7 +345,8 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       setShowAddPurchaseModal(false);
       setPurchaseForm({
         stockId: '', date: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
-        partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: ''
+        partyName: '', supplierAddress: '', gstNumber: '', partyInvoiceNumber: '', supplierInvoiceDate: '', vehicleNumber: '', remarks: '',
+        location: ''
       });
       fetchPurchases();
       fetchAllItemsCache();
@@ -432,7 +450,8 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       setShowAddSaleModal(false);
       setSaleForm({
         stockId: '', invoiceNumber: '', invoiceDate: new Date().toISOString().slice(0, 10), qty: 0, rate: 0, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, shippingCharges: 0,
-        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', vehicleNumber: '', eWayBillNumber: '', remarks: ''
+        partyName: '', supplierAddress: '', gstNumber: '', companyGstNumber: '', vehicleNumber: '', eWayBillNumber: '', remarks: '',
+        location: ''
       });
       fetchSales();
       fetchAllItemsCache();
@@ -777,7 +796,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       {activeTab === 'items' && (
         <div className="bg-white rounded-b-xl border border-slate-200 shadow-sm p-4 space-y-4">
           {/* Filters Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
             <div className="relative">
               <input
                 type="text"
@@ -809,6 +828,19 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
               />
             </div>
 
+            <div>
+              <select
+                value={selectedLocation}
+                onChange={(e) => { setSelectedLocation(e.target.value); setItemsPage(1); }}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-900"
+              >
+                <option value="ALL">📍 All Locations</option>
+                {locationsList.map((loc: any) => (
+                  <option key={loc.id} value={loc.name}>📍 {loc.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs text-slate-600 font-bold">
                 <span>Show:</span>
@@ -824,7 +856,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                 </select>
               </div>
               <button
-                onClick={() => { setItemsSearch(''); setItemsPartNumber(''); setItemsKpclCode(''); setItemsPage(1); fetchItemsMaster(); }}
+                onClick={() => { setItemsSearch(''); setItemsPartNumber(''); setItemsKpclCode(''); setSelectedLocation('ALL'); setItemsPage(1); fetchItemsMaster(); }}
                 className="p-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-700"
                 title="Reset Filters"
               >
@@ -965,7 +997,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
       {activeTab === 'purchases' && (
         <div className="bg-white rounded-b-xl border border-slate-200 shadow-sm p-4 space-y-4">
           {/* Filters Bar */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
             <div className="relative">
               <input
                 type="text"
@@ -975,6 +1007,19 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                 className="w-full pl-8 pr-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-900"
               />
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+            </div>
+
+            <div>
+              <select
+                value={selectedLocation}
+                onChange={(e) => { setSelectedLocation(e.target.value); setPurchasesPage(1); }}
+                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-blue-900"
+              >
+                <option value="ALL">📍 All Locations</option>
+                {locationsList.map((loc: any) => (
+                  <option key={loc.id} value={loc.name}>📍 {loc.name}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -1010,7 +1055,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                 </select>
               </div>
               <button
-                onClick={() => { setPurchasesSearch(''); setPurchasesDateFrom(''); setPurchasesDateTo(''); setPurchasesPage(1); fetchPurchases(); }}
+                onClick={() => { setPurchasesSearch(''); setPurchasesDateFrom(''); setPurchasesDateTo(''); setSelectedLocation('ALL'); setPurchasesPage(1); fetchPurchases(); }}
                 className="p-2 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-700"
                 title="Reset Filters"
               >
@@ -1029,6 +1074,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   <th className="p-3 border-r border-slate-200 w-36">DC / Invoice No</th>
                   <th className="p-3 border-r border-slate-200">Stock Item Name</th>
                   <th className="p-3 border-r border-slate-200 w-44">Supplier / Party</th>
+                  <th className="p-3 border-r border-slate-200 w-28">Location</th>
                   <th className="p-3 border-r border-slate-200 text-right w-24 bg-blue-50 text-blue-900 font-bold">Inward Qty</th>
                   <th className="p-3 border-r border-slate-200 text-right w-24">Rate (₹)</th>
                   <th className="p-3 border-r border-slate-200 text-right w-24">Shipping (₹)</th>
@@ -1041,14 +1087,14 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
               <tbody className="divide-y divide-slate-200">
                 {purchasesLoading ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-slate-500">
+                    <td colSpan={13} className="p-8 text-center text-slate-500">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-900 mb-2" />
                       Loading inward deliveries...
                     </td>
                   </tr>
                 ) : purchases.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="p-8 text-center text-slate-400 font-semibold">
+                    <td colSpan={13} className="p-8 text-center text-slate-400 font-semibold">
                       No inward deliveries recorded. Click "Stock In (Inward)" to record inward goods.
                     </td>
                   </tr>
@@ -1073,6 +1119,13 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                           {itm.partNumber && <div className="text-[10px] text-slate-500 font-mono font-normal">Part: {itm.partNumber}</div>}
                         </td>
                         <td className="p-3 border-r border-slate-200 text-slate-800">{p.partyName || '-'}</td>
+                        <td className="p-3 border-r border-slate-200 font-semibold text-slate-700">
+                          {p.location ? (
+                            <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
+                              📍 {p.location}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td className="p-3 border-r border-slate-200 text-right font-mono font-black text-blue-900 bg-blue-50/40">
                           +{qty} {itm.unit || 'NOS'}
                         </td>
@@ -1227,7 +1280,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
             </div>
 
             {/* Quick Filters */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 flex-1 max-w-3xl">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 flex-1 max-w-4xl">
               <div className="relative">
                 <input
                   type="text"
@@ -1237,6 +1290,19 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]"
                 />
                 <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+              </div>
+
+              <div>
+                <select
+                  value={selectedLocation}
+                  onChange={(e) => { setSelectedLocation(e.target.value); setSalesPage(1); }}
+                  className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:ring-2 focus:ring-[#1e3a8a]"
+                >
+                  <option value="ALL">📍 All Locations</option>
+                  {locationsList.map((loc: any) => (
+                    <option key={loc.id} value={loc.name}>📍 {loc.name}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -1270,7 +1336,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   <option value={100}>100 / page</option>
                 </select>
                 <button
-                  onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesDateFrom(''); setSalesDateTo(''); setSelectedSaleIds([]); setSalesPage(1); fetchSales(); }}
+                  onClick={() => { setSalesSearch(''); setSalesInvoiceNumber(''); setSalesDateFrom(''); setSalesDateTo(''); setSelectedLocation('ALL'); setSelectedSaleIds([]); setSalesPage(1); fetchSales(); }}
                   className="p-1.5 bg-slate-200 hover:bg-slate-300 rounded-lg text-slate-700 transition-colors"
                   title="Reset Filters"
                 >
@@ -1304,6 +1370,7 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                   <th className="p-2.5 border-r border-sky-900 min-w-[120px]">Party GSTIN</th>
                   <th className="p-2.5 border-r border-sky-900 min-w-[140px]">Stock Item Sold</th>
                   <th className="p-2.5 border-r border-sky-900 min-w-[110px]">Part Number</th>
+                  <th className="p-2.5 border-r border-sky-900 w-28">Location</th>
                   <th className="p-2.5 border-r border-sky-900 min-w-[120px]">Invoice Number</th>
                   <th className="p-2.5 border-r border-sky-900 w-24 whitespace-nowrap">Sale Date</th>
                   <th className="p-2.5 border-r border-sky-900 min-w-[110px]">Vehicle / E-Way</th>
@@ -1322,14 +1389,14 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
               <tbody className="divide-y divide-slate-200 bg-white">
                 {salesLoading ? (
                   <tr>
-                    <td colSpan={19} className="p-12 text-center text-slate-500 font-semibold">
+                    <td colSpan={20} className="p-12 text-center text-slate-500 font-semibold">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto text-[#1e3a8a] mb-2" />
                       Loading sales records...
                     </td>
                   </tr>
                 ) : sales.length === 0 ? (
                   <tr>
-                    <td colSpan={19} className="p-12 text-center text-slate-400 font-semibold">
+                    <td colSpan={20} className="p-12 text-center text-slate-400 font-semibold">
                       No sales recorded yet. Click "Record Sale" to record an outward dispatch.
                     </td>
                   </tr>
@@ -1381,6 +1448,13 @@ export const IndividualStock: React.FC<IndividualStockProps> = ({ currentUserRol
                           <div>{itm.itemName || s.itemName || 'Stock Item'}</div>
                         </td>
                         <td className="p-2 border-r border-slate-200 font-mono text-slate-700 font-semibold">{itm.partNumber || s.partNumber || '-'}</td>
+                        <td className="p-2 border-r border-slate-200 font-semibold text-slate-700">
+                          {s.location ? (
+                            <span className="bg-slate-100 text-slate-800 px-2 py-0.5 rounded font-mono text-[11px] font-bold">
+                              📍 {s.location}
+                            </span>
+                          ) : '-'}
+                        </td>
                         <td className="p-2 border-r border-slate-200 font-mono font-bold text-[#1e3a8a]">{invNo}</td>
                         <td className="p-2 border-r border-slate-200 font-mono text-slate-700 whitespace-nowrap">{formatDate(s.invoiceDate || s.date)}</td>
                         <td className="p-2 border-r border-slate-200 font-mono text-slate-600">

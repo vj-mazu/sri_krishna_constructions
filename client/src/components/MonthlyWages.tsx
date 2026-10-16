@@ -1157,38 +1157,80 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
   // --- ESI PF SHEET EXCEL EXPORT (EXACT MULTI-LEVEL COLUMNS) ---
   const handleExportEsiPfExcel = () => {
     const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
+    const selectedDivObj = divisions.find(d => d.id === selectedDivisionId);
+    const divLabel = selectedDivObj ? selectedDivObj.name : 'ALL DIVISIONS';
 
-    const exportRows = filteredWages.map((w, index) => {
-      const calc = getEsiPfRowCalculations(w);
+    const rows: any[] = [
+      ['SRI KRISHNA CONSTRUCTIONS'],
+      ['SHAKTHINAGAR - 584170'],
+      [`ESI & EPF STATUTORY SALARY STATEMENT - ${monthName.toUpperCase()} ${selectedYear}`],
+      [`DIVISION / SITE: ${divLabel.toUpperCase()}`],
+      [],
+      [
+        'SL NO', 'NAME OF THE EMPLOYEE', 'BASIC', 'VDA', 'CON', 'TOT',
+        'W', 'H', 'AB', 'ATT_TOT', 'BASIC & VDA', 'EARN_CON', 'GROSS',
+        'EPF BASE', 'GROSS EARN', 'PF (₹)', 'ESI (₹)', 'NET SALARY (₹)', 'DESIGNATION'
+      ],
+      ...filteredWages.map((w, index) => {
+        const calc = getEsiPfRowCalculations(w);
+        return [
+          index + 1,
+          (w.fullName || '').toUpperCase(),
+          calc.basicMonthly,
+          calc.vdaMonthly,
+          calc.conMonthly > 0 ? calc.conMonthly : 0,
+          calc.totMonthly,
+          calc.wDays,
+          calc.hDays,
+          calc.abDays,
+          calc.totDays,
+          calc.basicAndVdaEarned,
+          calc.conEarned > 0 ? calc.conEarned : 0,
+          calc.grossEarned,
+          calc.epfBase,
+          calc.grossEarn,
+          calc.pf,
+          calc.esi,
+          calc.netSalary,
+          (calc.designation || 'HELPER').toUpperCase()
+        ];
+      })
+    ];
 
-      return {
-        'SL NO': index + 1,
-        'NAME OF THE EMPLOYEE': (w.fullName || '').toUpperCase(),
-        'BASIC': calc.basicMonthly,
-        'VDA': calc.vdaMonthly,
-        'CON': calc.conMonthly > 0 ? calc.conMonthly : '-',
-        'TOT': calc.totMonthly,
-        'W': calc.wDays,
-        'H': calc.hDays,
-        'AB': calc.abDays,
-        'ATT_TOT': calc.totDays,
-        'BASIC & VDA': calc.basicAndVdaEarned,
-        'EARN_CON': calc.conEarned > 0 ? calc.conEarned : '-',
-        'GROSS': calc.grossEarned,
-        'EPF': calc.epfBase,
-        'GROSS EARN': calc.grossEarn,
-        'PF': calc.pf,
-        'ESI': calc.esi,
-        'NET SALARY': calc.netSalary,
-        'DESIGNATION': (calc.designation || 'HELPER').toUpperCase()
-      };
-    });
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 8 },  // SL NO
+      { wch: 28 }, // NAME
+      { wch: 12 }, // BASIC
+      { wch: 12 }, // VDA
+      { wch: 10 }, // CON
+      { wch: 12 }, // TOT
+      { wch: 6 },  // W
+      { wch: 6 },  // H
+      { wch: 6 },  // AB
+      { wch: 10 }, // ATT_TOT
+      { wch: 14 }, // BASIC & VDA
+      { wch: 12 }, // EARN_CON
+      { wch: 14 }, // GROSS
+      { wch: 14 }, // EPF
+      { wch: 14 }, // GROSS EARN
+      { wch: 12 }, // PF
+      { wch: 12 }, // ESI
+      { wch: 16 }, // NET SALARY
+      { wch: 18 }  // DESIGNATION
+    ];
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 18 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 18 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 18 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 18 } }
+    ];
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'SALARY STATEMENT');
     XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_SALARY_STATEMENT_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
-    showToast('ESI PF Salary Statement exported to Excel successfully!', 'success');
+    showToast('ESI PF Salary Statement exported with clean Excel alignment!', 'success');
   };
 
   // --- ESI PF SHEET PDF EXPORT (PORTRAIT A4 PROFESSIONAL) ---
@@ -1419,30 +1461,35 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       });
   };
 
-  const handleExportBankAdviceExcel = async (type: 'canara' | 'non_canara') => {
-    const list = getBankAdviceList(type);
+  const handleExportBankAdviceExcel = async (type: 'canara' | 'non_canara' | 'all') => {
     const monthName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
-    const chequeNo = type === 'canara' ? canaraChequeNo : nonCanaraChequeNo;
-    const totalAmount = list.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-    const bankTitle = type === 'canara' ? 'CANARA BANK' : 'NON-CANARA (OTHER BANKS)';
+    const canaraList = getBankAdviceList('canara');
+    const nonCanaraList = getBankAdviceList('non_canara');
 
-    if (list.length === 0) {
-      showToast(`No approved workers found for ${bankTitle} advice. Please approve wages first.`, 'error');
+    if (canaraList.length === 0 && nonCanaraList.length === 0) {
+      showToast(`No approved workers found for bank advice. Please approve wages first.`, 'error');
       return;
     }
 
     try {
-      showToast(`Generating styled ${bankTitle} Excel advice sheet...`, 'info');
+      showToast(`Generating unified Bank Advice Excel file (Canara + Non-Canara)...`, 'info');
       const res = await api.post(
         '/wages/export-bank-advice-excel',
         {
-          type,
+          type: 'all',
           month: selectedMonth,
           year: selectedYear,
-          chequeNo,
+          canaraChequeNo,
+          nonCanaraChequeNo,
           companyAccountNo,
           bankBranchDate,
-          workers: list.map(w => ({
+          canaraWorkers: canaraList.map(w => ({
+            fullName: w.fullName,
+            bankAccountNo: w.bankAccountNo,
+            ifscCode: w.ifscCode,
+            amount: w.amount
+          })),
+          nonCanaraWorkers: nonCanaraList.map(w => ({
             fullName: w.fullName,
             bankAccountNo: w.bankAccountNo,
             ifscCode: w.ifscCode,
@@ -1458,66 +1505,43 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`;
+      link.download = `SRI_KRISHNA_CONSTRUCTIONS_BANK_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      showToast(`${bankTitle} Salary Advice exported to Excel with clean grid borders!`, 'success');
+      showToast(`Bank Salary Advice exported to Excel with Canara & Non-Canara sheets!`, 'success');
     } catch (err) {
       console.warn('Backend ExcelJS export failed, falling back to local XLSX:', err);
-      const rows = [
-        ['SRI KRISHNA CONSTRUCTIONS'],
-        ['SHAKTHINAGAR - 584170'],
-        [],
-        ['To,'],
-        ['The Branch Manager,'],
-        ['Canara Bank,'],
-        ['Deosugur - 584 170'],
-        [],
-        ['SUB: SALARY DISTRIBUTION'],
-        [`ACCOUNT No. ${companyAccountNo || '18133070005349'}`],
-        [`We are enclosed herewith a cheque for Rs. ${totalAmount.toLocaleString('en-IN')}/- towards workers payment for the month of ${monthName.toUpperCase()} ${selectedYear}. Please credit the amount to the following accounts:`],
-        [],
-        [`Cheque No: ${chequeNo || '-'}`, '', '', '', `Date: ${bankBranchDate || '-'}`],
-        ['SI NO', 'NAME', 'ACCOUNT NUMBER', 'IFSC CODE', 'AMOUNT (₹)'],
-        ...list.map((w, idx) => [
-          idx + 1,
-          (w.fullName || '').toUpperCase(),
-          w.bankAccountNo || '-',
-          (w.ifscCode || '').toUpperCase(),
-          Number(w.amount) || 0
-        ]),
-        ['', 'TOTAL AMOUNT', '', '', totalAmount],
-        [],
-        ['sunilgouda1280@gmail.com', '', '', 'For SRI KRISHNA CONSTRUCTIONS', ''],
-        ['', '', '', 'Authorized Signatory', '']
-      ];
+      const wb = XLSX.utils.book_new();
 
-      const worksheet = XLSX.utils.aoa_to_sheet(rows);
-      worksheet['!cols'] = [
-        { wch: 10 },
-        { wch: 35 },
-        { wch: 28 },
-        { wch: 20 },
-        { wch: 18 }
-      ];
-      worksheet['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
-        { s: { r: 10, c: 0 }, e: { r: 10, c: 4 } },
-        { s: { r: 12, c: 0 }, e: { r: 12, c: 2 } },
-        { s: { r: 12, c: 3 }, e: { r: 12, c: 4 } },
-        { s: { r: rows.length - 2, c: 0 }, e: { r: rows.length - 2, c: 1 } },
-        { s: { r: rows.length - 2, c: 3 }, e: { r: rows.length - 2, c: 4 } },
-        { s: { r: rows.length - 1, c: 3 }, e: { r: rows.length - 1, c: 4 } }
-      ];
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, type === 'canara' ? 'CANARA BANK' : 'NON CANARA');
-      XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_${type.toUpperCase()}_SALARY_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
-      showToast(`${bankTitle} Salary Advice exported to Excel!`, 'success');
+      if (canaraList.length > 0) {
+        const canaraRows = canaraList.map((w, idx) => ({
+          'SI NO': idx + 1,
+          'NAME': (w.fullName || '').toUpperCase(),
+          'ACCOUNT NUMBER': w.bankAccountNo || '-',
+          'IFSC CODE': (w.ifscCode || '').toUpperCase(),
+          'AMOUNT (Rs)': w.amount
+        }));
+        const canWs = XLSX.utils.json_to_sheet(canaraRows);
+        XLSX.utils.book_append_sheet(wb, canWs, 'CANARA BANK');
+      }
+
+      if (nonCanaraList.length > 0) {
+        const nonCanaraRows = nonCanaraList.map((w, idx) => ({
+          'SI NO': idx + 1,
+          'NAME': (w.fullName || '').toUpperCase(),
+          'ACCOUNT NUMBER': w.bankAccountNo || '-',
+          'IFSC CODE': (w.ifscCode || '').toUpperCase(),
+          'AMOUNT (Rs)': w.amount
+        }));
+        const nonCanWs = XLSX.utils.json_to_sheet(nonCanaraRows);
+        XLSX.utils.book_append_sheet(wb, nonCanWs, 'NON-CANARA');
+      }
+
+      XLSX.writeFile(wb, `SRI_KRISHNA_CONSTRUCTIONS_BANK_ADVICE_${monthName.toUpperCase()}_${selectedYear}.xlsx`);
+      showToast(`Bank Salary Advice exported to Excel successfully!`, 'success');
     }
-
   };
 
   const handleExportBankAdvicePdf = (type: 'canara' | 'non_canara') => {
@@ -1729,24 +1753,61 @@ export const MonthlyWages: React.FC<MonthlyWagesProps> = ({ currentUserRole }) =
     const mName = months.find(m => m.value === selectedMonth)?.name || selectedMonth;
     const selectedDivObj = divisions.find(d => d.id === selectedDivisionId);
     const divLabel = selectedDivObj ? selectedDivObj.name : 'ALL DIVISIONS';
+    const totalPf = list.reduce((sum, item) => sum + (Number(item.pfAmount) || 0), 0);
+    const totalEsi = list.reduce((sum, item) => sum + (Number(item.esiAmount) || 0), 0);
+    const totalSkc = totalPf + totalEsi;
 
-    const exportRows = list.map((w, index) => ({
-      'SL NO': index + 1,
-      'WORKER ID': w.empId,
-      'WORKER NAME': (w.fullName || '').toUpperCase(),
-      'FATHER NAME': (w.fatherName || '-').toUpperCase(),
-      'DESIGNATION': (w.designation || 'WORKER').toUpperCase(),
-      'DIVISION / SITE': (w.divisionName || divLabel).toUpperCase(),
-      'P.F. AMOUNT (Rs)': w.pfAmount,
-      'ESI AMOUNT (Rs)': w.esiAmount,
-      'SKC CONTRIBUTION (PF + ESI) (Rs)': w.skcContribAmount,
-    }));
+    const rows: any[] = [
+      ['SRI KRISHNA CONSTRUCTIONS'],
+      ['SHAKTHINAGAR - 584170'],
+      [`STATEMENT OF EMPLOYER'S SKC CONTRIBUTION (PF + ESI) - ${mName.toUpperCase()} ${selectedYear}`],
+      [`DIVISION / SITE: ${divLabel.toUpperCase()}`],
+      [],
+      ['SL NO', 'WORKER ID', 'WORKER NAME', 'FATHER NAME', 'DESIGNATION', 'DIVISION / SITE', 'PF AMOUNT (₹)', 'ESI AMOUNT (₹)', 'SKC TOTAL (₹)'],
+      ...list.map((w, index) => [
+        index + 1,
+        w.empId || '-',
+        (w.fullName || '').toUpperCase(),
+        (w.fatherName || '-').toUpperCase(),
+        (w.designation || 'WORKER').toUpperCase(),
+        (w.divisionName || divLabel).toUpperCase(),
+        Number(w.pfAmount) || 0,
+        Number(w.esiAmount) || 0,
+        Number(w.skcContribAmount) || 0
+      ]),
+      ['', '', 'TOTAL', '', '', '', totalPf, totalEsi, totalSkc],
+      [],
+      ['sunilgouda1280@gmail.com', '', '', '', '', '', 'For SRI KRISHNA CONSTRUCTIONS', '', ''],
+      ['', '', '', '', '', '', 'Authorized Signatory', '', '']
+    ];
 
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    const worksheet = XLSX.utils.aoa_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 8 },  // SL NO
+      { wch: 14 }, // WORKER ID
+      { wch: 30 }, // WORKER NAME
+      { wch: 26 }, // FATHER NAME
+      { wch: 18 }, // DESIGNATION
+      { wch: 22 }, // DIVISION
+      { wch: 16 }, // PF AMOUNT
+      { wch: 16 }, // ESI AMOUNT
+      { wch: 18 }  // SKC TOTAL
+    ];
+
+    worksheet['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } },
+      { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } },
+      { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } },
+      { s: { r: rows.length - 2, c: 0 }, e: { r: rows.length - 2, c: 3 } },
+      { s: { r: rows.length - 2, c: 6 }, e: { r: rows.length - 2, c: 8 } },
+      { s: { r: rows.length - 1, c: 6 }, e: { r: rows.length - 1, c: 8 } }
+    ];
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'SKC CONTRIBUTION');
     XLSX.writeFile(workbook, `SRI_KRISHNA_CONSTRUCTIONS_SKC_CONTRIBUTION_${mName.toUpperCase()}_${selectedYear}.xlsx`);
-    showToast('SKC Contribution statement exported to Excel successfully!', 'success');
+    showToast('SKC Contribution statement exported with aligned Excel formatting!', 'success');
   };
 
   const handleExportSkcContribPdf = () => {

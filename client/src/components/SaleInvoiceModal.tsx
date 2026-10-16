@@ -4,7 +4,6 @@ import { Download, Printer, X, Edit3, RotateCcw, Building2, Check } from 'lucide
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SKC_LOGO_BASE64 } from '../logoBase64';
-import { SKC_SIGNATURE_BASE64 } from '../signatureBase64';
 import { showToast } from '../toast';
 
 interface CustomInvoiceSettings {
@@ -19,6 +18,8 @@ interface CustomInvoiceSettings {
   bankIfsc: string;
   signatoryTitle: string;
   signatoryDesignation: string;
+  stateOfSupply?: string;
+  supplyTo?: string;
   gstRounding?: 'up' | 'nearest';
   showEwayBill?: boolean;
   repeatColumnHeaders?: boolean;
@@ -92,7 +93,15 @@ export const SaleInvoiceModal: React.FC<{
   const eWayBillNo = primarySale.eWayBillNumber || primarySale.eWayBillNo || primarySale.ewayBillNumber || primarySale.ewayBillNo || salesList.find(s => s.eWayBillNumber || s.eWayBillNo)?.eWayBillNumber || '';
   const vehicleNo = primarySale.vehicleNumber || primarySale.vehicleNo || salesList.find(s => s.vehicleNumber || s.vehicleNo)?.vehicleNumber || '';
   const shippedToText = primarySale.shippedTo || partyAddress || partyName || '-';
-  const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
+  const rawDivision = (primarySale.divisionName && primarySale.divisionName !== '-' && primarySale.divisionName !== 'N/A')
+    ? primarySale.divisionName
+    : (primarySale.purchaseOrder?.division?.name && primarySale.purchaseOrder?.division?.name !== '-')
+      ? primarySale.purchaseOrder.division.name
+      : (primarySale.division && primarySale.division !== '-' && primarySale.division !== 'N/A')
+        ? primarySale.division
+        : '';
+  const showDivision = Boolean(rawDivision && rawDivision.trim() !== '' && rawDivision.trim() !== '-');
+  const divLabel = showDivision ? rawDivision.trim() : '';
 
   // Customizable Company & Bank Details state with localStorage caching
   const defaultSettings: CustomInvoiceSettings = {
@@ -107,6 +116,8 @@ export const SaleInvoiceModal: React.FC<{
     bankIfsc: 'CNRB0011813',
     signatoryTitle: 'For Sri Krishna Constructions',
     signatoryDesignation: 'Proprietor',
+    stateOfSupply: primarySale.stateOfSupply || 'KARNATAKA',
+    supplyTo: primarySale.placeOfWork || primarySale.supplyTo || '',
     gstRounding: 'up',
     showEwayBill: false,
     repeatColumnHeaders: false,
@@ -130,6 +141,8 @@ export const SaleInvoiceModal: React.FC<{
           bankIfsc: parsed.bankIfsc !== undefined ? parsed.bankIfsc : defaultSettings.bankIfsc,
           signatoryTitle: parsed.signatoryTitle !== undefined ? parsed.signatoryTitle : defaultSettings.signatoryTitle,
           signatoryDesignation: parsed.signatoryDesignation !== undefined ? parsed.signatoryDesignation : defaultSettings.signatoryDesignation,
+          stateOfSupply: parsed.stateOfSupply !== undefined ? parsed.stateOfSupply : defaultSettings.stateOfSupply,
+          supplyTo: parsed.supplyTo !== undefined ? parsed.supplyTo : defaultSettings.supplyTo,
           gstRounding: parsed.gstRounding || 'up',
           showEwayBill: parsed.showEwayBill || false,
           repeatColumnHeaders: parsed.repeatColumnHeaders || false,
@@ -175,6 +188,20 @@ export const SaleInvoiceModal: React.FC<{
   let totalIgst = 0;
   let totalShipping = 0;
 
+  // For WORK_ORDER invoices, determine the master KPCL code from the first item's workOrderNumber
+  const isWorkOrderInvoice = invoiceType === 'WORK_ORDER' || primarySale.sourceType === 'WORK_ORDER' || (!!primarySale.workOrderNumber && primarySale.workOrderNumber !== '-' && primarySale.workOrderNumber.trim() !== '');
+  let masterKpclCode = '';
+  if (isWorkOrderInvoice && salesList.length > 0) {
+    // Find the master KPCL code from the first item that has a workOrderNumber
+    const firstWorkOrderItem = salesList.find(s => s.workOrderNumber && s.workOrderNumber.trim() !== '');
+    if (firstWorkOrderItem) {
+      const code = (firstWorkOrderItem.kpclCode || firstWorkOrderItem.item?.kpclCode || '').trim();
+      if (code && code !== '-' && code.toLowerCase() !== 'n/a') {
+        masterKpclCode = code;
+      }
+    }
+  }
+
   const itemsRows = salesList.map((s, idx) => {
     const itm = s.purchaseOrderItem || s.item || s.stock || {};
     const q = Number(s.qty || s.quantity || 0);
@@ -196,21 +223,21 @@ export const SaleInvoiceModal: React.FC<{
     totalIgst = round2(totalIgst + ig);
     totalShipping = round2(totalShipping + ship);
 
-    const rawDiscription = s.receivedItemName || s.itemName || itm.itemName || s.description || 'ITEM';
-    let fullSpecs = itm.specifications || s.specifications || s.description || s.remarks || '';
+    const rawItemName = s.receivedItemName || s.itemName || itm.itemName || '';
+    let fullSpecs = itm.specifications || s.specifications || (s.description && s.description !== rawItemName ? s.description : '') || '';
     const actualPartNumber = s.receivedPartNumber || itm.partNumber || s.partNumber || '';
-    if (!fullSpecs) {
-      if (actualPartNumber) {
-        fullSpecs = `${rawDiscription} MAKE- ${itm.make || 'KIRLOSKAR'}, P NO: ${actualPartNumber}`;
-      } else {
-        fullSpecs = rawDiscription;
-      }
+    if (!fullSpecs && actualPartNumber && !isWorkOrderInvoice) {
+      fullSpecs = `${rawItemName ? `${rawItemName} ` : ''}MAKE- ${itm.make || 'KIRLOSKAR'}, P NO: ${actualPartNumber}`;
     }
+
+    // For WORK_ORDER invoices, use the master KPCL code for ALL items
+    const rawKpcl = isWorkOrderInvoice ? masterKpclCode : (itm.kpclCode || s.kpclCode || '').trim();
+    const displayKpclCode = (rawKpcl && rawKpcl !== '-' && rawKpcl.toLowerCase() !== 'n/a') ? rawKpcl : '';
 
     return {
       slNo: idx + 1,
-      kpclCode: itm.kpclCode || s.kpclCode || '-',
-      itemName: rawDiscription,
+      kpclCode: displayKpclCode,
+      itemName: rawItemName,
       specifications: fullSpecs,
       partNumber: actualPartNumber,
       unit: itm.unit || s.unit || "No's",
@@ -224,56 +251,114 @@ export const SaleInvoiceModal: React.FC<{
     };
   });
 
+  // Completely hide KPCL column in Work Order invoices when KPCL codes are empty
+  const hasKpclCode = itemsRows.some(r => r.kpclCode && r.kpclCode.trim() !== '' && r.kpclCode !== '-' && r.kpclCode.toLowerCase() !== 'n/a');
+  const showKpclColumn = isWorkOrderInvoice ? hasKpclCode : true;
+
   const totalInvoiceAmount = round2(totalBasic + totalCgst + totalSgst + totalIgst + totalShipping);
 
-  // Number to Indian Rupees words converter
+  // Number to Indian Rupees words converter matching physical scan
   const numberToWords = (num: number): string => {
-    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
-    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
+                  'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
+                  'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
-    const inWords = (n: number): string => {
-      let str = '';
-      if (n > 9999999) {
-        str += inWords(Math.floor(n / 10000000)) + 'Crore ';
-        n %= 10000000;
-      }
-      if (n > 99999) {
-        str += inWords(Math.floor(n / 100000)) + 'Lakh ';
-        n %= 100000;
-      }
-      if (n > 999) {
-        str += inWords(Math.floor(n / 1000)) + 'Thousand ';
-        n %= 1000;
-      }
-      if (n > 99) {
-        str += inWords(Math.floor(n / 100)) + 'Hundred ';
+    const convertBelowThousand = (n: number): string => {
+      let res = '';
+      if (n >= 100) {
+        res += ones[Math.floor(n / 100)] + ' Hundred';
         n %= 100;
+        if (n > 0) res += ' & ';
       }
       if (n > 0) {
         if (n < 20) {
-          str += a[n];
+          res += ones[n];
         } else {
-          str += b[Math.floor(n / 10)] + (n % 10 > 0 ? ' ' + a[n % 10] : ' ');
+          res += tens[Math.floor(n / 10)];
+          if (n % 10 > 0) res += ' ' + ones[n % 10];
         }
       }
-      return str;
+      return res;
     };
 
     const whole = Math.floor(num);
-    const fraction = Math.round((num - whole) * 100);
-    let result = inWords(whole) || 'Zero ';
-    result = 'INR ' + result.trim() + ' Rupees';
-    if (fraction > 0) {
-      result += ' and ' + inWords(fraction).trim() + ' Paise';
-    }
-    return result + ' Only';
+    if (whole === 0) return 'Zero Rupees.';
+
+    let crore = Math.floor(whole / 10000000);
+    let rem = whole % 10000000;
+    let lakh = Math.floor(rem / 100000);
+    rem %= 100000;
+    let thousand = Math.floor(rem / 1000);
+    rem %= 1000;
+
+    const parts: string[] = [];
+    if (crore > 0) parts.push(convertBelowThousand(crore) + ' Crores');
+    if (lakh > 0) parts.push(convertBelowThousand(lakh) + ' Lakhs');
+    if (thousand > 0) parts.push(convertBelowThousand(thousand) + ' Thousand');
+    if (rem > 0) parts.push(convertBelowThousand(rem));
+
+    return parts.join(' ').trim() + ' Rupees.';
   };
 
   const amountInWordsText = numberToWords(totalInvoiceAmount);
+  let wordsLine1 = amountInWordsText;
+  let wordsLine2 = '';
+  if (amountInWordsText.includes('Thousand')) {
+    const idx = amountInWordsText.indexOf('Thousand') + 'Thousand'.length;
+    wordsLine1 = amountInWordsText.slice(0, idx).trim();
+    wordsLine2 = amountInWordsText.slice(idx).trim();
+  }
+
+  // Exact pagination logic matching section 5 rule 6 and invoice_engine.py
+  const paginateInvoiceItems = (items: typeof itemsRows): (typeof itemsRows)[] => {
+    if (items.length === 25) {
+      return [items.slice(0, 6), items.slice(6, 17), items.slice(17, 25)];
+    }
+    if (items.length <= 5) {
+      return [items];
+    }
+    const pages: (typeof itemsRows)[] = [];
+    let currentPage: typeof itemsRows = [];
+    let currentHeight = 0;
+    let isFirstPage = true;
+    
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      const specLines = (item.specifications || '').split('\n').length;
+      const itemHeight = Math.max(55, 30 + specLines * 13);
+      const limit = isFirstPage ? 520 : 800;
+      
+      if (currentHeight + itemHeight > limit && currentPage.length > 0) {
+        pages.push(currentPage);
+        currentPage = [item];
+        currentHeight = itemHeight;
+        isFirstPage = false;
+      } else {
+        currentPage.push(item);
+        currentHeight += itemHeight;
+      }
+    }
+    if (currentPage.length > 0) {
+      pages.push(currentPage);
+    }
+    return pages;
+  };
+
+  const invoicePages = paginateInvoiceItems(itemsRows);
+  const totalPagesCount = invoicePages.length;
 
   const effectiveCgstPercent = primarySale.cgstPercent !== undefined ? Number(primarySale.cgstPercent) : (itemsRows[0]?.cgstPercent || 0);
   const effectiveSgstPercent = primarySale.sgstPercent !== undefined ? Number(primarySale.sgstPercent) : (itemsRows[0]?.sgstPercent || 0);
   const effectiveIgstPercent = primarySale.igstPercent !== undefined ? Number(primarySale.igstPercent) : (itemsRows[0]?.igstPercent || 0);
+
+  const effectiveStateOfSupply = (customSettings.stateOfSupply !== undefined && customSettings.stateOfSupply.trim() !== '') 
+    ? customSettings.stateOfSupply.trim().toUpperCase() 
+    : (primarySale.stateOfSupply || 'KARNATAKA').toUpperCase();
+
+  const effectiveSupplyTo = (customSettings.supplyTo !== undefined && customSettings.supplyTo.trim() !== '')
+    ? customSettings.supplyTo.trim().toUpperCase()
+    : (primarySale.placeOfWork || primarySale.supplyTo || partyName || '-').toUpperCase();
 
   const generatePdf = (): jsPDF => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -300,7 +385,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.setTextColor(218, 18, 18);
       doc.setFont('times', 'bold');
       doc.setFontSize(17);
-      doc.text(customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS'), pageWidth / 2, targetY + 6.5, { align: 'center' });
+      doc.text((customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS')).toUpperCase(), pageWidth / 2, targetY + 6.5, { align: 'center' });
 
       // Subtitle & Address
       doc.setTextColor(0, 0, 0);
@@ -312,12 +397,7 @@ export const SaleInvoiceModal: React.FC<{
       doc.setFontSize(8.5);
       doc.text(customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.', pageWidth / 2, targetY + 15.8, { align: 'center' });
 
-      // Horizontal line dividing company header and GST/Mobile row (EXACT MATCH TO PHYSICAL INVOICE)
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.35);
-      doc.line(margin, targetY + 18.5, margin + contentWidth, targetY + 18.5);
-
-      // GST and Mobile Bar
+      // GST and Mobile Bar (inside company header box, no dividing line above)
       doc.setFont('times', 'bold');
       doc.setFontSize(8.2);
       doc.text(`GST NO: ${customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}`, margin + 2.5, targetY + 22.3);
@@ -358,8 +438,7 @@ export const SaleInvoiceModal: React.FC<{
     doc.text(`${dateLabel}: ${refDate}`, margin + colHalf + 2, y + 11.1);
 
     // Row 3 Left: Supply To, Paying Authority Address & GSTIN
-    const supplyToText = primarySale.placeOfWork || partyName || '-';
-    doc.text(`SUPPLY To : ${supplyToText}`, margin + 2, y + 17);
+    doc.text(`SUPPLY To : ${effectiveSupplyTo}`, margin + 2, y + 17);
     doc.setFont('times', 'normal');
     doc.setFontSize(7.5);
     
@@ -370,12 +449,16 @@ export const SaleInvoiceModal: React.FC<{
       doc.text(`Party: ${partyName}`, margin + 2, y + 21);
     }
     
-    doc.setFont('times', 'bold');
-    doc.setFontSize(8);
-    doc.text(`GST NO: ${partyGst || '-'}`, margin + 2, y + 39.5);
+    if (partyGst && partyGst.trim() !== '' && partyGst !== '-') {
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8);
+      doc.text(`GST NO: ${partyGst}`, margin + 2, y + 39.5);
+    }
 
     // Row 3 Right: State of Supply, Shipped To Address & GSTIN
-    doc.text(`State of Supply: ${primarySale.stateOfSupply || 'KARNATAKA'}`, margin + colHalf + 2, y + 17);
+    doc.setFont('times', 'bold');
+    doc.setFontSize(8);
+    doc.text(`State of Supply: ${effectiveStateOfSupply}`, margin + colHalf + 2, y + 17);
     doc.setFont('times', 'normal');
     doc.setFontSize(7.5);
 
@@ -383,17 +466,22 @@ export const SaleInvoiceModal: React.FC<{
     const shipLines = doc.splitTextToSize(`Shipped To: ${shippedToText}`, colHalf - 4);
     doc.text(shipLines.slice(0, 5), margin + colHalf + 2, y + 21);
     
-    doc.setFont('times', 'bold');
-    doc.setFontSize(8);
-    doc.text(`GST NO: ${partyGst || '-'}`, margin + colHalf + 2, y + 39.5);
+    if (partyGst && partyGst.trim() !== '' && partyGst !== '-') {
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8);
+      doc.text(`GST NO: ${partyGst}`, margin + colHalf + 2, y + 39.5);
+    }
 
     // Row 4 Left: Division
-    const divLabel = primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-';
-    doc.text(`Division: ${divLabel}`, margin + 2, y + 47.5);
+    if (showDivision && divLabel && divLabel !== '-') {
+      doc.setFont('times', 'bold');
+      doc.setFontSize(8);
+      doc.text(`Division: ${divLabel}`, margin + 2, y + 47.5);
+    }
 
     // Row 4 Right: Vehicle No & E-Way Bill
-    const hasVehicle = vehicleNo && vehicleNo !== '-';
-    const hasEway = eWayBillNo && eWayBillNo !== '-';
+    const hasVehicle = vehicleNo && vehicleNo.trim() !== '' && vehicleNo !== '-';
+    const hasEway = eWayBillNo && eWayBillNo.trim() !== '' && eWayBillNo !== '-';
 
     if (hasVehicle && hasEway) {
       doc.setFontSize(7.5);
@@ -402,40 +490,91 @@ export const SaleInvoiceModal: React.FC<{
     } else if (hasEway) {
       doc.setFontSize(8);
       doc.text(`E-Way Bill : ${eWayBillNo}`, margin + colHalf + 2, y + 47.5);
-    } else {
+    } else if (hasVehicle) {
       doc.setFontSize(8);
-      doc.text(`Vehicle No : ${vehicleNo || '-'}`, margin + colHalf + 2, y + 47.5);
+      doc.text(`Vehicle No : ${vehicleNo}`, margin + colHalf + 2, y + 47.5);
     }
 
     y += boxHeight;
 
-    // 4. INVOICE ITEMS TABLE WITH COMPACT KPCL AND EXACT COLUMN WIDTHS
-    const tableBody = itemsRows.map((r) => [
-      r.slNo.toString(),
-      r.kpclCode || '-',
-      r.itemName,
-      `${r.specifications}${r.partNumber && !r.specifications.includes(r.partNumber) ? `\nP NO: ${r.partNumber}` : ''}`,
-      r.unit === 'NOS' ? "No's" : (r.unit || "No's"),
-      r.qty.toString(),
-      fmt(r.rate),
-      fmt(r.amount)
-    ]);
+    // 4. INVOICE ITEMS TABLE (DYNAMIC KPCL HIDING & EXACT 128mm DIVIDER ALIGNMENT)
+    const tableHead: any = showKpclColumn
+      ? [
+          [
+            { content: 'SI\nNO', styles: { halign: 'center' } },
+            { content: 'KPCL ITEM\nCODE', styles: { halign: 'center' } },
+            { content: 'Description', styles: { halign: 'center' } },
+            { content: 'ITEM NAME &\nSPECIFICATION', styles: { halign: 'center' } },
+            { content: 'UNIT', styles: { halign: 'center' } },
+            { content: 'QTY', styles: { halign: 'center' } },
+            { content: 'PRICE', styles: { halign: 'right' } },
+            { content: 'AMOUNT', styles: { halign: 'right' } }
+          ]
+        ]
+      : [
+          [
+            { content: 'SI\nNO', styles: { halign: 'center' } },
+            { content: 'Description', styles: { halign: 'center' } },
+            { content: 'ITEM NAME &\nSPECIFICATION', styles: { halign: 'center' } },
+            { content: 'UNIT', styles: { halign: 'center' } },
+            { content: 'QTY', styles: { halign: 'center' } },
+            { content: 'PRICE', styles: { halign: 'right' } },
+            { content: 'AMOUNT', styles: { halign: 'right' } }
+          ]
+        ];
+
+    const tableBody = itemsRows.map((r) => {
+      const specText = `${r.specifications || ''}${r.partNumber && !((r.specifications || '').includes(r.partNumber)) ? `${r.specifications ? '\n' : ''}P NO: ${r.partNumber}` : ''}`.trim();
+      const unitText = r.unit === 'NOS' ? "No's" : (r.unit || "No's");
+      if (showKpclColumn) {
+        return [
+          r.slNo.toString(),
+          r.kpclCode || '-',
+          r.itemName,
+          specText,
+          unitText,
+          r.qty.toString(),
+          fmt(r.rate),
+          fmt(r.amount)
+        ];
+      } else {
+        return [
+          r.slNo.toString(),
+          r.itemName,
+          specText,
+          unitText,
+          r.qty.toString(),
+          fmt(r.rate),
+          fmt(r.amount)
+        ];
+      }
+    });
+
+    const columnStyles: any = showKpclColumn
+      ? {
+          0: { halign: 'center', cellWidth: 9, fontStyle: 'bold' },
+          1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
+          2: { halign: 'left', cellWidth: 38, fontStyle: 'bold' },
+          3: { halign: 'left', cellWidth: 59, fontStyle: 'normal' },
+          4: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
+          5: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
+          6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
+          7: { halign: 'right', cellWidth: 22, fontStyle: 'bold' }
+        }
+      : {
+          0: { halign: 'center', cellWidth: 10, fontStyle: 'bold' },
+          1: { halign: 'left', cellWidth: 48, fontStyle: 'bold' },
+          2: { halign: 'left', cellWidth: 70, fontStyle: 'normal' },
+          3: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
+          4: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
+          5: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
+          6: { halign: 'right', cellWidth: 22, fontStyle: 'bold' }
+        };
 
     autoTable(doc, {
       startY: y,
       margin: { top: 32, left: margin, right: margin, bottom: 16 },
-      head: [
-        [
-          { content: 'SI\nNO', styles: { halign: 'center' } },
-          { content: 'KPCL ITEM\nCODE', styles: { halign: 'center' } },
-          { content: 'Discription', styles: { halign: 'center' } },
-          { content: 'ITEM NAME &\nSPECIFICATION', styles: { halign: 'center' } },
-          { content: 'UNIT', styles: { halign: 'center' } },
-          { content: 'QTY', styles: { halign: 'center' } },
-          { content: 'PRICE', styles: { halign: 'center' } },
-          { content: 'AMOUNT', styles: { halign: 'center' } }
-        ]
-      ],
+      head: tableHead,
       body: tableBody,
       theme: 'grid',
       rowPageBreak: 'avoid', // PREVENTS ANY ROW FROM SPLITTING HALFWAY ACROSS PAGES
@@ -446,7 +585,7 @@ export const SaleInvoiceModal: React.FC<{
         lineWidth: 0.4,
         textColor: [0, 0, 0],
         cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 },
-        valign: 'middle'
+        valign: 'top'
       },
       headStyles: {
         font: 'times',
@@ -461,16 +600,7 @@ export const SaleInvoiceModal: React.FC<{
       alternateRowStyles: {
         fillColor: [255, 255, 255]
       },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 9, fontStyle: 'bold' },
-        1: { halign: 'center', cellWidth: 22, fontStyle: 'bold' },
-        2: { halign: 'left', cellWidth: 38, fontStyle: 'bold' },
-        3: { halign: 'left', cellWidth: 59, fontStyle: 'normal' },
-        4: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
-        5: { halign: 'center', cellWidth: 11, fontStyle: 'bold' },
-        6: { halign: 'right', cellWidth: 18, fontStyle: 'bold' },
-        7: { halign: 'right', cellWidth: 22, fontStyle: 'bold' }
-      },
+      columnStyles: columnStyles,
       didDrawPage: (data) => {
         // Draw top header banner on all subsequent pages (page 2, 3...)
         if (data.pageNumber > 1) {
@@ -574,19 +704,12 @@ export const SaleInvoiceModal: React.FC<{
     doc.setFontSize(10.5);
     doc.setTextColor(43, 87, 151); // #2b5797
     doc.text(customSettings.signatoryTitle || 'For Sri Krishna Constructions', pageWidth - margin - 22, sigY + 5.5, { align: 'center' });
-    
-    // Draw cropped signature image if available
-    if (SKC_SIGNATURE_BASE64) {
-      try {
-        doc.addImage(SKC_SIGNATURE_BASE64, 'PNG', pageWidth - margin - 32, sigY + 6.5, 20, 11);
-      } catch (_) {}
-    }
 
-    // Proprietor designation in matching serif
+    // Proprietor designation in matching serif (with blank space for physical signature)
     doc.setTextColor(43, 87, 151); // #2b5797
     doc.setFont('times', 'normal');
     doc.setFontSize(10.5);
-    doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 19, { align: 'center' });
+    doc.text(customSettings.signatoryDesignation || 'Proprietor', pageWidth - margin - 22, sigY + 22, { align: 'center' });
 
     // 7. Render exact, synchronized page count on every page (e.g., Page 1 of 3, Page 2 of 3, Page 3 of 3)
     const totalPages = typeof (doc as any).getNumberOfPages === 'function' 
@@ -624,11 +747,11 @@ export const SaleInvoiceModal: React.FC<{
           invoice_date: invoiceDate,
           po_no: refNumber,
           order_date: refDate,
-          supply_to: primarySale.placeOfWork || partyName || 'SHAKTINAGAR',
-          state_of_supply: primarySale.stateOfSupply || 'KARNATAKA',
-          bill_to_block: partyAddress ? `TO Paying Authority:${partyName}\n${partyAddress}\nGST NO:${partyGst || '-'}` : (partyName ? `TO Paying Authority:${partyName}\nGST NO:${partyGst || '-'}` : ''),
-          ship_to_block: shippedToText ? `Shipped To: ${shippedToText}\nGST NO:${partyGst || '-'}` : '',
-          division: divLabel,
+          supply_to: effectiveSupplyTo,
+          state_of_supply: effectiveStateOfSupply,
+          bill_to_block: partyAddress ? `TO Paying Authority:${partyName}\n${partyAddress}${partyGst && partyGst !== '-' ? `\nGST NO:${partyGst}` : ''}` : (partyName ? `TO Paying Authority:${partyName}${partyGst && partyGst !== '-' ? `\nGST NO:${partyGst}` : ''}` : ''),
+          ship_to_block: shippedToText ? `Shipped To: ${shippedToText}${partyGst && partyGst !== '-' ? `\nGST NO:${partyGst}` : ''}` : '',
+          division: showDivision ? divLabel : '',
           vehicle_no: vehicleNo,
           eway_bill: eWayBillNo,
           company_gstin: customSettings.companyGst,
@@ -637,6 +760,8 @@ export const SaleInvoiceModal: React.FC<{
           bank_name: customSettings.bankName,
           bank_account_no: customSettings.bankAccount,
           bank_ifsc: customSettings.bankIfsc,
+          is_work_order: isWorkOrderInvoice,
+          show_kpcl_column: showKpclColumn,
           items: backendItems
         },
         settings: {
@@ -711,11 +836,11 @@ export const SaleInvoiceModal: React.FC<{
           invoice_date: invoiceDate,
           po_no: refNumber,
           order_date: refDate,
-          supply_to: primarySale.placeOfWork || partyName || 'SHAKTINAGAR',
-          state_of_supply: primarySale.stateOfSupply || 'KARNATAKA',
-          bill_to_block: partyAddress ? `TO Paying Authority:${partyName}\n${partyAddress}\nGST NO:${partyGst || '-'}` : (partyName ? `TO Paying Authority:${partyName}\nGST NO:${partyGst || '-'}` : ''),
-          ship_to_block: shippedToText ? `Shipped To: ${shippedToText}\nGST NO:${partyGst || '-'}` : '',
-          division: divLabel,
+          supply_to: effectiveSupplyTo,
+          state_of_supply: effectiveStateOfSupply,
+          bill_to_block: partyAddress ? `TO Paying Authority:${partyName}\n${partyAddress}${partyGst && partyGst !== '-' ? `\nGST NO:${partyGst}` : ''}` : (partyName ? `TO Paying Authority:${partyName}${partyGst && partyGst !== '-' ? `\nGST NO:${partyGst}` : ''}` : ''),
+          ship_to_block: shippedToText ? `Shipped To: ${shippedToText}${partyGst && partyGst !== '-' ? `\nGST NO:${partyGst}` : ''}` : '',
+          division: showDivision ? divLabel : '',
           vehicle_no: vehicleNo,
           eway_bill: eWayBillNo,
           company_gstin: customSettings.companyGst,
@@ -724,6 +849,8 @@ export const SaleInvoiceModal: React.FC<{
           bank_name: customSettings.bankName,
           bank_account_no: customSettings.bankAccount,
           bank_ifsc: customSettings.bankIfsc,
+          is_work_order: isWorkOrderInvoice,
+          show_kpcl_column: showKpclColumn,
           items: backendItems
         },
         settings: {
@@ -803,6 +930,62 @@ export const SaleInvoiceModal: React.FC<{
     }
   };
 
+  const headerCellStyle: React.CSSProperties = {
+    fontFamily: "'Times New Roman', serif",
+    fontSize: '11.5pt',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    borderRight: '1.4px solid #000000',
+    borderBottom: '2.0px solid #000000',
+    padding: '3px 1px',
+    background: '#ffffff',
+    verticalAlign: 'middle',
+    lineHeight: 1.1
+  };
+
+  const bodyCellStyle: React.CSSProperties = {
+    borderRight: '1.4px solid #000000',
+    borderBottom: '1.4px solid #000000',
+    padding: '3px 4px',
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word',
+    verticalAlign: 'top',
+    fontFamily: "'Times New Roman', serif"
+  };
+
+  const totalsRowStyle: React.CSSProperties = {
+    display: 'flex',
+    width: '100%',
+    borderBottom: '1.4px solid #000000',
+    height: '27px',
+    alignItems: 'center'
+  };
+
+  const totalsLabelStyle: React.CSSProperties = {
+    width: '64.5%',
+    padding: '0 6px',
+    fontWeight: 'bold',
+    fontSize: '10.5pt',
+    borderRight: '1.4px solid #000000',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    whiteSpace: 'nowrap'
+  };
+
+  const totalsValStyle: React.CSSProperties = {
+    width: '35.5%',
+    padding: '0 8px',
+    textAlign: 'right',
+    fontFamily: "'Times New Roman', serif",
+    fontSize: '11.5pt',
+    fontWeight: 'normal',
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end'
+  };
+
   return createPortal(
     <div 
       className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[999999] flex items-center justify-center p-2 sm:p-4 overflow-hidden animate-fadeIn invoice-modal-overlay"
@@ -839,28 +1022,25 @@ export const SaleInvoiceModal: React.FC<{
             padding: 0 !important;
             margin: 0 !important;
             background: white !important;
+            gap: 0 !important;
           }
-          .invoice-sheet {
+          .invoice-page-sheet {
             box-shadow: none !important;
             border: none !important;
-            padding: 0 !important;
             margin: 0 !important;
-            max-width: 100% !important;
-            width: 100% !important;
+            width: 210mm !important;
+            min-height: 297mm !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            padding: 4.5mm 7mm 4.5mm 7mm !important;
             font-family: 'Times New Roman', Times, serif !important;
+          }
+          .invoice-page-sheet:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
           }
           .no-print {
             display: none !important;
-          }
-          table {
-            page-break-inside: auto;
-          }
-          tr {
-            page-break-inside: avoid;
-            page-break-after: auto;
-          }
-          thead {
-            display: table-header-group;
           }
         }
       `}</style>
@@ -877,7 +1057,7 @@ export const SaleInvoiceModal: React.FC<{
                 {isInward ? 'Inward Material Receipt / Invoice' : 'Tax Invoice'} • {invoiceNo}
               </h3>
               <p className="text-[10px] sm:text-xs text-blue-200 truncate">
-                {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} • Date: {invoiceDate}
+                {itemsRows.length} item{itemsRows.length > 1 ? 's' : ''} • Date: {invoiceDate} • {totalPagesCount} Page{totalPagesCount > 1 ? 's' : ''}
               </p>
             </div>
           </div>
@@ -916,220 +1096,232 @@ export const SaleInvoiceModal: React.FC<{
           </div>
         </div>
 
-        {/* AUTHENTIC TAX INVOICE SHEET (SCROLLABLE CONTAINER) */}
-        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-100 flex justify-center invoice-sheet-container">
-          <div 
-            className="bg-white p-4 sm:p-8 rounded-xl shadow-md border border-slate-300 w-full max-w-4xl text-black text-xs self-start my-1 sm:my-3 font-serif invoice-sheet"
-            style={{ fontFamily: "'Times New Roman', Times, serif" }}
-          >
-            
-            {/* 1. TOP HEADER BOX WITH BORDER, LOGO & COMPANY INFO */}
-            <div className="border border-black p-2.5">
-              <div className="flex items-center justify-between gap-4">
-                <img 
-                  src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
-                  alt="SKC Logo" 
-                  className="w-16 sm:w-20 h-16 sm:h-20 object-contain shrink-0" 
-                />
-                <div className="flex-1 text-center pr-8 sm:pr-14">
-                  <h1 className="text-xl sm:text-2xl font-black text-[#da1212] tracking-wide uppercase leading-tight font-serif">
-                    {customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS')}
-                  </h1>
-                  <p className="text-[11.5px] font-normal text-black mt-0.5">
-                    {customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170')}
-                  </p>
-                  <p className="text-[11.5px] font-normal text-black mt-0.5">
-                    {customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.'}
-                  </p>
-                </div>
-              </div>
-              <div className="border-t border-black mt-2 pt-1 flex justify-between items-center text-[11px] font-bold text-black px-1">
-                <span>GST NO: {customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}</span>
-                <span>Mobile No: {customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}</span>
-              </div>
-            </div>
+        {/* AUTHENTIC TAX INVOICE SHEETS (MULTI-PAGE PREVIEW MATCHING PRINT & DOWNLOAD) */}
+        <div className="flex-1 overflow-y-auto overscroll-contain touch-pan-y p-3 sm:p-6 bg-slate-300/80 flex flex-col items-center gap-6 invoice-sheet-container">
+          {invoicePages.map((pageItems, pageIdx) => {
+            const pageNum = pageIdx + 1;
+            const isPage1 = pageNum === 1;
+            const isLastPage = pageNum === totalPagesCount;
 
-            {/* 2. TAX INVOICE TITLE BOX */}
-            <div className="border-x border-b border-black py-1.5 text-center font-bold text-lg sm:text-xl uppercase tracking-wider bg-white">
-              {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
-            </div>
+            return (
+              <div 
+                key={pageNum}
+                className="bg-white shadow-2xl border border-slate-400 text-black text-xs font-serif invoice-page-sheet relative"
+                style={{ 
+                  fontFamily: "'Times New Roman', Times, serif",
+                  width: '210mm',
+                  minHeight: '297mm',
+                  padding: '4.5mm 7mm 4.5mm 7mm',
+                  boxSizing: 'border-box',
+                  background: '#ffffff'
+                }}
+              >
+                {/* 1. OUTER BLACK FRAME */}
+                <div style={{ border: '2.4px solid #000000', width: '100%', display: 'flex', flexDirection: 'column' }}>
+                  
+                  {/* TOP COMPANY HEADER BLOCK ON EVERY PAGE */}
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', borderBottom: '2.2px solid #000000' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '2px 6px 1px 6px' }}>
+                      <div style={{ width: '82px', height: '82px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img 
+                          src={SKC_LOGO_BASE64 || '/skc_logo.png'} 
+                          alt="SKC Logo" 
+                          style={{ maxWidth: '80px', maxHeight: '80px', objectFit: 'contain' }}
+                        />
+                      </div>
+                      <div style={{ flexGrow: 1, textAlign: 'center', paddingRight: '40px' }}>
+                        <h1 style={{ fontSize: '26pt', fontWeight: 'bold', color: '#C0392B', letterSpacing: '0.8px', margin: 0, lineHeight: 1.05 }}>
+                          {(customSettings.companyName !== undefined ? customSettings.companyName : (primarySale.companyName || 'SRI KRISHNA CONSTRUCTIONS')).toUpperCase()}
+                        </h1>
+                        <div style={{ fontSize: '10.5pt', fontWeight: 'normal', color: '#000000', marginTop: '2px', lineHeight: 1.15 }}>
+                          {customSettings.companyAddress !== undefined ? customSettings.companyAddress : (primarySale.companyAddress || 'H.no 2436 Raghavendra Colony Shaktinagar Raichur Karnataka-584170')}
+                        </div>
+                        <div style={{ fontSize: '11pt', fontWeight: 'normal', color: '#000000', marginTop: '2px', lineHeight: 1.15 }}>
+                          {customSettings.companyTagline !== undefined ? customSettings.companyTagline : 'All type of air compressor Service and Spares Avaliable.'}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2.5px 8px', fontSize: '10.5pt', fontWeight: 'normal' }}>
+                      <div>GST NO: {customSettings.companyGst !== undefined ? customSettings.companyGst : (primarySale.companyGstNumber || '29DWKPP3582H1ZV')}</div>
+                      <div>Mobile No: {customSettings.companyPhone !== undefined ? customSettings.companyPhone : (primarySale.companyPhone || '8496841904')}</div>
+                    </div>
+                  </div>
 
-            {/* 3. TWO-COLUMN INVOICE & DISPATCH DETAILS GRID (EXACT 63% / 37% PHYSICAL SPLIT) */}
-            <div className="border-x border-b border-black flex text-[11px]">
-              {/* Left Column (63%) */}
-              <div className="w-[63%] border-r border-black divide-y divide-black flex flex-col">
-                <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: <span className="font-bold">{invoiceNo}</span>
-                </div>
-                <div className="p-1.5 font-bold">
-                  {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: <span className="font-bold">{invoiceDate}</span>
-                </div>
-                <div className="p-1.5 min-h-[92px] flex flex-col justify-between">
-                  <div>
-                    <div className="font-bold">SUPPLY To : {primarySale.placeOfWork || partyName || '-'}</div>
-                    {partyAddress ? (
-                      <div className="text-[10.5px] font-bold text-black whitespace-pre-wrap mt-0.5">{partyAddress}</div>
-                    ) : (
-                      <div className="text-[10.5px] font-bold text-black mt-0.5">{partyName || '-'}</div>
+                  {/* PAGE 1 ONLY: TAX INVOICE BANNER & TWO-COLUMN DETAILS GRID */}
+                  {isPage1 && (
+                    <>
+                      <div style={{ textAlign: 'center', fontSize: '32pt', fontWeight: 'bold', letterSpacing: '1.5px', padding: '2px 0 3px 0', borderBottom: '2.2px solid #000000', lineHeight: 1.0 }}>
+                        {isInward ? 'INWARD MATERIAL RECEIPT' : 'TAX INVOICE'}
+                      </div>
+
+                      {/* TWO-COLUMN DETAILS GRID (50% / 50% SPLIT) */}
+                      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', borderBottom: '2.2px solid #000000', fontSize: '11pt', fontWeight: 'bold' }}>
+                        <div style={{ display: 'flex', width: '100%', borderBottom: '1.2px solid #000000' }}>
+                          <div style={{ width: '50%', borderRight: '2.0px solid #000000', padding: '2.5px 6px' }}>
+                            {isInward ? 'RECEIPT NO' : 'INVOICE NO'}: {invoiceNo}
+                          </div>
+                          <div style={{ width: '50%', padding: '2.5px 6px' }}>
+                            {refLabel}: {refNumber}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', width: '100%', borderBottom: '1.2px solid #000000' }}>
+                          <div style={{ width: '50%', borderRight: '2.0px solid #000000', padding: '2.5px 6px' }}>
+                            {isInward ? 'RECEIPT DATE' : 'INVOICE DATE'}: {invoiceDate}
+                          </div>
+                          <div style={{ width: '50%', padding: '2.5px 6px' }}>
+                            {dateLabel}: {refDate}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', width: '100%', borderBottom: '1.2px solid #000000' }}>
+                          <div style={{ width: '50%', borderRight: '2.0px solid #000000', padding: '2.5px 6px', whiteSpace: 'pre-line', lineHeight: 1.2 }}>
+                            <div>SUPPLY To : {effectiveSupplyTo}</div>
+                            <div style={{ fontSize: '10.5pt', fontWeight: 'normal' }}>
+                              {partyAddress ? partyAddress : (partyName || '-')}
+                            </div>
+                            {partyGst && partyGst.trim() !== '' && partyGst !== '-' && (
+                              <div style={{ fontWeight: 'bold', marginTop: '2px' }}>GST NO:{partyGst}</div>
+                            )}
+                          </div>
+                          <div style={{ width: '50%', padding: '2.5px 6px', whiteSpace: 'pre-line', lineHeight: 1.2 }}>
+                            <div>State of Supply: {effectiveStateOfSupply}</div>
+                            <div style={{ fontSize: '10.5pt', fontWeight: 'normal' }}>
+                              Shipped To: {primarySale.shippedTo || partyAddress || partyName || '-'}
+                            </div>
+                            {partyGst && partyGst.trim() !== '' && partyGst !== '-' && (
+                              <div style={{ fontWeight: 'bold', marginTop: '2px' }}>GST NO:{partyGst}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', width: '100%' }}>
+                          <div style={{ width: '50%', borderRight: '2.0px solid #000000', padding: '2.5px 6px' }}>
+                            {showDivision && divLabel && divLabel.trim() !== '' && divLabel !== '-' ? `Division: ${divLabel}` : <>&nbsp;</>}
+                          </div>
+                          <div style={{ width: '50%', padding: '2.5px 6px' }}>
+                            {vehicleNo && vehicleNo.trim() !== '' && vehicleNo !== '-' ? (
+                              <div>Vehicle No : <span style={{ textTransform: 'uppercase' }}>{vehicleNo}</span></div>
+                            ) : (
+                              <>&nbsp;</>
+                            )}
+                            {eWayBillNo && eWayBillNo !== '-' && customSettings.showEwayBill && (
+                              <div style={{ marginTop: '2px' }}>E-Way Bill: {eWayBillNo}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* ITEMS TABLE */}
+                  <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                    {(isPage1 || customSettings.repeatColumnHeaders) && (
+                      <thead>
+                        <tr>
+                          <th style={{ ...headerCellStyle, width: showKpclColumn ? '4.8%' : '5.3%' }}>SI<br/>NO</th>
+                          {showKpclColumn && (
+                            <th style={{ ...headerCellStyle, width: '11.5%' }}>KPCL<br/>ITEM<br/>CODE</th>
+                          )}
+                          <th style={{ ...headerCellStyle, width: showKpclColumn ? '20.0%' : '25.3%', textAlign: 'left', paddingLeft: '4px' }}>Description</th>
+                          <th style={{ ...headerCellStyle, width: showKpclColumn ? '31.1%' : '36.8%', textAlign: 'left', paddingLeft: '4px' }}>ITEM NAME &amp;<br/>SPECIFICATION</th>
+                          <th style={{ ...headerCellStyle, width: '5.8%' }}>UNIT</th>
+                          <th style={{ ...headerCellStyle, width: '5.8%' }}>QTY</th>
+                          <th style={{ ...headerCellStyle, width: '9.5%', textAlign: 'right', paddingRight: '6px' }}>PRICE</th>
+                          <th style={{ ...headerCellStyle, width: '11.5%', textAlign: 'right', paddingRight: '6px', borderRight: 'none' }}>AMOUNT</th>
+                        </tr>
+                      </thead>
                     )}
-                  </div>
-                  <div className="font-bold mt-1">GST NO:{partyGst || '-'}</div>
-                </div>
-                <div className="p-1.5 font-bold">
-                  Division: <span className="font-bold">{primarySale.divisionName || primarySale.purchaseOrder?.division?.name || primarySale.remarks || '-'}</span>
-                </div>
-              </div>
+                    <tbody>
+                      {pageItems.map((r) => (
+                        <tr key={r.slNo}>
+                          <td style={{ ...bodyCellStyle, width: showKpclColumn ? '4.8%' : '5.3%', textAlign: 'center', fontWeight: 'bold', fontSize: '11.5pt' }}>{r.slNo}</td>
+                          {showKpclColumn && (
+                            <td style={{ ...bodyCellStyle, width: '11.5%', textAlign: 'center', whiteSpace: 'nowrap', fontSize: '11pt' }}>{r.kpclCode || '-'}</td>
+                          )}
+                          <td style={{ ...bodyCellStyle, width: showKpclColumn ? '20.0%' : '25.3%', fontWeight: 'bold', fontSize: '10.5pt' }}>{r.itemName}</td>
+                          <td style={{ ...bodyCellStyle, width: showKpclColumn ? '31.1%' : '36.8%', fontSize: '10pt', whiteSpace: 'pre-wrap', lineHeight: 1.2 }}>
+                            {r.specifications?.trim()}
+                            {r.partNumber && !r.specifications?.includes(r.partNumber) && (
+                              <div style={{ fontWeight: 'bold', marginTop: '2px' }}>P NO: {r.partNumber}</div>
+                            )}
+                          </td>
+                          <td style={{ ...bodyCellStyle, width: '5.8%', textAlign: 'center', fontWeight: 'bold', fontSize: '11pt' }}>{r.unit === 'NOS' ? "No's" : (r.unit || "No's")}</td>
+                          <td style={{ ...bodyCellStyle, width: '5.8%', textAlign: 'center', fontWeight: 'bold', fontSize: '11.5pt' }}>{customSettings.numberStyle === 'formatted' ? r.qty : String(r.qty)}</td>
+                          <td style={{ ...bodyCellStyle, width: '9.5%', textAlign: 'right', paddingRight: '6px', fontWeight: 'bold', fontSize: '11.5pt' }}>{customSettings.numberStyle === 'formatted' ? fmt(r.rate) : String(r.rate)}</td>
+                          <td style={{ ...bodyCellStyle, width: '11.5%', textAlign: 'right', paddingRight: '6px', fontWeight: 'bold', fontSize: '11.5pt', borderRight: 'none' }}>{customSettings.numberStyle === 'formatted' ? fmt(r.amount) : String(r.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
 
-              {/* Right Column (37%) */}
-              <div className="w-[37%] divide-y divide-black flex flex-col">
-                <div className="p-1.5 font-bold">
-                  {refLabel}: <span className="font-bold">{refNumber}</span>
-                </div>
-                <div className="p-1.5 font-bold">
-                  {dateLabel}: <span className="font-bold">{refDate}</span>
-                </div>
-                <div className="p-1.5 min-h-[92px] flex flex-col justify-between">
-                  <div>
-                    <div className="font-bold">State of Supply: {primarySale.stateOfSupply || 'KARNATAKA'}</div>
-                    <div className="font-bold mt-0.5">Shipped To: <span className="font-bold">{primarySale.shippedTo || partyAddress || partyName || '-'}</span></div>
-                  </div>
-                  <div className="font-bold mt-1">GST NO:{partyGst || '-'}</div>
-                </div>
-                <div className="p-1.5 font-bold space-y-0.5">
-                  <div>Vehicle No : <span className="uppercase font-bold">{vehicleNo || '-'}</span></div>
-                  {eWayBillNo && eWayBillNo !== '-' && customSettings.showEwayBill && (
-                    <div className="text-black font-bold text-[10.5px]">
-                      E-Way Bill : <span>{eWayBillNo}</span>
+                  {/* LAST PAGE ONLY: TOTALS CONTAINER */}
+                  {isLastPage && (
+                    <div style={{ width: '100%', display: 'flex', borderTop: 'none', fontSize: '11pt' }}>
+                      {/* Left: Amount in words + Bank Details (67.4%) */}
+                      <div style={{ width: '67.4%', borderRight: '1.4px solid #000000', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ padding: '5px 8px', borderBottom: '1.4px solid #000000', fontSize: '11.5pt', fontWeight: 'bold', minHeight: '44px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                          <div style={{ lineHeight: 1.2 }}>Total Invoice amount in words: {wordsLine1}</div>
+                          {wordsLine2 && <div style={{ textAlign: 'center', marginTop: '3px', lineHeight: 1.2 }}>{wordsLine2}</div>}
+                        </div>
+                        <div style={{ padding: '5px 8px', fontSize: '11pt', fontWeight: 'bold', lineHeight: 1.35 }}>
+                          <div>Bank Details :</div>
+                          <div>Account Holder Name : {customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}</div>
+                          <div>Bank Name : {customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}</div>
+                          <div>Bank Account No: {customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}</div>
+                          <div>IFSC Code:{customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}</div>
+                        </div>
+                      </div>
+
+                      {/* Right: Summary totals (32.6%) */}
+                      <div style={{ width: '32.6%', display: 'flex', flexDirection: 'column' }}>
+                        <div style={totalsRowStyle}>
+                          <div style={totalsLabelStyle}>Basic Cost</div>
+                          <div style={totalsValStyle}>{customSettings.numberStyle === 'formatted' ? fmt(totalBasic) : String(totalBasic)}</div>
+                        </div>
+                        <div style={totalsRowStyle}>
+                          <div style={totalsLabelStyle}>SGST 9%</div>
+                          <div style={totalsValStyle}>{customSettings.numberStyle === 'formatted' ? fmt(totalSgst) : String(totalSgst)}</div>
+                        </div>
+                        <div style={totalsRowStyle}>
+                          <div style={totalsLabelStyle}>CGST 9%</div>
+                          <div style={totalsValStyle}>{customSettings.numberStyle === 'formatted' ? fmt(totalCgst) : String(totalCgst)}</div>
+                        </div>
+                        <div style={totalsRowStyle}>
+                          <div style={{ ...totalsLabelStyle, fontSize: '10pt' }}>TOTAL TAX AMOUNT</div>
+                          <div style={totalsValStyle}>{customSettings.numberStyle === 'formatted' ? fmt(totalCgst + totalSgst + totalIgst) : String(totalCgst + totalSgst + totalIgst)}</div>
+                        </div>
+                        <div style={{ ...totalsRowStyle, borderBottom: 'none' }}>
+                          <div style={{ ...totalsLabelStyle, fontSize: '10pt' }}>TOTAL AMOUNT</div>
+                          <div style={totalsValStyle}>{customSettings.numberStyle === 'formatted' ? fmt(totalInvoiceAmount) : String(totalInvoiceAmount)}</div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
-            </div>
 
-            {/* 4. TAX INVOICE ITEMS TABLE */}
-            <div className="border-x border-b border-black overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse table-fixed">
-                <thead>
-                  <tr className="border-b border-black font-bold bg-white text-[11px] font-serif">
-                    <th className="p-1.5 border-r border-black w-[4%] text-center">SI<br/>NO</th>
-                    <th className="p-1.5 border-r border-black w-[11%] text-center">KPCL<br/>ITEM<br/>CODE</th>
-                    <th className="p-1.5 border-r border-black w-[19.5%] text-center px-1">Discription</th>
-                    <th className="p-1.5 border-r border-black w-[31%] text-center px-1">ITEM NAME &amp;<br/>SPECIFICATION</th>
-                    <th className="p-1.5 border-r border-black w-[5.5%] text-center">UNIT</th>
-                    <th className="p-1.5 border-r border-black w-[5.5%] text-center">QTY</th>
-                    <th className="p-1.5 border-r border-black w-[9.5%] text-center px-1">PRICE</th>
-                    <th className="p-1.5 w-[14%] text-center px-1 whitespace-nowrap">AMOUNT</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-black">
-                  {itemsRows.map((r) => (
-                    <tr key={r.slNo} className="border-b border-black">
-                      <td className="p-1.5 text-center font-bold border-r border-black font-serif align-middle">{r.slNo}</td>
-                      <td className="p-1.5 text-left font-normal border-r border-black font-serif align-middle whitespace-nowrap pl-1">{r.kpclCode || '-'}</td>
-                      <td className="p-1.5 font-bold border-r border-black px-1.5 uppercase font-sans text-[10.5px] align-middle">{r.itemName}</td>
-                      <td className="p-1.5 border-r border-black px-1.5 text-[10px] uppercase whitespace-pre-wrap font-sans align-top leading-tight">
-                        {r.specifications}
-                        {r.partNumber && !r.specifications.includes(r.partNumber) && (
-                          <div className="font-bold mt-0.5">P NO: {r.partNumber}</div>
-                        )}
-                      </td>
-                      <td className="p-1.5 text-center font-bold border-r border-black font-serif align-middle">{r.unit === 'NOS' ? "No's" : (r.unit || "No's")}</td>
-                      <td className="p-1.5 text-center font-bold border-r border-black font-serif align-middle">{customSettings.numberStyle === 'formatted' ? r.qty : String(r.qty)}</td>
-                      <td className="p-1.5 text-center font-bold border-r border-black px-1 font-serif align-middle">{customSettings.numberStyle === 'formatted' ? fmt(r.rate) : String(r.rate)}</td>
-                      <td className="p-1.5 text-center font-bold px-1 whitespace-nowrap font-serif align-middle">{customSettings.numberStyle === 'formatted' ? fmt(r.amount) : String(r.amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                </div>{/* outer frame */}
 
-            {/* 5. TAX TOTALS & AMOUNT IN WORDS & BANK DETAILS */}
-            <div className="flex mt-0 border-x border-b border-black text-[11px]">
-              {/* Left Box (65.2% = 4% + 11% + 19.5% + 31%) */}
-              <div className="w-[65.2%] p-2 text-[11px] border-r border-black flex flex-col justify-between font-serif">
-                <div className="min-h-[46px] flex flex-col justify-center">
-                  <span className="font-bold block text-black text-[11.5px] leading-tight">
-                    Total Invoice amount in words: {amountInWordsText.replace(/^INR\s*/i, '').replace(/Rupees/i, 'Rupees').trim()}
-                  </span>
-                </div>
-                <div className="pt-2 border-t border-black mt-2">
-                  <span className="font-bold block text-black text-[11.5px]">Bank Details :</span>
-                  <div className="text-[11px] text-black space-y-0.5 mt-0.5 font-bold">
-                    <div>Account Holder Name : {customSettings.bankHolder !== undefined ? customSettings.bankHolder : 'Sri Krishna Constructions'}</div>
-                    <div>Bank Name : {customSettings.bankName !== undefined ? customSettings.bankName : 'Canara Bank Deosugur Branch'}</div>
-                    <div>Bank Account No: {customSettings.bankAccount !== undefined ? customSettings.bankAccount : '18133070005349'}</div>
-                    <div>IFSC Code:{customSettings.bankIfsc !== undefined ? customSettings.bankIfsc : 'CNRB0011813'}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Box (34.8% = 5.5% + 5.5% + 9.5% + 14.3%) */}
-              <div className="w-[34.8%] divide-y divide-black text-[11px] font-serif flex flex-col">
-                <div className="flex h-[28px] items-center">
-                  <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">Basic Cost</div>
-                  <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalBasic) : String(totalBasic)}</div>
-                </div>
-                {(totalSgst > 0 || totalCgst > 0) && (
-                  <>
-                    <div className="flex h-[28px] items-center">
-                      <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">SGST {effectiveSgstPercent > 0 ? `${effectiveSgstPercent}%` : ''}</div>
-                      <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalSgst) : String(totalSgst)}</div>
+                {/* SIGNATURE BLOCK (BELOW OUTER FRAME ON LAST PAGE) */}
+                {isLastPage && (
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'flex-end', paddingTop: '6px', paddingRight: '20px' }}>
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                      <div style={{ fontSize: '11pt', fontFamily: "'Times New Roman', serif", marginBottom: '3px' }}>Your Faithfully</div>
+                      <div style={{ fontSize: '14pt', fontFamily: "'Times New Roman', serif", color: '#2b5797', marginBottom: '1px' }}>
+                        {customSettings.signatoryTitle || 'For Sri Krishna Constructions'}
+                      </div>
+                      <div style={{ height: '48px' }} />
+                      <div style={{ fontSize: '14pt', fontFamily: "'Times New Roman', serif", color: '#2b5797', marginTop: '1px' }}>
+                        {customSettings.signatoryDesignation || 'Proprietor'}
+                      </div>
                     </div>
-                    <div className="flex h-[28px] items-center">
-                      <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">CGST {effectiveCgstPercent > 0 ? `${effectiveCgstPercent}%` : ''}</div>
-                      <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalCgst) : String(totalCgst)}</div>
-                    </div>
-                  </>
-                )}
-                {totalIgst > 0 && (
-                  <div className="flex h-[28px] items-center">
-                    <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">IGST {effectiveIgstPercent > 0 ? `${effectiveIgstPercent}%` : ''}</div>
-                    <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalIgst) : String(totalIgst)}</div>
                   </div>
                 )}
-                {totalCgst === 0 && totalSgst === 0 && totalIgst === 0 && (
-                  <div className="flex h-[28px] items-center">
-                    <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">GST (0%)</div>
-                    <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">0</div>
-                  </div>
-                )}
-                {totalShipping > 0 && (
-                  <div className="flex h-[28px] items-center">
-                    <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold whitespace-nowrap">Shipping Charges</div>
-                    <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalShipping) : String(totalShipping)}</div>
-                  </div>
-                )}
-                <div className="flex h-[28px] items-center">
-                  <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold text-[10px] whitespace-nowrap">TOTAL TAX AMOUNT</div>
-                  <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalCgst + totalSgst + totalIgst) : String(totalCgst + totalSgst + totalIgst)}</div>
-                </div>
-                <div className="flex h-[28px] items-center">
-                  <div className="w-[59.8%] p-1.5 px-2 border-r border-black font-bold text-[10px] whitespace-nowrap">TOTAL AMOUNT</div>
-                  <div className="w-[40.2%] p-1.5 px-2 text-right font-normal">{customSettings.numberStyle === 'formatted' ? fmt(totalInvoiceAmount) : String(totalInvoiceAmount)}</div>
-                </div>
-              </div>
-            </div>
 
-            <div className="flex justify-end items-end mt-8 pt-4 text-xs">
-              <div className="text-center min-w-[220px]">
-                <div className="text-black font-normal text-[11.5px]">Your Faithfully</div>
-                <div className="font-normal text-[#2b5797] mt-0.5 text-sm font-serif">
-                  {customSettings.signatoryTitle || 'For Sri Krishna Constructions'}
+                {/* PAGE FOOTER */}
+                <div style={{ position: 'absolute', bottom: '3.0mm', left: 0, right: 0, textAlign: 'center', fontSize: '9.5pt', fontFamily: "'Times New Roman', serif" }}>
+                  Page {pageNum} of {totalPagesCount}
                 </div>
-                <div className="h-10 my-1 flex items-center justify-center">
-                  {SKC_SIGNATURE_BASE64 ? (
-                    <img src={SKC_SIGNATURE_BASE64} alt="Proprietor Signature" className="h-9 object-contain" />
-                  ) : (
-                    <div className="w-48 border-b border-black mt-6 mb-1 mx-auto"></div>
-                  )}
-                </div>
-                <div className="text-[#2b5797] text-[13px] font-normal font-serif">
-                  {customSettings.signatoryDesignation || 'Proprietor'}
-                </div>
-              </div>
-            </div>
 
-          </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* BOTTOM MODAL FOOTER BAR */}
@@ -1237,6 +1429,35 @@ export const SaleInvoiceModal: React.FC<{
                       value={tempSettings.companyPhone}
                       onChange={e => setTempSettings({ ...tempSettings, companyPhone: e.target.value })}
                       className="w-full p-2 border border-slate-300 rounded font-mono font-bold focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl p-3.5 bg-slate-50 space-y-3">
+                <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
+                  <span>📍 Supply & Delivery Details (Work Order / Invoice)</span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">State of Supply</label>
+                    <input
+                      type="text"
+                      value={tempSettings.stateOfSupply || ''}
+                      onChange={e => setTempSettings({ ...tempSettings, stateOfSupply: e.target.value.toUpperCase() })}
+                      placeholder="e.g. KARNATAKA"
+                      className="w-full p-2 border border-slate-300 rounded font-bold uppercase focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">SUPPLY To (Location / Site / Party)</label>
+                    <input
+                      type="text"
+                      value={tempSettings.supplyTo || ''}
+                      onChange={e => setTempSettings({ ...tempSettings, supplyTo: e.target.value })}
+                      placeholder="e.g. BTPS, KPCL, KUDATINI"
+                      className="w-full p-2 border border-slate-300 rounded focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                 </div>

@@ -1,31 +1,78 @@
-# Node files
+# ==========================================
+# Sri Krishna Constructions - Unified .gitignore
+# ==========================================
+
+# 1. Dependencies
 node_modules/
 **/node_modules/
 
-# Vite / build
+# 2. Build Outputs & Bundles
 dist/
+dist-ssr/
 build/
+**/dist/
+**/build/
 
-# Log files
+# 3. Environment & Secret Variables
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+!server/.env.example
+!client/.env.example
+
+# 4. Logs & Debug Files
+logs/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+client-dev.log
 
-# Environment files
-.env
-.env.local
-.env.*.local
+# 5. Python Cache & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+env/
+venv/
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Scratch and temporary development files
+# 6. Temporary, Scratch & Test Files
 scratch/
 **/scratch/
+verification_output/
 *.tmp
 *.bak
+*.swp
+*~
+test_query.js
+clean_db.py
+
+# 7. Generated Test PDFs & Images
+*.pdf
+*.png
+!client/public/*.png
+!client/public/*.svg
+!client/src/assets/*.png
+!client/src/assets/*.svg
+
+# 8. Editor & IDE Settings
 .vscode/
 .idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# 9. Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 10. Agent & Skills Cache
+.agents/
+skills-lock.json
 
